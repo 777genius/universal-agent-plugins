@@ -25,6 +25,18 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
     def setUpClass(cls):
         cls.body = WORKFLOW.read_text(encoding="utf-8")
 
+    def test_kimi_skill_pin_matches_strict_repeat_log_observer(self):
+        workflow = WORKFLOW.with_name("live-install-audit.yml").read_text(encoding="utf-8")
+        branch = workflow.split("            kimi)", 1)[1].split(";;", 1)[0]
+        pins = re.findall(r"npm install --global @moonshot-ai/kimi-code@([0-9.]+)", branch)
+        self.assertIn('if [[ "$KIND" == "skill" ]]; then', branch)
+        self.assertEqual(pins, ["2.5.2", "2.4.1"])
+        source = (WORKFLOW.parents[2] / "scripts/live-install-audit.py").read_text(encoding="utf-8")
+        guard = source.split("    kimi_log_case =", 1)[1].split("    kimi_repeat_log_facts =", 1)[0]
+        observed = re.search(r'client_version.get\("value"\) == "([0-9.]+)"', guard)
+        self.assertIsNotNone(observed)
+        self.assertEqual(pins[0], observed.group(1))
+
     def test_ready_pr_and_main_are_always_full(self):
         self.assertRegex(self.body, r"(?m)^  pull_request:\s*$")
         self.assertIn("types: [opened, synchronize, reopened, ready_for_review]", self.body)

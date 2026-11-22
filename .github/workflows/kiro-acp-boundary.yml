@@ -1,0 +1,71 @@
+name: Kiro 3.0.0 ACP boundary diagnostic
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+    paths:
+      - '.github/workflows/kiro-acp-boundary.yml'
+      - 'scripts/kiro_acp_boundary_capture.py'
+      - 'scripts/test_kiro_acp_boundary_capture.py'
+      - 'repotests/agentplugins_kiro_acp_boundary_linux_test.go'
+      - 'repotests/agentplugins_project_native_runtime_test.go'
+      - 'scripts/project_native_research.py'
+      - 'scripts/project_native_runtime.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/native_client_project_artifacts.py'
+      - 'install/integrationctl/adapters/process/**'
+      - 'install/integrationctl/agentplugins/clients/kiro/acp*.go'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: kiro-acp-boundary-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
+env:
+  EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+  PYTHONDONTWRITEBYTECODE: '1'
+jobs:
+  diagnostic:
+    name: Kiro Linux ordinary-UID ACP observation (unqualified)
+    if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Verify inert capture contracts
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_kiro_acp_boundary_capture.py'
+          go test -p=1 ./repotests -run '^TestKiroBoundaryInert' -count=1 -timeout=60s
+      - name: Capture only initialize and empty session/new under unchanged process containment
+        env:
+          AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED: '1'
+        run: python3 scripts/kiro_acp_boundary_capture.py --output '${{ runner.temp }}/kiro-acp-boundary'
+      - name: Admit bounded diagnostic artifact
+        id: upload
+        if: ${{ always() }}
+        env:
+          CAPTURE_ZIP: ${{ runner.temp }}/kiro-acp-boundary/upload/research.zip
+        run: |
+          /usr/bin/python3 -I - <<'PYTHON'
+          import os, stat
+          from pathlib import Path
+          path = Path(os.environ['CAPTURE_ZIP'])
+          info = path.lstat()
+          if path.resolve() != path or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_uid != os.getuid() or not 0 < info.st_size <= 32 << 20:
+              raise SystemExit('bounded ordinary diagnostic artifact required')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
+              out.write('valid=true\n')
+          PYTHON
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        if: ${{ always() && steps.upload.outputs.valid == 'true' }}
+        with:
+          name: kiro-3.0.0-linux-amd64-acp-boundary-unqualified
+          path: ${{ runner.temp }}/kiro-acp-boundary/upload/research.zip
+          if-no-files-found: error
+          retention-days: 14

@@ -297,6 +297,20 @@ EXPIRED_DIAGNOSTIC = re.compile(
     r"expires_at=2026-10-30T20:03:50Z now=(20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ)\n")
 
 
+def strict_json_value(value, expected):
+    """Exact JSON structure and types; bool cannot impersonate int or float."""
+    if type(value) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return (value.keys() == expected.keys()
+                and all(strict_json_value(value[key], item)
+                        for key, item in expected.items()))
+    if isinstance(expected, list):
+        return len(value) == len(expected) and all(
+            strict_json_value(left, right) for left, right in zip(value, expected))
+    return value == expected
+
+
 def exact_true_phases(value, phases):
     """Trust only an exact JSON object with literal true at every required phase."""
     return (type(value) is dict and set(value) == set(phases)
@@ -308,12 +322,13 @@ def expired_plugin_refusals(report, doc):
     if (report.get("acceptance") != EXPIRED_PLUGIN_ACCEPTANCE
             or report.get("target") != "codex" or report.get("kind") != "plugin"
             or report.get("platform") != "linux" or report.get("architecture") != "x86_64"
-            or report.get("cases_attempted") != 2 or report.get("passed") != 0
-            or report.get("verified_negative_coverage") != 0
-            or report.get("cli_version") != {"status": "reported", "value": "agentplugins 0.1.95",
-                                              "exit_code": 0}
-            or report.get("client_version") != {"status": "reported", "value": "codex-cli 0.153.4",
-                                                 "exit_code": 0}
+            or not strict_json_value(report.get("cases_attempted"), 2)
+            or not strict_json_value(report.get("passed"), 0)
+            or not strict_json_value(report.get("verified_negative_coverage"), 0)
+            or not strict_json_value(report.get("cli_version"), {
+                "status": "reported", "value": "agentplugins 0.1.95", "exit_code": 0})
+            or not strict_json_value(report.get("client_version"), {
+                "status": "reported", "value": "codex-cli 0.153.4", "exit_code": 0})
             or doc.get("plugin_aliases", [])[:2] != ["atlassian", "context7"]):
         return False
     rows = report.get("results")
@@ -329,18 +344,22 @@ def expired_plugin_refusals(report, doc):
             row.get("historical_npm_proof"), row.get("install"), row.get("list"))
         if (row.get("source") != doc["plugin_aliases"][index]
                 or row.get("target") != "codex" or row.get("kind") != "plugin"
-                or row.get("index") != index or row.get("status") != "install-failed"
+                or not strict_json_value(row.get("index"), index)
+                or row.get("status") != "install-failed"
                 or not isinstance(proof, dict)
-                or any(proof.get(k) != v for k, v in pinned.items())
+                or any(not strict_json_value(proof.get(k), v)
+                       for k, v in pinned.items())
                 or type(proof.get("commands_verified")) is not int
                 or proof["commands_verified"] < 2
-                or not isinstance(install, dict) or install.get("exit_code") != 1
+                or not isinstance(install, dict)
+                or not strict_json_value(install.get("exit_code"), 1)
                 or install.get("stdout_tail") != "" or install.get("timeout") is not False
-                or not isinstance(listed, dict) or listed.get("exit_code") != 0
+                or not isinstance(listed, dict)
+                or not strict_json_value(listed.get("exit_code"), 0)
                 or listed.get("timeout") is not False or listed.get("stderr_tail") != ""
                 or row.get("failed_install_registered") is not False
                 or row.get("failed_install_residue") is not False
-                or row.get("native_file_delta") != 0
+                or not strict_json_value(row.get("native_file_delta"), 0)
                 or row.get("native_identity_files") != []
                 or row.get("native_component_candidates") != []
                 or row.get("matched_installation_ids") != []
@@ -366,11 +385,11 @@ def expired_plugin_refusals(report, doc):
             return False
         states = row.get("public_target_states")
         if (not isinstance(states, dict)
-                or states.get("after-add") != {
+                or not strict_json_value(states.get("after-add"), {
                     "status": "observed", "selected_installations": 0,
                     "selected_bindings": 0, "invalid_rows": 0,
-                    "states": [], "truncated": False}
-                or states.get("repeat-add") != {"status": "unobserved"}
-                or states.get("after-remove") != {"status": "unobserved"}):
+                    "states": [], "truncated": False})
+                or not strict_json_value(states.get("repeat-add"), {"status": "unobserved"})
+                or not strict_json_value(states.get("after-remove"), {"status": "unobserved"})):
             return False
     return True

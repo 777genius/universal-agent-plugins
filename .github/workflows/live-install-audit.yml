@@ -29,6 +29,8 @@ permissions:
 env:
   # pull_request runs check out a synthetic merge commit; retain the source branch HEAD too.
   AUDIT_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || '' }}
+  # Keep the npm-selected Cline version during bootstrap and its version probe.
+  CLINE_NO_AUTO_UPDATE: '1'
 
 concurrency:
   group: live-install-audit-${{ github.event_name }}-${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && github.event.pull_request.number || github.run_id }}
@@ -201,9 +203,9 @@ jobs:
             copilot) npm install --global @github/copilot@1.0.105 ;;
             cline) npm install --global cline@3.0.74 ;;
             kimi)
-              # Project Skills qualify only against observed 2.3.1/2.3.2.
+              # Match the supported 2.5.2 Skill discovery and strict repeat-log proof.
               if [[ "$KIND" == "skill" ]]; then
-                npm install --global @moonshot-ai/kimi-code@2.3.2
+                npm install --global @moonshot-ai/kimi-code@2.5.2
               else
                 npm install --global @moonshot-ai/kimi-code@2.4.1
               fi

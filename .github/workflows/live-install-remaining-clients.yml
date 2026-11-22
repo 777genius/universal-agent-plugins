@@ -7,6 +7,11 @@ on:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/grok_project_skill_audit.py'
+      - 'scripts/test_grok_project_skill_audit.py'
+      - 'scripts/test_live_install_audit_grok_profile.py'
+      - 'scripts/windsurf_global_skill_audit.py'
+      - 'scripts/test_windsurf_global_skill_audit.py'
       - 'scripts/test_kimi_repeat_log_audit.py'
       - 'scripts/devin_project_auto_install_e2e.py'
       - 'scripts/test_devin_project_auto_install_e2e.py'
@@ -28,7 +33,7 @@ concurrency:
 
 jobs:
   remaining-client-install:
-    name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
+    name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }}${{ matrix.project_profile == 'owner-pretrusted' && ' / owner-pretrusted Project' || '' }} (report even if blocked)
     if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     # Linux hosted runners do not delegate cgroup v2 for Kiro's required
     # duplex MCP containment. Test the real native client on macOS instead
@@ -41,6 +46,13 @@ jobs:
       matrix:
         target: [cursor, kiro, windsurf, grok, chatgpt]
         kind: [plugin, skill]
+        project_profile: [cold]
+        # A separate supported initial condition; the original cold Grok cell
+        # keeps its own non-native result and unchanged acceptance requirement.
+        include:
+          - target: grok
+            kind: skill
+            project_profile: owner-pretrusted
         # Desktop exposes User scope; Project Skills are a documented refusal.
         exclude:
           - target: chatgpt
@@ -56,6 +68,17 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '24'
+      - name: Verify owner-pretrusted Grok fixture and native proof contracts
+        if: ${{ matrix.project_profile == 'owner-pretrusted' }}
+        run: |
+          python3 -m pip install PyYAML==6.0.3
+          python3 -m unittest discover -s scripts -p 'test_grok_project_skill_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_live_install_audit_grok_profile.py'
+      - name: Verify four immutable Windsurf Global Skill discovery proof contracts
+        if: ${{ matrix.target == 'windsurf' && matrix.kind == 'plugin' }}
+        run: |
+          python3 -m pip install PyYAML==6.0.3
+          python3 -m unittest discover -s scripts -p 'test_windsurf_global_skill_audit.py'
       - name: Refuse inherited real client profile overrides before live cases
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
@@ -69,6 +92,7 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           KIND: ${{ matrix.kind }}
+          PROJECT_PROFILE: ${{ matrix.project_profile }}
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
@@ -288,10 +312,15 @@ jobs:
           PY
           # No ambient CI credentials or native profile overrides reach vendor --version.
           probe_home="$(mktemp -d "$RUNNER_TEMP/vendor-probe.XXXXXX")"
+          audit_vendor_env=()
+          if [[ "$TARGET" == grok && "$PROJECT_PROFILE" == owner-pretrusted ]]; then
+            audit_vendor_env+=(GROK_DISABLE_AUTOUPDATER=1)
+          fi
           env -i PATH="$PATH" HOME="$probe_home" USERPROFILE="$probe_home" \
             XDG_CONFIG_HOME="$probe_home/config" XDG_CACHE_HOME="$probe_home/cache" \
             XDG_DATA_HOME="$probe_home/data" TMPDIR="$probe_home" \
             LANG="${LANG:-C.UTF-8}" CI=true DO_NOT_TRACK=1 \
+            "${audit_vendor_env[@]}" \
             python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
             | tee "$RUNNER_TEMP/vendor-proof/version.txt"
       - name: Install real Docker CLI for Kiro plugin sources
@@ -317,6 +346,7 @@ jobs:
         env:
           AUDIT_KIND: ${{ matrix.kind }}
           AUDIT_TARGET: ${{ matrix.target }}
+          AUDIT_PROJECT_PROFILE: ${{ matrix.project_profile }}
           AUDIT_VENDOR_OUTCOME: ${{ steps.vendor-install.outcome }}
           AUDIT_DOCKER_EXECUTABLE: ${{ steps.kiro-docker.outputs.executable }}
         shell: bash
@@ -340,12 +370,13 @@ jobs:
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \
             --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 30 \
+            --grok-project-profile "$AUDIT_PROJECT_PROFILE" \
             --report-dir "$RUNNER_TEMP/live-audit-report"
       - name: Preserve exact per-case evidence, even if vendor install or CLI fails
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: remaining-client-${{ matrix.target }}-${{ matrix.kind }}
+          name: remaining-client-${{ matrix.target }}-${{ matrix.kind }}${{ matrix.project_profile == 'owner-pretrusted' && '-owner-pretrusted' || '' }}
           path: |
             ${{ runner.temp }}/live-audit-report/
             ${{ runner.temp }}/vendor-proof/

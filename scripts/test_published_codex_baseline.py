@@ -675,5 +675,49 @@ class TestExpiredPublishedPluginRefusal(unittest.TestCase):
                 self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc),
                                  (field, mutation))
 
+    def test_report_rejects_boolean_as_integer_or_float_as_count(self):
+        doc = {"plugin_aliases": ["atlassian", "context7"]}
+        base = self.report()
+        self.assertTrue(BASELINE.expired_plugin_refusals(base, doc))
+        for field, value in (
+                ("cases_attempted", 2.0),
+                ("passed", False),
+                ("verified_negative_coverage", False)):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report[field] = value
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
+        for field in ("cli_version", "client_version"):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report[field]["exit_code"] = False
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
+        for field, value in (
+                ("index", False),
+                ("native_file_delta", False)):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report["results"][0][field] = value
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
+        for field, value in (("install", True), ("list", False)):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report["results"][0][field]["exit_code"] = value
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
+        for field, value in (("launcher_sources_verified", 1), ("binary_size", float(BASELINE.SIZE))):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report["results"][0]["historical_npm_proof"][field] = value
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
+        for field, value in (
+                ("selected_installations", False),
+                ("selected_bindings", False),
+                ("invalid_rows", False),
+                ("truncated", 0)):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report["results"][0]["public_target_states"]["after-add"][field] = value
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
+
 if __name__ == "__main__":
     unittest.main()

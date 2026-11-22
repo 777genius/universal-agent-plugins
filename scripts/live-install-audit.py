@@ -28,6 +28,10 @@ CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_a
 GEMINI_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/gemini_runtime_audit.py"))
 OPENCODE_BOOTSTRAP_AUDIT = run_path(str(ROOT / "scripts/opencode_bootstrap_audit.py"))
 NATIVE_ARTIFACTS = run_path(str(ROOT / "scripts/native_client_project_artifacts.py"))
+GROK_PROJECT_AUDIT = run_path(str(ROOT / "scripts/grok_project_skill_audit.py"))
+WINDSURF_GLOBAL_AUDIT = run_path(str(ROOT / "scripts/windsurf_global_skill_audit.py"))
+QODER_SKILL_DIAGNOSTIC = run_path(str(ROOT / "scripts/qoder_skill_diagnostic.py"))
+NATIVE_RESEARCH = run_path(str(ROOT / "scripts/native_client_research.py"))
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -116,6 +120,30 @@ AGENT_BINARIES = {
 GIT_EXECUTABLE = str(Path(path).resolve()) if (path := shutil.which("git")) else None
 
 
+def validate_signed_release_pin(alias, pin):
+    if not isinstance(pin, dict) or set(pin) != {
+            "distribution", "repository", "path", "revision",
+            "sequence", "tree_digest", "manifest_digest"}:
+        raise ValueError(f"Invalid frozen signed release pin: {alias}")
+    if (not all(isinstance(pin[key], str) and pin[key]
+                for key in ("distribution", "repository", "path"))
+            or type(pin["sequence"]) is not int or pin["sequence"] < 1
+            or not isinstance(pin["revision"], str)
+            or not re.fullmatch(r"[0-9a-f]{40}", pin["revision"])
+            or any(not isinstance(pin[key], str) or
+                   re.fullmatch(r"sha256:[0-9a-f]{64}", pin[key]) is None
+                   for key in ("tree_digest", "manifest_digest"))):
+        raise ValueError(f"Malformed frozen signed release pin: {alias}")
+
+
+def effective_signed_release_pins(doc, native_target):
+    """Freeze one selected client's source expectations without mutating defaults."""
+    pins = {alias: dict(pin) for alias, pin in doc["signed_release_pins"].items()}
+    for alias, pin in doc.get("signed_release_pins_by_target", {}).get(native_target, {}).items():
+        pins[alias] = dict(pin)
+    return pins
+
+
 def validate_fixtures(doc):
     names = doc["plugin_aliases"]
     skills = doc["skills"]
@@ -135,19 +163,18 @@ def validate_fixtures(doc):
     if not isinstance(pins, dict) or set(pins) != signed_aliases:
         raise ValueError("Missing frozen Registry release pins for signed aliases")
     for alias, pin in pins.items():
-        if not isinstance(pin, dict) or set(pin) != {
-                "distribution", "repository", "path", "revision",
-                "sequence", "tree_digest", "manifest_digest"}:
-            raise ValueError(f"Invalid frozen signed release pin: {alias}")
-        if (not all(isinstance(pin[key], str) and pin[key]
-                    for key in ("distribution", "repository", "path"))
-                or type(pin["sequence"]) is not int or pin["sequence"] < 1
-                or not isinstance(pin["revision"], str)
-                or not re.fullmatch(r"[0-9a-f]{40}", pin["revision"])
-                or any(not isinstance(pin[key], str) or
-                       re.fullmatch(r"sha256:[0-9a-f]{64}", pin[key]) is None
-                       for key in ("tree_digest", "manifest_digest"))):
-            raise ValueError(f"Malformed frozen signed release pin: {alias}")
+        validate_signed_release_pin(alias, pin)
+    if "signed_release_pins_by_target" in doc:
+        overrides = doc["signed_release_pins_by_target"]
+        canonical_targets = {audit_client_id(target, "plugin") for target in targets}
+        if not isinstance(overrides, dict) or not overrides or not set(overrides) <= canonical_targets:
+            raise ValueError("Invalid target-specific signed release pin maps")
+        for target, target_pins in overrides.items():
+            if (not isinstance(target_pins, dict) or not target_pins
+                    or not set(target_pins) <= signed_aliases):
+                raise ValueError(f"Invalid target-specific signed release pins: {target}")
+            for alias, pin in target_pins.items():
+                validate_signed_release_pin(alias, pin)
     for plugin in exact_git:
         if not re.fullmatch(r"github:[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[a-f0-9]{40}", plugin):
             raise ValueError("Direct plugin source is not a pinned root package")
@@ -376,12 +403,14 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
 
 
 def install_case_timeout(target, kind, item):
-    # The frozen Firebase Windows runtime can finish durable registration
-    # while a cold native runtime setup still holds the original add process.
-    # Stay bounded: a timeout or any surviving registration still FAILS E2E.
+    # A cold Claude/Firebase npm runtime is allowed 10 minutes by
+    # providers.runLockedNPM. The native Windows add must not be killed after
+    # only 180 seconds while that bounded preparation is still permitted.
+    # Keep other clients' historical budgets, and never accept a timeout,
+    # leftover registration, or an unverified repeat/remove as success.
     if (sys.platform == "win32" and kind == "plugin"
             and item == "firebase"):
-        return 180
+        return 660 if target == "claude" else 180
     return 105
 
 
@@ -729,6 +758,32 @@ def prepared_only_add(parsed):
             return False
         for component in action["component_support"]:
             if not isinstance(component, dict) or component.get("support") != "prepared":
+                return False
+            found = True
+    return found
+
+
+def kiro_plugin_components_observable(parsed):
+    """The current Kiro ACP observer qualifies MCP names, not Skill discovery."""
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("data"), dict):
+        return False
+    actions = parsed["data"].get("actions")
+    if not isinstance(actions, list) or not actions:
+        return False
+    found = False
+    for action in actions:
+        if (not isinstance(action, dict) or action.get("client_id") != "kiro"
+                or not isinstance(action.get("component_support"), list)
+                or not action["component_support"]):
+            return False
+        for component in action["component_support"]:
+            if not isinstance(component, dict):
+                return False
+            if component.get("support") == "unsupported":
+                continue
+            if (component.get("support") != "native" or component.get("kind") != "mcp_server"
+                    or not isinstance(component.get("name"), str)
+                    or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}", component["name"])):
                 return False
             found = True
     return found
@@ -1372,11 +1427,18 @@ def path_inside_case(path, case_root):
         return False
 
 
+def observed_project_skill_roots(target):
+    roots = PROJECT_SKILL_ROOTS.get(target, [])
+    # Copilot registers the owned bundle itself, with no duplicate loose Skill.
+    # Keep this observation root separate from shared foreign-fixture locations.
+    return [*roots, ".uap/managed/clients/copilot"] if target == "copilot" else roots
+
+
 def skill_removal_leftovers(project, target, skill_name, installed_path=None):
     """Reject surviving Skills and substituted intermediate project roots."""
     leftovers = []
     case_root = project.parent
-    for relative_root in PROJECT_SKILL_ROOTS.get(target, []):
+    for relative_root in observed_project_skill_roots(target):
         base = project / relative_root
         named = base / skill_name
         if not path_inside_case(base, case_root) or not path_inside_case(named, case_root):
@@ -1394,7 +1456,7 @@ def skill_removal_leftovers(project, target, skill_name, installed_path=None):
 
 def skill_file_present(project, target, skill_name):
     case_root = project.parent
-    for relative_root in PROJECT_SKILL_ROOTS.get(target, []):
+    for relative_root in observed_project_skill_roots(target):
         base = project / relative_root
         if not path_inside_case(base, case_root) or not base.is_dir():
             continue
@@ -1594,6 +1656,28 @@ def prepared_package_binding(client, target):
             and client.get("policy") == "allowed")
 
 
+def kiro_direct_prepared_installation(node, identity, target, kind, item):
+    """Bind Kiro's non-native User preparation to one exact Git source and UUID."""
+    if target != "kiro" or kind != "plugin" or type(item) is not str or type(node) is not dict:
+        return False
+    repository = r"[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*"
+    selector = re.fullmatch(r"github:(" + repository + r")@([0-9a-f]{40})", item)
+    source, uid, clients = node.get("source"), node.get("installation_id"), node.get("clients")
+    if (selector is None or type(identity) is not str or not identity or node.get("name") != identity
+            or type(source) is not str or re.fullmatch(repository, source) is None
+            or source.lower() != selector[1].lower() or type(uid) is not str
+            or re.fullmatch(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", uid) is None
+            or type(clients) is not list or len(clients) != 1):
+        return False
+    client = clients[0]
+    if not prepared_package_binding(client, "kiro") or client.get("authentication") != "not_checked":
+        return False
+    revision = client.get("package_revision")
+    return (type(revision) is dict and revision.get("resolved_revision") == selector[2]
+            and all(type(revision.get(key)) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", revision[key])
+                    for key in ("tree_digest", "manifest_digest")))
+
+
 def matching_installations(response, identity, target, kind, item, signed_release_pins=None):
     """Verify the frozen Registry release, never only live self-consistency."""
     signed_release_pins = signed_release_pins or {}
@@ -1610,6 +1694,9 @@ def matching_installations(response, identity, target, kind, item, signed_releas
     result = []
     for node in installations:
         if not isinstance(node, dict):
+            continue
+        if kiro_direct_prepared_installation(node, identity, target, kind, item):
+            result.append(node)
             continue
         clients = node.get("clients", [])
         if not isinstance(clients, list):
@@ -1942,6 +2029,7 @@ def isolated_client_env(home, case_root, data):
         "GIT_CONFIG_GLOBAL": str(case_root / "empty.gitconfig"),
         "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never",
         "KIMI_CODE_NO_AUTO_UPDATE": "1",
+        "CLINE_NO_AUTO_UPDATE": "1",
         "CI": "true", "DO_NOT_TRACK": "1",
         **{key: str(path) for key, path in roots.items()},
     })
@@ -2064,6 +2152,161 @@ def copilot_settings_read(path, case_root):
     finally:
         for descriptor in reversed(descriptors):
             os.close(descriptor)
+
+
+def copilot_project_settings_capture(project, case_root):
+    """Bounded registration facts; settings values never enter retained evidence."""
+    path = project / ".github/copilot/settings.local.json"
+    facts = {"path": str(path.relative_to(project)), "status": "unqualified"}
+    try:
+        def parents():
+            # Check before reading even when the leaf is absent: the shared
+            # reader's FileNotFound branch alone cannot establish containment.
+            if not path_inside_case(path, case_root):
+                raise ValueError("unsafe Project settings ancestor")
+            result = {}
+            for parent in (case_root, project, project / ".github", path.parent):
+                try:
+                    info = parent.lstat()
+                except FileNotFoundError:
+                    result[str(parent.relative_to(case_root))] = None
+                    continue
+                if (not stat.S_ISDIR(info.st_mode)
+                        or getattr(info, "st_file_attributes", 0) & 0x400
+                        or getattr(info, "st_reparse_tag", 0)
+                        or os.name != "nt" and info.st_uid != os.getuid()):
+                    raise ValueError("unowned Project settings ancestor")
+                result[str(parent.relative_to(case_root))] = [
+                    info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid]
+            return result
+        def identity():
+            try:
+                info = path.lstat()
+            except FileNotFoundError:
+                return None
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or getattr(info, "st_file_attributes", 0) & 0x400
+                    or getattr(info, "st_reparse_tag", 0)
+                    or os.name != "nt" and info.st_uid != os.getuid()):
+                raise ValueError("unowned Project settings file")
+            return [*NATIVE_ARTIFACTS["identity"](info), info.st_uid, info.st_gid]
+        before_parents, before = parents(), identity()
+        text, error = copilot_settings_read(path, case_root)
+        if before_parents != parents() or before != identity():
+            raise ValueError("Project settings changed during capture")
+        facts.update(parents=before_parents, identity=before)
+        if before is None and error == "absent":
+            return {**facts, "status": "absent", "_document": {}}
+        if error is not None or before is None:
+            raise ValueError("Project settings read refused")
+        body = text.encode("utf-8")
+        facts.update(bytes=len(body), sha256=hashlib.sha256(body).hexdigest())
+        document = GROK_PROJECT_AUDIT["strict_json"](body)
+        if (type(document) is not dict
+                or set(document) - {"extraKnownMarketplaces", "enabledPlugins"}
+                or any(type(value) is not dict for value in document.values())):
+            raise ValueError("Project settings shape differs")
+        return {**facts, "status": "observed", "_document": document}
+    except (OSError, ValueError, TypeError, UnicodeError, RecursionError):
+        return facts
+
+
+def copilot_project_settings_empty(capture):
+    return bool(capture and capture.get("status") in ("absent", "observed")
+                and not any(capture["_document"].values()))
+
+
+def copilot_project_settings_match(capture, binding):
+    if not binding or not capture or capture.get("status") != "observed":
+        return False
+    document = capture["_document"]
+    key = binding["name"] + "@" + binding["marketplace"]
+    return bool(set(document) == {"extraKnownMarketplaces", "enabledPlugins"}
+                and document["extraKnownMarketplaces"] == {
+                    binding["marketplace"]: {"source": {"source": "directory", "path": binding["directory"]}}}
+                and set(document["enabledPlugins"]) == {key}
+                and document["enabledPlugins"][key] is True)
+
+
+def copilot_project_skill_binding(project, case_root, item, node, skill_path):
+    """Join the original owner to its raw-Skill source, lock and managed root.
+
+    Prepared delivery may be cleaned up through this binding. Only the
+    installer's separate Ready observation can qualify native discovery.
+    """
+    try:
+        name = GROK_PROJECT_AUDIT["fixture_name"](item)
+        uid = node["installation_id"]
+        if (type(uid) is not str or re.fullmatch(r"[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}", uid) is None
+                or node.get("name") != name or node.get("source") != f'{item["repo"]}/skills/{item["folder"]}'
+                or type(node.get("clients")) is not list or len(node["clients"]) != 1):
+            return None
+        client = node["clients"][0]
+        expected = dict(client_id="copilot", scope="project", materialization="materialized",
+                        verification="installation_verified", policy="allowed")
+        if (type(client) is not dict or any(client.get(key) != value for key, value in expected.items())
+                or (client.get("activation"), client.get("authentication")) not in (
+                    ("active", "not_required"), ("prepared", "not_checked"))):
+            return None
+        revision = client["package_revision"]
+        if (type(revision) is not dict or revision.get("resolved_revision") != item["ref"]
+                or any(type(revision.get(key)) is not str or re.fullmatch(r"sha256:[a-f0-9]{64}", revision[key]) is None
+                       for key in ("tree_digest", "manifest_digest"))):
+            return None
+        physical = name[:51] + "-" + hashlib.sha256(uid.encode()).hexdigest()[:12]
+        directory = ".uap/managed/clients/copilot/" + physical
+        if skill_path != str(Path(directory) / "skills" / item["name"] / "SKILL.md"):
+            return None
+        lock_path = project / "uap.lock"
+        if not path_inside_case(lock_path, case_root):
+            return None
+        lock_text, error = copilot_settings_read(lock_path, case_root)
+        if error is not None:
+            return None
+        lock = GROK_PROJECT_AUDIT["strict_json"](lock_text.encode("utf-8"))
+        if (type(lock) is not dict or type(lock.get("lock_version")) is not int or lock["lock_version"] != 1
+                or type(lock.get("packages")) is not list or len(lock["packages"]) != 1):
+            return None
+        package = lock["packages"][0]
+        source_key = f'github-skill:{item["repo"].lower()}:{item["name"]}:skills/{item["folder"]}'
+        if (type(package) is not dict or package.get("alias") != item["name"]
+                or package.get("source_key") != source_key or package.get("targets") != ["copilot"]
+                or package.get("digest_algorithm") != "agentplugins-tree-sha256-v1"
+                or any(package.get(key) != revision[key] for key in ("tree_digest", "manifest_digest"))):
+            return None
+        source = package["source"]
+        git = source["git"]
+        location = "skills/" + item["folder"]
+        if (type(source) is not dict or set(source) != {"git"} or type(git) is not dict
+                or git.get("kind") != "skill" or git.get("skill") != item["name"]
+                or type(git.get("repository")) is not str or git["repository"].lower() != item["repo"].lower()
+                or git.get("commit") != item["ref"] or git.get("path") != location
+                or git.get("resolved_skill_path") != location or git.get("normalizer") != "agent-skill-package/v1"
+                or git.get("requested") != {"kind": "commit", "value": item["ref"]}):
+            return None
+        return {"installation_id": uid, "name": name, "source_key": source_key,
+                "revision": revision, "directory": directory,
+                "marketplace": "agentplugins-" + hashlib.sha256(physical.encode()).hexdigest()[:12]}
+    except (KeyError, TypeError, ValueError, OSError, UnicodeError, RecursionError):
+        return None
+
+
+def copilot_project_skill_ready(response, node, binding, project, identity, *, repeated=False):
+    if not binding or type(response) is not dict:
+        return False
+    selected = response.get("items")
+    return bool(type(response.get("schema_version")) is int and response["schema_version"] == 1
+                and response.get("command") == "skills add" and response.get("result") == "success"
+                and response.get("status") == "succeeded" and response.get("scope") == "project"
+                and response.get("readiness") == "ready" and response.get("next_actions") in (None, [])
+                and node["clients"][0].get("activation") == "active"
+                and node["clients"][0].get("authentication") == "not_required"
+                and type(selected) is list and len(selected) == 1 and type(selected[0]) is dict
+                and selected[0].get("alias") == identity and selected[0].get("targetId") == "copilot"
+                and selected[0].get("status") == ("unchanged" if repeated else "succeeded")
+                and selected[0].get("destinationPath") == str(project / binding["directory"])
+                and type(selected[0].get("candidateId")) is str
+                and re.fullmatch(r"sha256:[a-f0-9]{64}", selected[0]["candidateId"]) is not None)
 
 
 def kimi_log_fact(facts, reason, changed=None):
@@ -2299,12 +2542,25 @@ def audit_client_id(target, kind):
     return "codex" if (target, kind) == ("chatgpt", "plugin") else target
 
 
+def audit_native_roots(home, target):
+    """Include the actual Devin Global authority selected by the isolated env."""
+    roots = [home / relative for relative in NATIVE_ROOTS[target]]
+    if target == "windsurf":
+        # originalDevinGlobalRoot uses APPDATA on Windows and XDG_CONFIG_HOME
+        # on Linux/macOS. Both are fixed inside this HOME by isolated_client_env.
+        roots.append(home / ("AppData/Roaming/devin" if sys.platform == "win32"
+                             else ".config/devin"))
+    return roots
+
+
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-            signed_release_pins=None, *, client_version=None, historical_baseline=False):
+            signed_release_pins=None, *, client_version=None, historical_baseline=False,
+            grok_pretrusted=False):
     with ExitStack() as audits:
         return _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                         signed_release_pins, audits, client_version,
-                        **({"historical_baseline": True} if historical_baseline else {}))
+                        **({"historical_baseline": True} if historical_baseline else {}),
+                        **({"grok_pretrusted": True} if grok_pretrusted else {}))
 
 
 def scoped_lock_files_absent(root):
@@ -2319,7 +2575,15 @@ def historical_plugin_lock_files_absent(user_root, project_root):
 
 
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
-             signed_release_pins, audits, client_version, *, historical_baseline=False):
+             signed_release_pins, audits, client_version, *, historical_baseline=False,
+             grok_pretrusted=False):
+    if grok_pretrusted and (target, kind, sys.platform, platform.machine(), historical_baseline) != (
+            "grok", "skill", "linux", "x86_64", False):
+        raise ValueError("owner-pretrusted fixture requires Grok Project Skills on Linux x86_64")
+    windsurf_global_case = ((target, kind, sys.platform, platform.machine(), historical_baseline)
+                            == ("windsurf", "plugin", "linux", "x86_64", False)
+                            and isinstance(item, str) and item in WINDSURF_GLOBAL_AUDIT["CASES"])
+    private_case = grok_pretrusted or windsurf_global_case
     native_target = audit_client_id(target, kind)
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
@@ -2335,7 +2599,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     canonical_runroot = runroot.resolve(strict=True)
     if case_root.is_symlink():
         raise ValueError("audit case root is redirected")
-    case_root.mkdir(exist_ok=True)
+    case_root.mkdir(mode=0o700 if private_case else 0o777, exist_ok=True)
     if (runroot.is_symlink() or case_root.is_symlink() or not case_root.is_dir()
             or case_root.resolve(strict=True).parent != canonical_runroot):
         raise ValueError("audit case root escaped disposable run root")
@@ -2345,10 +2609,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if (path.is_symlink() or
                 not path.parent.resolve().is_relative_to(canonical_case)):
             raise ValueError("nested audit directory escapes disposable case")
-        path.mkdir(parents=True, exist_ok=True)
+        path.mkdir(mode=0o700 if private_case else 0o777, parents=True, exist_ok=True)
         if path.is_symlink() or not path.resolve().is_relative_to(canonical_case):
             raise ValueError("nested audit directory escapes disposable case")
-    native_roots = [home / v for v in NATIVE_ROOTS[native_target]]
+    native_roots = audit_native_roots(home, native_target)
     if any(not root.resolve().is_relative_to(case_root.resolve()) for root in native_roots):
         raise ValueError("native root escapes disposable case")
     sentinel = project / "foreign-untouched.txt"
@@ -2362,7 +2626,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         native_foreign.parent.mkdir(parents=True, exist_ok=True)
         native_foreign.write_text("unmanaged native neighbor must survive\n")
     # A pre-existing, unrelated project Skill is an independently owned neighbor.
-    project_skill_roots = PROJECT_SKILL_ROOTS.get(target, [])
+    project_skill_roots = observed_project_skill_roots(target)
     project_foreign = None
     if kind == "skill" and project_skill_roots:
         # Qoder's UAP-managed bundle is not an unmanaged native Skill location.
@@ -2384,8 +2648,21 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if native_target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
     env = isolated_client_env(home, case_root, data)
+    if grok_pretrusted:
+        env["GROK_DISABLE_AUTOUPDATER"] = "1"
     codex_skill_case = target == "codex" and kind == "skill"
+    grok_skill_case = target == "grok" and kind == "skill"
+    copilot_skill_case = target == "copilot" and kind == "skill"
+    qoder_skill_case = ((target, kind, sys.platform, platform.machine(), historical_baseline)
+                        == ("qoder", "skill", "linux", "x86_64", False))
+    qoder_skill_diagnostic = None
+    copilot_project_captures = {} if copilot_skill_case else None
+    copilot_project_binding = None
+    copilot_project_add_ready = copilot_project_repeat_ready = False
+    copilot_project_added = copilot_project_repeated = copilot_project_removed = False
     codex_runtime = None
+    grok_runtime = None
+    windsurf_runtime = None
     gemini_runtime = None
     gemini_native_baseline = None
     gemini_settings = gemini_settings_identity = None
@@ -2415,7 +2692,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 if not path.is_dir() or not path_inside_case(path, case_root):
                     raise ValueError("audit case profile/project root was redirected")
             for path in (*native_roots,
-                         *(project / rel for rel in project_skill_roots)):
+                         *(project / rel for rel in project_skill_roots),
+                         *((project / ".qoder/skills",) if qoder_skill_case else ()),
+                         *((project / ".github/copilot/settings.local.json",) if copilot_skill_case else ())):
                 if not path_inside_case(path, case_root):
                     raise ValueError("audit case native/project ancestor was redirected")
             if gemini_settings is not None:
@@ -2425,6 +2704,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     raise ValueError("Gemini audit context settings changed after external execution")
             if codex_runtime is not None:
                 codex_runtime.guard()
+            if grok_runtime is not None:
+                grok_runtime.guard()
+            if windsurf_runtime is not None:
+                windsurf_runtime.guard()
             if codex_plugin_sqlite is not None:
                 codex_plugin_sqlite.guard()
         except (OSError, RuntimeError) as error:
@@ -2432,14 +2715,62 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
 
     def audited_call(*args, **kwargs):
         assert_case_unchanged()
+        windsurf_transition = kwargs.pop("windsurf_transition", None)
+        if grok_pretrusted or copilot_skill_case or windsurf_global_case:
+            kwargs["capture_full"] = True
         outcome = call(*args, **kwargs)
+        if windsurf_runtime is not None:
+            try:
+                complete = outcome.get("stdout_full")
+                if type(complete) is not str:
+                    raise ValueError("public output is not complete text")
+                outcome["_json"] = WINDSURF_GLOBAL_AUDIT["strict_json"](complete.encode("utf-8"))
+            except (TypeError, ValueError, UnicodeError, RecursionError):
+                outcome["_json"] = None
+            if windsurf_transition is not None:
+                # Close the full public/state/lock/receipt delta before any
+                # post-call guard or next child may trust a new Skill subtree.
+                windsurf_runtime.after_public_transition(
+                    windsurf_transition, outcome["_json"], outcome, args[0])
         assert_case_unchanged()
+        if grok_pretrusted or copilot_skill_case:
+            try:
+                complete = outcome.get("stdout_full", "")
+                if type(complete) is not str:
+                    raise ValueError("public output is not complete text")
+                outcome["_json"] = GROK_PROJECT_AUDIT["strict_json"](complete.encode("utf-8"))
+            except (TypeError, ValueError, UnicodeError, RecursionError):
+                outcome["_json"] = None
         if historical_observer is not None:
             historical_observer.after_command()
             assert_case_unchanged()
         if codex_plugin_sqlite is not None:
             codex_plugin_sqlite.checkpoint("after-public-command")
         return outcome
+
+    def grok_observe(phase):
+        assert_case_unchanged()
+        record, stdout, stderr = NATIVE_RESEARCH["run_probe"](
+            [AGENT_BINARIES["grok"], "inspect", "--json"], project, env,
+            case_root, "grok-pretrusted-" + phase, timeout=30, limit=1 << 20, memory_only=True)
+        assert_case_unchanged()
+        return grok_runtime.observe(phase, record, stdout, stderr)
+
+    def windsurf_observe(phase):
+        assert_case_unchanged()
+        windsurf_runtime.begin_probe(phase)
+        record, stdout, stderr = NATIVE_RESEARCH["run_probe"](
+            [AGENT_BINARIES["windsurf"], "skills", "list", "--json"], Path("/"), env,
+            case_root, "windsurf-global-" + phase, timeout=10, limit=1 << 20, memory_only=True)
+        verified = windsurf_runtime.observe(phase, record, stdout, stderr)
+        assert_case_unchanged()
+        return verified
+
+    if windsurf_global_case:
+        windsurf_runtime = WINDSURF_GLOBAL_AUDIT["WindsurfGlobalSkillAudit"](
+            case_root, home, project, item, AGENT_BINARIES.get("windsurf"), client_version)
+        audits.callback(windsurf_runtime.close)
+        windsurf_observe("before")
 
     if gemini_skill_case:
         # The pinned native list initializes a model context even without a model call.
@@ -2450,10 +2781,17 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             stream.write(gemini_settings_text.encode("utf-8"))
         gemini_settings_identity = GEMINI_RUNTIME_AUDIT["_FILES"]["identity"](gemini_settings.lstat())
         assert_case_unchanged()
+    if grok_pretrusted:
+        grok_runtime = GROK_PROJECT_AUDIT["GrokPretrustedSkillAudit"](
+            case_root, home, project, item, AGENT_BINARIES.get("grok"), client_version)
+        audits.callback(grok_runtime.close)
+        assert_case_unchanged()
     if kind == "skill" and target in ("kimi", "grok"):
         # Grok inspect reports projectRoot from Git discovery. Never weaken its
         # strict native project identity contract to accept a missing root.
         initialize_project_skill_git_root(project, env, case_root)
+    if grok_runtime is not None:
+        grok_observe("before")
     if codex_skill_case and AGENT_BINARIES.get("codex"):
         codex_runtime = CODEX_RUNTIME_AUDIT["CodexRuntimeAudit"](
             AGENT_BINARIES["codex"], case_root, home, project, env, item["name"], project_foreign)
@@ -2526,6 +2864,17 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     before = snapshot(native_roots)
     claude_before = (scoped_snapshot(native_roots)
                      if (target, kind, sys.platform) == ("claude", "skill", "linux") else None)
+    if qoder_skill_case:
+        # Keep the original cold native baseline above. Discovery initialization
+        # is diagnostic only; none of its writes become a trusted baseline.
+        native = next((AGENT_BINARIES[name] for name in EXECUTABLE["qoder"]
+                       if AGENT_BINARIES.get(name)), None)
+        qoder_skill_diagnostic = QODER_SKILL_DIAGNOSTIC["QoderSkillDiagnostic"](
+            case_root, home, project, data, native, client_version,
+            artifacts=NATIVE_ARTIFACTS, run_probe=NATIVE_RESEARCH["run_probe"],
+            guard=assert_case_unchanged, env=env)
+        audits.callback(qoder_skill_diagnostic.close)
+        qoder_skill_diagnostic.observe("before")
     if kind == "plugin":
         identity = plugin_declared_names.get(item, item)
         args = ["add", item, "--target", target, "--scope", "user", "--format", "json"]
@@ -2541,6 +2890,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         scope = ["--scope", "project", "--project-root", str(project)]
     copilot_before = (copilot_settings_sanitized_shape(home, case_root, identity)
                       if kind == "plugin" and target == "copilot" else None)
+    if copilot_skill_case:
+        copilot_project_captures["before"] = copilot_project_settings_capture(project, case_root)
+        if not copilot_project_settings_empty(copilot_project_captures["before"]):
+            raise ValueError("Copilot Project settings fixture is not safely empty")
     add_timeout = install_case_timeout(target, kind, item)
     # Keep the original strict add/list/repeat/remove evidence; only avoid
     # inherited Windows Firebase child pipe handles masking parent exit.
@@ -2549,7 +2902,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     historical_scope_locks = (
         {"before-add": historical_plugin_lock_files_absent(data, project)}
         if historical_baseline and kind == "plugin" else None)
-    output = audited_call([cli, *args], env, project, add_timeout, **capture_option)
+    output = audited_call([cli, *args], env, project, add_timeout, **capture_option,
+                          **({"windsurf_transition": "add"} if windsurf_runtime is not None else {}))
+    if copilot_skill_case:
+        copilot_project_captures["after-add"] = copilot_project_settings_capture(project, case_root)
     if historical_scope_locks is not None:
         historical_scope_locks["after-add"] = historical_plugin_lock_files_absent(data, project)
     added_json = output.pop("_json", None)
@@ -2579,6 +2935,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     listed = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                    env, project, 30))
     listed_json = listed.pop("_json", None) if listed else None
+    if copilot_skill_case:
+        copilot_project_captures["after-list"] = copilot_project_settings_capture(project, case_root)
     if historical_scope_locks is not None:
         historical_scope_locks["after-list"] = historical_plugin_lock_files_absent(data, project)
     if historical_native_unchanged is not None:
@@ -2596,6 +2954,19 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if kind == "plugin" and isinstance(item, str) and not item.startswith("github:")
         else [])
     listed_identity = len(matching) == 1
+    if copilot_skill_case and listed_identity:
+        copilot_project_binding = copilot_project_skill_binding(
+            project, case_root, item, matching[0], skill_path)
+        initial, added = copilot_project_captures["before"], copilot_project_captures["after-add"]
+        copilot_project_added = bool(
+            copilot_project_settings_match(added, copilot_project_binding)
+            and added == copilot_project_captures["after-list"]
+            and all(value is None or added["parents"].get(key) == value
+                    for key, value in initial["parents"].items()))
+        copilot_project_add_ready = bool(copilot_project_added and copilot_project_skill_ready(
+            added_json, matching[0], copilot_project_binding, project, identity))
+    kiro_direct_prepared = bool(listed_identity and kiro_direct_prepared_installation(
+        matching[0], identity, native_target, kind, item))
     failed_install_registered = has_target_registration(listed_json, identity, native_target) if (
         output["exit_code"] != 0) else False
     failed_install_residue = bool(output["exit_code"] != 0 and (
@@ -2612,7 +2983,17 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         output["exit_code"] == 0 and listed["exit_code"] == 0 and listed_identity and
         (kind == "plugin" or
          (bool(skill_path) and lock_pinned and skill_bytes_match))
+        and (not copilot_skill_case or copilot_project_binding is not None)
     )
+    if grok_runtime is not None and installed:
+        grok_runtime.bind_installation(matching[0], skill_path, added_json)
+        grok_observe("add")
+    if qoder_skill_diagnostic is not None and installed:
+        qoder_skill_diagnostic.observe("add")
+    windsurf_owned = windsurf_runtime is not None and windsurf_runtime.owner is not None
+    if windsurf_owned:
+        windsurf_runtime.bind_installation(listed_json)
+        windsurf_observe("add")
     if gemini_skill_case and installed:
         gemini_baseline_before = snapshot(native_roots, include_directories=True)
         gemini_runtime = GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
@@ -2673,12 +3054,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                      and type(client_version.get("exit_code")) is int and client_version["exit_code"] == 0)
     kimi_repeat_log_facts = ({"captures": {phase: {} for phase in ("before", "after-add", "post-list")},
                               "append": {"reason": "not-reached"}} if kimi_log_case else None)
-    if installed:
+    if installed or windsurf_owned:
         before_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
         before_repeat_runtime = (codex_runtime.temporary_git_state()
                                  if codex_runtime is not None else None)
         before_repeat_project = (snapshot([project / root for root in project_skill_roots])
-                                 if grok_prepared else None)
+                                 if grok_skill_case or copilot_skill_case else None)
         lock_paths = (lock_root / "uap.toml", lock_root / "uap.lock")
         def lock_state():
             return tuple(
@@ -2691,7 +3072,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                             kimi_repeat_log_facts["captures"]["before"]) if kimi_log_case else None)
         repeat_add_started = datetime.now(timezone.utc)
         repeat_add = audited_call([cli, *args], env, project, add_timeout,
-                                  **capture_option)
+                                  **capture_option,
+                                  **({"windsurf_transition": "repeat"} if windsurf_runtime is not None else {}))
+        if copilot_skill_case:
+            copilot_project_captures["repeat-add"] = copilot_project_settings_capture(project, case_root)
         repeat_add_finished = datetime.now(timezone.utc)
         kimi_log_after = (kimi_repeat_log_capture(home, project, case_root,
                             kimi_repeat_log_facts["captures"]["after-add"]) if kimi_log_case else None)
@@ -2704,6 +3088,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         repeat_list_started = datetime.now(timezone.utc)
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
+        if copilot_skill_case:
+            copilot_project_captures["repeat-list"] = copilot_project_settings_capture(project, case_root)
         repeat_list_finished = datetime.now(timezone.utc)
         after_repeat_list = (snapshot(native_roots, include_directories=gemini_runtime is not None)
                              if codex_runtime is not None or gemini_runtime is not None else None)
@@ -2715,8 +3101,32 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             repeat_list_json, item, skill_path, project, repeat_add, repeated=True)
             if grok_prepared else matching_installations(
                 repeat_list_json, identity, native_target, kind, item, signed_release_pins))
+        if kiro_direct_prepared:
+            repeat_matches = [node for node in repeat_matches
+                if kiro_direct_prepared_installation(node, identity, native_target, kind, item)
+                and node["clients"][0]["package_revision"] == matching[0]["clients"][0]["package_revision"]]
+        if copilot_skill_case:
+            repeat_matches = [node for node in repeat_matches if copilot_project_skill_binding(
+                project, case_root, item, node, skill_path) == copilot_project_binding]
+            copilot_project_repeated = bool(
+                copilot_project_added and len(repeat_matches) == 1
+                and copilot_project_captures["after-add"] == copilot_project_captures["repeat-add"]
+                == copilot_project_captures["repeat-list"])
+            copilot_project_repeat_ready = bool(
+                copilot_project_repeated and copilot_project_skill_ready(
+                    repeat_add_json, repeat_matches[0], copilot_project_binding, project, identity, repeated=True)
+                and type(added_json) is dict and type(added_json.get("items")) is list
+                and len(added_json["items"]) == 1 and type(added_json["items"][0]) is dict
+                and repeat_add_json["items"][0]["candidateId"] == added_json["items"][0].get("candidateId"))
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
+        if grok_runtime is not None and len(repeat_matches) == 1:
+            grok_runtime.bind_installation(repeat_matches[0], skill_path, repeat_add_json,
+                                           repeated=True)
+            grok_observe("repeat")
+        if windsurf_owned:
+            windsurf_runtime.bind_installation(repeat_list_json, repeated=True)
+            windsurf_observe("repeat")
         if codex_runtime is not None:
             codex_runtime.checkpoint("repeat-installed", True)
             codex_repeat_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](
@@ -2744,14 +3154,15 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     before_repeat_native, after_repeat_native, kimi_repeat_log_facts["append"])
                 repeat_native_runtime_only = kimi_repeat_log_proof is not None
         repeat_project_unchanged = (snapshot([project / root for root in project_skill_roots])
-                                    == before_repeat_project if grok_prepared else None)
+                                    == before_repeat_project if grok_skill_case or copilot_skill_case else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
         historical_repeat_lifecycle_verified = bool(
             repeat_add["exit_code"] == 0 and repeat_list["exit_code"] == 0
             and len(repeat_matches) == 1
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
             and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
-            and (not grok_prepared or repeat_project_unchanged)
+            and (not (grok_skill_case or copilot_skill_case) or repeat_project_unchanged)
+            and (not copilot_skill_case or copilot_project_repeated)
         )
         repeat_verified = bool(historical_repeat_lifecycle_verified
                                and (not codex_skill_case or codex_repeat_ready)
@@ -2759,6 +3170,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if historical_observer is not None:
             historical_repeat_add_verified = HISTORICAL_CODEX["historical_add"](
                 repeat_add_json, repeat_matches, item, project / skill_path, repeated=True)
+        if qoder_skill_diagnostic is not None:
+            # The public repeat was evaluated already; diagnostic writes cannot
+            # conceal its mutations or become an allowed runtime delta.
+            qoder_skill_diagnostic.observe("repeat")
     # BUG-039: independent native ID+version proof before UAP removes it.
     qoder_native_before_remove = None
     if target == "qoder" and kind == "plugin" and installed and repeat_verified:
@@ -2799,7 +3214,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     cleanup = None
     cleanup_json = None
     native_uninstall = None
-    if installed:
+    if installed or windsurf_owned:
         # Codex explicitly requires external uninstall before UAP can settle a
         # user-scope plugin removal. We execute and verify the real native
         # plugin + marketplace commands, never attest on a guessed state.
@@ -2811,16 +3226,26 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 codex_plugin_sqlite.checkpoint("after-native-uninstall")
         attestation = (["--external-uninstalled"] if
                        native_uninstall and native_uninstall["completed"] else [])
-        # Grok project Skills have generated bundle names; never select by raw alias.
-        selector = matching[0]["installation_id"] if grok_prepared else identity
+        # Source-bound prepared delivery removes its recorded owner, never a display alias.
+        selector = matching[0]["installation_id"] if grok_skill_case or copilot_skill_case or kiro_direct_prepared else identity
+        if windsurf_owned:
+            selector = windsurf_runtime.owner["uuid"]
+            windsurf_runtime.begin_remove()
+        if grok_runtime is not None:
+            grok_runtime.begin_remove()
         cleanup = audited_call([cli, "remove", selector, "--target", target, *scope,
-                        *attestation, "--format", "json"], env, project, 60)
+                        *attestation, "--format", "json"], env, project, 60,
+                        **({"windsurf_transition": "remove"} if windsurf_runtime is not None else {}))
         cleanup_json = cleanup.pop("_json", None)
+        if copilot_skill_case:
+            copilot_project_captures["after-remove"] = copilot_project_settings_capture(project, case_root)
     qoder_native_after_remove = None
     if target == "qoder" and kind == "plugin" and cleanup and cleanup["exit_code"] == 0:
         qoder_native_after_remove = qoder_native_plugin_state(
             home, env, project, identity)
         assert_case_unchanged()
+    if qoder_skill_diagnostic is not None and cleanup and cleanup["exit_code"] == 0:
+        qoder_skill_diagnostic.observe("remove")
     sentinels_preserved = (
         preserved_regular_text(sentinel, "foreign content never belongs to UAP\n", case_root)
         and preserved_regular_text(user_sentinel, "foreign profile content never belongs to UAP\n", case_root)
@@ -2831,6 +3256,20 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     post_list = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
     post_list_json = post_list.pop("_json", None) if post_list else None
+    if copilot_skill_case and post_list:
+        removed = copilot_project_settings_capture(project, case_root)
+        copilot_project_captures["after-remove-list"] = removed
+        copilot_project_removed = bool(
+            copilot_project_settings_empty(removed)
+            and removed == copilot_project_captures.get("after-remove")
+            and removed["parents"] == copilot_project_captures["after-add"].get("parents")
+            and all(value is None or removed["parents"].get(key) == value
+                    for key, value in copilot_project_captures["before"]["parents"].items()))
+    if grok_runtime is not None and cleanup and cleanup["exit_code"] == 0:
+        grok_observe("remove")
+    if windsurf_owned and cleanup and cleanup["exit_code"] == 0:
+        windsurf_runtime.confirm_removed_list(post_list_json)
+        windsurf_observe("remove")
     if codex_runtime is not None and cleanup and cleanup["exit_code"] == 0:
         codex_runtime.checkpoint("removed", False)
         assert_case_unchanged()
@@ -2873,14 +3312,16 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         except (KeyError, TypeError):
             pass
     old_ids = {entry["installation_id"] for entry in matching}
+    if windsurf_owned:
+        old_ids.add(windsurf_runtime.owner["uuid"])
     # A successful remove must not re-register this identity under a new ID.
     post_remove_identity_registered = bool(
         post_list_schema_valid and (
             has_target_registration(
                 post_list_json, identity, native_target,
                 skill_source=f'{item["repo"]}/skills/{item["folder"]}'
-                if kind == "skill" and target == "claude" else None)
-            or (grok_prepared and grok_prepared_source_survives(
+                if kind == "skill" and target in ("claude", "copilot") else None)
+            or (grok_skill_case and matching and grok_prepared_source_survives(
                 post_list_json, item, matching[0]["name"], matching[0]["installation_id"]))))
     post_lock_pinned = bool(kind == "skill" and (project / "uap.lock").exists()
                             and locked_skill_is_pinned(project, item, target))
@@ -2958,6 +3399,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         # This fresh case owns the whole signed kit closure. An original or
         # reminted child record must not survive even when native state is empty.
         and (kind != "plugin" or item != "marketing-kit" or post_list_empty)
+        # A fresh direct-source Kiro case cannot retain a reminted registration.
+        and (not kiro_direct_prepared or post_list_empty)
+        and (not windsurf_owned or post_list_empty)
+        and (not copilot_skill_case or (post_list_empty and copilot_project_removed))
         and (target != "qoder" or kind != "plugin"
              or (qoder_native_after_remove is not None
                  and qoder_native_after_remove["status"] == "absent"))
@@ -2980,7 +3425,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         status = "repeat-add-unqualified"
     elif installed and removal_verified and sentinels_preserved and repeat_verified:
         status = ("prepared-lifecycle-passed" if (
-                       kind == "plugin" and prepared_components_only)
+                       kind == "plugin" and (prepared_components_only or kiro_direct_prepared))
                   else "package-installed-native-unqualified" if (
                        kind == "plugin" and (
                            (target == "qoder" and
@@ -3048,12 +3493,41 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if kind == "skill" else None)
     if status == "passed" and skill_public_ready is not None and not all(skill_public_ready.values()):
         status = "incomplete-native-proof"
+    if status == "passed" and copilot_skill_case and not (
+            copilot_project_add_ready and copilot_project_repeat_ready):
+        status = "incomplete-native-proof"
+    if (status == "passed" and target == "kiro" and kind == "plugin"
+            and not kiro_plugin_components_observable(added_json)):
+        status = "package-installed-native-unqualified"
+    grok_native_verified = grok_runtime.finish() if grok_runtime is not None else None
+    if status == "passed" and grok_runtime is not None and grok_native_verified is not True:
+        status = "incomplete-native-proof"
+    windsurf_native_verified = windsurf_runtime.finish() if windsurf_runtime is not None else None
+    if windsurf_runtime is not None:
+        # Keep generic component support/attribution truthful. Only this closed,
+        # independently source-bound native inventory can qualify these four.
+        if (windsurf_native_verified is True and installed and repeat_verified
+                and removal_verified and sentinels_preserved and not prepared_binding):
+            status = "passed"
+        elif status == "passed":
+            status = "incomplete-native-proof"
+    # Pi's public completion and file receipts do not supply an independent
+    # before/add/repeat/remove native inventory proof for this catalog lane.
+    if status == "passed" and (native_target, kind) == ("pi", "plugin"):
+        status = "package-installed-native-unqualified"
     if historical_scope_locks is not None:
         historical_scope_locks["final"] = historical_plugin_lock_files_absent(data, project)
     if historical_native_unchanged is not None:
         historical_native_unchanged["final"] = snapshot(native_roots) == before
     return {"kind": kind, "index": index, "identity": identity, "target": target,
             **({"canonical_client_id": native_target} if target == "chatgpt" else {}),
+            **({"project_profile": "owner-pretrusted",
+                "grok_pretrusted_native_proof": grok_runtime.evidence()}
+               if grok_runtime is not None else {}),
+            **({"windsurf_global_native_proof": windsurf_runtime.evidence()}
+               if windsurf_runtime is not None else {}),
+            **({"qoder_skill_diagnostic": qoder_skill_diagnostic.evidence()}
+               if qoder_skill_diagnostic is not None else {}),
             "source": item if kind == "plugin" else item["source"],
             "status": status, "install": output, "list": listed,
             "native_file_delta": len(changed),
@@ -3079,6 +3553,14 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     installation_ids=old_ids | set(repeat_identity_ids) if kind == "skill" else None,
                     skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None)},
             "public_skill_ready": skill_public_ready,
+            **({"copilot_project_skill_registration": {
+                "binding": copilot_project_binding,
+                "captures": {phase: {key: value for key, value in capture.items() if not key.startswith("_")}
+                             for phase, capture in copilot_project_captures.items()},
+                "added": copilot_project_added, "repeated": copilot_project_repeated,
+                "removed": copilot_project_removed,
+                "public_ready": {"add": copilot_project_add_ready, "repeat": copilot_project_repeat_ready}}}
+               if copilot_skill_case else {}),
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
@@ -3171,8 +3653,9 @@ def expected_negative_coverage(row, cli_version=None):
         if (row.get("status") == "prepared-lifecycle-passed"
                 and row.get("prepared_components_only") is True):
             return True
-        # Only these immutable sources in the verified 0.1.95 / 0.1.101 / 0.1.102
-        # catalog have a clean lifecycle but no attributable native component.
+        # These immutable sources in the verified 0.1.95 / 0.1.101 / 0.1.102 /
+        # source-built 0.1.115 catalog have a clean non-native lifecycle.
+        # .115: original run 44939583899, artifact 14726623430, exact fc68 head.
         # An unknown or newly unqualified source must still fail this audit.
         non_native_direct_sources = {
             "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d",
@@ -3181,7 +3664,8 @@ def expected_negative_coverage(row, cli_version=None):
             "github:uizze/uizze@fc401e9e654cbafe427b0c98142fc8bccd0c4e7e",
         }
         if (row.get("status") == "package-installed-native-unqualified"
-                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101", "agentplugins 0.1.102")
+                and cli_version in ("agentplugins 0.1.95", "agentplugins 0.1.101", "agentplugins 0.1.102",
+                                    "agentplugins 0.1.115")
                 and row.get("prepared_components_only") is False
                 and native_files == []
                 and row.get("source") in non_native_direct_sources):
@@ -3254,7 +3738,12 @@ def main():
     p.add_argument("--report-dir", required=True)
     p.add_argument("--acceptance", choices=("native", HISTORICAL_CODEX["ACCEPTANCE"],
                     HISTORICAL_CODEX["EXPIRED_PLUGIN_ACCEPTANCE"]), default="native")
+    p.add_argument("--grok-project-profile", choices=("cold", "owner-pretrusted"), default="cold")
     args = p.parse_args()
+    grok_pretrusted = args.grok_project_profile == "owner-pretrusted"
+    if grok_pretrusted and (args.target, args.kind, sys.platform, platform.machine(), args.acceptance) != (
+            "grok", "skill", "linux", "x86_64", "native"):
+        p.error("owner-pretrusted profile requires the native Grok Skill scenario on Linux x86_64")
     historical_skills = args.acceptance == HISTORICAL_CODEX["ACCEPTANCE"]
     historical_plugins = args.acceptance == HISTORICAL_CODEX["EXPIRED_PLUGIN_ACCEPTANCE"]
     historical_baseline = historical_skills or historical_plugins
@@ -3288,10 +3777,14 @@ def main():
         report["acceptance"] = args.acceptance
     if historical_skills:
         report.update(HISTORICAL_CODEX["summary"](report, doc))
-    report_file = report_dir / f"{args.target}-{args.kind}.json"
+    if grok_pretrusted:
+        report["project_profile"] = "owner-pretrusted"
+    report_suffix = "-owner-pretrusted" if grok_pretrusted else ""
+    report_file = report_dir / f"{args.target}-{args.kind}{report_suffix}.json"
     def save():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     native_target = audit_client_id(args.target, args.kind)
+    signed_release_pins = effective_signed_release_pins(doc, native_target)
     if args.target == "chatgpt":
         report["canonical_client_id"] = native_target
     eligible_binaries = EXECUTABLE.get(native_target, ())
@@ -3336,6 +3829,8 @@ def main():
         probe_home.mkdir(parents=True)
         probe_data.mkdir()
         probe_env = isolated_client_env(probe_home, probe_case, probe_data)
+        if grok_pretrusted:
+            probe_env["GROK_DISABLE_AUTOUPDATER"] = "1"
         report["cli_version"] = version_evidence([cli, "version"], probe_env, probe_case)
         if eligible_binaries:
             native = next(AGENT_BINARIES[name] for name in eligible_binaries
@@ -3347,11 +3842,14 @@ def main():
             try:
                 result = do_case(cli, args.target, args.kind, item, i, runroot,
                                  doc["plugin_declared_names"],
-                                 doc["signed_release_pins"],
+                                 signed_release_pins,
                                  **({"client_version": report.get("client_version")}
-                                    if (args.target, args.kind) in (("gemini", "skill"), ("kimi", "skill"))
-                                    or args.target == "opencode" else {}),
-                                 **({"historical_baseline": True} if historical_baseline else {}))
+                                    if (args.target, args.kind) in (("gemini", "skill"), ("kimi", "skill"), ("qoder", "skill"))
+                                    or args.target == "opencode" or grok_pretrusted
+                                    or ((args.target, args.kind) == ("windsurf", "plugin")
+                                        and isinstance(item, str) and item in WINDSURF_GLOBAL_AUDIT["CASES"]) else {}),
+                                 **({"historical_baseline": True} if historical_baseline else {}),
+                                 **({"grok_pretrusted": True} if grok_pretrusted else {}))
             except Exception as e:
                 result = {"kind": args.kind, "target": args.target, "index": i,
                           "source": item if args.kind == "plugin" else item["source"],
@@ -3359,6 +3857,10 @@ def main():
                                        if args.kind == "plugin" else item["name"]),
                           "status": "harness-error", "error": repr(e),
                           "error_traceback": bounded_error_traceback(e)}
+                if isinstance(e, WINDSURF_GLOBAL_AUDIT["CustodyError"]) and hasattr(e, "audit_evidence"):
+                    result["windsurf_global_native_proof"] = e.audit_evidence
+                if isinstance(e, QODER_SKILL_DIAGNOSTIC["QoderDiagnosticCustodyError"]) and hasattr(e, "audit_evidence"):
+                    result["qoder_skill_diagnostic"] = e.audit_evidence
             report["results"].append(result)
             report["cases_attempted"] += 1
             save()
@@ -3368,7 +3870,7 @@ def main():
                 line.update(failed_case_diagnostics(result))
             if result["status"] == "incomplete-native-proof" and args.kind == "plugin":
                 line["observed_signed_release"] = result.get("signed_release_observation", [])
-                line["expected_signed_release"] = doc["signed_release_pins"].get(item)
+                line["expected_signed_release"] = signed_release_pins.get(item)
             print(json.dumps(line), flush=True)
     passed = sum(r["status"] == "passed" for r in report["results"])
     report["passed"] = passed

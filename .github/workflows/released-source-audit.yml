@@ -66,7 +66,7 @@ jobs:
   # new public release is cut, so merging harness changes never depends on the
   # release that is currently published.
   source-lifecycle:
-    name: Public .108 / ${{ matrix.client }} / ${{ matrix.target }}
+    name: Public .116 / ${{ matrix.client }} / ${{ matrix.target }}
     if: github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35

@@ -502,5 +502,18 @@
       "tree_digest": "sha256:2ce143ac1068f56e8674b1160c6c82515d0387529d5dbf13f03b2e080a3953d0",
       "manifest_digest": "sha256:ea444f4814659dde61a78073d55377abd04d34fe9c09af7c9bbb41c93097523e"
     }
+  },
+  "signed_release_pins_by_target": {
+    "pi": {
+      "context7": {
+        "distribution": "777genius/context7",
+        "repository": "777genius/universal-agent-plugins-registry",
+        "path": "plugins/context7",
+        "revision": "8360159c07140d17cbd4060a110553092c9cd245",
+        "sequence": 7,
+        "tree_digest": "sha256:635e673ec3aa8440a2826dc3a677ebe652b63e542db2e861b61d2df7f55e48b3",
+        "manifest_digest": "sha256:1c1b8633e99d8ae10ed804b2c98532c4e08049b95f6229a6dd0b3746bdaea496"
+      }
+    }
   }
 }
