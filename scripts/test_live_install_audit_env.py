@@ -2408,6 +2408,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "verify_fixed_vscode_user_policy_refusal": lambda *_: self.fail("historical45 is not a current gate"),
                     "verify_current_vscode_user_boundary": boundary,
                     "observe_production_policy": observe,
+                    # This shared scope/report fixture already replaces public
+                    # and native operations; SQLite semantics have their own
+                    # real-database Marketing Kit regression tests.
+                    "initialize_codex_sqlite": lambda *_: SimpleNamespace(
+                        checkpoint=lambda *_: None, evidence=lambda: {}),
                     "codex_user_native_remove_attestation": lambda *_: ("--external-uninstalled",),
                     # Patch the runner binding, preserving tempfile for setup helpers.
                     "tempfile": SimpleNamespace(TemporaryDirectory=CheckedCleanup),
