@@ -11,6 +11,7 @@ on:
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/test_marketing_kit_codex_sqlite.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/codex_runtime_audit.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   push:
     branches: [main]
@@ -22,6 +23,7 @@ on:
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/test_marketing_kit_codex_sqlite.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/codex_runtime_audit.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   workflow_dispatch:
 

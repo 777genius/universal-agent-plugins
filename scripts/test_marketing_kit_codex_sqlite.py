@@ -31,6 +31,9 @@ class MarketingKitCodexSQLiteTests(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
         events = workflow.split("permissions:", 1)[0]
         self.assertEqual(events.count("      - 'scripts/prepare-codex-linux-sandbox.sh'"), 2)
+        for event, next_event in (("pull_request", "push"), ("push", "workflow_dispatch")):
+            event_filters = events.split(f"  {event}:\n", 1)[1].split(f"  {next_event}:\n", 1)[0]
+            self.assertIn("scripts/codex_runtime_audit.py", event_filters)
 
     def setUp(self):
         self.runner = run_path(str(Path(__file__).with_name("marketing-kit-project-release-e2e.py")))
