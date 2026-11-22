@@ -206,8 +206,9 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertNotIn("universal-agent-plugins", native)
         build = steps["Build exact current-source CLI for Windows"]
         self.assertIn("if: ${{ !cancelled() }}", build)
-        self.assertIn("go build -trimpath -ldflags='-X main.version=0.1.95'", build)
+        self.assertIn("go build -trimpath -ldflags='-X main.version=0.1.115'", build)
         source = steps["Genuine current-source Firebase add, repeat, native attribution and remove"]
+        self.assertIn("assert cli_version == 'agentplugins 0.1.115'", source)
         self.assertIn("if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}", source)
         self.assertIn("AUDIT_VENDOR_OUTCOME: ${{ steps.native-bootstrap.outcome }}", source)
         self.assertIn("assert actual_head == os.environ['GITHUB_SHA'] and clean_worktree", source)
