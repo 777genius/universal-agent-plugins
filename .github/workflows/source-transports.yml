@@ -2,6 +2,7 @@ name: Source transports
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'install/integrationctl/agentplugins/**'
       - 'cli/internal/agentpluginscli/**'
@@ -30,6 +31,7 @@ concurrency:
 
 jobs:
   native-ssh:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
     name: native-ssh-linux
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-24.04' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 15
