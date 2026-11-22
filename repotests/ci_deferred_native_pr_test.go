@@ -49,7 +49,8 @@ func TestCIDeferredNativePR_ReadyAndReleaseBoundary(t *testing.T) {
 			var pr struct {
 				Types []string `yaml:"types"`
 			}
-			if err := w.On["pull_request"].Decode(&pr); err != nil {
+			prEvent := w.On["pull_request"]
+			if err := prEvent.Decode(&pr); err != nil {
 				t.Fatal(err)
 			}
 			slices.Sort(pr.Types)
