@@ -8423,13 +8423,19 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
         with patch.object(audit.sys, "platform", "win32"):
             for target in ("codex", "claude", "opencode", "gemini",
                            "copilot", "cline", "kimi", "qoder", "pi"):
-                self.assertEqual(audit.install_case_timeout(target, "plugin", "firebase"), 180)
+                expected = 660 if target == "claude" else 180
+                self.assertEqual(audit.install_case_timeout(target, "plugin", "firebase"), expected)
                 self.assertEqual(audit.install_case_timeout(target, "plugin", "docker-hub"), 105)
                 self.assertEqual(audit.install_case_timeout(target, "skill", "firebase"), 105)
         with patch.object(audit.sys, "platform", "darwin"):
             self.assertEqual(audit.install_case_timeout("codex", "plugin", "firebase"), 105)
         with patch.object(audit.sys, "platform", "linux"):
             self.assertEqual(audit.install_case_timeout("claude", "plugin", "firebase"), 105)
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/agentplugins-windows-firebase-capture-probe.yml").read_text()
+        # Dispatch runs both historical and current cases, including repeat.
+        self.assertIn("    timeout-minutes: 70\n", workflow)
+        self.assertGreater(70 * 60, 2 * (2 * 660 + 3 * 30 + 60 + 2 * 5))
 
 
 
