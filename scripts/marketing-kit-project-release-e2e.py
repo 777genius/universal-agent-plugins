@@ -1587,9 +1587,12 @@ def verify_copilot_cold_project_refusal(cli, env, project):
     """A locked agreement cannot grant Copilot's remembered folder consent."""
     reason = "copilot has not remembered the selected project folder; rerun installation to restore folder trust"
     trust = Path(env["HOME"]) / ".copilot/config.json"
-    read_trust = lambda: audit["copilot_settings_read"](trust, project.parent)
     guard = audit["copilot_native_roots_guard"](Path(env["HOME"]), env, project)
     guard()
+    # macOS temp profiles may spell the trusted ancestor /var or /private/var.
+    # Anchor the reader to the held canonical case after verifying its identity.
+    case_root = project.parent.resolve(strict=True)
+    read_trust = lambda: audit["copilot_settings_read"](trust, case_root)
     if read_trust() != (None, "absent"):
         raise AssertionError("cold Copilot Project already has native folder trust config")
     native_home = scoped_snapshot([Path(env["HOME"])])
@@ -2014,8 +2017,12 @@ def main():
                 # after the real install/restore; never warm cold B/C first.
                 # Its runtime baseline has no path-name exceptions. Foreign,
                 # Project/data and peers remain protected during initialization.
+                canonical_root = root.resolve(strict=True)
                 for candidate in (Path(e["HOME"]), Path(e["AGENTPLUGINS_HOME"]), p):
-                    if not audit["path_inside_case"](candidate, root):
+                    # Reject interior links in either spelling of the same owned
+                    # root; only the trusted macOS temporary ancestor may differ.
+                    if not (audit["path_inside_case"](candidate, root)
+                            or audit["path_inside_case"](candidate, canonical_root)):
                         raise AssertionError("Claude native observation root is unsafe")
                 complete = profile_snapshot(e, p)
                 if (any(key.startswith(("root-link:", "link:")) for key in complete)

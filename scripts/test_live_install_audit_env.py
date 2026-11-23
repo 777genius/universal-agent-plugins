@@ -2914,6 +2914,32 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 self.assertFalse(report["two_scope_lifecycle_qualified"])
                 self.assertNotIn("owner-confirmed saved add B", phases)
 
+    def test_marketing_kit_copilot_cold_trust_accepts_owned_temp_ancestor_alias(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            canonical = Path(temporary) / "canonical"
+            canonical.mkdir()
+            alias = Path(temporary) / "alias"
+            try:
+                alias.symlink_to(canonical, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"host cannot create a temporary path alias: {error}")
+            root = alias / "cases"
+            root.mkdir()
+            env, project, *_ = runner["run_case"]("unused", "copilot", root, "B")
+            for name in ("uap.toml", "uap.lock"):
+                (project / name).write_text("retained agreement")
+            reached = []
+            def stop_before_native_call(*_args, **_kwargs):
+                reached.append(True)
+                raise RuntimeError("reached genuine cold invocation boundary")
+            verify = runner["verify_copilot_cold_project_refusal"]
+            with patch.dict(verify.__globals__, {"invoke": stop_before_native_call}):
+                with self.assertRaisesRegex(RuntimeError, "reached genuine cold invocation boundary"):
+                    verify("unused", env, project)
+            self.assertEqual(reached, [True])
+
     def test_marketing_kit_copilot_refusal_accepts_only_receipt_bound_private_materialization(self):
         def materialize(response, _env, project):
             private = project / ".uap"
@@ -8047,10 +8073,13 @@ module.exports = {
                 def fake_call(argv, env, cwd, timeout=105):
                     if argv[1] == "skills":
                         state["add_count"] = state.get("add_count", 0) + 1
-                        skill.parent.mkdir(parents=True, exist_ok=True)
-                        skill.write_text("---\nname: demo-skill\n---\n")
-                        (project / "uap.toml").write_text("demo-skill\n")
-                        (project / "uap.lock").write_text('{"name":"demo-skill"}')
+                        # A genuine repeated add is a no-op: Cursor checks the
+                        # pinned tree's inode/mtime as well as its content.
+                        if not state["installed"]:
+                            skill.parent.mkdir(parents=True, exist_ok=True)
+                            skill.write_text("---\nname: demo-skill\n---\n")
+                            (project / "uap.toml").write_text("demo-skill\n")
+                            (project / "uap.lock").write_text('{"name":"demo-skill"}')
                         state["installed"] = True
                     elif argv[1] == "remove":
                         skill.unlink()
