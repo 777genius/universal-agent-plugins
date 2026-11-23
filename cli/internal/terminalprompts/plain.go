@@ -43,9 +43,6 @@ func (p PlainPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelecti
 	if err != nil {
 		return prompt.TargetSelectionResult{}, err
 	}
-	if err := writeSkipped(p.Output, r.SkippedLabels, terminaltheme.For(p.Output).Enabled); err != nil {
-		return prompt.TargetSelectionResult{}, err
-	}
 	result, err := p.selectMany(ctx, req)
 	if errors.Is(err, context.Canceled) {
 		return prompt.TargetSelectionResult{}, canceledPrompt(err)
@@ -104,7 +101,7 @@ func (p PlainPrompter) selectMany(ctx context.Context, req installerui.MultiSele
 		if e != nil {
 			return installerui.Selection{}, e
 		}
-		result, err = u.SelectMany(ctx, req.SelectRequest)
+		result, err = u.SelectManyWithNotes(ctx, req, terminaltheme.For(p.Output).Enabled)
 	}
 	return result, err
 }

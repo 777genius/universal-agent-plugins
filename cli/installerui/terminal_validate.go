@@ -88,6 +88,12 @@ func normalizeMulti(req MultiSelectRequest) (MultiSelectRequest, error) {
 	}
 	req.Options = options
 	req.Defaults = canonicalIDs(options, defaults)
+	if req.Annotations, err = normalizeAnnotations(req.Annotations, seen); err != nil {
+		return MultiSelectRequest{}, err
+	}
+	if req.UnavailableHeading, req.Unavailable, err = normalizeUnavailable(req.UnavailableHeading, req.Unavailable); err != nil {
+		return MultiSelectRequest{}, err
+	}
 	return req, nil
 }
 
