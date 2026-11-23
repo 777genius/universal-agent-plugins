@@ -3449,7 +3449,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
             def checkpoint(self, stage):
                 phases.append("codex-sqlite:" + self.label + ":" + stage)
-                if codex_sqlite_error == stage:
+                if codex_sqlite_error == (self.label, stage):
                     raise ValueError("Codex SQLite semantic baseline changed")
                 self.observations.append({"phase": stage})
 
@@ -3618,12 +3618,22 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
     def test_marketing_kit_codex_sqlite_mutation_fails_closed(self):
         code, report, phases = self._exercise_marketing_kit_scope_report(
-            "codex", codex_sqlite_error="remove B")
+            "codex", codex_sqlite_error=("B", "remove B"))
         self.assertEqual(code, 1)
         self.assertIn("Codex SQLite semantic baseline changed", report["failure"])
         self.assertFalse(report["two_scope_lifecycle_qualified"])
         self.assertIn("codex-sqlite:B:remove B", phases)
         self.assertNotIn("codex_sqlite_runtime", report)
+
+    def test_marketing_kit_codex_peer_sqlite_mutation_fails_closed(self):
+        # User A's command must also audit B's large runtime/WAL, not only A.
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "codex", codex_sqlite_error=("B", "User add"))
+        self.assertEqual(code, 1)
+        self.assertIn("Codex SQLite semantic baseline changed", report["failure"])
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertIn("codex-sqlite:A:User add", phases)
+        self.assertIn("codex-sqlite:B:User add", phases)
 
     def test_marketing_kit_removed_record_info_is_not_a_catalog_policy(self):
         from runpy import run_path

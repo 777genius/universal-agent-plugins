@@ -1,5 +1,6 @@
 """Inert published-wrapper ownership/routing tests; never native qualification."""
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -28,7 +29,7 @@ class PublishedRemotionTempRootTest(unittest.TestCase):
         self.default = self.base / "default-windows-profile-with-a-longer-physical-spelling"
         self.runner.mkdir()
         self.default.mkdir()
-        self.cli = self.base / "inert-published-cli.cmd"
+        self.cli = self.base / "inert-published-cli.exe"
         self.cli.write_bytes(b"inert fixture, never executed\n")
         self.script = run_path(str(ROOT / "scripts/remotion_published_windows_long_temp_e2e.py"))
         self.audit = run_path(str(ROOT / "scripts/live-install-audit.py"))
@@ -126,10 +127,16 @@ class PublishedRemotionTempRootTest(unittest.TestCase):
         commands = SimpleNamespace(run=version_call, check_output=lambda *args, **kwargs:
                                   "inert-wrapper-source" if kwargs.get("text") else self.fixture_bytes)
         environment = SimpleNamespace(name="nt", environ={"RUNNER_TEMP": str(self.runner)})
+        def acquire():
+            self.assertEqual(self.created, [], "published acquisition must precede custody profiles")
+            return self.cli, {"package_name": "universal-agent-plugins", "package_version": "0.1.102",
+                              "sha256_verified": True, "acquisition_scope": "runner-before-isolated-cases"}
+
         main = self.script["main"]
         error = None
         with patch.dict(main.__globals__, {
                 "os": environment, "subprocess": commands, "importlib": imports,
+                "acquire_published_cli": acquire,
                 "tempfile": SimpleNamespace(mkdtemp=create)}), \
                 patch.object(shutil, "which", return_value=str(self.cli)), \
                 patch.object(Path, "resolve", resolve), patch.object(Path, "lstat", lstat), \
@@ -139,7 +146,7 @@ class PublishedRemotionTempRootTest(unittest.TestCase):
             except SystemExit as caught:
                 error = str(caught)
             delete.assert_not_called()
-        self.assertEqual(len(versions), 1)
+        self.assertEqual(len(versions), 2 if version.strip() == "agentplugins 0.1.102" else 1)
         report = self.runner / "remotion-windows-published-0.1.102.json"
         return error, json.loads(report.read_text()) if report.exists() else None
 
@@ -149,7 +156,7 @@ class PublishedRemotionTempRootTest(unittest.TestCase):
         self.assertEqual(len(self.calls), 2)
         self.assertEqual(report["published_version"], "agentplugins 0.1.102")
         self.assertEqual(report["published_tag"], "agentplugins-v0.1.102")
-        self.assertEqual(report["cli_path_kind"], "published-npm-windows")
+        self.assertEqual(report["cli_path_kind"], "published-npm-acquired-windows-executable")
         for label, (lexical, physical, previous) in zip(
                 ("runner-temp", "default-windows-temp"), self.created):
             retained = report["temp_roots"][label]
@@ -228,6 +235,75 @@ class PublishedRemotionTempRootTest(unittest.TestCase):
         finally:
             separate.tearDown()
             separate.doCleanups()
+
+
+
+    def acquisition(self, *, digest=None, mutation=None, extra=b""):
+        """Exercise actual acquisition, replacing only subprocess and NTFS transport."""
+        acquire = self.script["acquire_published_cli"]
+        original = self.cli.read_bytes()
+        payload = {"binary_path": str(self.cli), "version": "0.1.102",
+                   "package_name": "universal-agent-plugins", "package_version": "0.1.102",
+                   "asset": {"file": "agentplugins_0.1.102_windows_amd64.exe",
+                             "size": len(original),
+                             "sha256": digest or hashlib.sha256(original).hexdigest()}}
+        self.cli.write_bytes(original + extra)
+        calls, held = [], []
+        class InertCustody:
+            def __init__(backend, deadline):
+                backend.fd, backend.guards, backend.closed = None, 0, False
+                backend.parent = None
+                held.append(backend)
+            def hold(backend, parent):
+                backend.parent = parent
+            def open_file(backend, path, limit):
+                if backend.parent != path.parent or limit != len(original):
+                    raise AssertionError("exact parent and size bound required")
+                backend.fd = os.open(path, os.O_RDONLY)
+                # Oversized transport case deliberately challenges the caller.
+                return backend.fd, len(original)
+            def guard(backend):
+                backend.guards += 1
+                if mutation and backend.guards == 4:
+                    raise ValueError(mutation)
+            def close(backend):
+                if backend.fd is not None:
+                    os.close(backend.fd)
+                backend.closed = True
+        def transport(argv, **options):
+            calls.append(argv)
+            return SimpleNamespace(returncode=0, stderr="",
+                stdout=str(self.base) if len(calls) == 1 else json.dumps(payload))
+        try:
+            with patch.dict(acquire.__globals__, {
+                    "subprocess": SimpleNamespace(run=transport),
+                    "_WINDOWS_CUSTODY": {"Custody": InertCustody}}), \
+                    patch.object(shutil, "which", side_effect=lambda name: name):
+                return acquire()
+        finally:
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(len(held), 1)
+            self.assertTrue(held[0].closed)
+            self.assertEqual(held[0].parent, self.cli.parent)
+            self.assertEqual(self.created, [])
+            self.assertEqual(self.calls, [])
+
+    def test_acquisition_rejects_wrong_asset_bytes_before_any_lifecycle(self):
+        with self.assertRaisesRegex(SystemExit, "digest or custody mismatch"):
+            self.acquisition(digest="0" * 64)
+
+    def test_acquisition_binds_digest_and_preserves_held_parent_refusal(self):
+        cli, receipt = self.acquisition()
+        self.assertEqual(cli, self.cli)
+        self.assertTrue(receipt["sha256_verified"])
+        self.assertEqual(receipt["binary_verification"], "held-ntfs-parents-and-file")
+        self.assertTrue(receipt["verification_custody_closed_before_lifecycle"])
+        with self.assertRaisesRegex(ValueError, "held parent changed"):
+            self.acquisition(mutation="held parent changed")
+
+    def test_acquisition_rejects_extra_byte_with_exact_pinned_read_bound(self):
+        with self.assertRaisesRegex(SystemExit, "digest or custody mismatch"):
+            self.acquisition(extra=b"x")
 
     def test_unreadable_native_snapshot_is_still_rejected_with_bounded_path(self):
         entry = "runner/.codex/state_5.sqlite-wal"

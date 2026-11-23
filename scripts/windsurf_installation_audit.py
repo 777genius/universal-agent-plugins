@@ -47,6 +47,26 @@ def image_fact(image):
     return {"sha256": digest(image), "entries": len(image)}
 
 
+def require_same_image(before, after, before_phase, after_phase):
+    """Keep exact image equality; expose only bounded hashed refusal facts."""
+    if before == after:
+        return
+    changed = sorted(key for key in before.keys() | after.keys()
+                     if (key not in before or key not in after
+                         or before[key] != after[key]))
+    def value_fact(image, key):
+        if key not in image:
+            return {"present": False}
+        value = image[key]
+        return {"present": True, "type": type(value).__name__, "sha256": digest(value)}
+    diagnostic = {"before_phase": before_phase, "after_phase": after_phase,
+                  "delta_count": len(changed), "entries": [
+                      {"key_sha256": digest(key), "before": value_fact(before, key),
+                       "after": value_fact(after, key)} for key in changed[:8]]}
+    raise ValueError("Devin Global installation evidence is unresolved: native image mismatch "
+                     + encoded(diagnostic, 8192).decode())
+
+
 def ordinary(path):
     info = path.lstat()
     require(stat.S_ISDIR(info.st_mode) and path.resolve(strict=True) == path)
@@ -289,9 +309,13 @@ class WindsurfInstallationAudit:
                     "listed_identity", "repeat_verified", "repeat_native_unchanged", "repeat_lock_unchanged",
                     "removal_verified", "post_list_schema_valid"))
                 and row.get("post_removal_leftovers") == [])
-        require(self.observations[0][2] == self.observations[1][2]
-                == self.observations[2][2] == self.observations[3][2]
-                and self.observations[4][2] == self.observations[5][2] == self.initial)
+        for before, after, before_phase, after_phase in (
+                (self.observations[0][2], self.observations[1][2], "add", "list-after-add"),
+                (self.observations[1][2], self.observations[2][2], "list-after-add", "repeat-add"),
+                (self.observations[2][2], self.observations[3][2], "repeat-add", "list-after-repeat"),
+                (self.observations[4][2], self.observations[5][2], "remove", "list-after-remove"),
+                (self.observations[5][2], self.initial, "list-after-remove", "initial")):
+            require_same_image(before, after, before_phase, after_phase)
         documents = [document(outcome, operation) for (_, outcome, _), operation in
                      zip(self.observations, ("add", "list", "add", "list", "remove", "list"))]
         prior = None

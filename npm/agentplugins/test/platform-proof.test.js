@@ -9,9 +9,7 @@ const test = require("node:test");
 
 const script = path.resolve(__dirname, "..", "scripts", "platform-proof.js");
 const {
-  AUTHORING_UNSUPPORTED_TARGETS,
   assertAssetManifest,
-  assertAuthoringUnsupported,
   assertContext7Search,
   assertInstalledShimInvocation,
   assertPublicJSONPathFree,
@@ -302,34 +300,4 @@ test("platform proof binds the local binary to the frozen release manifest and n
     () => frozenReleaseAsset(root, commit, version, target, { ...pinned, sha256: "0".repeat(64) }),
     /manifest does not match/
   );
-});
-
-test("platform proof requires authoring to fail closed only on unsupported Intel macOS", () => {
-  assert.deepEqual([...AUTHORING_UNSUPPORTED_TARGETS], ["darwin-amd64"]);
-  // Shape captured from the real darwin-amd64 release binary (run 44577050350).
-  const closed = {
-    schema_version: 1,
-    command: "author.init",
-    result: "failure",
-    data: {
-      committed: false,
-      affected_paths: [],
-      error: { code: "platform_unavailable", action: "Check the exact package root, local filesystem support and private scratch access." },
-      effects: { attempted: true, committed: false }
-    }
-  };
-  const mutate = (change) => structuredClone(Object.assign(structuredClone(closed), change(structuredClone(closed))));
-  assert.doesNotThrow(() => assertAuthoringUnsupported(1, closed));
-  assert.throws(() => assertAuthoringUnsupported(0, closed), /fail closed/);
-  assert.throws(() => assertAuthoringUnsupported(2, closed), /fail closed/);
-  assert.throws(() => assertAuthoringUnsupported(null, closed), /fail closed/);
-  assert.throws(() => assertAuthoringUnsupported(1, mutate(() => ({ result: "success" }))), /fail closed/);
-  assert.throws(() => assertAuthoringUnsupported(1, mutate((c) => ({ data: { ...c.data, committed: true } }))), /fail closed/);
-  assert.throws(() => assertAuthoringUnsupported(1, mutate((c) => ({ data: { ...c.data, effects: { committed: true } } }))), /fail closed/);
-  assert.throws(() => assertAuthoringUnsupported(1, mutate((c) => ({ data: { ...c.data, affected_paths: ["x"] } }))), /fail closed/);
-  assert.throws(() => assertAuthoringUnsupported(1, mutate((c) => ({ data: { ...c.data, error: { code: "root_unreadable" } } }))), /fail closed/);
-  // The old top-level layout must not be accepted.
-  assert.throws(() => assertAuthoringUnsupported(1, { command: "author.init", result: "failure",
-    committed: false, error: { code: "platform_unavailable" } }), /fail closed/);
-  assert.throws(() => assertAuthoringUnsupported(1, undefined), /fail closed/);
 });

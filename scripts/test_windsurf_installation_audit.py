@@ -183,6 +183,73 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             self.assertTrue(transport.verifier.closed)
             return result, pins
 
+
+    def image_mismatch(self, before, after):
+        with self.assertRaisesRegex(ValueError, "native image mismatch") as raised:
+            installation.require_same_image(before, after, "before", "after")
+        message = str(raised.exception)
+        return message, json.loads(message.split("native image mismatch ", 1)[1])
+
+    def test_native_image_diagnostic_preserves_metadata_only_refusal(self):
+        before = {"foreign-secret-name": {"sha256": "a" * 64, "mode": 0o600}}
+        after = copy.deepcopy(before)
+        after["foreign-secret-name"]["mode"] = 0o644
+        message, detail = self.image_mismatch(before, after)
+        self.assertEqual(detail["delta_count"], 1)
+        entry = detail["entries"][0]
+        self.assertEqual(entry["before"]["type"], "dict")
+        self.assertNotEqual(entry["before"]["sha256"], entry["after"]["sha256"])
+        self.assertNotIn("foreign-secret-name", message)
+        self.assertNotIn('"mode"', message)
+        self.assertIsNone(installation.require_same_image(before, copy.deepcopy(before), "a", "b"))
+
+    def test_native_image_diagnostic_detects_same_hash_renamed_foreign_member(self):
+        value = {"sha256": "d" * 64, "mode": 0o600}
+        before = {"private-old-foreign-name": value}
+        after = {"private-new-foreign-name": copy.deepcopy(value)}
+        message, detail = self.image_mismatch(before, after)
+        self.assertEqual(detail["delta_count"], 2)
+        self.assertEqual({entry["key_sha256"] for entry in detail["entries"]},
+                         {installation.digest(key) for key in (*before, *after)})
+        self.assertTrue(all(entry["before"]["present"] != entry["after"]["present"]
+                            for entry in detail["entries"]))
+        self.assertNotIn("private-old-foreign-name", message)
+        self.assertNotIn("private-new-foreign-name", message)
+        self.assertNotIn("d" * 64, message)
+
+    def test_native_image_diagnostic_caps_entries_and_message_without_hiding_count(self):
+        before = {"private-" + str(i) + "x" * 2000: {"mode": i} for i in range(40)}
+        after = {key: {"mode": value["mode"] + 1} for key, value in before.items()}
+        message, detail = self.image_mismatch(before, after)
+        self.assertEqual(detail["delta_count"], 40)
+        self.assertEqual(len(detail["entries"]), 8)
+        self.assertLess(len(message.encode()), 8192)
+        self.assertNotIn("private-", message)
+
+    def test_positive_native_image_diagnostic_identifies_late_phase_pairs(self):
+        # Call the actual positive validator: changes after repeat or removal
+        # must still fail before any public document can be accepted.
+        cases = ((3, "repeat-add", "list-after-repeat"),
+                 (5, "remove", "list-after-remove"),
+                 (4, "list-after-remove", "initial"))
+        for position, before_phase, after_phase in cases:
+            with self.subTest(position=position):
+                observer = object.__new__(WindsurfInstallationAudit)
+                observer.native_runtime = None
+                observer.initial = {}
+                observer.observations = [(None, None, {}) for _ in range(6)]
+                for index in ((4, 5) if position == 4 else (position,)):
+                    observer.observations[index] = (None, None, {"private-late-member": "body"})
+                row = self.row(0)
+                with self.assertRaisesRegex(ValueError, "native image mismatch") as raised:
+                    observer.positive(row, row["source"], row["identity"], 0, self.fixtures)
+                detail = json.loads(str(raised.exception).split("native image mismatch ", 1)[1])
+                self.assertEqual((detail["before_phase"], detail["after_phase"]),
+                                 (before_phase, after_phase))
+                self.assertEqual(detail["delta_count"], 1)
+                self.assertNotIn("private-late-member", str(raised.exception))
+                self.assertNotIn("body", str(raised.exception))
+
     def test_all_exact_slots_preserve_prepared_active_and_five_negatives(self):
         proofs = []
         for index in range(30):

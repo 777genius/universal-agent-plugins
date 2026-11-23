@@ -1673,7 +1673,10 @@ def main():
                     # Every command must preserve the native SQLite baseline;
                     # its WAL is never silently excluded from native cleanup.
                     if options.target == "codex":
-                        codex_sqlite[e["HOME"]].checkpoint(label)
+                        # The active command must not mutate another disposable
+                        # HOME's large WAL invisibly to its bounded file scanner.
+                        for observer in codex_sqlite.values():
+                            observer.checkpoint(label)
             def copilot_read(e, p, action, native_commands=0):
                 make_guard = audit["copilot_native_roots_guard"]
                 own_guard = make_guard(Path(e["HOME"]), e, p)

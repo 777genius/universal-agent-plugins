@@ -335,7 +335,7 @@ class PiQoderInstallationAudit:
             selector = {"kind": "commit", "value": commit}
         else:
             pin = self.pins[self.source]
-            wanted = {"registry": "uap", "distribution": pin["distribution"], "release": pin["sequence"]}
+            wanted = {"registry": "uap", "distribution": pin["distribution"], "release": str(pin["sequence"])}
             selector = {"kind": "release", "value": str(pin["sequence"])}
         require(exact(dependency, wanted), "portable source intent differs")
         dep = {"alias": self.name, "source_key": key}

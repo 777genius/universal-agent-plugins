@@ -113,9 +113,10 @@ jobs:
       - name: Broad existing CLI contracts
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         working-directory: cli
+        # Whole-suite budget matches REQUIRED_TEST_TIMEOUT; UI deadlines stay separate.
         run: |
           set -o pipefail
-          go test -json -timeout=15m ./internal/agentpluginscli ./cmd/agentplugins/... 2> "$RUNNER_TEMP/broad-cli-tests.stderr.log" |
+          go test -json -timeout=20m ./internal/agentpluginscli ./cmd/agentplugins/... 2> "$RUNNER_TEMP/broad-cli-tests.stderr.log" |
             tee "$RUNNER_TEMP/broad-cli-tests.jsonl"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()

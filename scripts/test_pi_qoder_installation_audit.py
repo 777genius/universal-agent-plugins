@@ -276,7 +276,7 @@ class InertLifecycle:
             selector = {"kind": "commit", "value": commit}
         else:
             pin = self.pins[self.source]
-            source = {"registry": "uap", "distribution": pin["distribution"], "release": pin["sequence"]}
+            source = {"registry": "uap", "distribution": pin["distribution"], "release": str(pin["sequence"])}
             selector = {"kind": "release", "value": str(pin["sequence"])}
         text = "schema_version = 1\n[dependencies." + json.dumps(self.name) + "]\n"
         text += "".join(k + " = " + json.dumps(v) + "\n" for k, v in source.items())
