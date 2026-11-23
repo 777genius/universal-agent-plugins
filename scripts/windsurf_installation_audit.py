@@ -64,10 +64,54 @@ def image_drift_counts(before, after):
     return ",".join(f"{key}={differences[key]}" for key in sorted(differences)) or "none"
 
 
+def image_drift_diagnostic(before, after):
+    """Bounded nonauthorizing roles; unknown native names and values stay private."""
+    known = {
+        "devin/mcp_config.json": "mcp_document",
+        "metadata:2:mcp_config.json": "mcp_document",
+        "devin/mcp_config.json.agentplugins.lock": "writer_lock",
+        "metadata:2:mcp_config.json.agentplugins.lock": "writer_lock",
+        "directory:2:skills": "skills_parent",
+        "metadata:2:skills": "skills_parent",
+        "devin/config.json": "native_config",
+        "metadata:2:config.json": "native_config",
+    }
+    changed = sorted(
+        key for key in set(before) | set(after)
+        if (key in before) != (key in after)
+        or key in before and before[key] != after[key]
+    )
+    entries = []
+    for key in changed[:8]:
+        entries.append({
+            "role": known.get(key, "unknown"),
+            "key_sha256": hashlib.sha256(
+                key.encode("utf-8", "surrogatepass")
+            ).hexdigest(),
+            "operation": (
+                "added" if key not in before
+                else "removed" if key not in after
+                else "changed"
+            ),
+            "before_present": key in before,
+            "after_present": key in after,
+        })
+    return {
+        "diagnostic_only": True,
+        "changed_entries": len(changed),
+        "omitted_entries": max(0, len(changed) - len(entries)),
+        "entries": entries,
+    }
+
+
 def require_same_image(before, after, phase):
     if before != after:
-        raise ValueError("Devin Global native-image drift " + phase + ": "
-                         + image_drift_counts(before, after))
+        diagnostic = encoded(image_drift_diagnostic(before, after), 4096).decode()
+        raise ValueError(
+            "Devin Global native-image drift " + phase + ": "
+            + image_drift_counts(before, after)
+            + "; diagnostic=" + diagnostic
+        )
 
 
 def image_fact(image):

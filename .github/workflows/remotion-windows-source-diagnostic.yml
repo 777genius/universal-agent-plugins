@@ -2,7 +2,7 @@ name: Diagnostic pinned Remotion Windows Skill acquisition
 
 on:
   pull_request:
-    paths: ['.github/workflows/remotion-windows-source-diagnostic.yml', 'scripts/remotion_published_windows_long_temp_e2e.py']
+    paths: ['.github/workflows/remotion-windows-source-diagnostic.yml', 'scripts/remotion_published_windows_long_temp_e2e.py', 'scripts/test_remotion_published_windows_diagnostics.py']
   workflow_dispatch:
 
 # Replace superseded PR checks; preserve exact push, scheduled and manual runs.
@@ -229,6 +229,13 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
         with:
           python-version: '3.12'
+      - name: Verify bounded failure diagnostics before native execution
+        shell: pwsh
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -m unittest discover -s scripts -p test_remotion_published_windows_diagnostics.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install exact published npm CLI and pinned native Codex
         shell: pwsh
         run: |

@@ -14,7 +14,8 @@ from unittest.mock import patch
 from types import SimpleNamespace
 
 from windsurf_installation_audit import (ACTIVE_SLOTS, ACTIVE_SKILLS, CLIENT_VERSION, CLI_VERSION,
-    COMPONENT_REFUSALS, PREPARED, WindsurfInstallationAudit, selected, summary)
+    COMPONENT_REFUSALS, PREPARED, WindsurfInstallationAudit, selected, summary,
+    image_drift_diagnostic, require_same_image)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -167,6 +168,79 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             self.assertIn("file_added=1", diagnostic)
             self.assertNotIn("secret-personal", diagnostic)
             self.assertNotIn("PRIVATE-TOKEN", diagnostic)
+
+
+    def test_drift_diagnostic_identifies_known_infrastructure_without_values(self):
+        after = {
+            "devin/mcp_config.json": "PRIVATE-DOCUMENT-DIGEST",
+            "metadata:2:mcp_config.json": (0o100600, 11, 22, 33),
+            "devin/mcp_config.json.agentplugins.lock": "PRIVATE-LOCK-DIGEST",
+            "metadata:2:mcp_config.json.agentplugins.lock": (0o100600, 11, 23, 34),
+            "directory:2:skills": "present",
+            "metadata:2:skills": (0o40700, 11, 24),
+            "devin/config.json": "PRIVATE-NATIVE-CONFIG-DIGEST",
+            "metadata:2:config.json": (0o100600, 11, 25, 35),
+        }
+        diagnostic = image_drift_diagnostic({}, after)
+        self.assertIs(diagnostic["diagnostic_only"], True)
+        self.assertEqual(diagnostic["changed_entries"], 8)
+        self.assertEqual(diagnostic["omitted_entries"], 0)
+        self.assertEqual(
+            sorted(entry["role"] for entry in diagnostic["entries"]),
+            sorted(["mcp_document", "writer_lock", "skills_parent", "native_config"] * 2),
+        )
+        for entry in diagnostic["entries"]:
+            self.assertEqual(entry["operation"], "added")
+            self.assertIs(entry["before_present"], False)
+            self.assertIs(entry["after_present"], True)
+            self.assertRegex(entry["key_sha256"], r"^[0-9a-f]{64}$")
+        exported = json.dumps(diagnostic)
+        self.assertNotIn("PRIVATE", exported)
+        self.assertNotIn("mcp_config.json", exported)
+        self.assertNotIn("metadata:", exported)
+
+    def test_drift_diagnostic_bounds_unknown_names_and_retains_all_failures(self):
+        before = {
+            "devin/secret-personal-old-name": "PRIVATE-OLD-CONTENT",
+            "devin/secret-personal-changed-name": "PRIVATE-BEFORE",
+        }
+        after = {
+            "devin/secret-personal-changed-name": "PRIVATE-AFTER",
+            **{f"devin/secret-personal-new-{i:02d}": "PRIVATE-NEW" for i in range(20)},
+        }
+        diagnostic = image_drift_diagnostic(before, after)
+        self.assertEqual(diagnostic["changed_entries"], 22)
+        self.assertEqual(len(diagnostic["entries"]), 8)
+        self.assertEqual(diagnostic["omitted_entries"], 14)
+        exported = json.dumps(diagnostic)
+        self.assertNotIn("secret-personal", exported)
+        self.assertNotIn("PRIVATE", exported)
+        self.assertTrue(all(entry["role"] == "unknown"
+                            for entry in diagnostic["entries"]))
+        for old, new in (
+                ({"unknown": "old"}, {}),
+                ({}, {"unknown": "new"}),
+                ({"unknown": "old"}, {"unknown": "new"})):
+            with self.subTest(before=old, after=new):
+                with self.assertRaisesRegex(ValueError, "native-image drift"):
+                    require_same_image(old, new, "remove/initial")
+
+    def test_drift_diagnostic_cannot_admit_preseeded_document_inode_changes(self):
+        before = {
+            "devin/mcp_config.json": "same-document-digest",
+            "metadata:2:mcp_config.json": (0o100600, 11, 22, 33),
+        }
+        after = {
+            "devin/mcp_config.json": "same-document-digest",
+            "metadata:2:mcp_config.json": (0o100600, 11, 23, 34),
+        }
+        diagnostic = image_drift_diagnostic(before, after)
+        self.assertEqual(diagnostic["changed_entries"], 1)
+        self.assertEqual(diagnostic["entries"][0]["role"], "mcp_document")
+        self.assertEqual(diagnostic["entries"][0]["operation"], "changed")
+        with self.assertRaisesRegex(ValueError, "metadata_changed=1"):
+            require_same_image(before, after, "remove/initial")
+        require_same_image(before, copy.deepcopy(before), "unchanged")
 
     def test_old_report_without_actual_global_custody_never_qualifies(self):
         self.assertFalse(summary(self.report([self.row(i) for i in range(30)]), self.fixtures,

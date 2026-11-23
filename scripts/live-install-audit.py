@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
 QODER_PREPARED_ACCEPTANCE = "qoder-prepared-skills-installation"
 QODER_PREPARED_AUDIT = None
+PI_PROJECT_SKILL_AUDIT = None
 CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
 HISTORICAL_CODEX = run_path(str(ROOT / "scripts/published_codex_baseline.py"))
 CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
