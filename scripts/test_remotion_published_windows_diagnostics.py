@@ -1,10 +1,13 @@
 """Bounded refusal diagnostics preserve private paths and original failures."""
+from contextlib import redirect_stdout
 import hashlib
+import io
 import importlib.util
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 MODULE_PATH = Path(__file__).with_name("remotion_published_windows_long_temp_e2e.py")
 SPEC = importlib.util.spec_from_file_location("remotion_diagnostics", MODULE_PATH)
@@ -112,6 +115,60 @@ class RemotionFailureDiagnosticsTest(unittest.TestCase):
         candidates = facts["entries"][0]["root_candidates"]
         self.assertEqual([row["root_index"] for row in candidates], [0, 1])
         self.assertEqual([row["role"] for row in candidates], ["home", "other-disposable-entry"])
+
+
+    def capture_emission(self, facts=None, failure=None, cohort="runner-temp"):
+        original = ValueError("PRIVATE-original-refusal")
+        original.add_note("PRIVATE-original-note")
+        stream = io.StringIO()
+        arguments = ({"side_effect": failure} if failure is not None else {"return_value": facts})
+        with mock.patch.object(AUDIT, "sanitized_failure_diagnostics", **arguments):
+            with redirect_stdout(stream):
+                returned = AUDIT.emit_failure_diagnostics(original, self.repo, self.root, cohort)
+        self.assertEqual(original.args, ("PRIVATE-original-refusal",))
+        self.assertEqual(original.__notes__, ["PRIVATE-original-note"])
+        self.assertIsNone(original.__traceback__)
+        output = stream.getvalue()
+        self.assertNotIn("PRIVATE", output)
+        self.assertEqual(output.count("\n"), 1)
+        prefix, encoded = output.rstrip("\n").split(": ", 1)
+        self.assertLessEqual(len(encoded.encode("utf-8")), 64 << 10)
+        self.assertEqual(json.loads(encoded), returned)
+        return returned, prefix, output
+
+    def test_emission_returns_and_prints_identical_sanitized_facts(self):
+        facts = {"source_chain": [], "guards": [{"category": "directory-guard-refused",
+                                                "held_directory": True}]}
+        returned, prefix, _ = self.capture_emission(facts)
+        self.assertIs(returned, facts)
+        self.assertEqual(prefix, "Remotion failure diagnostics [runner-temp]")
+        _, prefix, _ = self.capture_emission(facts, cohort="PRIVATE-cohort")
+        self.assertEqual(prefix, "Remotion failure diagnostics [unqualified]")
+
+    def test_emission_sanitizer_failure_has_fixed_fallback(self):
+        returned, _, _ = self.capture_emission(failure=RuntimeError("PRIVATE-sanitizer"))
+        self.assertEqual(returned, {"category": "diagnostic-unavailable"})
+
+    def test_emission_unserializable_facts_have_fixed_fallback(self):
+        returned, _, _ = self.capture_emission({"value": object()})
+        self.assertEqual(returned, {"category": "diagnostic-unavailable"})
+
+    def test_emission_encoded_bound_has_fixed_fallback(self):
+        returned, _, _ = self.capture_emission({"value": "x" * (64 << 10)})
+        self.assertEqual(returned, {"category": "diagnostic-unavailable"})
+        returned, _, _ = self.capture_emission({"value": "\u2603" * 12000})
+        self.assertEqual(returned, {"category": "diagnostic-unavailable"})
+
+    def test_emission_stdout_failure_preserves_original_refusal(self):
+        original = ValueError("PRIVATE-original-refusal")
+        facts = {"guards": []}
+        with mock.patch.object(AUDIT, "sanitized_failure_diagnostics", return_value=facts):
+            with mock.patch.object(AUDIT, "print", side_effect=OSError("PRIVATE-stdout"), create=True):
+                returned = AUDIT.emit_failure_diagnostics(original, self.repo, self.root, "runner-temp")
+        self.assertIs(returned, facts)
+        self.assertEqual(original.args, ("PRIVATE-original-refusal",))
+        self.assertIsNone(original.__traceback__)
+
 
 
 if __name__ == "__main__":

@@ -124,6 +124,24 @@ def sanitized_failure_diagnostics(error, repo, root):
             "guards_omitted": max(0, len(guards) - DIAGNOSTIC_LIMIT)}
 
 
+def emit_failure_diagnostics(error, repo, root, cohort):
+    """Publish only bounded sanitized facts; preserve the original refusal."""
+    label = cohort if cohort in ("runner-temp", "default-windows-temp") else "unqualified"
+    try:
+        diagnostic = sanitized_failure_diagnostics(error, repo, root)
+        encoded = json.dumps(diagnostic, ensure_ascii=True, allow_nan=False, sort_keys=True)
+        if len(encoded) > 64 << 10:
+            raise ValueError("diagnostic bound exceeded")
+    except Exception:
+        diagnostic = {"category": "diagnostic-unavailable"}
+        encoded = '{"category":"diagnostic-unavailable"}'
+    try:
+        print(f"Remotion failure diagnostics [{label}]: {encoded}", flush=True)
+    except OSError:
+        pass
+    return diagnostic
+
+
 def main():
     if os.name != "nt":
         raise SystemExit("genuine Windows runner required")
@@ -190,10 +208,7 @@ def main():
                     failures.append(f"{label}: native E2E case did not PASS")
             except Exception as error:
                 site = sanitized_failure_site(error, repo)
-                try:
-                    diagnostic = sanitized_failure_diagnostics(error, repo, root)
-                except Exception:
-                    diagnostic = {"category": "diagnostic-unavailable"}
+                diagnostic = emit_failure_diagnostics(error, repo, root, label)
                 # The workflow log and artifact identify only an allowed source
                 # coordinate, never exception text, paths or native profile data.
                 failures.append(f"{label}: {type(error).__name__} at "
