@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual public npm 0.1.104 + signed Marketing Kit Project lifecycle, no mocks."""
+"""Actual public npm 0.1.116 + signed Marketing Kit Project lifecycle, no mocks."""
 import argparse
 import hashlib
 import json
@@ -180,8 +180,8 @@ def require_exact_published_version(result):
     stdout = result.get("stdout_tail")
     if (result.get("exit_code") != 0 or result.get("timeout")
             or not isinstance(stdout, str)
-            or stdout.strip() != "agentplugins 0.1.104"):
-        raise AssertionError("not exact published agentplugins 0.1.104")
+            or stdout.strip() != "agentplugins 0.1.116"):
+        raise AssertionError("not exact published agentplugins 0.1.116")
 
 
 def verify_pinned_launcher(cli, env, project):
@@ -1422,6 +1422,10 @@ def current_vscode_boundary_kind(policy):
         return "signed_grant_refusal"
     if targets == {**managed, "vscode": {"scopes": ["user"], "delivery": "prepared"}}:
         return "saved_management_capability"
+    current_managed = {**managed, **{client: {"scopes": ["user"], "delivery": "managed"}
+        for client in ("hermes", "antigravity", "pi")}}
+    if targets == {**current_managed, "vscode": {"scopes": ["user"], "delivery": "prepared"}}:
+        return "saved_management_capability"
     raise AssertionError("current VS Code boundary has unqualified signed target shape")
 
 
@@ -1527,7 +1531,7 @@ def main():
     options = parser.parse_args()
     report_path = Path(options.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report = {"cli_version": "0.1.104", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
+    report = {"cli_version": "0.1.116", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
               "qualification_scope": "user_and_project", "two_scope_lifecycle_qualified": False,
               "positive_policy": None, "logical_owner_evidence": None,
               "final_policy_observation": {"status": "not_run", "source_profile": "E",

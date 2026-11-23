@@ -1625,6 +1625,56 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         self.assertEqual(calls, [])
                         self.assertEqual(checked, [True])
 
+    def test_marketing_kit_current_ten_grant_boundary_requires_complete_exact_metadata(self):
+        from copy import deepcopy
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        verify = runner["verify_current_vscode_user_boundary"]
+        with TemporaryDirectory() as temporary:
+            env, project, *_ = runner["run_case"]("unused", "copilot", Path(temporary), "E")
+            def info(command, *_):
+                response = self._marketing_kit_info_response(runner, command[2], prepared_vscode=True)
+                if command[2] == runner["REQUIRED_DISTRIBUTIONS"]["marketing-kit"]:
+                    response["_json"]["data"]["selected_release"]["target_compatibility"].extend(
+                        {"client": client, "scopes": ["user"], "delivery": "managed"}
+                        for client in ("hermes", "antigravity", "pi"))
+                return response
+            with patch.dict(verify.__globals__, {"invoke": info}):
+                policy = runner["observe_production_policy"]("unused", env, project, "codex")
+            self.assertEqual(runner["current_vscode_boundary_kind"](policy),
+                             "saved_management_capability")
+            mutations = [(client, kind) for client in ("hermes", "antigravity", "pi")
+                         for kind in ("missing", "scope", "mixed-scopes", "delivery")]
+            mutations += [("vscode", "missing"), ("unknown", "extra"),
+                          ("", "origin"), ("", "source-tuple")]
+            for client, kind in mutations:
+                with self.subTest(client=client, mutation=kind):
+                    changed = deepcopy(policy)
+                    targets = changed["root_target_compatibility"]
+                    if kind == "origin":
+                        changed["source_mode"] = "fixed_immutable"
+                    elif kind == "source-tuple":
+                        changed["closure"]["777genius/notion"]["manifest_digest"] = "sha256:" + "b" * 64
+                    elif kind == "missing":
+                        targets.pop(client)
+                    elif kind == "scope":
+                        targets[client]["scopes"] = ["project"]
+                    elif kind == "mixed-scopes":
+                        targets[client]["scopes"] = ["user", "project"]
+                    elif kind == "delivery":
+                        targets[client]["delivery"] = "prepared"
+                    else:
+                        targets[client] = {"scopes": ["user"], "delivery": "managed"}
+                    calls, checked = [], []
+                    with patch.dict(verify.__globals__, {
+                            "invoke": lambda *args: calls.append(args),
+                            "verify_pinned_launcher": lambda *args: calls.append(args)}):
+                        with self.assertRaises(AssertionError):
+                            verify("unused", env, project, changed, (lambda: checked.append(True),))
+                    self.assertEqual(calls, [])
+                    self.assertEqual(checked, [True])
+
     def test_marketing_kit_current_six_grant_refusal_has_exact_exit_and_no_capability_fallback(self):
         from runpy import run_path
         runner = run_path(str(Path(__file__).resolve().parent /
@@ -3350,7 +3400,7 @@ module.exports = {
                 package = npm_root / "universal-agent-plugins"
                 (package / "lib").mkdir(parents=True)
                 (package / "package.json").write_text(
-                    json.dumps({"version": "0.1.104"}), encoding="utf-8")
+                    json.dumps({"version": "0.1.116"}), encoding="utf-8")
                 (package / "lib/bootstrap.js").write_text(
                     bootstrap.replace("__STRANDED_PHASE__", json.dumps(phase)),
                     encoding="utf-8")
@@ -3370,20 +3420,21 @@ module.exports = {
                                  "failed watchdog must run trusted cache cleanup")
 
     def test_marketing_kit_requires_exact_published_cli_version(self):
-        # The substring "0.1.104" alone also matches prereleases and 0.1.1041.
+        # The substring "0.1.116" alone also matches prereleases and 0.1.1161.
         from runpy import run_path
 
         runner = run_path(str(Path(__file__).resolve().parent /
                               "marketing-kit-project-release-e2e.py"))
         require = runner["require_exact_published_version"]
         valid = {"exit_code": 0, "timeout": False,
-                 "stdout_tail": "agentplugins 0.1.104\n"}
+                 "stdout_tail": "agentplugins 0.1.116\n"}
         require(valid)
-        for version in ("agentplugins 0.1.104-dev",
-                        "agentplugins 0.1.1041",
-                        "agentplugins 0.1.103",
-                        "other-launcher 0.1.104",
-                        "agentplugins 0.1.104\nagentplugins 0.1.104",
+        for version in ("agentplugins 0.1.116-dev",
+                        "agentplugins 0.1.1161",
+                        "agentplugins 0.1.115",
+                        "agentplugins 0.1.104",
+                        "other-launcher 0.1.116",
+                        "agentplugins 0.1.116\nagentplugins 0.1.116",
                         ""):
             with self.subTest(version=version):
                 with self.assertRaisesRegex(AssertionError, "not exact published"):
@@ -3406,7 +3457,7 @@ module.exports = {
         failed = {"exit_code": 1, "timeout": False, "stdout_tail": ""}
         timed_out = {"exit_code": None, "timeout": True, "stdout_tail": ""}
         valid = {"exit_code": 0, "timeout": False,
-                 "stdout_tail": "agentplugins 0.1.104\n"}
+                 "stdout_tail": "agentplugins 0.1.116\n"}
         probe, pause = Mock(side_effect=[failed, timed_out, valid]), Mock()
         with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
             verify("agentplugins", {}, Path("."))
@@ -3420,7 +3471,7 @@ module.exports = {
         self.assertEqual(probe.call_count, 3)
         self.assertEqual([item.args for item in pause.call_args_list], [(5,), (10,)])
 
-        probe, pause = Mock(return_value={**valid, "stdout_tail": "agentplugins 0.1.104-dev"}), Mock()
+        probe, pause = Mock(return_value={**valid, "stdout_tail": "agentplugins 0.1.116-dev"}), Mock()
         with patch.dict(verify.__globals__, {"invoke": probe, "sleep": pause}):
             with self.assertRaisesRegex(AssertionError, "not exact published"):
                 verify("agentplugins", {}, Path("."))
