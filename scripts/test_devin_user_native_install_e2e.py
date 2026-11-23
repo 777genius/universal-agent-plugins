@@ -13,6 +13,12 @@ from unittest.mock import patch
 import devin_user_native_install_e2e as subject
 
 
+def active_pull_request_paths(workflow):
+    request = re.search(r"(?m)^on:\n  pull_request:\n((?: {4,}[^\n]*\n)+)", workflow)
+    paths = re.search(r"(?m)^    paths:\n((?: {6,}[^\n]*\n)+)", request.group(1)) if request else None
+    return set(re.findall(r"(?m)^      - ['\"]([^'\"]+)['\"][ \t]*(?:#[^\n]*)?$", paths.group(1))) if paths else set()
+
+
 class DevinUserNativeContracts(unittest.TestCase):
     def test_skill_requires_exact_global_metadata_not_name_or_project_copy(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -277,11 +283,20 @@ class DevinUserNativeContracts(unittest.TestCase):
             projection_path = managed / "mcp.json"
             projection_path.write_text(json.dumps(projected))
             native_path = native / "mcp_config.json"
-            native_path.write_text(json.dumps({"mcpServers": {subject.STDIO: stdio,
-                subject.HTTP: {"url": "http://127.0.0.1:12345/mcp", "transport": "http"}}}))
+            foreign = {"foreign-user": {"url": "https://foreign.invalid/mcp", "disabled": True}}
+            native_servers = {**foreign, subject.STDIO: stdio,
+                              subject.HTTP: {"url": "http://127.0.0.1:12345/mcp", "transport": "http"}}
+            native_path.write_text(json.dumps({"mcpServers": native_servers}))
             def verify():
-                return subject.verify_projection(managed, package, native, data, service, 12345, digest, root)
+                return subject.verify_projection(managed, package, native, data, service, 12345, digest, root, foreign)
             self.assertEqual(len(verify()), 5)
+            native_path.write_text(json.dumps({"mcpServers": {**native_servers, "unexpected": {"url": "https://extra.invalid"}}}))
+            with self.assertRaises(RuntimeError):
+                verify()
+            native_path.write_text(json.dumps({"mcpServers": {**native_servers, "foreign-user": {"url": "https://changed.invalid"}}}))
+            with self.assertRaises(RuntimeError):
+                verify()
+            native_path.write_text(json.dumps({"mcpServers": native_servers}))
             metadata_path.write_text(json.dumps(dict(metadata, sha256="0" * 64)))
             with self.assertRaises(RuntimeError):
                 verify()
@@ -357,21 +372,49 @@ class DevinUserNativeContracts(unittest.TestCase):
             data = root / "owned-data"
             data.mkdir()
             sentinel = data / "fixture-user-data.txt"
-            sentinel.write_bytes(subject.DATA_SENTINEL)
+            subject.seed_user_data(data)
+            self.assertEqual(sentinel.stat().st_mode & 0o777, 0o600)
+            with self.assertRaises(FileExistsError):
+                subject.seed_user_data(data)
+            self.assertEqual(sentinel.read_bytes(), subject.DATA_SENTINEL)
             receipt = {"data_receipt_id": "owned", "ownership_digest": "sha256:" + "a" * 64}
             before = subject.snapshot([data], root)
             subject.assert_repair_data(data, root, before, receipt, dict(receipt))
+            subject.assert_data_preserved(data, root, before)
             with self.assertRaises(RuntimeError):
                 subject.assert_repair_data(data, root, before, receipt,
                     dict(receipt, ownership_digest="sha256:" + "b" * 64))
             sentinel.write_bytes(b"lost original contents")
             with self.assertRaises(RuntimeError):
                 subject.assert_repair_data(data, root, before, receipt, receipt)
+            with self.assertRaises(RuntimeError):
+                subject.assert_data_preserved(data, root, before)
             data.rename(root / "original-data")
             data.mkdir()
             sentinel.write_bytes(subject.DATA_SENTINEL)
             with self.assertRaises(RuntimeError):
                 subject.assert_repair_data(data, root, before, receipt, receipt)
+            with self.assertRaises(RuntimeError):
+                subject.assert_data_preserved(data, root, before)
+
+    def test_user_commands_require_both_project_state_roots_absent(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            projects = [root / "a", root / "b"]
+            for project in projects:
+                project.mkdir()
+            subject.require_project_state_absent(projects)
+            for project in projects:
+                state = project / ".uap"
+                state.mkdir()
+                (state / "state-v2.json").write_text('{"scope":"project"}')
+                with self.subTest(project=project), self.assertRaises(RuntimeError):
+                    subject.require_project_state_absent(projects)
+                (state / "state-v2.json").unlink()
+                state.rmdir()
+            (projects[0] / ".uap").symlink_to(root / "missing-state")
+            with self.assertRaises(RuntimeError):
+                subject.require_project_state_absent(projects)
 
     def test_snapshot_entry_bound_stops_lazy_enumeration_and_closes_iterator(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -418,7 +461,11 @@ class DevinUserNativeContracts(unittest.TestCase):
     def test_existing_workflow_retains_both_independent_cohorts_and_future_path_triggers(self):
         workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/devin-project-auto-install.yml").read_text()
         for path in ["scripts/devin_user_native_install_e2e.py", "scripts/test_devin_user_native_install_e2e.py"]:
-            self.assertIn("- '" + path + "'", workflow)
+            self.assertIn(path, active_pull_request_paths(workflow))
+            commented = workflow.replace("      - '" + path + "'", "      # - '" + path + "'")
+            self.assertNotIn(path, active_pull_request_paths(commented))
+            moved = workflow.replace("      - '" + path + "'\n", "") + "\n# - '" + path + "'\n"
+            self.assertNotIn(path, active_pull_request_paths(moved))
         self.assertIn("python3 scripts/devin_project_auto_install_e2e.py", workflow)
         self.assertIn("python3 scripts/devin_user_native_install_e2e.py", workflow)
         self.assertIn("test_devin_project_auto_install_e2e.py", workflow)
