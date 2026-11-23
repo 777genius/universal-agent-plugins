@@ -1,0 +1,129 @@
+name: Authoring Darwin Intel APFS native E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+    paths:
+      - 'install/integrationctl/agentplugins/adapters/packageview/**'
+      - 'cli/internal/authoring/project/**'
+      - 'cli/internal/authoring/commands/**'
+      - 'cli/internal/authoring/report/**'
+      - '.github/workflows/authoring-darwin-amd64-native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authoring-darwin-amd64-${{ github.event_name }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native:
+    name: Held APFS metadata, swaps and real authoring (macos-15-intel)
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: macos-15-intel
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Exercise the exact Darwin Intel kernel and strict local APFS contract
+        env:
+          GOTOOLCHAIN: local
+          GOENV: 'off'
+          GOFLAGS: '-p=1'
+          GOWORK: ${{ github.workspace }}/go.work
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = x86_64
+          test "$(go env GOVERSION)" = go1.26.11
+          test "$(go env GOARCH)" = amd64
+          test "$(go env GOOS)" = darwin
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          # macOS's default TMPDIR can traverse /var -> /private/var. The
+          # strict authoring scaffold rejects symlink ancestors by design.
+          # Give Go's t.TempDir a canonical runner-owned APFS parent instead;
+          # do not change production host-safety or negative symlink tests.
+          canonical_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          test -d "$canonical_temp" && test -w "$canonical_temp"
+          # df -t verifies the actual APFS filesystem, not stat's file type.
+          df -P -t apfs "$canonical_temp" | awk 'NR == 2 { found = 1 } END { exit !found }'
+          export TMPDIR="$canonical_temp"
+          proof="$canonical_temp/authoring-intel-proof"
+          mkdir -m 700 "$proof"
+          printf 'INTEL_PROOF=%s\n' "$proof" >> "$GITHUB_ENV"
+          git rev-parse HEAD > "$proof/head.txt"
+          go env -json GOVERSION GOOS GOARCH GOHOSTOS GOHOSTARCH > "$proof/go-env.json"
+          # Keep permission-sensitive tests unprivileged. As in authoring-native,
+          # only compiled, owned device fixtures use sudo; no device data opens.
+          package=github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview
+          go test -count=1 -json -timeout=38m "$package" | tee "$proof/packageview.jsonl"
+          go test -c -o "$proof/packageview.test" "$package"
+          go tool test2json -p "$package" sudo -n env -i PATH=/usr/bin:/bin TMPDIR="$canonical_temp" \
+            "$proof/packageview.test" -test.v=test2json -test.count=1 -test.timeout=3m \
+            -test.run '^TestDarwinDeviceMetadataNeverOpened$' | tee "$proof/devices.jsonl"
+          # Retain source-root identity, author.init and strict scratch effects.
+          go test -count=1 -json -timeout=10m ./cli/internal/authoring/project ./cli/internal/authoring/commands ./cli/internal/authoring/report | tee "$proof/authoring.jsonl"
+      - name: Require actual Intel native cases and report platform-specific skips
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ["INTEL_PROOF"])
+          streams = {name: [json.loads(line) for line in (root / (name + ".jsonl")).read_text().splitlines()]
+                     for name in ("packageview", "devices", "authoring")}
+          passed = lambda events: {(e.get("Package"), e.get("Test", "")) for e in events if e["Action"] == "pass"}
+          package = "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packageview"
+          device = "TestDarwinDeviceMetadataNeverOpened"
+          required_devices = {(package, device + suffix) for suffix in ("", "/character", "/block")}
+          assert required_devices <= passed(streams["devices"]), "Intel device cases did not all pass"
+          assert (package, "") in passed(streams["devices"]), "device test process did not pass"
+          for name, events in streams.items():
+              assert events and not any(e["Action"] == "fail" for e in events), name + " failed or empty"
+          assert (package, "") in passed(streams["packageview"]), "packageview did not pass"
+          for name in ("packageview", "devices"):
+              for event in streams[name]:
+                  if event["Action"] == "skip":
+                      assert name == "packageview" and (event.get("Package"), event.get("Test")) in required_devices, "unproven native packageview case"
+          prefix = "github.com/777genius/plugin-kit-ai/cli/internal/authoring/"
+          for tail in ("project", "commands", "report"):
+              assert (prefix + tail, "") in passed(streams["authoring"]), tail + " did not pass"
+          vertical = "TestNativeBinaryVerticalSlice"
+          for suffix in ("", "/skill", "/mcp-remote", "/mcp-stdio", "/hybrid", "/hybrid-remote"):
+              assert (prefix + "commands", vertical + suffix) in passed(streams["authoring"]), "missing native journey: " + suffix
+          # These existing command fixtures are explicitly Linux/Windows-only;
+          # record them as skipped, never as passed Intel capability evidence.
+          host_only = {"TestReportsAndFreshFactory", "TestInitValidationAndFailurePolicy",
+                       "TestConcurrentInitAndCanceledInvocation", "TestCleanupFailureSurvivesCancellation",
+                       "TestGeneratedPackagesReachExistingInstallerPlanner", "TestPackedInstallerSourceHarness"}
+          skipped = [e for e in streams["authoring"] if e["Action"] == "skip"]
+          assert all(e.get("Package") == prefix + "commands" and e.get("Test") in host_only for e in skipped), "unexpected authoring skip"
+          summary = {"head": (root / "head.txt").read_text().strip(), "native_device_cases": len(required_devices),
+                     "passed_test_events": {name: sum(bool(e.get("Test")) and e["Action"] == "pass" for e in events) for name, events in streams.items()},
+                     "unprivileged_device_skips_proven_separately": [e["Test"] for e in streams["packageview"] if e["Action"] == "skip"],
+                     "linux_windows_only_skips": [e["Test"] for e in skipped]}
+          (root / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+          print(json.dumps(summary, indent=2))
+          PY
+      - name: Preserve Intel native evidence including failures
+        if: ${{ always() && env.INTEL_PROOF != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: authoring-darwin-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.INTEL_PROOF }}/*.json
+            ${{ env.INTEL_PROOF }}/*.jsonl
+            ${{ env.INTEL_PROOF }}/*.txt
+          if-no-files-found: error
+          retention-days: 14

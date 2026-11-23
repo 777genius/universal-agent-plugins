@@ -40,16 +40,37 @@ func TestSafeText(t *testing.T) {
 	}
 }
 
-func TestSkippedClientsNoticeSanitizesAndDeduplicatesReasons(t *testing.T) {
-	got := SkippedClientsNotice([]string{
-		" ChatGPT: no compatible release\x1b\u202e ",
-		"ChatGPT: no compatible release",
-		"Kiro: manual activation required",
+func TestSkippedClientsNoticeSanitizesDeduplicatesAndGroups(t *testing.T) {
+	got := SkippedClientsNotice([]SkippedTarget{
+		{ID: "chatgpt", Label: " ChatGPT\x1b\u202e ", Kind: SkipNotSaveable},
+		{ID: "chatgpt", Label: "ChatGPT", Kind: SkipNotSaveable},
+		{ID: "vscode", Label: "Visual Studio Code", Kind: SkipNotSaveable},
+		{ID: "hermes", Label: "Hermes Agent", Kind: SkipNotDetected},
+		{ID: "antigravity", Label: "Google Antigravity", Kind: SkipNotDetected},
+		{ID: "pi", Label: "Pi", Target: "pi", Kind: SkipNoRelease},
+		{ID: "kiro", Label: "Kiro", Kind: SkipManual, Reason: "connect the server in Kiro yourself\x1b"},
+		{ID: "empty", Label: " ", Kind: SkipNotDetected},
 	})
+	// Specific problems first, missing clients last; one line per shared reason.
 	want := "Not available for automatic install:\n" +
-		"  - ChatGPT: no compatible release\n" +
-		"  - Kiro: manual activation required\n"
+		"  Kiro: connect the server in Kiro yourself\n" +
+		"  ChatGPT, Visual Studio Code: cannot be recorded in the dependency list; install it separately with --no-save\n" +
+		"  Pi: the catalog has no compatible release of this package; check one with --target pi\n" +
+		"  Hermes Agent, Google Antigravity: not found on this computer; install or configure it first\n"
 	if got != want {
 		t.Fatalf("notice = %q, want %q", got, want)
+	}
+	if SkippedClientsNotice([]SkippedTarget{{ID: "x", Label: "X", Kind: SkipOther}}) != "" {
+		t.Fatal("a skipped client without any reason must not render an empty explanation")
+	}
+}
+
+func TestGroupSkippedUsesGenericTargetForSeveralClients(t *testing.T) {
+	groups := GroupSkipped([]SkippedTarget{
+		{ID: "pi", Label: "Pi", Kind: SkipNoRelease},
+		{ID: "cline", Label: "Cline", Kind: SkipNoRelease},
+	})
+	if len(groups) != 1 || len(groups[0].Names) != 2 || groups[0].Detail != "the catalog has no compatible release of this package; check one with --target <name>" {
+		t.Fatalf("groups = %+v", groups)
 	}
 }

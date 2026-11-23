@@ -5,6 +5,13 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'scripts/released-source-audit.py'
+      - 'scripts/released-source-policy.go'
+      - 'scripts/released-source-policy_test.go'
+      - 'scripts/released_source_closure.py'
+      - 'scripts/released_source_npm.py'
+      - 'scripts/test_released_source_npm.py'
+      - 'npm/agentplugins/scripts/npm-public-contract.js'
+      - 'scripts/test_released_source_closure.py'
       - 'scripts/test_released_source_audit.py'
       - 'scripts/live-install-audit.py'
       - 'scripts/run-native-client-matrix.py'
@@ -22,6 +29,13 @@ on:
     branches: [main]
     paths:
       - 'scripts/released-source-audit.py'
+      - 'scripts/released-source-policy.go'
+      - 'scripts/released-source-policy_test.go'
+      - 'scripts/released_source_closure.py'
+      - 'scripts/released_source_npm.py'
+      - 'scripts/test_released_source_npm.py'
+      - 'npm/agentplugins/scripts/npm-public-contract.js'
+      - 'scripts/test_released_source_closure.py'
       - 'scripts/test_released_source_audit.py'
       - 'scripts/live-install-audit.py'
       - 'scripts/run-native-client-matrix.py'
@@ -50,7 +64,7 @@ jobs:
     name: Harness unit tests
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,10 +73,40 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.21.1'
+          package-manager-cache: false
       - name: Install pinned native config parser
         run: python3 -m pip install PyYAML==6.0.3
       - name: Exercise receipt refusals
-        run: python3 scripts/test_released_source_audit.py
+        run: python3 -m unittest discover -s scripts -p 'test_released_source_*.py' -v
+      - name: Verify runtime policy adapter against the frozen released source
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          import os
+          from pathlib import Path
+          import subprocess
+          import tempfile
+          root = Path.cwd()
+          spec = importlib.util.spec_from_file_location("source_audit", root / "scripts/released-source-audit.py")
+          audit = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(audit)
+          with tempfile.TemporaryDirectory(prefix="source-policy-unit-", dir=os.environ["RUNNER_TEMP"]) as temp:
+              directory = Path(temp).resolve()
+              context = audit.prepare_policy_context(directory, directory / "public-policy", "linux-amd64")
+              frozen = Path(context["frozen"])
+              environment = dict(os.environ, GOWORK=str(frozen / "go.work"))
+              subprocess.run(["go", "test", str(root / "scripts/released-source-policy.go"),
+                              str(root / "scripts/released-source-policy_test.go")],
+                             cwd=frozen / "cli", env=environment, check=True, timeout=300)
+          PY
 
   # Live qualification of the published release. Manual only: it is run after a
   # new public release is cut, so merging harness changes never depends on the
@@ -115,6 +159,9 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.12'
+      - name: Install pinned public npm provenance verifier
+        shell: bash
+        run: npm install --global npm@12.0.2 --ignore-scripts --no-audit --no-fund
       - name: Install pinned native config parser
         shell: bash
         run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} -m pip install PyYAML==6.0.3
@@ -123,7 +170,7 @@ jobs:
         run: |
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git diff --exit-code
-          ${{ runner.os == 'Windows' && 'python' || 'python3' }} scripts/test_released_source_audit.py
+          ${{ runner.os == 'Windows' && 'python' || 'python3' }} -m unittest discover -s scripts -p 'test_released_source_*.py' -v
       - name: Install pinned real Hermes for native target detection
         if: matrix.client == 'hermes'
         shell: bash
@@ -157,6 +204,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: source-${{ matrix.client }}-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/source-receipt/receipt.json
+          path: |
+            ${{ runner.temp }}/source-receipt/receipt.json
+            ${{ runner.temp }}/source-receipt/verified-public-policy/*/snapshot.json
+            ${{ runner.temp }}/source-receipt/verified-public-policy/*/envelope.json
+            ${{ runner.temp }}/source-receipt/verified-public-policy/*/policy.json
           if-no-files-found: warn
           retention-days: 14

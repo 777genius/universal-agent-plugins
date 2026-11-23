@@ -1186,5 +1186,309 @@ class PiProjectTrustTests(unittest.TestCase):
                          audit.digest(b"o1:s3:urls26:https://mcp.notion.com/mcp"))
 
 
+
+
+class PiClosureNativeTests(unittest.TestCase):
+    CAMPAIGN = "---\nname: campaign-planning\ndescription: Plan a marketing campaign, content calendar or landing-page launch using an audience brief, existing Notion content, HubSpot CRM insights and Playwright checks.\n---\n\n# Campaign planning\n\nUse this workflow when the user requests a campaign plan, content calendar,\nlaunch brief or landing-page marketing review.\n\n## Establish the brief\n\nStart from the information the user supplied. Identify the product or offer,\naudience, objective, channels, dates, budget and brand constraints. Ask only for\nmissing details that would materially change the plan. Mark estimates and\nassumptions explicitly; never invent customer research or campaign results.\n\n## Gather relevant evidence\n\n- **Notion:** find the user's relevant brand guidelines, product notes and\n  existing campaign material. Cite the pages used. Draft a content calendar in\n  the answer; create or edit Notion pages when the user requests saving it.\n- **HubSpot CRM:** read authorized aggregate pipeline and audience context to\n  inform personas and channel priorities. This planning workflow uses read\n  tools; it does not create contacts, send campaigns or update CRM records.\n  Do not copy a contact database into the campaign plan.\n- **Playwright:** inspect the requested landing page for message consistency,\n  primary calls to action, mobile layout and obvious broken navigation. Report\n  observed issues with the page URL and evidence. Do not submit live forms or\n  create purchases as part of a review.\n\nUse only the integrations relevant to the request. If a workspace connection\nis unavailable, continue from the brief and identify the missing evidence.\nInstalling a plugin does not supply Notion or HubSpot account authorization.\n\n## Produce a usable plan\n\nKeep the result proportional to the campaign. Include:\n\n1. Objective, audience, offer and evidence-backed assumptions.\n2. The main message and two or three supporting content themes.\n3. A channel calendar with date, asset, owner and call to action.\n4. Draft copy for the highest-priority asset.\n5. Landing-page issues and the smallest useful changes.\n6. Success measures, their data source and the next review date.\n\nDistinguish proposed work from completed actions. Link supporting Notion pages\nand reviewed URLs. Planning does not itself publish content or contact leads;\nperform those actions only when they are part of the user's explicit request.\n"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        native = self.root / "home/.pi/agent"
+        native.mkdir(parents=True)
+        (self.root / "project").mkdir()
+        self.selected = self.root / "project/.pi"
+        self.selected.mkdir()
+        self.oracle = audit.PiProjectTrustOracle(self.root, native)
+        self.case = {"client": "pi", "scope": "project"}
+        self.closure = SimpleNamespace(checked_playwright_runtime=mock.Mock())
+        self.owners = {}
+        self.entries = {
+            audit.FOREIGN_NATIVE_MCP: {"url": "https://foreign.invalid/mcp", "enabled": False},
+            "notion": {"url": "https://mcp.notion.com/mcp"},
+            "hubspot-crm": {"url": "https://mcp.hubspot.com"}}
+        for alias in audit.live.MARKETING_KIT_DISTRIBUTIONS:
+            physical = alias + "-owner"
+            locator = self.selected / "extensions" / physical
+            locator.mkdir(parents=True)
+            (locator / "plugin.json").write_text("{}", encoding="utf-8")
+            package = {"object_id": "package:pi:" + physical, "kind": "managed_package_directory",
+                       "logical_name": alias, "path": str(locator), "protection_class": "managed",
+                       "managed_digest": "sha256:" + "a" * 64}
+            if alias == "marketing-kit":
+                path = self.selected / "skills/campaign-planning"
+                path.mkdir(parents=True)
+                source = locator / "skills/campaign-planning"
+                source.mkdir(parents=True)
+                for directory in (path, source):
+                    (directory / "SKILL.md").write_bytes(self.CAMPAIGN.encode())
+                body = self.CAMPAIGN.encode()
+                image = {"SKILL.md": ("file", (path / "SKILL.md").lstat().st_mode,
+                                      None, None, None, len(body), audit.hashlib.sha256(body).hexdigest())}
+                adapter = type("SkillReader", (), {"bytes": lambda _, p: p.read_bytes()})()
+                md = self.oracle.resource_audit.PiProjectSkillAudit.skill_digest(adapter, path, image)
+                kind = "pi_project_skill_directory"
+                member = {"kind": kind, "object_id": kind + ":campaign-planning", "logical_name": "campaign-planning",
+                          "source_relative": "skills/campaign-planning", "path": str(path),
+                          "managed_digest": md, "protection_class": "managed"}
+            else:
+                kind = "pi_project_mcp_server"
+                member = {"kind": kind, "object_id": kind + ":" + alias, "logical_name": alias,
+                          "path": str(self.selected / "mcp.json"), "managed_digest": "sha256:" + "b" * 64,
+                          "protection_class": "managed"}
+            binding = {"client_binding_id": alias, "physical_artifact_id": physical,
+                       "native_objects": [package, member], "receipts": [{"phase": "committed",
+                       "client_binding_id": alias, "active_path": str(locator), "after_digest": package["managed_digest"]}]}
+            self.owners[alias] = {"binding": binding, "locator": locator}
+        locator = self.owners["playwright"]["locator"]
+        self.entries["playwright"] = {"command": "node", "args": [
+            str(locator / "io.github.777genius.agentplugins/runtime/launcher.mjs")]}
+        self.config()
+
+    def config(self):
+        (self.selected / "mcp.json").write_text(json.dumps({"mcpServers": self.entries}), encoding="utf-8")
+
+    def check(self, alias):
+        return audit.checked_pi_closure_native(self.oracle, self.closure, self.case, self.selected,
+                                               alias, self.owners[alias])
+
+    def test_all_four_exact_native_owners_produce_trust_map(self):
+        proofs = {alias: self.check(alias) for alias in self.owners}
+        self.assertTrue(all(p["content_verified"] is True for p in proofs.values()))
+        self.assertEqual(set(proofs["marketing-kit"]["trust_owner"]["skills"]), {"campaign-planning"})
+        for alias in ("notion", "hubspot-crm", "playwright"):
+            self.assertEqual(set(proofs[alias]["trust_owner"]["mcp_servers"]), {alias})
+        self.closure.checked_playwright_runtime.assert_called_once()
+
+    def test_wrong_transport_and_extra_native_server_are_refused(self):
+        self.entries["playwright"]["args"].append("--evil")
+        self.config()
+        with self.assertRaisesRegex(ValueError, "transport"):
+            self.check("playwright")
+        self.entries["foreign-extra"] = {"command": "evil"}
+        self.config()
+        with self.assertRaisesRegex(ValueError, "transport"):
+            self.check("notion")
+
+    def test_extra_native_object_wrong_scope_or_missing_receipt_are_refused(self):
+        binding = self.owners["notion"]["binding"]
+        original = copy.deepcopy(binding)
+        for mutation in ("object", "scope", "receipt"):
+            binding.clear()
+            binding.update(copy.deepcopy(original))
+            if mutation == "object":
+                binding["native_objects"].append(copy.deepcopy(binding["native_objects"][0]))
+            elif mutation == "scope":
+                binding["native_objects"][1]["kind"] = "pi_user_mcp_server"
+            else:
+                binding["receipts"] = []
+            with self.assertRaises(ValueError):
+                self.check("notion")
+
+    def test_forged_skill_digest_extra_skill_and_entrypoint_are_refused(self):
+        member = self.owners["marketing-kit"]["binding"]["native_objects"][1]
+        before = member["managed_digest"]
+        member["managed_digest"] = "sha256:" + "f" * 64
+        with self.assertRaisesRegex(ValueError, "digest"):
+            self.check("marketing-kit")
+        member["managed_digest"] = before
+        path = self.selected / "skills/foreign"
+        path.mkdir()
+        with self.assertRaisesRegex(ValueError, "unreviewed Skill"):
+            self.check("marketing-kit")
+        foreign = self.owners["notion"]["locator"] / "index.ts"
+        foreign.write_text("evil", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "entrypoint"):
+            self.check("notion")
+
+    def test_playwright_source_oracle_failure_prevents_native_proof(self):
+        self.closure.checked_playwright_runtime.side_effect = ValueError("forged source")
+        with self.assertRaisesRegex(ValueError, "forged source"):
+            self.check("playwright")
+
+
+class ClosureLifecycleIntegrationTests(unittest.TestCase):
+    def selected(self):
+        pin = audit.live.MARKETING_KIT_SIGNED_CLOSURE["777genius/marketing-kit"]
+        return {"name": "marketing-kit", "distribution": "777genius/marketing-kit", "client": "hermes",
+                "scope": "user", "expected": "dependency-closure", "components": ["skills"],
+                "selector": "github:fixture", "source": {"repository": pin["repository"],
+                "revision": pin["resolved_revision"], "path": pin["package_path"]},
+                "tree_digest": pin["tree_digest"], "manifest_digest": pin["manifest_digest"]}
+
+    def exercise(self, *, policy="eligible", error=None, retain_child=False, missing_native=False):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name).resolve() / "case"
+        calls, stages, owners = [], [], {}
+        selected = self.selected()
+        helper = SimpleNamespace()
+        real_closure = audit.module("real_cleanup_contract", "released_source_closure.py")
+        def authorize(api, context, case_root, case, stage):
+            stages.append(stage)
+            if error is not None:
+                raise ValueError(error)
+            return {"policy_status": policy, "ineligible_distributions": ["777genius/notion"]}
+        def join(*args):
+            return owners
+        def native(api, joined, verifier):
+            if missing_native:
+                raise ValueError("native content incomplete")
+            return {alias: {"content_verified": True} for alias in joined}
+        def cli(argv, env, project, *args, **kwargs):
+            operation = argv[1]
+            calls.append((operation, argv[2] if operation in ("info", "update", "repair", "remove") else None))
+            data = root / "uap-data"
+            if operation == "add" and policy == "eligible":
+                native = root / "home/.hermes"
+                skill = native / "skills/campaign-planning"
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text("fixture", encoding="utf-8")
+                (native / "config.yaml").write_text(audit.yaml.safe_dump({"mcp_servers": {
+                    audit.FOREIGN_NATIVE_MCP: {"command": "echo", "args": ["unrelated-native-audit"]},
+                    "notion": {}, "hubspot-crm": {}, "playwright": {}}}), encoding="utf-8")
+                for alias in audit.live.MARKETING_KIT_DISTRIBUTIONS:
+                    locator = root / "home/.hermes/plugins" / alias
+                    locator.mkdir(parents=True)
+                    (locator / "plugin.json").write_text("{}", encoding="utf-8")
+                    owners[alias] = {"installation": {"installation_id": alias},
+                        "binding": {"client_binding_id": alias, "physical_artifact_id": alias},
+                        "locator": locator}
+                (data / "uap.toml").write_text('schema_version=1\n[dependencies]\n[targets]\n', encoding="utf-8")
+                (data / "uap.lock").write_text('{"lock_version":1,"packages":[]}', encoding="utf-8")
+            if operation == "remove":
+                native = root / "home/.hermes"
+                (native / "skills/campaign-planning/SKILL.md").unlink()
+                (native / "skills/campaign-planning").rmdir()
+                (native / "config.yaml").write_text(audit.yaml.safe_dump({"mcp_servers": {
+                    audit.FOREIGN_NATIVE_MCP: {"command": "echo", "args": ["unrelated-native-audit"]}}}), encoding="utf-8")
+                for owner in owners.values():
+                    (owner["locator"] / "plugin.json").unlink()
+                    owner["locator"].rmdir()
+                if retain_child:
+                    (data / "uap.lock").write_text('{"lock_version":1,"packages":[{"alias":"notion","source_key":"directory:777genius/notion"}]}', encoding="utf-8")
+                (data / "state-v2.json").write_text('{"schema_version":5,"installations":[],"environment_receipts":[]}', encoding="utf-8")
+            refused = operation == "add" and policy == "ineligible"
+            return {"exit_code": 1 if refused else 0, "timeout": False,
+                    "_json": {"data": {"installations": []}},
+                    "stdout_full": "", "stderr_full": ("agentplugins: dependency conflict for directory:777genius/notion: marketing-kit version 1.0.0" if refused else ""),
+                    "stdout_tail": "", "stderr_tail": ""}
+        helper.authorize = authorize
+        helper.checked_closure = join
+        helper.checked_native = native
+        helper.checked_cleanup = real_closure.checked_cleanup
+        helper.checked_member_native = lambda *args: {"content_verified": True}
+        helper.checked_namespace = real_closure.checked_namespace
+        helper.held_read = lambda api, path, case_root: path.read_bytes()
+        helper.checked_refusal_authority = lambda *args: None
+        original_module = audit.module
+        with mock.patch.object(audit, "module", side_effect=lambda name, filename: helper if filename == "released_source_closure.py" else original_module(name, filename)), \
+             mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+             mock.patch.object(audit.live, "call", side_effect=cli), \
+             mock.patch.object(audit, "checked_dependency_refusal", return_value={"distribution": "777genius/notion"}):
+            outcome = audit.run_case(Path("/fixture-cli"), selected, root, None, policy_context={"verified": True})
+        return outcome, calls, stages
+
+    def test_complete_closure_exercises_all_ids_and_reauthenticates_mutations(self):
+        outcome, calls, stages = self.exercise()
+        self.assertEqual(outcome["status"], "materialized-closure-lifecycle-passed", outcome.get("reason"))
+        self.assertEqual(stages, ["add", "update", "repair"])
+        self.assertEqual([target for op, target in calls if op == "info"], list(audit.live.MARKETING_KIT_DISTRIBUTIONS))
+        self.assertIn(("update", "marketing-kit"), calls)
+        self.assertIn(("repair", "marketing-kit"), calls)
+        self.assertIn(("remove", "marketing-kit"), calls)
+        self.assertFalse(outcome["runtime_qualified"])
+
+    def test_authentication_missing_native_and_retained_child_lock_fail_closed(self):
+        for kwargs, reason in (({"error": "bad signature"}, "bad signature"),
+                               ({"missing_native": True}, "native content incomplete"),
+                               ({"retain_child": True}, "retained locked child")):
+            with self.subTest(kwargs=kwargs):
+                outcome, _, _ = self.exercise(**kwargs)
+                self.assertEqual(outcome["status"], "failed")
+                self.assertIn(reason, outcome["reason"])
+
+    def test_authenticated_ineligible_refusal_has_no_effects(self):
+        outcome, calls, stages = self.exercise(policy="ineligible")
+        self.assertEqual(outcome["status"], "expected-dependency-refusal", outcome.get("reason"))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(stages, ["add"])
+
+    def test_new_closure_without_runtime_context_never_runs_cli(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+             mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+             mock.patch.object(audit.live, "call") as cli:
+            outcome = audit.run_case(Path("/fixture-cli"), self.selected(), Path(temporary) / "case", None)
+        self.assertEqual(outcome["status"], "failed")
+        self.assertIn("prerequisites", outcome["reason"])
+        cli.assert_not_called()
+
+
+
+
+class PairedChannelTests(unittest.TestCase):
+    def test_public_npm_prefix_executes_wrapper_for_actual_operation(self):
+        selected = ClosureLifecycleIntegrationTests().selected()
+        selected["expected"] = "dependency-refusal"
+        output = {"exit_code": 1, "timeout": False, "stdout_full": "", "stderr_full": "",
+                  "_json": None, "stdout_tail": "", "stderr_tail": ""}
+        prefix = [str(Path("/absolute-node").absolute()), str(Path("/public-package/bin/agentplugins.js").absolute())]
+        with tempfile.TemporaryDirectory() as temporary, \
+             mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+             mock.patch.object(audit.live, "call", return_value=output) as call, \
+             mock.patch.object(audit, "checked_dependency_refusal", return_value={"distribution": "777genius/notion"}):
+            result = audit.run_case(prefix, selected, Path(temporary) / "case", None)
+        self.assertEqual(result["status"], "expected-dependency-refusal")
+        self.assertEqual(call.call_args.args[0][:3], [*prefix, "add"])
+        self.assertEqual(result["trace"][0]["argv"][:3], [*prefix, "add"])
+
+    def test_main_runs_both_channels_with_fresh_roots_and_one_policy_build(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            native = base / "hermes"
+            native.write_text("fixture", encoding="utf-8")
+            args = SimpleNamespace(client="hermes", target="linux-amd64", native_bin=native, report_dir=base / "receipt")
+            prefix = [str(base / "node"), str(base / "public/bin/agentplugins.js")]
+            context = {"frozen": "verified"}
+            npm = SimpleNamespace(provision=mock.Mock(return_value={"command": prefix, "proof": {"verified": True},
+                                                                   "env": {"PATH": str(base)}}))
+            calls = []
+            def selected(snapshot, distribution, sequence, client, scope, refusal):
+                return {"name": "notion" if distribution.endswith("/notion") else "marketing-kit",
+                        "client": client, "scope": scope, "expected": "dependency-refusal" if refusal else "materialized-lifecycle"}
+            def run(command, case, root, executable, policy_context=None, command_env=None):
+                calls.append((command, case.copy(), root, policy_context, command_env))
+                return {**case, "status": "materialized-lifecycle-passed"}
+            with mock.patch.object(audit.argparse.ArgumentParser, "parse_args", return_value=args), \
+                 mock.patch.object(audit.native, "require_hosted"), \
+                 mock.patch.object(audit.native, "provision_release", return_value=(base / "binary", {"verified": True})), \
+                 mock.patch.object(audit, "authenticated_snapshot", return_value={}), \
+                 mock.patch.object(audit, "provision_native", return_value=(native, {"verified": True})), \
+                 mock.patch.object(audit, "prepare_policy_context", return_value=context) as prepare, \
+                 mock.patch.object(audit, "module", return_value=npm), \
+                 mock.patch.object(audit, "source_case", side_effect=selected), \
+                 mock.patch.object(audit, "run_case", side_effect=run), \
+                 mock.patch("sys.stdout", new_callable=io.StringIO), \
+                 mock.patch.dict(os.environ, {"RUNNER_TEMP": str(base)}):
+                self.assertEqual(audit.main(), 0)
+            prepare.assert_called_once()
+            npm.provision.assert_called_once()
+            self.assertEqual(len(calls), 4)
+            self.assertEqual({c[2].name for c in calls}, {"binary-notion-user", "binary-marketing-kit-user",
+                                                        "npm-notion-user", "npm-marketing-kit-user"})
+            self.assertTrue(all(c[3] is context for c in calls))
+            self.assertTrue(all(c[0] == prefix for c in calls if c[1]["channel"] == "npm"))
+            self.assertTrue(all(c[1]["expected"] == "dependency-closure" for c in calls if c[1]["name"] == "marketing-kit"))
+            receipt = json.loads((args.report_dir / "receipt.json").read_text())
+            self.assertEqual({c["channel"] for c in receipt["cases"]}, {"binary", "npm"})
+
+    def test_npm_env_cannot_replace_case_home(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.assertRaisesRegex(ValueError, "isolation"):
+                audit.run_case([str(Path("/node").absolute()), str(Path("/wrapper.js").absolute())],
+                               ClosureLifecycleIntegrationTests().selected(), Path(temporary) / "case", None,
+                               command_env={"HOME": "/foreign"})
+
 if __name__ == "__main__":
     unittest.main()

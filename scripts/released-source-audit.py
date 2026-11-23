@@ -20,6 +20,7 @@ import tempfile
 import tomllib
 import urllib.request
 import zipfile
+from types import SimpleNamespace
 from datetime import datetime, timezone
 
 import yaml
@@ -615,13 +616,14 @@ def check_unrelated_native_mcp(control, root):
 
 
 class PiProjectTrustOracle:
-    """Only the frozen Notion Project hook may cross the protected User scope."""
+    """Frozen Project hook, admitted only after independent native owner proof."""
 
-    def __init__(self, root, native_root):
+    def __init__(self, root, native_root, verified_owners=None):
         self.root, self.native = root, native_root
         self.project = root / "project"
         self.hook = native_root / "extensions/agentplugins-project-trust"
         self.phase, self.installed = "fresh", None
+        self.owner_verifier = verified_owners
         self.directories = (native_root / "extensions", self.hook)
         self.files = tuple(self.hook / name for name in
                            ("index.ts", "projects.json", "index.ts.agentplugins.lock",
@@ -683,21 +685,25 @@ class PiProjectTrustOracle:
 
     @staticmethod
     def value_digest(value):
-        # Frozen project_trust_digest.go framing; this oracle admits only Notion's
-        # exact one-string server entry, not arbitrary JSON numeric semantics.
-        require(value == {"url": "https://mcp.notion.com/mcp"}, "unexpected Pi trust MCP")
-        def string(value):
-            body = value.encode("utf-8")
-            return b"s" + str(len(body)).encode() + b":" + body
-        return digest(
-            b"o1:" + string("url") + string(value["url"]))
+        # Frozen framing for the independently checked string/list transport
+        # objects below. Unused numeric and boolean values stay unsupported.
+        def frame(item):
+            if type(item) is str:
+                body = item.encode("utf-8")
+                return b"s" + str(len(body)).encode() + b":" + body
+            if type(item) is list:
+                return b"a" + str(len(item)).encode() + b":" + b"".join(frame(v) for v in item)
+            require(type(item) is dict and all(type(k) is str for k in item), "unsupported Pi trust value")
+            keys = sorted(item, key=lambda k: k.encode("utf-8"))
+            return b"o" + str(len(keys)).encode() + b":" + b"".join(frame(k) + frame(item[k]) for k in keys)
+        return digest(frame(value))
 
     def verified_owners(self, case):
-        """Notion-only seam: binding plus the independent native oracle first.
-
-        A future closure proof must supply every verified binding here before
-        the common hook/namespace/phase verifier can admit multiple owners.
-        """
+        """Use authenticated four-owner closure proof, or the exact Notion proof."""
+        if self.owner_verifier is not None:
+            owners = self.owner_verifier(self, case)
+            require(type(owners) is dict and len(owners) == 4, "Pi closure owners are incomplete")
+            return owners
         _, binding, _ = checked_binding(state_file(self.root, "project"), case)
         locator = in_case(Path(binding["target_locator"]), self.root)
         checked_native_materialization(self.project / ".pi", locator, case, binding, self.root)
@@ -790,12 +796,109 @@ class PiProjectTrustOracle:
         return self.project_snapshot(current)
 
 
-def run_case(binary, case, root, executable):
+def checked_pi_closure_native(oracle, closure, case, selected_root, alias, owner):
+    """One authenticated closure member, exact native object and transport."""
+    binding, locator = owner["binding"], owner["locator"]
+    physical = binding.get("physical_artifact_id")
+    require(case["client"] == "pi" and type(physical) is str
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", physical)
+            and locator == selected_root / "extensions" / physical,
+            "Pi closure physical placement differs")
+    require(not any((locator / name).exists() or (locator / name).is_symlink()
+                    for name in ("index.ts", "index.js", ".agentplugins-pi.json", "package.json")),
+            "Pi closure package acquired an unowned native entrypoint")
+    objects = binding.get("native_objects")
+    require(type(objects) is list and len(objects) == 2 and all(type(v) is dict for v in objects),
+            "Pi closure native ownership inventory differs")
+    packages = [v for v in objects if v.get("kind") == "managed_package_directory"]
+    require(len(packages) == 1, "Pi closure managed package owner missing")
+    package = packages[0]
+    require(package.get("object_id") == "package:pi:" + physical
+            and package.get("logical_name") == alias and Path(package.get("path", "")) == locator
+            and package.get("protection_class") == "managed" and not package.get("user_modified")
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", package.get("managed_digest", "")),
+            "Pi closure managed package owner differs")
+    receipts = binding.get("receipts", [])
+    require(type(receipts) is list and any(type(receipt) is dict and receipt.get("phase") == "committed"
+            and receipt.get("active_path") == str(locator)
+            and receipt.get("client_binding_id") == binding.get("client_binding_id")
+            and receipt.get("after_digest") == package["managed_digest"] for receipt in receipts),
+            "Pi closure package has no committed native receipt")
+    member = next(v for v in objects if v is not package)
+    trust = {"extensions": {physical: oracle.tree_digest(locator)}, "skills": {}, "mcp_servers": {}}
+    if alias == "marketing-kit":
+        kind = "pi_" + case["scope"] + "_skill_directory"
+        path = selected_root / "skills/campaign-planning"
+        require(member.get("kind") == kind and member.get("object_id") == kind + ":campaign-planning"
+                and member.get("logical_name") == "campaign-planning"
+                and member.get("source_relative") == "skills/campaign-planning"
+                and Path(member.get("path", "")) == path, "Pi closure Skill ownership differs")
+        require(set(path.iterdir()) == {path / "SKILL.md"}
+                and set((locator / "skills/campaign-planning").iterdir()) == {locator / "skills/campaign-planning/SKILL.md"},
+                "Pi closure Skill contains unreviewed resources")
+        require(set((selected_root / "skills").iterdir()) == {path}
+                and set((locator / "skills").iterdir()) == {locator / "skills/campaign-planning"},
+                "Pi closure exposes an unreviewed Skill")
+        for skill in (path / "SKILL.md", locator / "skills/campaign-planning/SKILL.md"):
+            require(digest(oracle.read(skill)) == "sha256:42ffb5ea182abd0c710735a28e6f6989cc8a4e125642f1d954dabd2e10ca76b1",
+                    "Pi closure Skill differs from immutable source")
+        body = oracle.read(path / "SKILL.md")
+        image = {"SKILL.md": ("file", (path / "SKILL.md").lstat().st_mode,
+                              None, None, None, len(body), hashlib.sha256(body).hexdigest())}
+        adapter = type("SkillReader", (), {"bytes": lambda _, p: oracle.read(p)})()
+        require(member.get("managed_digest") == oracle.resource_audit.PiProjectSkillAudit.skill_digest(adapter, path, image),
+                "Pi closure Skill receipt digest differs from native bytes")
+        trust["skills"]["campaign-planning"] = oracle.tree_digest(path)
+    else:
+        kind = "pi_" + case["scope"] + "_mcp_server"
+        path = selected_root / "mcp.json"
+        require(member.get("kind") == kind and member.get("object_id") == kind + ":" + alias
+                and member.get("logical_name") == alias and Path(member.get("path", "")) == path,
+                "Pi closure MCP ownership differs")
+        if alias in ("notion", "hubspot-crm"):
+            entry = {"url": {"notion": "https://mcp.notion.com/mcp", "hubspot-crm": "https://mcp.hubspot.com"}[alias]}
+        else:
+            require(alias == "playwright", "unknown Pi closure member")
+            closure.checked_playwright_runtime(SimpleNamespace(**globals()), locator, oracle.root)
+            entry = {"command": "node", "args": [str(locator / "io.github.777genius.agentplugins/runtime/launcher.mjs")]}
+        document = json.loads(oracle.read(path), object_pairs_hook=live._unique_json_object)
+        require(type(document) is dict and type(document.get("mcpServers")) is dict
+                and set(document) == {"mcpServers"}
+                and set(document["mcpServers"]) == {FOREIGN_NATIVE_MCP, "notion", "hubspot-crm", "playwright"}
+                and document["mcpServers"].get(alias) == entry, "Pi closure MCP transport differs")
+        trust["mcp_servers"][alias] = oracle.value_digest(entry)
+    require(member.get("protection_class") == "managed" and not member.get("user_modified")
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", member.get("managed_digest", "")),
+            "Pi closure native member lacks ownership")
+    return {"content_verified": True, "physical": physical, "trust_owner": trust,
+            "path": path.relative_to(oracle.root).as_posix()}
+
+
+def prepare_policy_context(directory, evidence_dir, target):
+    """One frozen-source verifier build, separate from the released CLI."""
+    closure = module("source_closure", "released_source_closure.py")
+    context = closure.prepare(SimpleNamespace(**globals()), directory, evidence_dir)
+    context["target"] = target
+    return context
+
+
+def run_case(binary, case, root, executable, policy_context=None, command_env=None):
     root.mkdir()
     home, project, data = (root / name for name in ("home", "project", "uap-data"))
     for path in (home, project, data):
         path.mkdir()
     env = live.isolated_client_env(home, root, data)
+    if command_env:
+        require(set(command_env) <= {"PATH", "NPM_CONFIG_CACHE", "NPM_CONFIG_PREFIX", "NPM_CONFIG_USERCONFIG",
+                                     "NPM_CONFIG_GLOBALCONFIG", "NPM_CONFIG_REGISTRY", "NPM_CONFIG_IGNORE_SCRIPTS"}
+                and all(type(value) is str for value in command_env.values()),
+                "npm command environment would replace case isolation")
+        env.update(command_env)
+    require(not any("PROOF" in key for key in env), "proof-mode environment is forbidden for released CLI")
+    command = [str(part) for part in binary] if isinstance(binary, (list, tuple)) else [str(binary)]
+    require(bool(command) and (not isinstance(binary, (list, tuple))
+            or len(command) == 2 and all(Path(part).is_absolute() for part in command)),
+            "public npm command prefix is not absolute")
     env["HERMES_HOME"] = str(home / ".hermes")
     if executable:
         env["PATH"] = str(executable.parent) + os.pathsep + env.get("PATH", "")
@@ -816,22 +919,67 @@ def run_case(binary, case, root, executable):
     scope_changes = None
     saved_root = data if case["scope"] == "user" else project
     documents = [saved_root / "uap.toml", saved_root / "uap.lock"]
+    closure = None
+    closure_state = {"authorities": {}, "owners": None, "proofs": None, "identity": None,
+                     "native_baseline": None, "removed": False}
+    pi_native = None
+
+    def refresh_closure(stage, result):
+        require(policy_context is not None, "authenticated runtime policy context unavailable")
+        api = SimpleNamespace(**globals())
+        authority = closure.authorize(api, policy_context, root, case, stage)
+        closure_state["authorities"][stage] = authority
+        if result["exit_code"] != 0:
+            require(stage == "add" and authority.get("policy_status") == "ineligible",
+                    "failed closure operation is not an authenticated policy refusal")
+            return
+        owners = closure.checked_closure(api, case, root, documents, authority)
+        verifier = (lambda alias, owner: checked_pi_closure_native(pi_native, closure, case, selected_root, alias, owner)
+                    if case["client"] == "pi" else
+                    closure.checked_member_native(api, case, root, selected_root, alias, owner))
+        proofs = closure.checked_native(api, owners, verifier)
+        closure.checked_namespace(api, case, root, selected_root, owners)
+        identity = {alias: (owner["installation"]["installation_id"], owner["binding"]["client_binding_id"],
+                            owner["binding"]["physical_artifact_id"], str(owner["locator"]))
+                    for alias, owner in owners.items()}
+        require(closure_state["identity"] in (None, identity), "closure changed saved installation identity")
+        closure_state.update(owners=owners, proofs=proofs, identity=identity)
+        if stage == "add":
+            closure_state["native_baseline"] = live.snapshot([selected_root])
+
+    def verified_pi_owners(oracle, selected_case):
+        require(selected_case == case and closure_state["owners"] is not None
+                and set(closure_state["proofs"]) == set(live.MARKETING_KIT_DISTRIBUTIONS),
+                "Pi trust has no independently authenticated closure")
+        return {proof["physical"]: proof["trust_owner"] for proof in closure_state["proofs"].values()}
 
     def run(operation, selector=None, success=True):
         nonlocal scope_changes
-        argv = [str(binary), operation, *([selector] if selector else []), "--target", case["client"], *scope, "--format", "json"]
+        argv = [*command, operation, *([selector] if selector else []), "--target", case["client"], *scope, "--format", "json"]
         if operation in ("add", "update", "repair", "remove"):
             argv += ["--yes"]
         for path in (root, home, project, data, native_root, project_native):
             in_case(path, root)
-        result = live.call(argv, env, project, 180, capture_files=True, capture_full=not success)
+        result = live.call(argv, env, project, 180, capture_files=True,
+                           capture_full=not success or case["expected"] == "dependency-closure")
         parsed = result.pop("_json", None)
         trace.append({"operation": operation, "argv": argv, **result})
         for path in sentinels:
             require(live.preserved_regular_text(path, "unmanaged source audit neighbor\n", root), "foreign state changed")
         check_unrelated_native_mcp(foreign_mcp_control, root)
+        if case["expected"] == "dependency-closure" and operation in ("add", "update", "repair"):
+            require(type(result.get("exit_code")) is int and result.get("timeout") is False,
+                    "closure operation did not finish")
+            refresh_closure(operation, result)
+        if case["expected"] == "dependency-closure" and operation == "remove" and result.get("exit_code") == 0:
+            closure_state["removed"] = True
+        if (case["expected"] == "dependency-closure" and closure_state["native_baseline"] is not None
+                and operation in ("info", "list", "update", "repair")
+                and not closure_state["removed"]):
+            require(live.snapshot([selected_root]) == closure_state["native_baseline"],
+                    "closure operation changed native resources")
         current = protected_scope_snapshot(root, case["scope"], protected_root)
-        if pi_trust is not None:
+        if pi_trust is not None and result.get("exit_code") == 0:
             current = pi_trust.observe(operation, result, current, case)
         if current != protected:
             scope_changes = protected_scope_changes(protected, current, root, case["scope"], protected_root)
@@ -846,11 +994,55 @@ def run_case(binary, case, root, executable):
     pi_trust = None
     before = live.snapshot([selected_root])
     try:
+        if case["expected"] == "dependency-closure":
+            require(case["name"] == "marketing-kit" and policy_context is not None,
+                    "authenticated closure prerequisites unavailable")
+            closure = module("source_closure_case", "released_source_closure.py")
+            if case["client"] == "pi":
+                pi_native = PiProjectTrustOracle(root, native_root, verified_pi_owners)
+                if case["scope"] == "project":
+                    pi_trust = pi_native
         if (case["client"], case["scope"], case["name"], case["expected"]) == (
                 "pi", "project", "notion", "materialized-lifecycle"):
             pi_trust = PiProjectTrustOracle(root, native_root)
-        _, added = run("add", case["selector"], case["expected"] != "dependency-refusal")
-        if case["expected"] == "dependency-refusal":
+        _, added = run("add", case["selector"], case["expected"] not in ("dependency-refusal", "dependency-closure"))
+        if case["expected"] == "dependency-closure":
+            authority = closure_state["authorities"]["add"]
+            if added["exit_code"] != 0:
+                refusal = checked_dependency_refusal(added, case)
+                closure.checked_refusal_authority(SimpleNamespace(**globals()), case, authority, refusal)
+                require(authority.get("policy_status") == "ineligible"
+                        and refusal["distribution"] in authority.get("ineligible_distributions", []),
+                        "refusal differs from authenticated ineligible policy")
+                require(not state_file(root, case["scope"]).get("installations")
+                        and not state_file(root, case["scope"]).get("environment_receipts"),
+                        "refused closure left owned state")
+                require(not any(path.exists() or path.is_symlink() for path in documents)
+                        and live.snapshot([selected_root]) == before, "refused closure published native or saved effects")
+                outcome = {"status": "expected-dependency-refusal", "refusal": refusal,
+                           "authenticated_policy": closure_state["authorities"]}
+            else:
+                require(closure_state["owners"] is not None, "successful closure lacks authenticated owners")
+                installed_owners = closure_state["owners"]
+                initial_native = live.snapshot([selected_root])
+                require(initial_native != before, "closure native materialization not observed")
+                for owner in installed_owners.values():
+                    run("info", owner["installation"]["installation_id"])
+                run("list")
+                for stage in ("update", "repair"):
+                    run(stage, "marketing-kit")
+                    require(live.snapshot([selected_root]) == initial_native,
+                            "immutable closure operation changed native resources")
+                proofs = closure_state["proofs"]
+                run("remove", "marketing-kit")
+                listed, _ = run("list")
+                require(listed.get("data", {}).get("installations") == [], "removed closure is still listed")
+                closure.checked_cleanup(SimpleNamespace(**globals()), installed_owners, selected_root, case, root, documents)
+                outcome = {"status": "materialized-closure-lifecycle-passed", "native_content": proofs,
+                           "authenticated_policy": closure_state["authorities"],
+                           "owned_aliases": sorted(installed_owners), "update": "immutable-no-change",
+                           "repair": "healthy-repair", "native_cleanup": "all-four-owners-absent"}
+        elif case["expected"] == "dependency-refusal":
             if type(added.get("exit_code")) is int and added["exit_code"] == 0 and added.get("timeout") is False:
                 raise ValueError("successful closure is inconclusive: runtime signed policy and full owned lifecycle are unverified")
             refusal = checked_dependency_refusal(added, case)
@@ -896,7 +1088,7 @@ def run_case(binary, case, root, executable):
                        "saved_intent": saved_intent, "native_content": native_content,
                        "update": "immutable-no-change", "repair": "healthy-repair"}
         current = protected_scope_snapshot(root, case["scope"], protected_root)
-        if pi_trust is not None:
+        if pi_trust is not None and closure_state["authorities"].get("add", {}).get("policy_status") != "ineligible":
             require(pi_trust.phase == "removed", "Pi trust lifecycle is incomplete")
             current = pi_trust.observe("list", trace[-1], current, case)
         if current != protected:
@@ -908,7 +1100,7 @@ def run_case(binary, case, root, executable):
                    "activation_qualified": False, "runtime_qualified": False}
         if scope_changes is not None:
             outcome["protected_scope_changes"] = scope_changes
-        if (case.get("expected") == "dependency-refusal" and case.get("name") == "marketing-kit"
+        if (case.get("expected") in ("dependency-refusal", "dependency-closure") and case.get("name") == "marketing-kit"
                 and trace and trace[0].get("operation") == "add"
                 and type(trace[0].get("exit_code")) is int and trace[0]["exit_code"] == 0
                 and trace[0].get("timeout") is False):
@@ -940,18 +1132,29 @@ def main():
             snapshot = authenticated_snapshot(directory)
             binary, report["installer"] = native.provision_release(ROOT, directory, args.target, RELEASE_TAG, RELEASE_COMMIT, REPOSITORY)
             executable, report["native_client"] = provision_native(args.client, args.target, directory, args.native_bin)
+            policy_context = prepare_policy_context(directory, args.report_dir / "verified-public-policy", args.target)
+            npm = module("source_public_npm", "released_source_npm.py").provision(
+                SimpleNamespace(**globals()), directory, args.target,
+                release_context={"binary": binary, "proof": report["installer"]})
+            report["npm"] = npm["proof"]
             scopes = ("user",) if args.client == "hermes" else ("user", "project")
-            for scope in scopes:
-                for distribution, refusal in (("777genius/notion", False), ("777genius/marketing-kit", True)):
-                    case = source_case(snapshot, distribution, 1, args.client, scope, refusal)
-                    report["cases"].append(run_case(binary, case, directory / f'{case["name"]}-{scope}', executable))
+            channels = (("binary", binary, None), ("npm", npm["command"], npm.get("env")))
+            for channel, command, command_env in channels:
+                for scope in scopes:
+                    for distribution, refusal in (("777genius/notion", False), ("777genius/marketing-kit", True)):
+                        case = source_case(snapshot, distribution, 1, args.client, scope, refusal)
+                        case["channel"] = channel
+                        if case["name"] == "marketing-kit":
+                            case["expected"] = "dependency-closure"
+                        report["cases"].append(run_case(command, case, directory / f'{channel}-{case["name"]}-{scope}', executable,
+                                                        policy_context=policy_context, command_env=command_env))
             require(all(case["status"] != "failed" for case in report["cases"]), "some exact-source lifecycle cases failed")
             report["status"] = "passed"
     except Exception as error:
         report["reason"] = str(error)
     finally:
         (args.report_dir / "receipt.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"status": report["status"], "cases": [{"client": row["client"], "scope": row["scope"], "name": row["name"], "status": row["status"]} for row in report["cases"]]}))
+    print(json.dumps({"status": report["status"], "cases": [{"channel": row.get("channel"), "client": row["client"], "scope": row["scope"], "name": row["name"], "status": row["status"]} for row in report["cases"]]}))
     return 0 if report["status"] == "passed" else 1
 
 
