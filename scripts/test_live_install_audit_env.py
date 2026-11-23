@@ -2443,7 +2443,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
     def _exercise_marketing_kit_scope_report(self, target, *, cleanup_failure=False,
                                               boundary_error=False, grants=7, native_error=None, native_peer_mutation=False,
                                               final_policy_error=False, final_peer_mutation=None,
-                                              native_root_redirect=None):
+                                              native_root_redirect=None, project_remove_error=None,
+                                              claude_native_error=None):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2502,8 +2503,64 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 if exc_type is None and cleanup_failure:
                     raise OSError("disposable cleanup failed")
 
-        def execute(_cli, env, project, _target, label, *args):
+        # This fixture tests orchestration/report failure propagation only.
+        # The dedicated helper suites exercise real SQLite/filesystem custody;
+        # genuine public/native qualification remains the hosted workflow.
+        class UnitCodexProfile:
+            def __init__(self, _audit, _root, env, _project):
+                self.home, self.final = Path(env["HOME"]), False
+            def guard(self):
+                pass
+            def checkpoint(self, phase):
+                self.final = self.final or phase == "final-lifecycle"
+            def system_files(self):
+                return {}
+            def evidence(self):
+                return {"unit_fixture": True, "runtime_semantics_unchanged": self.final}
+
+        class UnitClaudeRetirement:
+            def __init__(self, case, home, project, _rows, _pins, _audit, checkpoint_diagnostics):
+                self.case, self.home, self.project = case, home, project
+                self.finished = False
+                checkpoint_diagnostics.append({"status": "observed", "diagnostic_only": True})
+            def close(self):
+                self.finished = True
+            def checkpoint(self):
+                if self.finished:
+                    raise AssertionError("unit custody closed")
+            def finish(self, _receipt, _leftovers, _rescan, keep_open=False):
+                self.finished = not keep_open
+                return {"status": "unit_fixture_retirement", "writer_closure_claimed": False}
+            def verify_retained(self, *_args):
+                self.checkpoint()
+                return {"status": "unit_fixture_retained", "writer_closure_claimed": False}
+
+        class UnitClaudeDiscovery:
+            def __init__(self, retirement, _env, _invoke):
+                self.retirement, self.calls = retirement, 0
+            def removed(self):
+                self.retirement.checkpoint()
+                self.calls += 1
+                point = self.retirement.project.parent.name + ":" + str(self.calls)
+                phases.append("native-claude:" + point)
+                if point == claude_native_error:
+                    raise AssertionError("injected fresh Claude absence failure")
+                return {"status": "unit_fixture_native_absence", "writer_closure_claimed": False}
+
+        def invoke(argv, env, project, _timeout, *, capture_full):
+            from scripts.test_marketing_kit_copilot_project import CopilotProjectConsentContracts
+            self.assertTrue(capture_full)
+            self.assertEqual(argv[1:4], ["install", "--locked", "--yes"])
+            self.assertEqual(project.parent.name, "B")
+            result, staged = CopilotProjectConsentContracts().receipt(project)
+            installed[(env["AGENTPLUGINS_HOME"], "project")] = staged
+            phases.append("cold locked restore refused without Project trust")
+            return result
+
+        def execute(_cli, env, project, _target, label, *args, existing_installations=None, capture=None):
             phases.append(label)
+            if label == project_remove_error:
+                raise AssertionError("injected Project removal failure")
             scope = args[args.index("--scope") + 1]
             key = (env["AGENTPLUGINS_HOME"], scope)
             portable = project if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
@@ -2513,8 +2570,15 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         (portable / name).write_text("retained portable agreement")
                 installed[key] = {name: f"{scope}:{project.parent.name}:{name}"
                                   for name in runner["EXPECTED"]}
+                if existing_installations is not None:
+                    self.assertEqual(installed[key], existing_installations)
+                if label == "explicit owner Project add B":
+                    (Path(env["HOME"]) / ".copilot/config.json").write_text(
+                        json.dumps({"trustedFolders": [str(project)]}))
             elif args[0] == "remove":
                 installed[key] = {}
+            if capture is not None:
+                capture({"result": "success", "scope": scope, "outcome": "completed"})
             return {"stage": label, "exit_code": 0, "result": "passed"}
 
         def boundary(_cli, env, project, expected, _guards):
@@ -2577,6 +2641,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
                     "execute": execute, "verify_pinned_launcher": lambda *_: None,
+                    "invoke": invoke, "CodexProfile": UnitCodexProfile,
+                    "SignedClosureRetirement": UnitClaudeRetirement,
+                    "ClaudeProjectDiscovery": UnitClaudeDiscovery,
                     "profile_snapshot": profile, "check_foreign": foreign,
                     "check_user_project_unchanged": project_check,
                     "inventory": inventory, "identities": lambda items, *_: items,
@@ -2617,12 +2684,18 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 self.assertEqual(report["final_policy_observation"], {
                     "status": "passed", "source_profile": "E", "profile_usage": "never_installed",
                     "policy": report["positive_policy"]})
-                for scope in ("user", "project"):
-                    self.assertEqual(report["scope_results"][scope], {
-                        "expectation": "positive_lifecycle", "status": "passed"})
+                self.assertEqual(report["scope_results"]["user"], {
+                    "expectation": "positive_lifecycle", "status": "passed"})
+                self.assertEqual(report["scope_results"]["project"], {
+                    "expectation": "owner_confirmed_lifecycle_with_cold_refusal" if target == "copilot" else "positive_lifecycle",
+                    "cold_native_restore_qualified": target != "copilot", "status": "passed"})
                 required = ["add", "repeat add", "update", "repair intact", "cold locked restore",
                             "remove B", "remove A", "User add", "User repeat add", "User update",
                             "User repair intact", "User cold locked restore C", "User remove C", "User remove"]
+                if target == "copilot":
+                    required[4:5] = ["cold locked restore refused without Project trust", "remove refused B bindings",
+                                     "explicit owner Project add B", "locked restore after explicit Project consent"]
+                    self.assertFalse(report["copilot_project_restore"]["cold_native_restore_qualified"])
                 self.assertEqual([phase for phase in phases if phase in required], required)
                 boundary = report["current_vscode_user_boundary"]
                 if target == "copilot":
@@ -2636,6 +2709,16 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.assertEqual(boundary["status"], "not_applicable")
                 self.assertEqual(report["historical_policy_results"]["signed45"], {
                     "status": "separate_point_in_time_audit", "required_for_current_qualification": False})
+
+    def test_marketing_kit_claude_fresh_absence_failure_never_qualifies_lifecycle(self):
+        for phase in ("B:1", "A:1", "A:2"):
+            with self.subTest(phase=phase):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "claude", claude_native_error=phase)
+                self.assertEqual(code, 1)
+                self.assertIn("native-claude:" + phase, phases)
+                self.assertIn("fresh Claude absence failure", report["failure"])
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
 
     def test_marketing_kit_removed_record_info_is_not_a_catalog_policy(self):
         from runpy import run_path

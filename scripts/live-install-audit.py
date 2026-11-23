@@ -1291,6 +1291,72 @@ def copilot_disabled_preference_only(before, after_add, after_remove,
             and after_remove.get("match_counts") == expected_after)
 
 
+def initialize_codex_plugin_profile(binary, case_root, home, project, data, env, assert_case_unchanged):
+    """Reuse the strict pinned native bootstrap without exempting profile paths."""
+    # Pinned 0.153.4 retains a valid installation UUID and empty arg0 parents.
+    # Author these fixture objects before protecting every byte and identity.
+    assert_case_unchanged()
+    profile = home / ".codex"
+    for directory in (profile / "tmp", profile / "tmp/arg0"):
+        directory.mkdir(mode=0o700)
+    with (profile / "installation_id").open("xb") as stream:
+        if os.name != "nt":
+            os.fchmod(stream.fileno(), 0o644)
+        stream.write(str(uuid.uuid4()).encode("ascii"))
+    protected_home = scoped_snapshot((home,))
+    protected_delivery = scoped_snapshot((project, data))
+    codex_plugin_sqlite = CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"](
+        binary, case_root, home, project, env)
+    codex_plugin_sqlite.guard()
+    assert_case_unchanged()
+    bundle_files, bundle_directories, bundle_metadata = (
+        CODEX_RUNTIME_AUDIT["plugin_initialization"](home / ".codex"))
+    system_root = home / ".codex/skills/.system"
+    codex_system_metadata = {
+        path: fact for path, fact in bundle_metadata.items()
+        if path == system_root.parent or path.is_relative_to(system_root)}
+    initialized_home = scoped_snapshot((home,))
+    # Admit only exact artifacts validated by the bounded Codex initialization
+    # proofs. Every other old or newly created key is protected.
+    initializer = codex_plugin_sqlite
+    sqlite_root = home / ".local/state/codex-sqlite"
+    config_path = home / ".codex/config.toml"
+    if initializer.runtime != sqlite_root or initializer.config != config_path:
+        raise ValueError("Codex preinstall initialization changed protected fixture authority")
+    owned_files = {
+        config_path: hashlib.sha256(
+            CODEX_RUNTIME_AUDIT["_sqlite_config"](initializer.pin)).hexdigest(),
+        **{sqlite_root / name: fact["sha256"] for name, fact in
+           initializer.observations[0]["runtime_files_fully_read"].items()},
+        **bundle_files,
+    }
+    expected_home = dict(protected_home)
+    owned_directories = (home / ".local", home / ".local/state", sqlite_root,
+                         *bundle_directories)
+    for path in (*owned_directories, *owned_files):
+        directory = path in owned_directories
+        relative = path.relative_to(home)
+        metadata_key = "metadata:0:" + relative.as_posix()
+        metadata = initialized_home.get(metadata_key)
+        if (not isinstance(metadata, tuple) or not metadata
+                or not (stat.S_ISDIR(metadata[0]) if directory
+                        else stat.S_ISREG(metadata[0]))
+                or (path in bundle_metadata and metadata != bundle_metadata[path])):
+            raise ValueError("Codex preinstall initialization changed protected fixture authority")
+        entries = {metadata_key: metadata}
+        if directory:
+            entries["directory:0:" + relative.as_posix()] = "present"
+        else:
+            entries[home.name + "/" + str(relative)] = owned_files[path]
+        for key, value in entries.items():
+            if key not in protected_home:
+                expected_home[key] = value
+    initializer.guard()
+    if (initialized_home != expected_home
+            or scoped_snapshot((project, data)) != protected_delivery):
+        raise ValueError("Codex preinstall initialization changed protected fixture authority")
+    return codex_plugin_sqlite, codex_system_metadata
+
 def _codex_system_skill_checkpoint(home, original):
     """Join the full pinned bundle proof to the original objects and fresh bytes."""
     profile = home / ".codex"
@@ -2916,67 +2982,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             home / ".codex")
         _codex_system_skill_checkpoint(home, codex_system_metadata)
     if native_target == "codex" and kind == "plugin" and AGENT_BINARIES.get("codex"):
-        # Pinned 0.153.4 retains a valid installation UUID and empty arg0 parents.
-        # Author these fixture objects before protecting every byte and identity.
-        assert_case_unchanged()
-        profile = home / ".codex"
-        for directory in (profile / "tmp", profile / "tmp/arg0"):
-            directory.mkdir(mode=0o700)
-        with (profile / "installation_id").open("xb") as stream:
-            if os.name != "nt":
-                os.fchmod(stream.fileno(), 0o644)
-            stream.write(str(uuid.uuid4()).encode("ascii"))
-        protected_home = scoped_snapshot((home,))
-        protected_delivery = scoped_snapshot((project, data))
-        codex_plugin_sqlite = CODEX_RUNTIME_AUDIT["CodexPluginSQLiteAudit"](
-            AGENT_BINARIES["codex"], case_root, home, project, env)
-        assert_case_unchanged()
-        bundle_files, bundle_directories, bundle_metadata = (
-            CODEX_RUNTIME_AUDIT["plugin_initialization"](home / ".codex"))
-        system_root = home / ".codex/skills/.system"
-        codex_system_metadata = {
-            path: fact for path, fact in bundle_metadata.items()
-            if path == system_root.parent or path.is_relative_to(system_root)}
-        initialized_home = scoped_snapshot((home,))
-        # Admit only exact artifacts validated by the bounded Codex initialization
-        # proofs. Every other old or newly created key is protected.
-        initializer = codex_plugin_sqlite
-        sqlite_root = home / ".local/state/codex-sqlite"
-        config_path = home / ".codex/config.toml"
-        if initializer.runtime != sqlite_root or initializer.config != config_path:
-            raise ValueError("Codex preinstall initialization changed protected fixture authority")
-        owned_files = {
-            config_path: hashlib.sha256(
-                CODEX_RUNTIME_AUDIT["_sqlite_config"](initializer.pin)).hexdigest(),
-            **{sqlite_root / name: fact["sha256"] for name, fact in
-               initializer.observations[0]["runtime_files_fully_read"].items()},
-            **bundle_files,
-        }
-        expected_home = dict(protected_home)
-        owned_directories = (home / ".local", home / ".local/state", sqlite_root,
-                             *bundle_directories)
-        for path in (*owned_directories, *owned_files):
-            directory = path in owned_directories
-            relative = path.relative_to(home)
-            metadata_key = "metadata:0:" + relative.as_posix()
-            metadata = initialized_home.get(metadata_key)
-            if (not isinstance(metadata, tuple) or not metadata
-                    or not (stat.S_ISDIR(metadata[0]) if directory
-                            else stat.S_ISREG(metadata[0]))
-                    or (path in bundle_metadata and metadata != bundle_metadata[path])):
-                raise ValueError("Codex preinstall initialization changed protected fixture authority")
-            entries = {metadata_key: metadata}
-            if directory:
-                entries["directory:0:" + relative.as_posix()] = "present"
-            else:
-                entries[home.name + "/" + str(relative)] = owned_files[path]
-            for key, value in entries.items():
-                if key not in protected_home:
-                    expected_home[key] = value
-        initializer.guard()
-        if (initialized_home != expected_home
-                or scoped_snapshot((project, data)) != protected_delivery):
-            raise ValueError("Codex preinstall initialization changed protected fixture authority")
+        codex_plugin_sqlite, codex_system_metadata = initialize_codex_plugin_profile(
+            AGENT_BINARIES["codex"], case_root, home, project, data, env,
+            assert_case_unchanged)
     before = snapshot(native_roots)
     claude_before = (scoped_snapshot(native_roots)
                      if (target, kind, sys.platform) == ("claude", "skill", "linux") else None)

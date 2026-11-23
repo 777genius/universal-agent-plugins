@@ -118,11 +118,12 @@ jobs:
         env:
           GOTOOLCHAIN: local
         run: |
-          # Match the source catalog's release-semver fixture for Directory policy.
-          # The report binds this source build to its actual checkout and binary.
+          # Use the current 0.1.116 policy fixture; 0.1.95 predates Firebase's
+          # signed minimum 0.1.108. This remains a source build, not a release
+          # artifact: the report binds its actual checkout, tree and binary.
           python -B -m unittest discover -s scripts -p test_firebase_runtime_failure.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go build -trimpath -ldflags='-X main.version=0.1.95' -o "$env:RUNNER_TEMP\agentplugins-source.exe" ./cli/cmd/agentplugins
+          go build -trimpath -ldflags='-X main.version=0.1.116' -o "$env:RUNNER_TEMP\agentplugins-source.exe" ./cli/cmd/agentplugins
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Genuine current-source Firebase add, repeat, native attribution and remove
         if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}
@@ -156,7 +157,7 @@ jobs:
           clean_worktree = subprocess.check_output(['git', 'status', '--porcelain'], text=True, timeout=30) == ''
           assert actual_head == os.environ['GITHUB_SHA'] and clean_worktree
           cli_version = subprocess.check_output([str(cli), 'version'], text=True, timeout=30).strip()
-          assert cli_version == 'agentplugins 0.1.95', 'Source fixture version differs from Directory policy pin'
+          assert cli_version == 'agentplugins 0.1.116', 'Source fixture version differs from Directory policy pin'
           cli_sha256 = hashlib.sha256(cli.read_bytes()).hexdigest()
           report = Path(os.environ['RUNNER_TEMP']) / 'source-firebase-claude.json'
           # Reproduce the original long Windows TEMP profile, unlike the
