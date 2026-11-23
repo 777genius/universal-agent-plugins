@@ -1328,6 +1328,20 @@ def check_removed_native_components(target, home, case_root, stage, project_scop
         raise AssertionError(f"{stage}: native Marketing Kit remnants: {sorted(leftovers)}")
 
 
+def start_codex_sqlite_audit(env, project):
+    """Preinstall native Codex 0.153.4: separate SQLite runtime, unchanged semantics.
+
+    The existing CodexPluginSQLiteAudit binds the config pin, full SQLite
+    schema/tables/integrity and every live WAL byte to the disposable case.
+    It does not exclude any native-profile file or relax removal checks.
+    """
+    native = audit["AGENT_BINARIES"].get("codex")
+    if not native or not Path(native).is_file():
+        raise AssertionError("Codex native SQLite baseline prerequisite unavailable")
+    return audit["CODEX_RUNTIME_AUDIT"]["CodexPluginSQLiteAudit"](
+        native, project.parent, Path(env["HOME"]), project, env)
+
+
 def bind_pinned_launcher_cache(env, cache, sandbox):
     """Share only the SHA-checked released CLI binary, not native client state."""
     if (not cache.is_dir() or cache.is_symlink()
@@ -1638,6 +1652,10 @@ def main():
             report["positive_policy"] = observe_production_policy(
                 options.cli, env, project_a, options.target,
                 guards=(lambda: check_foreign(foreign_files, root),))
+            codex_sqlite = {}
+            if options.target == "codex":
+                codex_sqlite[env["HOME"]] = start_codex_sqlite_audit(env, project_a)
+
             def run(e, p, label, *args):
                 try:
                     report["steps"].append(execute(options.cli, e, p, options.target, label, *args))
@@ -1652,6 +1670,10 @@ def main():
                         check_user_project_unchanged(project_c, protected_c_project, label)
                     if protected_c_profile is not None:
                         check_profile_unchanged(env_c, project_c, protected_c_profile, label)
+                    # Every command must preserve the native SQLite baseline;
+                    # its WAL is never silently excluded from native cleanup.
+                    if options.target == "codex":
+                        codex_sqlite[e["HOME"]].checkpoint(label)
             def copilot_read(e, p, action, native_commands=0):
                 make_guard = audit["copilot_native_roots_guard"]
                 own_guard = make_guard(Path(e["HOME"]), e, p)
@@ -1752,6 +1774,9 @@ def main():
                     lambda: check_foreign(foreign_files, root),
                     lambda: check_profile_unchanged(env, project_a, native_a_before_b, "Project B policy"),
                 ))
+            if options.target == "codex":
+                codex_sqlite[env_b["HOME"]] = start_codex_sqlite_audit(env_b, project_b)
+                check_profile_unchanged(env, project_a, native_a_before_b, "Project B native baseline")
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
             # The genuine published CLI must refuse a corrupted child pin
             # without modifying native or durable state in cold Project B.
@@ -1874,6 +1899,8 @@ def main():
             foreign_files.extend(pin_foreign([(foreign_c, "unmanaged user data\n"),
                                               (project_foreign_c, "unmanaged project data\n"),
                                               *native_foreign_c], root))
+            if options.target == "codex":
+                codex_sqlite[env_c["HOME"]] = start_codex_sqlite_audit(env_c, project_c)
             # Read-only forensic baseline: native Copilot may retain disabled
             # settings after uninstall. Never treat a residue as a PASS here.
             copilot_c_shapes = ({"before": copilot_user_c_settings_shape(env_c, root)}
@@ -2068,6 +2095,14 @@ def main():
                 report["current_vscode_user_boundary"].update(
                     status="refused_as_expected", contract=boundary["contract"],
                     reason=boundary["reason"], policy=boundary["policy"])
+            if options.target == "codex":
+                # Only measured native checkpoints reach this report.
+                report["codex_sqlite_runtime"] = {
+                    label: {"native_version": codex_sqlite[e["HOME"]].native_version,
+                            "runtime_semantics_unchanged": True,
+                            "checkpoints": [row["phase"] for row in
+                                            codex_sqlite[e["HOME"]].observations]}
+                    for label, e in (("A", env), ("B", env_b), ("C", env_c))}
             report["scope_results"]["user"]["status"] = "passed"
         # TemporaryDirectory cleanup is part of qualification; exceptions from
         # its __exit__ must never leave a successful two-scope result behind.

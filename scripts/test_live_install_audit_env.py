@@ -3390,6 +3390,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
     def _exercise_marketing_kit_scope_report(self, target, *, cleanup_failure=False,
                                               boundary_error=False, grants=7, native_error=None, native_peer_mutation=False,
+                                              codex_sqlite_error=None,
                                               final_policy_error=False, final_peer_mutation=None,
                                               native_root_redirect=None):
         from io import StringIO
@@ -3437,6 +3438,23 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     phases.append("guard-root:" + project.parent.name)
                 captured()
             return guard
+
+        class InertCodexSQLite:
+            native_version = "0.153.4"
+
+            def __init__(self, label):
+                self.label = label
+                self.observations = [{"phase": "before-install"}]
+                phases.append("codex-sqlite-bootstrap:" + label)
+
+            def checkpoint(self, stage):
+                phases.append("codex-sqlite:" + self.label + ":" + stage)
+                if codex_sqlite_error == stage:
+                    raise ValueError("Codex SQLite semantic baseline changed")
+                self.observations.append({"phase": stage})
+
+        def start_codex_sqlite(_env, project):
+            return InertCodexSQLite(project.parent.name)
 
         class CheckedCleanup:
             def __init__(self, **kwargs):
@@ -3539,6 +3557,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "verify_current_vscode_user_boundary": boundary,
                     "observe_production_policy": observe,
                     "codex_user_native_remove_attestation": lambda *_: ("--external-uninstalled",),
+                    "start_codex_sqlite_audit": start_codex_sqlite,
                     # Patch the runner binding, preserving tempfile for setup helpers.
                     "tempfile": SimpleNamespace(TemporaryDirectory=CheckedCleanup),
                     }), \
@@ -3572,6 +3591,18 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                             "remove B", "remove A", "User add", "User repeat add", "User update",
                             "User repair intact", "User cold locked restore C", "User remove C", "User remove"]
                 self.assertEqual([phase for phase in phases if phase in required], required)
+                if target == "codex":
+                    self.assertEqual(
+                        [phase for phase in phases if phase.startswith("codex-sqlite-bootstrap:")],
+                        ["codex-sqlite-bootstrap:A", "codex-sqlite-bootstrap:B",
+                         "codex-sqlite-bootstrap:C"])
+                    self.assertEqual(set(report["codex_sqlite_runtime"]), {"A", "B", "C"})
+                    for row in report["codex_sqlite_runtime"].values():
+                        self.assertEqual(row["native_version"], "0.153.4")
+                        self.assertTrue(row["runtime_semantics_unchanged"])
+                        self.assertIn("before-install", row["checkpoints"])
+                else:
+                    self.assertNotIn("codex_sqlite_runtime", report)
                 boundary = report["current_vscode_user_boundary"]
                 if target == "copilot":
                     self.assertEqual(phases[-1], "vscode-saved_management_capability")
@@ -3584,6 +3615,15 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.assertEqual(boundary["status"], "not_applicable")
                 self.assertEqual(report["historical_policy_results"]["signed45"], {
                     "status": "separate_point_in_time_audit", "required_for_current_qualification": False})
+
+    def test_marketing_kit_codex_sqlite_mutation_fails_closed(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "codex", codex_sqlite_error="remove B")
+        self.assertEqual(code, 1)
+        self.assertIn("Codex SQLite semantic baseline changed", report["failure"])
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertIn("codex-sqlite:B:remove B", phases)
+        self.assertNotIn("codex_sqlite_runtime", report)
 
     def test_marketing_kit_removed_record_info_is_not_a_catalog_policy(self):
         from runpy import run_path
