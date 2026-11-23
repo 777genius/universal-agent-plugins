@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { hydrated } from './i18n-state.helpers';
+import { hydrated, navigate } from './i18n-state.helpers';
 
 function skill(index = 0) {
   return {
@@ -502,7 +502,9 @@ test('a busy Skill preview waits and automatically displays the source after ret
         markdown: '---\nname: frontend-design\ndescription: Design\n---\n## Source after retry\n' },
     });
   });
-  await page.goto('skills/?id=skills-sh%3Aanthropics%2Fskills%3Afrontend-design&q=frontend-design');
+  // Start after hydration so an aborted startup request cannot consume the busy fixture.
+  await page.goto('./download/');
+  await navigate(page, 'skills', 'en', '?id=skills-sh%3Aanthropics%2Fskills%3Afrontend-design&q=frontend-design');
   await hydrated(page);
   releaseBusy();
   await expect(page.getByRole('status').filter({ hasText: 'Preview is busy. Retrying shortly…' })).toBeVisible();
