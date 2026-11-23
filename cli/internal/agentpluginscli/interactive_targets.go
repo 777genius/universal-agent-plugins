@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
@@ -26,7 +26,7 @@ func promptCompatibleDetectedTargets(ctx context.Context, cmd *cobra.Command, ap
 	detectionSkipped := make([]targetSkip, 0)
 	for _, client := range clients {
 		if client.DetectionError != nil && supportedTarget(client.ClientID) {
-			detectionSkipped = append(detectionSkipped, targetSkip{Client: client.ClientID, Reason: "client configuration could not be inspected safely; correct it and retry"})
+			detectionSkipped = append(detectionSkipped, targetSkip{Client: client.ClientID, Kind: prompt.SkipManual, Reason: reasonConfigurationUnreadable})
 		}
 	}
 	if len(detected) == 0 {
@@ -77,15 +77,19 @@ func subtractDetectedClients(all, selected []domain.DetectedClient) []domain.Det
 }
 
 // targetSkip contains only installer-owned guidance, never raw planner/provider errors.
+// Kind groups explanations in the picker; an empty Reason uses the kind's default.
 type targetSkip struct {
 	Client domain.ClientID
 	Reason string
+	Kind   prompt.SkipKind
 }
 
-func skippedTargets(clients []domain.DetectedClient, reason string) []targetSkip {
+const reasonConfigurationUnreadable = "its configuration could not be inspected safely; fix it and retry"
+
+func skippedTargets(clients []domain.DetectedClient, kind prompt.SkipKind, reason string) []targetSkip {
 	var skipped []targetSkip
 	for _, client := range clients {
-		skipped = append(skipped, targetSkip{Client: client.ClientID, Reason: strings.ReplaceAll(reason, "--target", "--target "+string(client.ClientID))})
+		skipped = append(skipped, targetSkip{Client: client.ClientID, Kind: kind, Reason: reason})
 	}
 	return skipped
 }

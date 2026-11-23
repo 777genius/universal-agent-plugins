@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 )
 
 var (
@@ -72,7 +74,7 @@ func (u *UI) SelectOne(ctx context.Context, req SelectRequest) (Selection, error
 	if err := validate(req, false); err != nil {
 		return Selection{}, err
 	}
-	if err := u.render(req, false); err != nil {
+	if err := u.render(req, false, ""); err != nil {
 		return Selection{}, err
 	}
 	line, err := u.read(ctx)
@@ -93,13 +95,33 @@ func (u *UI) SelectOne(ctx context.Context, req SelectRequest) (Selection, error
 }
 
 func (u *UI) SelectMany(ctx context.Context, req SelectRequest) (Selection, error) {
+	return u.selectMany(ctx, req, "")
+}
+
+// SelectManyWithNotes behaves like SelectMany and prints the annotations and
+// the unavailable-client explanations of a normalized request between the list
+// and the prompt, so line-oriented callers show the same information. Color
+// applies only to the explanation block; labels stay plain text.
+func (u *UI) SelectManyWithNotes(ctx context.Context, req MultiSelectRequest, color bool) (Selection, error) {
+	req, err := normalizeMulti(req)
+	if err != nil {
+		return Selection{}, err
+	}
+	selection, err := u.selectMany(ctx, annotatedRequest(req, terminaltheme.Theme{}), plainUnavailable(req.UnavailableHeading, req.Unavailable, terminaltheme.Theme{Enabled: color}))
+	if err != nil || selection.Cancelled { //nolint:misspell // Preserve the existing public cancellation field.
+		return selection, err
+	}
+	return terminalSelection(req, selection.IDs)
+}
+
+func (u *UI) selectMany(ctx context.Context, req SelectRequest, below string) (Selection, error) {
 	if err := ctx.Err(); err != nil {
 		return Selection{}, err
 	}
 	if err := validate(req, true); err != nil {
 		return Selection{}, err
 	}
-	if err := u.render(req, true); err != nil {
+	if err := u.render(req, true, below); err != nil {
 		return Selection{}, err
 	}
 	line, err := u.read(ctx)
@@ -204,7 +226,7 @@ func (u *UI) read(ctx context.Context) (string, error) {
 	}
 }
 
-func (u *UI) render(req SelectRequest, many bool) error {
+func (u *UI) render(req SelectRequest, many bool, below string) error {
 	if _, err := fmt.Fprintln(u.out, u.label(req.Title)); err != nil {
 		return err
 	}
@@ -214,6 +236,11 @@ func (u *UI) render(req SelectRequest, many bool) error {
 			mark = "*"
 		}
 		if _, err := fmt.Fprintf(u.out, "  %d. [%s] %s\n", i+1, mark, clean(option.Label)); err != nil {
+			return err
+		}
+	}
+	if below != "" {
+		if _, err := fmt.Fprint(u.out, "\n"+below+"\n"); err != nil {
 			return err
 		}
 	}

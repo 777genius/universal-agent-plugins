@@ -290,7 +290,14 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         ):
             event_paths = re.findall(r"(?m)^      - " + re.escape(path) + r"$", self.body)
             self.assertEqual(len(event_paths), 2, path)
-        self.assertRegex(self.body, r"(?m)^  cancel-in-progress:.*pull_request.*push.*$")
+        # Replace superseded PR runs; preserve every non-PR run independently.
+        concurrency = re.search(r"(?m)^concurrency:\n((?:  .+\n)+)", self.body)
+        self.assertIsNotNone(concurrency)
+        self.assertEqual(concurrency[1],
+            "  group: package-manager-e2e-${{ github.event_name }}-${{ "
+            "github.event_name == 'pull_request' && (github.event.pull_request.number || github.ref) "
+            "|| github.run_id }}\n"
+            "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n")
 
     def test_each_preflight_rejection_is_an_independent_fail_closed_step(self):
         # One native command per Actions step: Windows PowerShell must never
@@ -353,18 +360,21 @@ class HeavyNativeSelectionPolicyTests(unittest.TestCase):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             listing, output = root / "files", root / "output"
-            listing.write_text("\n".join(files))
+            listing.write_text("\n".join(files), encoding="utf-8", newline="\n")
             gh = root / "gh"
-            gh.write_text('#!/bin/sh\n[ "$FAKE_GH_FAIL" = 1 ] && exit 1\ncat "$FAKE_GH_FILES"\n')
+            gh.write_text('#!/bin/sh\n[ "$FAKE_GH_FAIL" = 1 ] && exit 1\ncat "$FAKE_GH_FILES"\n',
+                          encoding="utf-8", newline="\n")
             gh.chmod(0o755)
             env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"],
                    "GITHUB_EVENT_NAME": event, "GITHUB_OUTPUT": str(output),
                    "GITHUB_REPOSITORY": "owner/repo", "PR_NUMBER": "7",
                    "CHANGED_FILES": str(len(files) if changed is None else changed),
                    "FAKE_GH_FILES": str(listing), "FAKE_GH_FAIL": "1" if fail else "0"}
-            result = subprocess.run([bash, "-c", script], env=env, capture_output=True,
-                                    text=True, timeout=5, check=False)
-            self.assertEqual(result.returncode, 0, result.stderr)
+            # Keep the script out of Windows Bash launcher argument limits.
+            # Binary stdin also preserves LF instead of translating it to CRLF.
+            result = subprocess.run([bash, "-s"], input=script.encode("utf-8"), env=env,
+                                    capture_output=True, timeout=5, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", errors="replace"))
             pairs = [line.split("=", 1) for line in output.read_text().splitlines()]
             self.assertEqual(len(pairs), len(dict(pairs)), "duplicate classifier output")
             return {key: json.loads(value) for key, value in pairs if key.endswith("_clients")}
@@ -396,6 +406,26 @@ class HeavyNativeSelectionPolicyTests(unittest.TestCase):
         expression = expression.replace("&&", " and ").replace("||", " or ")
         return eval(expression, {"__builtins__": {}, "fromJSON": json.loads,
                                  "contains": lambda items, item: item in items}, {})
+
+    def test_classifier_survives_windows_launch_transport(self):
+        run, write_text = subprocess.run, Path.write_text
+
+        def windows_write_text(path, data, encoding=None, errors=None, newline=None):
+            # Model Windows defaults while honoring an explicit LF newline.
+            return write_text(path, data, encoding=encoding, errors=errors,
+                              newline="\r\n" if newline is None else newline)
+
+        def windows_transport(args, **kwargs):
+            # Model the launcher argument limit and Windows text stdin newline
+            # conversion while still executing the real classifier in Bash.
+            if isinstance(kwargs.get("input"), str):
+                kwargs["input"] = kwargs["input"].replace("\n", "\r\n")
+            return run([arg[:8192] for arg in args], **kwargs)
+
+        with patch.object(subprocess, "run", side_effect=windows_transport), \
+                patch.object(Path, "write_text", windows_write_text):
+            self.assertEqual(self.classify(["scripts/project_native_cursor_acquisition.py", "docs/archive.md"]), {
+                "native_clients": [], "remaining_clients": ["cursor"], "live_clients": []})
 
     def test_expanded_isolated_inputs_preserve_scoped_selection(self):
         cases = [

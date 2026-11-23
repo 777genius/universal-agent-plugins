@@ -43,13 +43,20 @@ var heavyPRLaneConditions = []string{
 	"${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && (" + heavyPRLaneGate + ") }}",
 }
 
-const heavyPRNativePilot = "${{ !cancelled() && (" + heavyPRLaneGate + ") }}"
-const heavyPRRemainingSelection = "${{ !cancelled() && " +
+// The evaluator's synthetic context key pins GitHub's exact cancellation name.
+// Reuse that name for function calls and job results; local state uses Go spelling.
+const tierCanceledContext = "status.cancelled"
+
+var tierCanceledName = strings.TrimPrefix(tierCanceledContext, "status.")
+var tierNotCanceled = "!" + tierCanceledName + "()"
+
+var heavyPRNativePilot = "${{ " + tierNotCanceled + " && (" + heavyPRLaneGate + ") }}"
+var heavyPRRemainingSelection = "${{ " + tierNotCanceled + " && " +
 	"(needs.changes.result != 'success' || needs.changes.outputs.remaining_clients != '[]') && (" + heavyPRLaneGate + ") }}"
 
 // This status-bearing matrix has no direct tier gate. Only this exact
 // conjunction may inherit one through its mandatory successful native pilot.
-const heavyPRNativeMatrix = "${{ !cancelled() && needs.native-pilot.result == 'success' && " +
+var heavyPRNativeMatrix = "${{ " + tierNotCanceled + " && needs.native-pilot.result == 'success' && " +
 	"(needs.changes.result != 'success' || needs.changes.outputs.live_clients != '[]') }}"
 
 // A newer real run supersedes the run of the same pull request; label events
@@ -259,11 +266,11 @@ func evalTierJob(t *testing.T, w tierWorkflow, job string, ctx map[string]any) b
 		t.Fatalf("unknown job %q", job)
 	}
 	if !readsStatusFunction(spec.If) {
-		cancelled, ok := ctx["status.cancelled"].(bool)
+		canceled, ok := ctx[tierCanceledContext].(bool)
 		if !ok {
 			t.Fatal("implicit success() requires explicit boolean workflow cancellation status")
 		}
-		if cancelled {
+		if canceled {
 			return false
 		}
 		for _, parent := range decodeNeeds(t, spec.Needs) {
@@ -296,7 +303,7 @@ func decodeNeeds(t *testing.T, node yaml.Node) []string {
 }
 
 func readsStatusFunction(condition string) bool {
-	for _, function := range []string{"always()", "cancelled()", "failure()", "success()"} {
+	for _, function := range []string{"always()", tierCanceledName + "()", "failure()", "success()"} {
 		if strings.Contains(condition, function) {
 			return true
 		}
@@ -350,7 +357,7 @@ func TestCITiers_LabelEventsBehavior(t *testing.T) {
 	const runID, number, mainRef = 7001, 42, "refs/heads/main"
 	context := func(e event) map[string]any {
 		ctx := map[string]any{
-			"status.cancelled":                        false,
+			tierCanceledContext:                       false,
 			"needs.changes.result":                    "success",
 			"needs.changes.outputs.remaining_clients": `["cursor"]`,
 			"github.event_name":                       e.name,
@@ -460,7 +467,7 @@ func TestCITiers_NativeClassifierAndCancellationConditions(t *testing.T) {
 	}
 	cases := []struct {
 		name, classifier, output, pilot string
-		cancelled, selection, smoke     bool
+		canceled, selection, smoke      bool
 	}{
 		{"selected clients", "success", `["claude"]`, "success", false, true, true},
 		{"successful empty selection", "success", "[]", "success", false, false, true},
@@ -470,13 +477,13 @@ func TestCITiers_NativeClassifierAndCancellationConditions(t *testing.T) {
 		{"skipped classifier", "skipped", "", "success", false, true, true},
 		{"pilot failed", "success", `["claude"]`, "failure", false, true, false},
 		{"pilot skipped", "success", `["claude"]`, "skipped", false, true, false},
-		{"pilot cancelled", "success", `["claude"]`, "cancelled", false, true, false},
-		{"workflow cancelled after successful pilot", "success", `["claude"]`, "success", true, false, false},
+		{"pilot canceled", "success", `["claude"]`, tierCanceledName, false, true, false},
+		{"workflow canceled after successful pilot", "success", `["claude"]`, "success", true, false, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx := map[string]any{
-				"status.cancelled": tc.cancelled, "github.event_name": "pull_request",
+				tierCanceledContext: tc.canceled, "github.event_name": "pull_request",
 				"github.event.action": "synchronize", "github.event.label.name": nil,
 				"github.event.pull_request.draft": false, "github.event.pull_request.labels.*.name": []string(nil),
 				"needs.changes.result": tc.classifier, "needs.native-pilot.result": tc.pilot,
@@ -484,8 +491,8 @@ func TestCITiers_NativeClassifierAndCancellationConditions(t *testing.T) {
 			}
 			want := map[string]bool{
 				// A job's own future result cannot alter its admission.
-				"changes":                !tc.cancelled,
-				"native-pilot":           !tc.cancelled,
+				"changes":                !tc.canceled,
+				"native-pilot":           !tc.canceled,
 				"published-cli-smoke":    tc.smoke,
 				"real-native-cli-matrix": tc.selection && tc.pilot == "success",
 			}
@@ -511,21 +518,21 @@ func TestCITiers_NativeGateMutationRefusals(t *testing.T) {
 			pilot, matrix, changes := w.Jobs["native-pilot"], w.Jobs["real-native-cli-matrix"], w.Jobs["changes"]
 			switch mutation {
 			case "pilot-no-tier-gate":
-				pilot.If = "${{ !cancelled() }}"
+				pilot.If = "${{ " + tierNotCanceled + " }}"
 			case "pilot-or-tier-gate":
-				pilot.If = "${{ !cancelled() || (" + heavyPRLaneGate + ") }}"
+				pilot.If = "${{ " + tierNotCanceled + " || (" + heavyPRLaneGate + ") }}"
 			case "pilot-no-cancellation":
 				pilot.If = "${{ " + heavyPRLaneGate + " }}"
 			case "matrix-no-cancellation":
-				matrix.If = strings.Replace(matrix.If, "!cancelled() && ", "", 1)
+				matrix.If = strings.Replace(matrix.If, tierNotCanceled+" && ", "", 1)
 			case "matrix-no-success":
 				matrix.If = strings.Replace(matrix.If, "needs.native-pilot.result == 'success' && ", "", 1)
 			case "matrix-failure-result":
 				matrix.If = strings.Replace(matrix.If, "needs.native-pilot.result == 'success'", "needs.native-pilot.result == 'failure'", 1)
 			case "matrix-or-success":
-				matrix.If = "${{ !cancelled() && (needs.native-pilot.result == 'success' || needs.changes.outputs.live_clients != '[]') }}"
+				matrix.If = "${{ " + tierNotCanceled + " && (needs.native-pilot.result == 'success' || needs.changes.outputs.live_clients != '[]') }}"
 			case "matrix-no-selection":
-				matrix.If = "${{ !cancelled() && needs.native-pilot.result == 'success' }}"
+				matrix.If = "${{ " + tierNotCanceled + " && needs.native-pilot.result == 'success' }}"
 			case "matrix-nondependency-pilot":
 				matrix.Needs = yaml.Node{Kind: yaml.ScalarNode, Value: "changes"}
 			case "matrix-no-classifier-dependency":
@@ -565,8 +572,8 @@ func TestCITiers_NativeGateMutationRefusals(t *testing.T) {
 	// A selected-client condition cannot weaken the remaining lane's direct
 	// tier conjunction into an alternative or omit cancellation.
 	for _, condition := range []string{
-		strings.Replace(heavyPRRemainingSelection, "!cancelled() && ", "", 1),
-		"${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.remaining_clients != '[]') || (" + heavyPRLaneGate + ") }}",
+		strings.Replace(heavyPRRemainingSelection, tierNotCanceled+" && ", "", 1),
+		"${{ " + tierNotCanceled + " && (needs.changes.result != 'success' || needs.changes.outputs.remaining_clients != '[]') || (" + heavyPRLaneGate + ") }}",
 		"${{ (needs.changes.result != 'success' || needs.changes.outputs.remaining_clients != '[]') && (" + heavyPRLaneGate + ") || true }}",
 	} {
 		w := readTierWorkflow(t, "live-install-remaining-clients.yml")
@@ -690,8 +697,8 @@ func expressionContains(search, item any) bool {
 
 // evalExpression implements the GitHub expression subset these rules use:
 // ||, &&, ==, !=, parentheses, string and boolean literals, context values,
-// unary !, always(), cancelled() and contains(), with GitHub's loose equality
-// and truthiness. cancelled() reads an explicit boolean workflow status value.
+// unary !, always(), the cancellation function and contains(), with GitHub's
+// loose equality and truthiness. Cancellation requires explicit boolean status.
 // Other functions, comparisons such as < and object filters fail the test.
 func evalExpression(t *testing.T, source string, ctx map[string]any) any {
 	t.Helper()
@@ -724,12 +731,12 @@ func evalExpression(t *testing.T, source string, ctx map[string]any) any {
 			expect("(")
 			expect(")")
 			return true
-		case token == "cancelled":
+		case token == tierCanceledName:
 			expect("(")
 			expect(")")
-			value, ok := ctx["status.cancelled"].(bool)
+			value, ok := ctx[tierCanceledContext].(bool)
 			if !ok {
-				t.Fatalf("cancelled() requires explicit boolean workflow status")
+				t.Fatalf("%s() requires explicit boolean workflow status", tierCanceledName)
 			}
 			return value
 		case token == "contains":
