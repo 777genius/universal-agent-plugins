@@ -115,8 +115,49 @@ jobs:
               ;;
           esac
 
+      - name: Install Chromium system dependencies with bounded APT
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          docs_node="$(node -p 'process.execPath')"
+          docs_playwright_cli="$(node -e '
+            const path = require("node:path");
+            const manifestPath = require.resolve("playwright/package.json");
+            const manifest = require(manifestPath);
+            if (manifest.bin?.playwright !== "cli.js")
+              throw new Error("Unexpected Playwright CLI entry");
+            console.log(path.join(path.dirname(manifestPath), "cli.js"));
+          ')"
+          [[ "$docs_node" = /* && "$docs_playwright_cli" = /* ]]
+          docs_apt_bin="$(mktemp -d "$RUNNER_TEMP/docs-apt.XXXXXX")"
+          docs_apt_cleanup() {
+            rm -f -- "$docs_apt_bin/apt-get"
+            rmdir -- "$docs_apt_bin"
+          }
+          trap docs_apt_cleanup EXIT
+          [[ "$docs_apt_bin" != *:* ]]
+          # Preserve Playwright's complete dependency list and host trust configuration.
+          # CLI options bound every APT invocation without modifying system files.
+          cat > "$docs_apt_bin/apt-get" <<'APT'
+          #!/bin/sh
+          exec /usr/bin/apt-get \
+            -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 \
+            -o Acquire::Retries=1 -o APT::Update::Error-Mode=any "$@"
+          APT
+          chmod 0500 "$docs_apt_bin/apt-get"
+          docs_root=()
+          if [ "$(id -u)" -ne 0 ]; then
+            docs_root=(sudo -n)
+          fi
+          # Run only the installed vendor CLI as root; keep its APT process group bounded.
+          "${docs_root[@]}" /usr/bin/timeout --signal=TERM --kill-after=15s 600s \
+            /usr/bin/env "PATH=$docs_apt_bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+            "$docs_node" "$docs_playwright_cli" install-deps chromium
+
       - name: Install Chromium for docs smoke
-        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 15
+        run: pnpm exec playwright install chromium
 
       - name: Run docs UI smoke
         run: pnpm run docs:smoke-ui

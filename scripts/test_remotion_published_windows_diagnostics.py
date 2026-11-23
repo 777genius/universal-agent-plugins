@@ -405,11 +405,11 @@ class NativeReadFailureFactsTest(unittest.TestCase):
                     or (failure == "final-lstat" and number == 2)):
                 raise OSError(errno.EIO, "PRIVATE-lstat-error")
             if failure == "replacement" and number == 2:
-                # Swap only after the held-fd check, so this exercises the
-                # final pathname identity check with a real same-byte file.
-                replacement = self.home / "replacement"
-                replacement.write_bytes(b"PRIVATE-body")
-                os.replace(replacement, self.path)
+                # Move the held original aside before recreating its name.
+                # This also permits a real swap on Windows without replacing
+                # an existing open destination. The held-fd check has finished.
+                self.path.rename(self.home / "held-original")
+                self.path.write_bytes(b"PRIVATE-body")
             return old_lstat(path, *args, **kwargs)
 
         def opened(path):
@@ -490,8 +490,12 @@ class NativeReadFailureFactsTest(unittest.TestCase):
         value, facts, trace = self.digest("replacement")
         self.assertEqual(value, "unreadable")
         self.assertEqual(facts["operation"], "final-lstat")
-        self.assertEqual(facts["reason"], "name-identity-changed")
+        self.assertEqual(facts["reason"], "name-identity-changed", facts)
+        held_original = self.home / "held-original"
         self.assertEqual(self.path.read_bytes(), b"PRIVATE-body")
+        self.assertEqual(held_original.read_bytes(), b"PRIVATE-body")
+        current, held = self.path.stat(), held_original.stat()
+        self.assertNotEqual((current.st_dev, current.st_ino), (held.st_dev, held.st_ino))
         self.assertEqual(trace, ["lstat", "open", "fstat", "read", "read", "fstat", "lstat", "close"])
 
     def test_malformed_error_attributes_and_collector_cannot_change_refusal(self):
