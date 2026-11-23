@@ -617,8 +617,12 @@ def scoped_snapshot(roots, *, snapshotter=None):
     state = (snapshot if snapshotter is None else snapshotter)(roots)
     # The shared audit records failed file reads and walk errors as
     # 'unreadable'. Identical failures before/after must not prove isolation.
-    if any(digest == "unreadable" for digest in state.values()):
-        raise AssertionError("protected scope snapshot unreadable: native entry")
+    unreadable = sorted(path for path, digest in state.items() if digest == "unreadable")
+    if unreadable:
+        # Report only the bounded native-relative entry name, never its bytes.
+        # Diagnostics must not turn an unreadable protected file into success.
+        raise AssertionError("protected scope snapshot unreadable: native entry: "
+                             + unreadable[0][:192])
 
     def record_metadata(index, path, relative):
         """Preserve directory and file inode identity, not only permissions."""

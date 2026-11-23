@@ -229,6 +229,14 @@ class PublishedRemotionTempRootTest(unittest.TestCase):
             separate.tearDown()
             separate.doCleanups()
 
+    def test_unreadable_native_snapshot_is_still_rejected_with_bounded_path(self):
+        entry = "runner/.codex/state_5.sqlite-wal"
+        observed = {entry: "unreadable", "runner/.codex/config.toml": "retained-hash"}
+        with self.assertRaisesRegex(
+                AssertionError, r"protected scope snapshot unreadable: native entry: runner/\\.codex/state_5\\.sqlite-wal"):
+            self.audit["scoped_snapshot"]([self.runner], snapshotter=lambda _roots: observed)
+        self.assertEqual(observed[entry], "unreadable")
+
 
 if __name__ == "__main__":
     unittest.main()
