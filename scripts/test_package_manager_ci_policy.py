@@ -289,7 +289,7 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         ):
             event_paths = re.findall(r"(?m)^      - " + re.escape(path) + r"$", self.body)
             self.assertEqual(len(event_paths), 2, path)
-        # New PR heads may cancel stale checks; main pushes must never be cancelled.
+        # A stale PR may be cancelled; keep post-merge main push checks.
         self.assertIn(
             "concurrency:\n"
             "  group: package-manager-e2e-${{ github.event_name }}-"
