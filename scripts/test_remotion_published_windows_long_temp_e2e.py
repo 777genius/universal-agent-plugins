@@ -233,7 +233,7 @@ class PublishedRemotionTempRootTest(unittest.TestCase):
         entry = "runner/.codex/state_5.sqlite-wal"
         observed = {entry: "unreadable", "runner/.codex/config.toml": "retained-hash"}
         with self.assertRaisesRegex(
-                AssertionError, r"protected scope snapshot unreadable: native entry: runner/\\.codex/state_5\\.sqlite-wal"):
+                AssertionError, r"protected scope snapshot unreadable: native entry: runner/\.codex/state_5\.sqlite-wal"):
             self.audit["scoped_snapshot"]([self.runner], snapshotter=lambda _roots: observed)
         self.assertEqual(observed[entry], "unreadable")
 
