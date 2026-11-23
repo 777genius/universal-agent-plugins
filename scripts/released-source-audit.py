@@ -614,6 +614,182 @@ def check_unrelated_native_mcp(control, root):
 
 
 
+class PiProjectTrustOracle:
+    """Only the frozen Notion Project hook may cross the protected User scope."""
+
+    def __init__(self, root, native_root):
+        self.root, self.native = root, native_root
+        self.project = root / "project"
+        self.hook = native_root / "extensions/agentplugins-project-trust"
+        self.phase, self.installed = "fresh", None
+        self.directories = (native_root / "extensions", self.hook)
+        self.files = tuple(self.hook / name for name in
+                           ("index.ts", "projects.json", "index.ts.agentplugins.lock",
+                            "projects.json.agentplugins.lock"))
+        self.anchors = {}
+        require(not any(path.exists() or path.is_symlink() for path in self.directories),
+                "Pi trust fixture must start without a hook namespace")
+        self.anchor(native_root)
+        self.resource_audit = module("source_pi_skill_contract", "pi_project_skill_audit.py")
+
+    def anchor(self, path):
+        while path != self.root.parent:
+            in_case(path, self.root)
+            info = path.lstat()
+            require(stat.S_ISDIR(info.st_mode) and not path.is_symlink(),
+                    "Pi trust ancestor is not a real directory")
+            stamp = (info.st_mode, info.st_dev, info.st_ino)
+            require(self.anchors.setdefault(path, stamp) == stamp, "Pi trust ancestor replaced")
+            path = path.parent
+
+    def read(self, path):
+        self.anchor(path.parent)
+        body, before = read_saved_record(in_case(path, self.root))
+        require(body is not None, "Pi trust file is absent")
+        self.anchor(path.parent)
+        # The same custody reader used for protected state holds ancestors and
+        # checks final handle paths on Windows. Join its bytes to the file read.
+        text, error = live.copilot_settings_read(path, self.root)
+        require(error is None and isinstance(text, str) and text.encode("utf-8") == body,
+                "Pi trust held read differs")
+        after = path.lstat()
+        require(os.path.samestat(before, after) and before.st_mode == after.st_mode
+                and before.st_size == after.st_size and before.st_mtime_ns == after.st_mtime_ns,
+                "Pi trust file replaced")
+        return body
+
+    def tree_digest(self, path):
+        image = {}
+        total_bytes = 0
+        def walk(directory, prefix=""):
+            nonlocal total_bytes
+            self.anchor(directory)
+            for child in sorted(directory.iterdir(), key=lambda p: p.name.encode("utf-8")):
+                relative = prefix + child.name
+                info = child.lstat()
+                if stat.S_ISDIR(info.st_mode) and not child.is_symlink():
+                    image[relative] = ("dir",)
+                    walk(child, relative + "/")
+                else:
+                    body = self.read(child)
+                    total_bytes += len(body)
+                    require(total_bytes <= 64 << 20, "Pi trust tree exceeds byte bound")
+                    image[relative] = ("file", hashlib.sha256(body).hexdigest())
+                require(len(image) <= 16384, "Pi trust tree exceeds entry bound")
+        walk(path)
+        # Reuse the existing frozen Go/JS trust framing, not Skill digest framing.
+        adapter = type("TrustReader", (), {"bytes": lambda _, p: self.read(p)})()
+        return self.resource_audit.PiProjectSkillAudit.trust_digest(adapter, path, image)
+
+    @staticmethod
+    def value_digest(value):
+        # Frozen project_trust_digest.go framing; this oracle admits only Notion's
+        # exact one-string server entry, not arbitrary JSON numeric semantics.
+        require(value == {"url": "https://mcp.notion.com/mcp"}, "unexpected Pi trust MCP")
+        def string(value):
+            body = value.encode("utf-8")
+            return b"s" + str(len(body)).encode() + b":" + body
+        return digest(
+            b"o1:" + string("url") + string(value["url"]))
+
+    def verified_owners(self, case):
+        """Notion-only seam: binding plus the independent native oracle first.
+
+        A future closure proof must supply every verified binding here before
+        the common hook/namespace/phase verifier can admit multiple owners.
+        """
+        _, binding, _ = checked_binding(state_file(self.root, "project"), case)
+        locator = in_case(Path(binding["target_locator"]), self.root)
+        checked_native_materialization(self.project / ".pi", locator, case, binding, self.root)
+        physical = binding["physical_artifact_id"]
+        require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", physical) is not None,
+                "Pi trust owner is not a portable artifact")
+        require(locator == self.project / ".pi/extensions" / physical,
+                "Pi trust owner is not the selected project package")
+        return {physical: {
+            "extensions": {physical: self.tree_digest(locator)}, "skills": {},
+            "mcp_servers": {"notion": self.value_digest({"url": "https://mcp.notion.com/mcp"})}}}
+
+    def validate_installed(self, case):
+        owners = self.verified_owners(case)
+        record = json.loads(self.read(self.hook / "projects.json"),
+                            object_pairs_hook=live._unique_json_object,
+                            parse_constant=lambda _: require(False, "non-finite Pi trust JSON"))
+        expected = {"schema_version": 1, "projects": {str(self.project): owners}}
+        require(type(record.get("schema_version")) is int and record == expected,
+                "Pi trust record differs from verified project ownership")
+        hook = self.read(self.hook / "index.ts")
+        # Same exact frozen literal as pi_project_skill_audit.py trust_check().
+        require(len(hook) == 9078 and hashlib.sha256(hook).hexdigest() ==
+                "eb4fa44cb880e1df05e42356f7e4bef9efef4abad82495cdfc87867b76b90a73",
+                "Pi trust hook differs from frozen release")
+
+    def allowed_image(self, removed=False):
+        paths = (*self.directories, *self.files)
+        for directory in self.directories:
+            self.anchor(directory)
+        require(set(self.hook.iterdir()) == set(self.files[2:] if removed else self.files),
+                "Pi trust namespace contains foreign entries")
+        image = {}
+        for path in paths:
+            if removed and path in self.files[:2]:
+                require(not path.exists() and not path.is_symlink(), "Pi trust record survived removal")
+                continue
+            info = path.lstat()
+            directory = path in self.directories
+            expected_mode = ((0o777 if directory else 0o666) if os.name == "nt"
+                             else (0o700 if directory else 0o600))
+            require((stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode))
+                    and not path.is_symlink() and stat.S_IMODE(info.st_mode) == expected_mode,
+                    "Pi trust path kind or mode changed")
+            self.anchor(path if directory else path.parent)
+            body = None if directory else self.read(path)
+            if path in self.files[2:]:
+                require(body == b"", "Pi trust writer lock is not inert")
+            image[path] = (info.st_mode, info.st_dev, info.st_ino,
+                           None if directory else info.st_mtime_ns, body)
+        return image
+
+    def project_snapshot(self, current):
+        # Remove only exact validated owned keys; every sibling and all saved
+        # User state remain in the original full protected snapshot.
+        result = {"files": current["files"], "directories": dict(current["directories"])}
+        for path in (*self.directories, *self.files):
+            relative = path.relative_to(self.native)
+            for key in (self.native.name + "/" + str(relative),
+                        "directory:0:" + relative.as_posix(),
+                        "metadata:0:" + relative.as_posix()):
+                result["directories"].pop(key, None)
+        return result
+
+    def observe(self, operation, result, current, case):
+        require(type(result.get("exit_code")) is int and result["exit_code"] == 0
+                and result.get("timeout") is False, "Pi trust transition requires successful operation")
+        if self.phase == "fresh":
+            require(operation == "add", "Pi trust appeared outside confirmed add")
+            self.validate_installed(case)
+            image = self.allowed_image()
+            self.installed, self.phase = image, "installed"
+        elif self.phase == "installed":
+            require(operation in ("info", "list", "update", "repair", "remove"),
+                    "unexpected Pi trust phase")
+            if operation == "remove":
+                image = self.allowed_image(removed=True)
+                require(all(value == self.installed[path] for path, value in image.items()),
+                        "Pi trust cleanup changed retained identities")
+                self.phase = "removed"
+            else:
+                self.validate_installed(case)
+                require(self.allowed_image() == self.installed,
+                        "Pi trust changed after confirmed add")
+        else:
+            require(operation == "list", "Pi trust operation after removal")
+            image = self.allowed_image(removed=True)
+            require(all(value == self.installed[path] for path, value in image.items()),
+                    "Pi trust residue changed")
+        return self.project_snapshot(current)
+
+
 def run_case(binary, case, root, executable):
     root.mkdir()
     home, project, data = (root / name for name in ("home", "project", "uap-data"))
@@ -655,6 +831,8 @@ def run_case(binary, case, root, executable):
             require(live.preserved_regular_text(path, "unmanaged source audit neighbor\n", root), "foreign state changed")
         check_unrelated_native_mcp(foreign_mcp_control, root)
         current = protected_scope_snapshot(root, case["scope"], protected_root)
+        if pi_trust is not None:
+            current = pi_trust.observe(operation, result, current, case)
         if current != protected:
             scope_changes = protected_scope_changes(protected, current, root, case["scope"], protected_root)
             raise ValueError(operation + " changed the other scope")
@@ -665,8 +843,12 @@ def run_case(binary, case, root, executable):
     selected_root = native_root if case["scope"] == "user" else project_native
     protected_root = project_native if case["scope"] == "user" else native_root
     protected = protected_scope_snapshot(root, case["scope"], protected_root)
+    pi_trust = None
     before = live.snapshot([selected_root])
     try:
+        if (case["client"], case["scope"], case["name"], case["expected"]) == (
+                "pi", "project", "notion", "materialized-lifecycle"):
+            pi_trust = PiProjectTrustOracle(root, native_root)
         _, added = run("add", case["selector"], case["expected"] != "dependency-refusal")
         if case["expected"] == "dependency-refusal":
             if type(added.get("exit_code")) is int and added["exit_code"] == 0 and added.get("timeout") is False:
@@ -714,6 +896,9 @@ def run_case(binary, case, root, executable):
                        "saved_intent": saved_intent, "native_content": native_content,
                        "update": "immutable-no-change", "repair": "healthy-repair"}
         current = protected_scope_snapshot(root, case["scope"], protected_root)
+        if pi_trust is not None:
+            require(pi_trust.phase == "removed", "Pi trust lifecycle is incomplete")
+            current = pi_trust.observe("list", trace[-1], current, case)
         if current != protected:
             scope_changes = protected_scope_changes(protected, current, root, case["scope"], protected_root)
             raise ValueError("other scope changed")
