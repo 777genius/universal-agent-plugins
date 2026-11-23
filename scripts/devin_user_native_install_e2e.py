@@ -126,10 +126,26 @@ def protected_context_paths(native, projects):
             *(project / ".devin" for project in projects)]
 
 
-def assert_repair_data(data, anchor, before, receipt_before, receipt_after):
-    require(snapshot([data], anchor) == before and receipt_before == receipt_after
+def require_project_state_absent(projects):
+    require(all(not os.path.lexists(project / ".uap") for project in projects),
+            "User operation created Project installation state")
+
+
+def seed_user_data(data):
+    sentinel = data / "fixture-user-data.txt"
+    with os.fdopen(os.open(sentinel, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600), "wb") as stream:
+        stream.write(DATA_SENTINEL)
+
+
+def assert_data_preserved(data, anchor, before):
+    require(snapshot([data], anchor) == before
             and read_owned(data / "fixture-user-data.txt", anchor) == DATA_SENTINEL,
-            "User repair changed original owned data directory, contents or receipt")
+            "User operation changed original data directory or contents")
+
+
+def assert_repair_data(data, anchor, before, receipt_before, receipt_after):
+    assert_data_preserved(data, anchor, before)
+    require(receipt_before == receipt_after, "User repair changed original owned data receipt")
 
 
 def no_cascade(home):
@@ -236,7 +252,7 @@ def selected_binding(document, iid, native, managed_root, required=True):
     return binding
 
 
-def verify_projection(managed, package, native, data, service, port, cli_hash, anchor):
+def verify_projection(managed, package, native, data, service, port, cli_hash, anchor, foreign_servers):
     """Verify authored resources and the exact production-generated stdio projection."""
     observed = snapshot([managed], anchor, trusted_launcher=(managed / LAUNCHER, cli_hash))
     files = {str(Path(name).relative_to(managed)): row[-1]
@@ -260,7 +276,8 @@ def verify_projection(managed, package, native, data, service, port, cli_hash, a
     require(read_json(managed / "mcp.json", anchor) == expected,
             "User managed MCP roots, wrapper argv or environment differs")
     actual = read_json(native / "mcp_config.json", anchor).get("mcpServers", {})
-    require(actual.get(STDIO) == stdio and actual.get(HTTP) == {"url": url, "transport": "http"},
+    expected_native = {**foreign_servers, STDIO: stdio, HTTP: {"url": url, "transport": "http"}}
+    require(actual == expected_native,
             "User native MCP projection differs from selected owned resources")
     return files
 
@@ -319,6 +336,7 @@ def run(root, report):
 
     def guard():
         no_cascade(home)
+        require_project_state_absent(projects)
         require(all(path.resolve(strict=True) == path and not path.is_symlink()
                     and (path.stat().st_dev, path.stat().st_ino, path.stat().st_mode) == saved
                     for path, saved in anchors_before.items()), "User authority directory replaced")
@@ -400,8 +418,10 @@ def run(root, report):
         managed = Path(selected["target_locator"])
         data = state / "plugin-data" / selected["physical_artifact_id"]
         report["projected_files_sha256"] = verify_projection(
-            managed, package, native, data, service, port, executable_facts[cli]["sha256"], root)
+            managed, package, native, data, service, port, executable_facts[cli]["sha256"], root,
+            foreign_mcp["mcpServers"])
         require(read_owned(skill / "SKILL.md", root) == read_owned(payload, root), "User native pinned Skill bytes differ")
+        seed_user_data(data)
         held = snapshot([managed, skill, data, state_file, native / "mcp_config.json"], root,
                         trusted_launcher=(managed / LAUNCHER, executable_facts[cli]["sha256"]))
         inventory("after-add", True)
@@ -410,10 +430,10 @@ def run(root, report):
                 and snapshot([managed, skill, data, state_file, native / "mcp_config.json"], root,
                              trusted_launcher=(managed / LAUNCHER, executable_facts[cli]["sha256"])) == held,
                 "User repeat changed identity, state, ownership or native bytes")
+        report["repeat_data_preserved"] = True
+        verify_projection(managed, package, native, data, service, port, executable_facts[cli]["sha256"], root,
+                          foreign_mcp["mcpServers"])
         inventory("after-repeat", True)
-        sentinel = data / "fixture-user-data.txt"
-        with os.fdopen(os.open(sentinel, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600), "wb") as stream:
-            stream.write(DATA_SENTINEL)
         data_before = snapshot([data], root)
         state_before = read_json(state_file, root)
         receipt_before = next(row["data_receipts"][selected["data_receipt_id"]]
@@ -428,7 +448,8 @@ def run(root, report):
                 and repaired["target_locator"] == str(managed)
                 and repaired["data_receipt_id"] == selected["data_receipt_id"]
                 and read_owned(skill / "SKILL.md", root) == read_owned(payload, root), "User repair changed authority or bytes")
-        verify_projection(managed, package, native, data, service, port, executable_facts[cli]["sha256"], root)
+        verify_projection(managed, package, native, data, service, port, executable_facts[cli]["sha256"], root,
+                          foreign_mcp["mcpServers"])
         state_after = read_json(state_file, root)
         receipt_after = next(row["data_receipts"][repaired["data_receipt_id"]]
                              for row in state_after["installations"] if row["installation_id"] == iid)
@@ -441,6 +462,8 @@ def run(root, report):
         require(not os.path.lexists(managed) and not os.path.lexists(skill)
                 and read_json(native / "mcp_config.json", root) == foreign_mcp,
                 "User removal retained owned payload or changed foreign native config")
+        assert_data_preserved(data, root, data_before)
+        report["remove_data_retained"] = True
         require(snapshot([package, service], root) == source, "User cohort changed inert source")
     guard()
     require(all(executable_fact(path) == saved for path, saved in executable_facts.items()), "User executable identity drifted")
