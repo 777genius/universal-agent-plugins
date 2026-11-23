@@ -374,6 +374,120 @@ class PreparedInstallationTest(unittest.TestCase):
         self.assertIsNone(row["cleanup"])
         self.assertTrue(row["sentinels_preserved"])
 
+    def test_cursor_repeat_skill_tree_changes_refuse_proof_and_still_remove(self):
+        runner = run_path(str(ROOT / "scripts/live-install-audit.py"))
+        do_case = runner["do_case"]
+        item = deepcopy(FIXTURES["skills"][0])
+        body = ("---\nname: " + item["name"] + "\ndescription: Inert immutable upstream fixture\n---\nPinned test bytes.\n").encode()
+        item["skill_md_git_blob_sha1"] = hashlib.sha1(
+            b"blob " + str(len(body)).encode() + b"\0" + body).hexdigest()
+        for mutation in (None, "initial-list", "repeat-add", "repeat-list", "rewrite-restore",
+                         "empty-repeat-add", "empty-repeat-list", "unavailable-repeat-add"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temp:
+                calls = []
+                def invoke(argv, env, cwd, timeout=105, **options):
+                    phase = AUDIT["COMMANDS"][len(calls)]
+                    calls.append(phase)
+                    documents = envelopes("skill", item["name"], "cursor", item, cwd)
+                    for inventory in ("list", "repeat_list"):
+                        documents[inventory]["data"]["installations"][0]["source"] = item["repo"] + "/skills/" + item["folder"]
+                    skill = cwd / ".cursor/skills" / item["name"] / "SKILL.md"
+                    extra = cwd / ".cursor/skills/unknown-empty"
+                    if phase == "install":
+                        skill.parent.mkdir(); skill.write_bytes(body)
+                        (cwd / "uap.toml").write_text("# inert saved agreement\n")
+                        (cwd / "uap.lock").write_text(json.dumps({"packages": [{
+                            "alias": item["name"], "targets": ["cursor"],
+                            "tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "b" * 64,
+                            "source": {"git": {"kind": "skill", "skill": item["name"],
+                                "repository": item["repo"], "commit": item["ref"],
+                                "path": "skills/" + item["folder"]}}}]}))
+                    if ((phase == "list" and mutation == "initial-list")
+                            or (phase == "repeat_add" and mutation in ("repeat-add", "rewrite-restore"))
+                            or (phase == "repeat_list" and mutation == "repeat-list")):
+                        skill.write_bytes(b"rewritten project Skill\n")
+                    if ((phase == "repeat_add" and mutation == "initial-list")
+                            or (phase == "repeat_list" and mutation == "rewrite-restore")):
+                        skill.write_bytes(body)
+                    if ((phase == "repeat_add" and mutation == "empty-repeat-add")
+                            or (phase == "repeat_list" and mutation == "empty-repeat-list")):
+                        extra.mkdir()
+                    if phase == "repeat_list" and mutation == "empty-repeat-add": extra.rmdir()
+                    if phase == "cleanup":
+                        self.assertEqual(argv[1:3], ["remove", item["name"]])
+                        skill.unlink(); skill.parent.rmdir()
+                        if extra.exists(): extra.rmdir()
+                        (cwd / "uap.lock").unlink()
+                    document = documents[phase]
+                    output = json.dumps(document)
+                    return {"exit_code": 0, "timeout": False, "stdout_tail": output[-1800:],
+                            "stderr_tail": "", "stdout_full": output, "stderr_full": "", "_json": document}
+                original_snapshot = runner["scoped_snapshot"]
+                def skill_snapshot(roots):
+                    if mutation == "unavailable-repeat-add" and calls[-1] == "repeat_add":
+                        raise AssertionError("injected unavailable Skill-tree comparison")
+                    return original_snapshot(roots)
+                with mock.patch.dict(do_case.__globals__, {"call": invoke, "AGENT_BINARIES": {},
+                        "scoped_snapshot": skill_snapshot,
+                        "initialize_project_skill_git_root": mock.Mock()}), \
+                     mock.patch.object(runner["subprocess"], "run", side_effect=AssertionError("unexpected child")):
+                    row = do_case("/fixture/agentplugins", "cursor", "skill", item, 0,
+                                  Path(temp).resolve() / "run", {}, {},
+                                  installation_audit="cursor-prepared-skills-installation")
+                self.assertEqual(calls, list(AUDIT["COMMANDS"]))
+                self.assertTrue(row["skill_bytes_match"])
+                self.assertTrue(row["repeat_native_unchanged"])
+                self.assertTrue(row["repeat_lock_unchanged"])
+                self.assertTrue(row["removal_verified"])
+                self.assertEqual(row["post_skill_tree_delta"], [])
+                self.assertIsNone(row["repeat_project_unchanged"])
+                self.assertEqual(row["cursor_preparation_envelopes"]["status"], "verified")
+                self.assertIs(row["cursor_repeat_project_unchanged"], mutation is None)
+                self.assertIs(row["repeat_verified"], mutation is None)
+                self.assertEqual(row["status"], "incomplete-native-proof" if mutation is None else "repeat-add-unqualified")
+                value = report("skill")
+                value["results"][0] = row
+                self.assertIs(self.summary(value)["installation_acceptance_passed"], mutation is None)
+
+    def test_main_reports_resolved_executed_cli_and_keeps_unexecuted_input(self):
+        main = run_path(str(ROOT / "scripts/live-install-audit.py"))["main"]
+        windsurf = main.__globals__["WINDSURF_INSTALLATION"]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            cli = root / "agentplugins"; cli.write_text("inert test artifact; never executed")
+            for spelling, bootstrap in (("agentplugins", True), (str(cli), True), ("missing-relative-cli", False)):
+                with self.subTest(cli=spelling, bootstrap=bootstrap):
+                    calls, probes = [], []
+                    destination = root / ("relative" if spelling == "agentplugins" else "absolute" if bootstrap else "blocked")
+                    def case(*args, **kwargs):
+                        calls.append(args[0])
+                        return {"index": args[4], "target": "windsurf", "kind": "plugin",
+                                "source": args[3], "status": "incomplete-native-proof"}
+                    def version(argv, *_):
+                        probes.append(argv)
+                        return {"status": "reported", "exit_code": 0,
+                                "value": windsurf["CLI_VERSION"] if argv[1] == "version" else windsurf["CLIENT_VERSION"]}
+                    substitutions = {"do_case": case, "vendor_bootstrap_attested": lambda: bootstrap,
+                        "version_evidence": version, "AGENT_BINARIES": {"devin": "/fixture/devin"},
+                        "isolated_client_env": lambda *args: {}, "published_audit_temp_parent": lambda: None}
+                    argv = ["audit", "--cli", spelling, "--kind", "plugin", "--target", "windsurf",
+                            "--limit", "30", "--report-dir", str(destination), "--acceptance", windsurf["ACCEPTANCE"]]
+                    with mock.patch.dict(main.__globals__, substitutions), mock.patch("sys.argv", argv), \
+                         mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="x86_64"), \
+                         contextlib.chdir(root), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                        self.assertEqual(main(), 1 if bootstrap else 2)
+                    written = json.loads((destination / "windsurf-plugin.json").read_text())
+                    self.assertFalse(written["installation_acceptance_passed"])
+                    if bootstrap:
+                        self.assertEqual(calls, [str(cli)] * 30)
+                        self.assertEqual(probes[0][0], str(cli))
+                        self.assertEqual(written["cli"], str(cli))
+                        self.assertEqual(written["passed"], 0)
+                    else:
+                        self.assertEqual(written["cli"], spelling)
+                        self.assertEqual(written["cli_version"], {"status": "not-probed"})
+                        self.assertEqual(calls, []); self.assertEqual(probes, [])
+
     def test_grok_explicit_main_mode_keeps_default_failure_and_original_prepared_rows(self):
         main = run_path(str(ROOT / "scripts/live-install-audit.py"))["main"]
         value = report("skill", "grok")

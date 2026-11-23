@@ -7,13 +7,16 @@ hashes, counts and checked public states, never native profile contents.
 import copy
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import stat
 import sys
+import tomllib
 from uuid import UUID
 
-from windsurf_global_skill_audit import CASES as GLOBAL_SKILL_CASES, frame_changes
+from windsurf_global_skill_audit import (CASES as GLOBAL_SKILL_CASES, frame_changes,
+    frame, member, read_file, strict_json, managed_digest, content, compact, sha)
 
 ACCEPTANCE = "windsurf-global-installation"
 PREPARED = {"materialization": "materialized", "activation": "prepared",
@@ -133,11 +136,35 @@ class WindsurfInstallationAudit:
                         (self.case, self.home, self.xdg, self.project, self.data)}
         self.global_root = self.xdg / "devin"
         if native_runtime is None:
-            if not self.global_root.exists() and not self.global_root.is_symlink():
-                self.global_root.mkdir(mode=0o700)
+            # Validate the canonical directory before creating a sentinel, and
+            # resolve every write through held descriptors. A substituted path
+            # cannot redirect the write into a sibling, even inside this case.
             self.foreign = self.global_root / "foreign-neighbor.txt"
-            with self.foreign.open("xb") as stream:
-                stream.write(b"unmanaged Devin Global neighbor must survive\n")
+            directory = os.open(self.xdg, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                require(ordinary(self.xdg) == self.directory_identity(os.fstat(directory)) == self.anchors[self.xdg])
+                try:
+                    os.mkdir("devin", mode=0o700, dir_fd=directory)
+                except FileExistsError:
+                    pass
+                require(ordinary(self.xdg) == self.directory_identity(os.fstat(directory)) == self.anchors[self.xdg])
+                self.anchors[self.global_root] = ordinary(self.global_root)
+                held = os.open("devin", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory)
+                try:
+                    require(self.directory_identity(os.fstat(held)) == self.anchors[self.global_root])
+                    fd = os.open(self.foreign.name, os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                                 | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600, dir_fd=held)
+                    try:
+                        body = b"unmanaged Devin Global neighbor must survive\n"
+                        require(os.write(fd, body) == len(body))
+                    finally:
+                        os.close(fd)
+                    require(ordinary(self.global_root) == self.directory_identity(os.fstat(held))
+                            == self.anchors[self.global_root])
+                finally:
+                    os.close(held)
+            finally:
+                os.close(directory)
         else:
             # Reuse only the exact native observer's authored, still pre-child
             # profile. Adding another file would invalidate its frozen HOME.
@@ -154,9 +181,88 @@ class WindsurfInstallationAudit:
             self.foreign = native_runtime.skills / "foreign-windsurf-global-audit/SKILL.md"
         self.anchors[self.global_root] = ordinary(self.global_root)
         self.native_roots = (self.home / ".windsurf", self.home / ".devin", self.global_root)
-        self.observations = []
+        self.observations, self.saved_observations = [], []
         self.initial = self.image()
+        self.initial_saved = self.saved_image()
         self.project_initial = self.audit["scoped_snapshot"]((self.project,))
+
+    @staticmethod
+    def directory_identity(info):
+        return info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid
+
+    def saved_image(self):
+        """Read existing saved authorities through the shared bounded custody API."""
+        self.guard()
+        fd = os.open(self.case, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            require(self.directory_identity(os.fstat(fd)) == self.anchors[self.case])
+            with member(fd, "uap-data") as data_fd:
+                require(self.directory_identity(os.fstat(data_fd)) == self.anchors[self.data])
+                observed = frame(data_fd)
+                docs, blobs, authorities = {}, {}, {}
+                for name in ("uap.toml", "uap.lock", "state-v2.json"):
+                    if name in observed:
+                        body, authorities[name] = read_file(data_fd, name)
+                        blobs[name] = hashlib.sha256(body).hexdigest()
+                        docs[name] = (tomllib.loads(body.decode("utf-8", errors="strict"))
+                                      if name.endswith("toml") else strict_json(body))
+                if "uap.toml" in docs:
+                    require(type(docs["uap.toml"].get("schema_version")) is int
+                            and docs["uap.toml"]["schema_version"] == 1)
+                if "uap.lock" in docs:
+                    locked = docs["uap.lock"]
+                    require(type(locked) is dict and type(locked.get("lock_version")) is int
+                            and locked["lock_version"] == 1 and type(locked.get("packages")) is list)
+                deliveries = {}
+                state = docs.get("state-v2.json", {"schema_version": 5, "installations": []})
+                require(type(state) is dict and type(state.get("schema_version")) is int
+                        and state["schema_version"] == 5 and type(state.get("installations")) is list)
+                for record in state["installations"]:
+                    require(type(record) is dict and type(record.get("clients")) is dict)
+                    for binding in record["clients"].values():
+                        require(type(binding) is dict)
+                        if binding.get("client_id") != "windsurf":
+                            continue
+                        physical = binding.get("physical_artifact_id")
+                        require(type(physical) is str and re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,63}", physical))
+                        relative = "managed/clients/windsurf/" + physical
+                        require(binding.get("target_locator") == str(self.data / relative))
+                        with member(data_fd, relative) as managed_fd:
+                            tree = frame(managed_fd)
+                            deliveries[relative] = {"image": tree, "digest": managed_digest(managed_fd, tree)}
+                require(observed == frame(data_fd))
+        except OSError as error:
+            raise ValueError("Devin Global saved installation authority is unavailable") from error
+        finally:
+            os.close(fd)
+        self.guard()
+        # Cache trees remain bounded by frame(); saved documents and managed
+        # ownership are checked separately. Other data files cannot be silently
+        # created by an exact refusal. Cache names come from main.go; cache
+        # adapters append .lock during authenticated reconciliation. Store and
+        # scanner locations come from compose.go. frame() supplies the existing
+        # regular-file, owner, link, byte, entry and depth bounds for all of them.
+        ancillary = {key: value for key, value in observed.items() if value["kind"] == "file"
+                     and key not in {"uap.toml", "uap.lock", "state-v2.json", "mutation.lock", "environment.lock",
+                                     "directory-v1-cache.json", "directory-v1-cache.json.lock",
+                                     "discovery-v1-cache.json", "discovery-v1-cache.json.lock"}
+                     and not key.startswith(("store/", "security/", "managed/"))}
+        return {"documents": docs, "blobs": blobs, "authorities": authorities, "deliveries": deliveries,
+                "managed_authority": {key: value for key, value in observed.items() if key.startswith("managed/")},
+                "ancillary": content(ancillary),
+                "managed": content({key: value for key, value in observed.items()
+                                    if key.startswith("managed/")})}
+
+    @staticmethod
+    def saved_intent(saved):
+        docs = saved["documents"]
+        manifest, locked = docs.get("uap.toml", {}), docs.get("uap.lock", {})
+        require(type(manifest) is dict and type(locked) is dict)
+        return {"dependencies": manifest.get("dependencies", {}),
+                "dev-dependencies": manifest.get("dev-dependencies", {}),
+                "targets": {key: value for key, value in manifest.get("targets", {}).items() if value},
+                "packages": locked.get("packages", []),
+                "installations": docs.get("state-v2.json", {}).get("installations", [])}
 
     def guard(self):
         require(all(ordinary(path) == identity for path, identity in self.anchors.items()))
@@ -186,6 +292,7 @@ class WindsurfInstallationAudit:
         require(self.audit["scoped_snapshot"]((self.project,)) == self.project_initial)
         # Existing foreign files and directory identities remain authoritative.
         require(all(image.get(key) == value for key, value in self.initial.items()))
+        self.saved_observations.append(self.saved_image())
         self.observations.append((list(argv), copy.deepcopy(outcome), image))
 
     def finish(self, row, item, index, fixtures):
@@ -204,6 +311,7 @@ class WindsurfInstallationAudit:
         self.guard()
         require(self.image() == (self.observations[-1][2] if self.observations else self.initial))
         require(self.audit["scoped_snapshot"]((self.project,)) == self.project_initial)
+        require(self.saved_observations and self.saved_image() == self.saved_observations[-1])
         scope = ["--target", "windsurf", "--scope", "user", "--format", "json"]
         add, listed = [self.cli, "add", source, *scope], [self.cli, "list", *scope]
         negative = index == 13 or index in COMPONENT_REFUSALS
@@ -236,9 +344,10 @@ class WindsurfInstallationAudit:
                 "native_roots": [".windsurf", ".devin", ".config/devin"],
                 "project_unchanged": True, "original_native_preserved": True,
                 "initial_native_image": image_fact(self.initial),
+                "initial_saved_authority_sha256": digest(self.initial_saved),
                 "observations": [{"argv": argv, "json_sha256": digest(outcome.get("_json"), 1 << 20),
-                                  "native_image": image_fact(image)}
-                                 for argv, outcome, image in self.observations]}
+                                  "native_image": image_fact(image), "saved_authority_sha256": digest(saved)}
+                                 for (argv, outcome, image), saved in zip(self.observations, self.saved_observations)]}
 
     @staticmethod
     def same_native_evidence(before, after):
@@ -250,6 +359,14 @@ class WindsurfInstallationAudit:
 
     def negative(self, row, source, identity, index):
         require(all(image == self.initial for _, _, image in self.observations))
+        # These exact refusals precede saved publication: Directory selection
+        # fails in resolveSavedAdd; component preflight fails in prepareSavedSync
+        # before applyDependencySync. list only loads state. No authority-file
+        # initialization or replacement is legitimate on either refusal path.
+        require(all(saved["authorities"] == self.initial_saved["authorities"]
+                    and saved["managed_authority"] == self.initial_saved["managed_authority"]
+                    and saved["ancillary"] == self.initial_saved["ancillary"]
+                    for saved in self.saved_observations))
         first, second = (entry[1] for entry in self.observations)
         if index == 13:
             require(source == identity == "marketing-kit"
@@ -321,6 +438,7 @@ class WindsurfInstallationAudit:
             require(prior is None or node == prior)
             prior = node
         installation = prior["installation_id"]
+        self.saved_lifecycle(prior, source, identity, state, fixtures)
         require(row.get("matched_installation_ids") == row.get("repeat_installation_ids") == [installation]
                 and documents[5][1]["installations"] == [])
         for position, action, operation in ((0, "install", "install"), (2, "unchanged", "install"),
@@ -335,8 +453,12 @@ class WindsurfInstallationAudit:
                 require(type(components) is list and bool(components)
                         and all(type(component) is dict and component.get("support") == "prepared"
                                 for component in components))
-            if position != 0:
+            if position != 0 or "installation_id" in actions[0]:
                 require(actions[0].get("installation_id") == installation)
+            if position in (0, 2):
+                revision = prior["clients"][0]["package_revision"]
+                require(actions[0].get("package_digest") == revision.get("tree_digest")
+                        and actions[0].get("revision") == revision.get("resolved_revision"))
             if position == 2 and not results:
                 continue
             require(len(results) == 1 and type(results[0]) is dict
@@ -345,6 +467,97 @@ class WindsurfInstallationAudit:
                     and results[0].get("operation") == operation
                     and results[0].get("outcome") in (("completed", "unchanged") if position == 2 else ("completed",)))
         return dict(state)
+
+    def saved_lifecycle(self, public, source, identity, public_state, fixtures):
+        """Join saved source, public binding, lock and managed receipt authorities.
+
+        This follows Prepared Kiro's source/public/physical ownership joins and
+        uses the existing Windsurf receipt digest and finite custody readers.
+        Prepared components may legitimately leave the native profile unchanged.
+        """
+        first = None
+        for saved in self.saved_observations[:4]:
+            docs = saved["documents"]
+            require(set(docs) == {"uap.toml", "uap.lock", "state-v2.json"})
+            manifest, locked, state = (docs[key] for key in ("uap.toml", "uap.lock", "state-v2.json"))
+            require(type(manifest.get("schema_version")) is int and manifest["schema_version"] == 1
+                    and set(manifest.get("dependencies", {})) == {identity}
+                    and manifest.get("dev-dependencies", {}) == {}
+                    and manifest.get("targets") == {"windsurf": [identity]}
+                    and type(locked.get("lock_version")) is int and locked["lock_version"] == 1
+                    and type(locked.get("packages")) is list and len(locked["packages"]) == 1
+                    and len(state["installations"]) == 1)
+            record = state["installations"][0]
+            require(record.get("installation_id") == public["installation_id"]
+                    and record.get("declared_name") == identity and len(record["clients"]) == 1)
+            key, binding = next(iter(record["clients"].items()))
+            physical = identity[:51].rstrip(".-") + "-" + hashlib.sha256(public["installation_id"].encode()).hexdigest()[:12]
+            relative = "managed/clients/windsurf/" + physical
+            locator = str(self.data / relative)
+            require(key == binding.get("client_binding_id") == "client_" + hashlib.sha256(
+                    "\0".join((public["installation_id"], "windsurf", "user", locator)).encode()).hexdigest()[:24]
+                    and binding.get("client_id") == "windsurf" and binding.get("scope") == "user"
+                    and binding.get("physical_artifact_id") == physical and binding.get("target_locator") == locator
+                    and binding.get("native_profile_root") == str(self.global_root)
+                    and all(binding.get(k) == v for k, v in public_state.items()))
+            revision, origin, package = binding.get("package_revision"), record.get("source"), record.get("package")
+            require(type(revision) is dict and type(origin) is dict and type(package) is dict
+                    and all(revision.get(k) == v for k, v in public["clients"][0]["package_revision"].items())
+                    and all(type(revision.get(k)) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", revision[k])
+                            for k in ("tree_digest", "manifest_digest")))
+            pin = locked["packages"][0]
+            require(type(pin) is dict and pin.get("alias") == identity and pin.get("targets") == ["windsurf"]
+                    and pin.get("digest_algorithm") == "agentplugins-tree-sha256-v1"
+                    and all(pin.get(k) == revision[k] for k in ("tree_digest", "manifest_digest"))
+                    and origin.get("resolved_revision") == revision.get("resolved_revision")
+                    and origin.get("tree_digest") == revision["tree_digest"]
+                    and package.get("manifest_digest") == revision["manifest_digest"])
+            dependency = manifest["dependencies"][identity]
+            if source.startswith("github:"):
+                repo, commit = source[7:].rsplit("@", 1)
+                require(type(dependency) is dict and dependency == {
+                        "git": "https://github.com/" + repo.lower() + ".git", "commit": commit}
+                        and revision.get("resolved_revision") == commit
+                        and pin.get("source", {}).get("git") == {"repository": repo.lower(),
+                            "requested": {"kind": "commit", "value": commit}, "commit": commit})
+                subpath = ""
+                source_key, selector = "github:" + repo.lower() + ":", {"kind": "commit", "value": commit}
+            else:
+                release = fixtures["signed_release_pins"][source]
+                repo, subpath = release["repository"], release["path"]
+                source_key = "directory:" + release["distribution"].lower()
+                selector = {"kind": "release", "value": str(release["sequence"])}
+                registry = pin.get("source", {}).get("registry")
+                require(type(dependency) is dict and dependency.get("registry") == "uap"
+                        and dependency.get("distribution") == release["distribution"]
+                        and str(dependency.get("release")) == str(release["sequence"])
+                        and type(registry) is dict and registry.get("distribution_id") == release["distribution"]
+                        and registry.get("release_sequence") == release["sequence"]
+                        and registry.get("repository", "").lower() == repo.lower()
+                        and registry.get("path", "") == subpath and registry.get("commit") == release["revision"])
+            intent = {"schema_version": 1, "dependencies": [{"alias": identity, "source_key": source_key,
+                      "selector": selector}], "targets": [{"id": "windsurf", "aliases": [identity]}]}
+            require(pin.get("source_key") == source_key
+                    and locked.get("manifest_digest") == "sha256:" + sha(compact(intent)))
+            require(origin.get("repository", "").lower() == repo.lower()
+                    and origin.get("package_subpath", "") == subpath)
+            objects = binding.get("native_objects")
+            require(type(objects) is list and all(type(obj) is dict for obj in objects))
+            receipts = [obj for obj in objects if obj.get("kind") == "managed_package_directory"]
+            require(len(receipts) == 1 and receipts[0] == {"object_id": "package:windsurf:" + physical,
+                    "kind": "managed_package_directory", "logical_name": identity, "path": locator,
+                    "managed_digest": saved["deliveries"][relative]["digest"], "protection_class": "managed"}
+                    and len(saved["deliveries"][relative]["image"]) > 1)
+            agreement = (record, saved["blobs"]["uap.toml"], saved["blobs"]["uap.lock"], saved["deliveries"])
+            require(first is None or agreement == first)
+            first = agreement
+        for saved in self.saved_observations[4:]:
+            intent = self.saved_intent(saved)
+            require(intent["dependencies"] == intent["dev-dependencies"] == intent["targets"] == {}
+                    and intent["packages"] == [] and saved["deliveries"] == {}
+                    and relative not in saved["managed"]
+                    and all(record.get("clients") == {} for record in intent["installations"])
+                    and not any(value[0] == "file" for value in saved["managed"].values()))
 
 
 def summary(report, fixtures, *, fixture_sha256):
@@ -407,6 +620,11 @@ def summary(report, fixtures, *, fixture_sha256):
                 require(type(frame) is dict and set(frame) == {"sha256", "entries"}
                         and type(frame["sha256"]) is str and re.fullmatch(r"[0-9a-f]{64}", frame["sha256"])
                         and type(frame["entries"]) is int and frame["entries"] > 0)
+            require(type(proof.get("initial_saved_authority_sha256")) is str
+                    and re.fullmatch(r"[0-9a-f]{64}", proof["initial_saved_authority_sha256"]))
+            require(all(type(entry.get("saved_authority_sha256")) is str
+                        and re.fullmatch(r"[0-9a-f]{64}", entry["saved_authority_sha256"])
+                        for entry in proof["observations"]))
             require(all(type(entry.get("json_sha256")) is str
                         and re.fullmatch(r"[0-9a-f]{64}", entry["json_sha256"])
                         for entry in proof["observations"]))

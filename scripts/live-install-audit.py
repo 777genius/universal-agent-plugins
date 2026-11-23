@@ -3190,8 +3190,25 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     lock_pinned = bool(kind == "skill" and locked and locked_skill_is_pinned(project, item, target))
     skill_bytes_match = (kind == "skill" and matches_pinned_skill_bytes(
         project, skill_path, item["skill_md_git_blob_sha1"]))
+    # Keep the pinned Project tree from before the first list. Every later
+    # public checkpoint must match it, including directory and file identity.
+    cursor_skill_case = target == "cursor" and kind == "skill"
+    def cursor_skill_tree_snapshot():
+        try:
+            return scoped_snapshot(project / name for name in project_skill_roots)
+        except (OSError, ValueError, AssertionError):
+            # Unavailable comparison evidence refuses repeat qualification;
+            # it must not prevent the ordinary removal attempt below.
+            return None
+    cursor_skill_tree_before = (cursor_skill_tree_snapshot()
+        if cursor_skill_case and skill_bytes_match and lock_pinned else None)
+    cursor_repeat_project_unchanged = None
     listed = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                    env, project, 30))
+    if cursor_skill_case:
+        cursor_after_list = cursor_skill_tree_snapshot()
+        cursor_repeat_project_unchanged = (cursor_skill_tree_before is not None
+            and cursor_after_list == cursor_skill_tree_before)
     listed_json = listed.pop("_json", None) if listed else None
     matching = matching_installations(listed_json, identity, native_target, kind, item,
                                      signed_release_pins)
@@ -3341,6 +3358,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                                   **capture_option,
                                   **({"windsurf_transition": "repeat"} if windsurf_runtime is not None else {}))
         repeat_add_finished = datetime.now(timezone.utc)
+        if cursor_skill_case:
+            cursor_after_repeat_add = cursor_skill_tree_snapshot()
+            cursor_repeat_project_unchanged = (cursor_repeat_project_unchanged
+                and cursor_after_repeat_add == cursor_skill_tree_before)
         kimi_log_after = (kimi_repeat_log_capture(home, project, case_root,
                             kimi_repeat_log_facts["captures"]["after-add"]) if kimi_log_case else None)
         after_repeat_add = (snapshot(native_roots, include_directories=gemini_runtime is not None)
@@ -3353,6 +3374,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         repeat_list = audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                            env, project, 30)
         repeat_list_finished = datetime.now(timezone.utc)
+        if cursor_skill_case:
+            cursor_after_repeat_list = cursor_skill_tree_snapshot()
+            cursor_repeat_project_unchanged = (cursor_repeat_project_unchanged
+                and cursor_after_repeat_list == cursor_skill_tree_before)
         after_repeat_list = (snapshot(native_roots, include_directories=gemini_runtime is not None)
                              if codex_runtime is not None or gemini_runtime is not None else None)
         if gemini_runtime is not None:
@@ -3414,6 +3439,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
             and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
             and (not grok_prepared or repeat_project_unchanged)
+            and (not cursor_skill_case or cursor_repeat_project_unchanged)
         )
         repeat_verified = bool(historical_repeat_lifecycle_verified
                                and (not codex_skill_case or codex_repeat_ready)
@@ -3829,6 +3855,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             "repeat_native_phases": repeat_native_phases,
             "repeat_lock_unchanged": repeat_lock_unchanged,
             "repeat_project_unchanged": repeat_project_unchanged,
+            **({"cursor_repeat_project_unchanged": cursor_repeat_project_unchanged} if cursor_skill_case else {}),
             "repeat_verified": repeat_verified,
             "failed_install_registered": failed_install_registered,
             "failed_install_residue": failed_install_residue,
@@ -4104,6 +4131,7 @@ def main():
         save()
         return 2
     cli = str(Path(args.cli).resolve(strict=True))
+    report["cli"] = cli
     # Real Windows runner scratch avoids accidental >260-character internal
     # preview paths for deep immutable Skills (tracked separately in PR #780).
     # This does not convert a refused installation into native PASS.

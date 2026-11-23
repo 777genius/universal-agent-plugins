@@ -2694,6 +2694,90 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                         phases.index("owner-confirmed saved add B"))
         self.assertNotIn("remove B", phases)
 
+    def test_marketing_kit_copilot_refusal_binds_present_action_ids_and_accepts_cold_missing_ids(self):
+        def bind_ids(response, _env, _project):
+            for action, result in zip(response["_json"]["actions"], response["_json"]["results"]):
+                action["installation_id"] = result["installation_id"]
+
+        def swap_child_ids(response, env, project):
+            bind_ids(response, env, project)
+            rows = response["_json"]["results"]
+            actions = response["_json"]["actions"]
+            notion = next(i for i, row in enumerate(actions) if row["alias"] == "notion")
+            hubspot = next(i for i, row in enumerate(actions) if row["alias"] == "hubspot-crm")
+            rows[notion]["installation_id"], rows[hubspot]["installation_id"] = (
+                rows[hubspot]["installation_id"], rows[notion]["installation_id"])
+
+        for mutation in (None, bind_ids, swap_child_ids):
+            with self.subTest(mutation=mutation):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=mutation)
+                self.assertEqual(code, int(mutation is swap_child_ids), report.get("failure"))
+                self.assertFalse(report["cold_native_restore_qualified"])
+                self.assertEqual("owner-confirmed saved add B" in phases, mutation is not swap_child_ids)
+
+    def test_marketing_kit_copilot_refusal_protects_native_project_files_and_empty_directories(self):
+        paths = (".github/mcp.json", ".github/copilot/settings.local.json", ".github/empty-native",
+                 "empty-project-directory", ".uap/unknown-empty", ".uap/operations-v2/unowned.json",
+                 ".uap/managed/clients/copilot/unowned-package")
+        for relative in paths:
+            with self.subTest(relative=relative):
+                def mutate(_response, _env, project):
+                    path = project / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if relative.endswith(".json"):
+                        path.write_text('{"mcpServers":{"unexpected":{}}}')
+                    else:
+                        path.mkdir()
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=mutate)
+                self.assertEqual(code, 1)
+                self.assertIn("Project state", report["failure"])
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertNotIn("owner-confirmed saved add B", phases)
+
+    def test_marketing_kit_copilot_refusal_checks_project_custody_when_invocation_raises(self):
+        for relative in (None, ".github/mcp.json", ".github/empty-native"):
+            with self.subTest(relative=relative):
+                def interrupted(_response, _env, project):
+                    if relative is not None:
+                        path = project / relative
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        if relative.endswith(".json"):
+                            path.write_text('{"mcpServers":{"unexpected":{}}}')
+                        else:
+                            path.mkdir()
+                    raise RuntimeError("refused invocation interrupted")
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=interrupted)
+                self.assertEqual(code, 1)
+                self.assertIn("Project state" if relative else "refused invocation interrupted", report["failure"])
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertNotIn("owner-confirmed saved add B", phases)
+
+    def test_marketing_kit_copilot_refusal_accepts_only_receipt_bound_private_materialization(self):
+        def materialize(response, _env, project):
+            private = project / ".uap"
+            private.mkdir(mode=0o700)
+            for name in ("state-v2.json", "mutation.lock", "environment.lock"):
+                (private / name).write_text("inert installer artifact")
+            for name in ("operations-v2", "installer-tmp"):
+                (private / name).mkdir()
+            for action, result in zip(response["_json"]["actions"], response["_json"]["results"]):
+                physical = action["alias"] + "-" + hashlib.sha256(result["installation_id"].encode()).hexdigest()[:12]
+                package = private / "managed/clients/copilot" / physical
+                package.mkdir(parents=True)
+                (package / "plugin.json").write_text("inert staged package")
+                data = private / "plugin-data" / physical
+                data.mkdir(parents=True)
+                (data / ".agentplugins-data-owner.json").write_text("inert data receipt")
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "copilot", copilot_refusal_mutation=materialize)
+        self.assertEqual(code, 0, report.get("failure"))
+        self.assertFalse(report["cold_native_restore_qualified"])
+        self.assertTrue(report["two_scope_lifecycle_qualified"])
+        self.assertIn("owner-confirmed saved add B", phases)
+
     def test_marketing_kit_all_six_require_complete_positive_user_and_project_phases(self):
         for target in ("codex", "cursor", "claude", "gemini", "opencode", "copilot"):
             with self.subTest(target=target):

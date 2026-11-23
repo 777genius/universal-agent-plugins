@@ -3,6 +3,7 @@ import copy
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 from io import StringIO
 from runpy import run_path
@@ -30,10 +31,12 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         cls.fixtures = json.loads(cls.fixture_bytes)
         cls.fixture_hash = hashlib.sha256(cls.fixture_bytes).hexdigest()
 
-    def fixture(self, root, cli="/fixture/agentplugins"):
+    def fixture(self, root, cli="/fixture/agentplugins", *, saved=None):
         case = root / "plugin-case"
         for relative in ("home/.config", "home/.windsurf", "project", "uap-data"):
             (case / relative).mkdir(parents=True)
+        for name, body in (saved or {}).items():
+            (case / "uap-data" / name).write_bytes(body)
         env = {"HOME": str(case / "home"), "XDG_CONFIG_HOME": str(case / "home/.config"),
                "AGENTPLUGINS_HOME": str(case / "uap-data")}
         observer = WindsurfInstallationAudit(cli, env, case / "project", case, self.audit)
@@ -65,7 +68,8 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 "mixed_version": False, "clients": [client]}
         if source.startswith("github:"):
             node["source"] = source[len("github:"):].rsplit("@", 1)[0]
-            client["package_revision"] = {"resolved_revision": source.rsplit("@", 1)[1]}
+            client["package_revision"] = {"resolved_revision": source.rsplit("@", 1)[1],
+                "tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "b" * 64}
         else:
             pin = self.fixtures["signed_release_pins"][source]
             node["source"] = pin["repository"] + "/" + pin["path"]
@@ -99,6 +103,9 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         def mutation(operation, action, initial=False):
             entry = {"action": action, "alias": identity, "client_id": "windsurf",
                      "installation_id": "fixture-installation"}
+            revision = self.raw_list(index)["data"]["installations"][0]["clients"][0]["package_revision"]
+            if operation == "add":
+                entry.update(package_digest=revision["tree_digest"], revision=revision["resolved_revision"])
             if initial:
                 entry["component_support"] = [{"kind": "skill" if index in ACTIVE_SLOTS else "mcp_server",
                                                 "name": identity, "support": "prepared"}]
@@ -113,8 +120,68 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 (listed, self.outcome({"schema_version": 1, "command": "list", "result": "success",
                                       "data": {"installations": []}}))]
 
+    def author_saved(self, observer, row, position):
+        """Independent inert producer: saved intent, binding and managed receipt."""
+        if row["index"] == 13 or row["index"] in COMPONENT_REFUSALS:
+            return
+        data = observer.data
+        if position == 0:
+            from test_windsurf_global_skill_audit import source_digest
+            node = self.raw_list(row["index"])["data"]["installations"][0]
+            client = node["clients"][0]
+            identity, source = row["identity"], row["source"]
+            physical = identity[:51].rstrip(".-") + "-" + hashlib.sha256(node["installation_id"].encode()).hexdigest()[:12]
+            active = data / "managed/clients/windsurf" / physical
+            active.mkdir(parents=True)
+            files = {"plugin.json": json.dumps({"name": identity, "version": "1.0.0"}).encode(),
+                     "mcp.json": b'{"mcpServers":{}}'}
+            for name, body in files.items(): (active / name).write_bytes(body)
+            binding_id = "client_" + hashlib.sha256("\0".join((node["installation_id"], "windsurf", "user", str(active))).encode()).hexdigest()[:24]
+            revision = client["package_revision"]
+            binding = {**copy.deepcopy(client), "client_binding_id": binding_id,
+                "physical_artifact_id": physical, "target_locator": str(active),
+                "native_profile_root": str(observer.global_root),
+                "native_objects": [{"kind": "managed_package_directory", "object_id": "package:windsurf:" + physical,
+                    "logical_name": identity, "path": str(active), "managed_digest": source_digest(files), "protection_class": "managed"}]}
+            if source.startswith("github:"):
+                repo, commit = source[7:].rsplit("@", 1); repo = repo.lower(); subpath = ""
+                dep = f'git = "https://github.com/{repo}.git"\ncommit = "{commit}"\n'
+                locked_source = {"git": {"repository": repo, "commit": commit, "requested": {"kind": "commit", "value": commit}}}
+            else:
+                release = self.fixtures["signed_release_pins"][source]
+                repo, subpath, commit = release["repository"], release["path"], release["revision"]
+                dep = f'registry = "uap"\ndistribution = "{release["distribution"]}"\nrelease = "{release["sequence"]}"\n'
+                locked_source = {"registry": {"distribution_id": release["distribution"],
+                    "release_sequence": release["sequence"], "repository": repo, "path": subpath, "commit": commit}}
+            source_key = "github:" + repo + ":" if source.startswith("github:") else "directory:" + release["distribution"].lower()
+            selector = {"kind": "commit", "value": commit} if source.startswith("github:") else {"kind": "release", "value": str(release["sequence"])}
+            intent = {"schema_version": 1, "dependencies": [{"alias": identity, "source_key": source_key,
+                "selector": selector}], "targets": [{"id": "windsurf", "aliases": [identity]}]}
+            manifest_digest = "sha256:" + hashlib.sha256(json.dumps(intent, separators=(",", ":")).encode()).hexdigest()
+            state = {"schema_version": 5, "installations": [{"installation_id": node["installation_id"], "declared_name": identity,
+                "source": {"repository": repo, "package_subpath": subpath, "resolved_revision": commit, "tree_digest": revision["tree_digest"]},
+                "package": {"manifest_digest": revision["manifest_digest"]}, "clients": {binding_id: binding}}]}
+            (data / "state-v2.json").write_text(json.dumps(state))
+            (data / "uap.toml").write_text(f'schema_version = 1\n[dependencies.{json.dumps(identity)}]\n' + dep
+                + f'[targets]\nwindsurf = [{json.dumps(identity)}]\n')
+            (data / "uap.lock").write_text(json.dumps({"lock_version": 1, "manifest_digest": manifest_digest, "packages": [{"alias": identity, "source_key": source_key,
+                "source": locked_source, "targets": ["windsurf"], "digest_algorithm": "agentplugins-tree-sha256-v1",
+                **{key: revision[key] for key in ("tree_digest", "manifest_digest")}}]}))
+        elif position == 4:
+            state = json.loads((data / "state-v2.json").read_text())
+            for record in state["installations"]:
+                for binding in record["clients"].values(): shutil.rmtree(binding["target_locator"])
+            (data / "state-v2.json").write_text('{"schema_version":5,"installations":[]}')
+            (data / "uap.toml").write_text('schema_version = 1\n[dependencies]\n[targets]\n')
+            (data / "uap.lock").write_text('{"lock_version":1,"packages":[]}')
+
+    def authored_sequence(self, observer, row, sequence):
+        for position, entry in enumerate(sequence):
+            self.author_saved(observer, row, position)
+            yield entry
+
     def finish(self, observer, row, sequence=None):
-        for argv, outcome in sequence or self.sequence(observer, row):
+        for argv, outcome in self.authored_sequence(observer, row, sequence or self.sequence(observer, row)):
             observer.observe(argv, outcome)
         return observer.finish(row, row["source"], row["index"], self.fixtures)
 
@@ -290,9 +357,11 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             sequence = self.sequence(observer, row)
             owned = observer.global_root / "owned-fixture.json"
             owned.write_text('{"name":"atlassian"}')
+            self.author_saved(observer, row, 0)
             for argv, outcome in sequence[:4]:
                 observer.observe(argv, outcome)
             owned.unlink()
+            self.author_saved(observer, row, 4)
             for argv, outcome in sequence[4:]:
                 observer.observe(argv, outcome)
             proof = observer.finish(row, row["source"], 0, self.fixtures)
@@ -312,6 +381,193 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                     env[mutation] += "-wrong"
                 with self.assertRaises((ValueError, FileExistsError)):
                     WindsurfInstallationAudit(observer.cli, env, observer.project, observer.case, self.audit)
+
+    def test_fresh_internal_profile_symlink_and_raced_substitution_never_redirect_sentinel(self):
+        for raced in (False, True):
+            with self.subTest(raced=raced), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                observer, env = self.fixture(root)
+                # Fresh construction, with no occupied sentinel to mask the
+                # pre-write directory refusal seen in the original regression.
+                shutil.rmtree(observer.global_root)
+                sibling = observer.xdg / "sibling"
+                sibling.mkdir()
+                original_open = os.open
+                if not raced:
+                    observer.global_root.symlink_to(sibling, target_is_directory=True)
+                else:
+                    observer.global_root.mkdir()
+                def substitute(path, flags, *args, **kwargs):
+                    if raced and path == "foreign-neighbor.txt":
+                        observer.global_root.rename(observer.xdg / "original")
+                        observer.global_root.symlink_to(sibling, target_is_directory=True)
+                    return original_open(path, flags, *args, **kwargs)
+                with patch.object(installation.os, "open", side_effect=substitute), self.assertRaises(ValueError):
+                    WindsurfInstallationAudit(observer.cli, env, observer.project, observer.case, self.audit)
+                self.assertEqual(list(sibling.iterdir()), [])
+
+    def test_profile_directory_creation_uses_verified_xdg_descriptor_during_substitution(self):
+        with TemporaryDirectory() as temporary:
+            observer, env = self.fixture(Path(temporary).resolve())
+            shutil.rmtree(observer.global_root)
+            sibling = observer.home / "unmanaged-sibling"
+            sibling.mkdir()
+            original_mkdir = os.mkdir
+            def substitute(path, mode=0o777, *, dir_fd=None):
+                if path == "devin":
+                    self.assertIsNotNone(dir_fd)
+                    observer.xdg.rename(observer.home / "original-config")
+                    observer.xdg.symlink_to(sibling, target_is_directory=True)
+                return original_mkdir(path, mode=mode, dir_fd=dir_fd)
+            with patch.object(installation.os, "mkdir", side_effect=substitute), self.assertRaises(ValueError):
+                WindsurfInstallationAudit(observer.cli, env, observer.project, observer.case, self.audit)
+            self.assertEqual(list(sibling.iterdir()), [])
+            self.assertFalse((sibling / "devin").exists())
+
+    def test_exact_negatives_refuse_saved_intent_and_hidden_binding_residue(self):
+        for index in (13, *COMPONENT_REFUSALS):
+            for mutation in ("dependency", "binding", "lock", "managed", "foreign-data"):
+                with self.subTest(index=index, mutation=mutation), TemporaryDirectory() as temporary:
+                    observer, _ = self.fixture(Path(temporary).resolve())
+                    row = self.row(index)
+                    sequence = self.sequence(observer, row)
+                    # A valid exact refusal with an empty public list remains
+                    # insufficient if the failed add changed private ownership.
+                    if mutation == "dependency":
+                        (observer.data / "uap.toml").write_text('schema_version=1\n[dependencies]\nresidue="1.0.0"\n')
+                    elif mutation == "binding":
+                        self.author_saved(observer, self.row(0), 0)
+                    elif mutation == "lock":
+                        (observer.data / "uap.lock").write_text('{"lock_version":1,"packages":[{"alias":"residue"}]}')
+                    elif mutation == "foreign-data":
+                        (observer.data / "unowned.json").write_text('{}')
+                    else:
+                        path = observer.data / "managed/hidden/package.json"
+                        path.parent.mkdir(parents=True); path.write_text('{}')
+                    with self.assertRaises(ValueError): self.finish(observer, row, sequence)
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            cache = observer.data / "store/cache/inert.json"
+            cache.parent.mkdir(parents=True); cache.write_text('{}')
+            (observer.data / "mutation.lock").write_bytes(b"")
+            proof = self.finish(observer, self.row(13))
+            self.assertEqual(proof["status"], "verified-installation-negative")
+
+    def test_exact_negatives_allow_only_producer_cache_names_and_bounded_coordination(self):
+        for index in (13, *COMPONENT_REFUSALS):
+            with self.subTest(index=index), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                for name in ("directory-v1-cache.json", "discovery-v1-cache.json"):
+                    (observer.data / name).write_text('{"schema_version":1,"sequence":1,"snapshot":"e30=","envelope":"e30="}')
+                    (observer.data / (name + ".lock")).write_bytes(b"")
+                self.assertEqual(self.finish(observer, self.row(index))["status"], "verified-installation-negative")
+        for mutation in ("wrong-name", "link", "fifo"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                path = observer.data / "directory-v1-cache.json"
+                if mutation == "wrong-name": path.with_name("directory-v1-cache.json.retained").write_text('{}')
+                elif mutation == "link": path.symlink_to(observer.foreign)
+                else: os.mkfifo(path)
+                with self.assertRaises(ValueError): self.finish(observer, self.row(13))
+
+    def test_exact_negatives_preserve_full_saved_authority_bytes_existence_and_metadata(self):
+        empty = {"uap.toml": b'schema_version=1\n[dependencies]\n[targets]\n',
+                 "uap.lock": json.dumps({"lock_version": 1, "manifest_digest": "sha256:" + hashlib.sha256(
+                     b'{"schema_version":1,"dependencies":[],"targets":[]}').hexdigest(), "packages": []}).encode(),
+                 "state-v2.json": b'{"schema_version":5,"installations":[]}'}
+        for index in (13, *COMPONENT_REFUSALS):
+            with self.subTest(index=index, mutation="untouched"), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve(), saved=empty)
+                self.assertEqual(self.finish(observer, self.row(index))["status"], "verified-installation-negative")
+            for mutation in ("new-lock", "new-state", "new-manifest", "rewrite", "same-bytes-replace", "mode", "removed", "transient"):
+                with self.subTest(index=index, mutation=mutation), TemporaryDirectory() as temporary:
+                    observer, _ = self.fixture(Path(temporary).resolve(), saved=empty if not mutation.startswith("new-") else None)
+                    row = self.row(index)
+                    sequence = self.sequence(observer, row)
+                    manifest = observer.data / "uap.toml"
+                    if mutation == "new-lock":
+                        (observer.data / "uap.lock").write_text('{"lock_version":1,"manifest_digest":"corrupt","packages":[]}')
+                    elif mutation == "new-state":
+                        (observer.data / "state-v2.json").write_text('{"schema_version":5,"installations":[],"unexpected":"retained"}')
+                    elif mutation == "new-manifest": manifest.write_bytes(empty["uap.toml"])
+                    elif mutation in ("rewrite", "transient"): manifest.write_bytes(b'unknown="injected"\n' + empty["uap.toml"])
+                    elif mutation == "same-bytes-replace":
+                        pending = manifest.with_name("replacement")
+                        pending.write_bytes(manifest.read_bytes()); pending.replace(manifest)
+                    elif mutation == "mode": manifest.chmod(0o400)
+                    elif mutation == "removed": manifest.unlink()
+                    observer.observe(*sequence[0])
+                    if mutation == "transient": manifest.write_bytes(empty["uap.toml"])
+                    observer.observe(*sequence[1])
+                    with self.assertRaises(ValueError): observer.finish(row, row["source"], index, self.fixtures)
+
+    def test_negative_cannot_erase_private_residue_before_empty_list(self):
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            row = self.row(13)
+            sequence = self.sequence(observer, row)
+            manifest = observer.data / "uap.toml"
+            manifest.write_text('schema_version=1\n[dependencies]\nresidue="1.0.0"\n')
+            observer.observe(*sequence[0])
+            manifest.unlink()
+            observer.observe(*sequence[1])
+            with self.assertRaises(ValueError): observer.finish(row, row["source"], row["index"], self.fixtures)
+
+    def test_saved_binding_delivery_lock_repeat_and_removal_are_required(self):
+        for mutation in ("no-saved", "manifest-missing", "lock-missing", "state-missing", "wrong-source",
+                         "wrong-revision", "wrong-binding", "wrong-state", "wrong-lock", "wrong-lock-intent",
+                         "receipt-digest", "wrong-locator", "missing-managed", "managed-bytes",
+                         "repeat-binding", "repeat-delivery", "retained-binding", "retained-package", "retained-intent"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                row = self.row(0)
+                sequence = self.sequence(observer, row)
+                def corrupt_sequence():
+                    for position, entry in enumerate(sequence):
+                        if mutation != "no-saved":
+                            retained_state = None
+                            if position == 4 and mutation in ("retained-binding", "retained-package"):
+                                retained_state = (observer.data / "state-v2.json").read_text()
+                                retained_path = Path(next(iter(json.loads(retained_state)["installations"][0]["clients"].values()))["target_locator"])
+                            if position == 4 and mutation == "state-missing":
+                                (observer.data / "state-v2.json").write_text(saved_state)
+                            self.author_saved(observer, row, position)
+                            if retained_state is not None:
+                                if mutation == "retained-binding":
+                                    (observer.data / "state-v2.json").write_text(retained_state)
+                                else:
+                                    retained_path.mkdir(); (retained_path / "retained.json").write_text('{}')
+                            if position == (2 if mutation.startswith("repeat-") else 0):
+                                state_path = observer.data / "state-v2.json"
+                                state = json.loads(state_path.read_text())
+                                record = state["installations"][0]
+                                binding = next(iter(record["clients"].values()))
+                                saved_state = json.dumps(state)
+                                if mutation.endswith("missing") and mutation != "missing-managed":
+                                    (observer.data / {"manifest-missing": "uap.toml", "lock-missing": "uap.lock", "state-missing": "state-v2.json"}[mutation]).unlink()
+                                elif mutation == "wrong-source": record["source"]["repository"] = "foreign/source"
+                                elif mutation == "wrong-revision": binding["package_revision"]["tree_digest"] = "sha256:" + "0" * 64
+                                elif mutation in ("wrong-binding", "repeat-binding"):
+                                    binding["client_binding_id"] = "foreign"
+                                elif mutation == "wrong-state": binding["activation"] = "active"
+                                elif mutation in ("wrong-lock", "wrong-lock-intent"):
+                                    lock_path = observer.data / "uap.lock"
+                                    locked = json.loads(lock_path.read_text())
+                                    if mutation == "wrong-lock": locked["packages"][0]["tree_digest"] = "sha256:" + "0" * 64
+                                    else: locked["manifest_digest"] = "sha256:" + "0" * 64
+                                    lock_path.write_text(json.dumps(locked))
+                                elif mutation == "receipt-digest": binding["native_objects"][0]["managed_digest"] = "sha256:" + "0" * 64
+                                elif mutation == "wrong-locator": binding["target_locator"] += "-foreign"
+                                elif mutation == "missing-managed": shutil.rmtree(binding["target_locator"])
+                                elif mutation in ("managed-bytes", "repeat-delivery"):
+                                    (Path(binding["target_locator"]) / "mcp.json").write_text('{"changed":true}')
+                                if mutation not in ("state-missing",): state_path.write_text(json.dumps(state))
+                            if position == 4 and mutation == "retained-intent":
+                                (observer.data / "uap.toml").write_text('schema_version=1\n[dependencies]\nresidue="1.0.0"\n')
+                        yield entry
+                with self.assertRaises(ValueError):
+                    for argv, outcome in corrupt_sequence(): observer.observe(argv, outcome)
+                    observer.finish(row, row["source"], row["index"], self.fixtures)
 
     def test_original_global_foreign_bytes_and_root_identity_are_pinned(self):
         for mutation in ("foreign", "global", "home", "project", "xdg", "data", "case"):
@@ -343,7 +599,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
     def test_raw_envelope_missing_wrong_scope_state_source_or_ids_refuse(self):
         for mutation in ("missing-json", "tail-only", "wrong-scope", "extra-client", "extra-row", "wrong-source",
                          "wrong-sha", "wrong-digest", "policy", "authentication", "verification", "activation",
-                         "rekey", "remove-id", "remove-outcome", "add-result", "result-type", "implicit-scope", "nan", "large", "timeout", "exit", "stderr"):
+                         "rekey", "remove-id", "remove-outcome", "add-id", "add-revision", "add-digest", "add-missing-revision", "add-missing-digest", "add-result", "result-type", "implicit-scope", "nan", "large", "timeout", "exit", "stderr"):
             with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
                 observer, _ = self.fixture(Path(temporary).resolve())
                 row = self.row(0)
@@ -363,6 +619,11 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 elif mutation == "rekey": sequence[3][1]["_json"]["data"]["installations"][0]["installation_id"] = "new"
                 elif mutation == "remove-id": sequence[4][1]["_json"]["results"][0]["installation_id"] = "foreign"
                 elif mutation == "remove-outcome": sequence[4][1]["_json"]["outcome"] = "failed"
+                elif mutation == "add-id": sequence[0][1]["_json"]["actions"][0]["installation_id"] = "foreign-installation"
+                elif mutation == "add-revision": sequence[0][1]["_json"]["actions"][0]["revision"] = "0" * 40
+                elif mutation == "add-digest": sequence[0][1]["_json"]["actions"][0]["package_digest"] = "sha256:" + "0" * 64
+                elif mutation == "add-missing-revision": sequence[0][1]["_json"]["actions"][0].pop("revision")
+                elif mutation == "add-missing-digest": sequence[0][1]["_json"]["actions"][0].pop("package_digest")
                 elif mutation == "add-result": sequence[0][1]["_json"]["results"] = []
                 elif mutation == "result-type": sequence[4][1]["_json"]["results"] = [42]
                 elif mutation == "implicit-scope": sequence[0][1]["_json"]["scope_selection_reason"] = "default"
@@ -410,7 +671,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 observer, _ = self.fixture(Path(temporary).resolve())
                 row = self.row(0)
                 sequence = self.sequence(observer, row)
-                for position, (argv, outcome) in enumerate(sequence):
+                for position, (argv, outcome) in enumerate(self.authored_sequence(observer, row, sequence)):
                     if when == "repeat" and position == 2:
                         (observer.global_root / "unexpected").write_text("changed during repeat")
                     observer.observe(argv, outcome)
@@ -430,7 +691,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             observer, _ = self.fixture(Path(temporary).resolve())
             row = self.row(0)
             sequence = self.sequence(observer, row)
-            for position, (argv, outcome) in enumerate(sequence):
+            for position, (argv, outcome) in enumerate(self.authored_sequence(observer, row, sequence)):
                 if position == 4:
                     (observer.global_root / "unrelated-new-file").write_text("must not survive cleanup")
                 observer.observe(argv, outcome)
@@ -461,7 +722,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
     def test_summary_refuses_tampered_row_custody_scope_and_counts(self):
         original = self.completed_report()
         self.assertTrue(summary(original, self.fixtures, fixture_sha256=self.fixture_hash)["installation_acceptance_passed"])
-        for mutation in ("missing-proof", "source", "index-bool", "residue", "sentinel", "repeat", "global-omitted",
+        for mutation in ("missing-proof", "missing-saved-proof", "source", "index-bool", "residue", "sentinel", "repeat", "global-omitted",
                          "image-count", "negative-image", "state-promotion", "writer-claim", "model-native-count",
                          "missing-row", "duplicate-row", "cli-bool"):
             with self.subTest(mutation=mutation):
@@ -469,6 +730,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 row = report["results"][0]
                 proof = row["windsurf_installation_audit"]
                 if mutation == "missing-proof": del row["windsurf_installation_audit"]
+                elif mutation == "missing-saved-proof": proof.pop("initial_saved_authority_sha256")
                 elif mutation == "source": row["source"] = "other-source"
                 elif mutation == "index-bool": row["index"] = False
                 elif mutation == "residue": row["native_residuals"] = ["unowned"]
@@ -490,7 +752,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         with TemporaryDirectory() as temporary:
             observer, _ = self.fixture(Path(temporary).resolve())
             row = self.row(0)
-            for argv, outcome in self.sequence(observer, row):
+            for argv, outcome in self.authored_sequence(observer, row, self.sequence(observer, row)):
                 observer.observe(argv, outcome)
                 outcome.pop("_json")
                 outcome.pop("stderr_full")
@@ -652,6 +914,8 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                     self.assertIs(kwargs.get("capture_full"), True)
                     self.assertTrue((Path(env["XDG_CONFIG_HOME"]) / "devin/foreign-neighbor.txt").is_file())
                     self.assertEqual(project, Path(temporary).resolve() / f"plugin-{index:02d}/project")
+                    self.author_saved(SimpleNamespace(data=Path(env["AGENTPLUGINS_HOME"]),
+                        global_root=Path(env["XDG_CONFIG_HOME"]) / "devin"), expected_row, len(calls))
                     calls.append(list(argv))
                     return copy.deepcopy(outcome)
                 with patch.dict(self.audit["do_case"].__globals__, {"call": public_call}):
@@ -720,6 +984,8 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             self.assertIs(kwargs.get("capture_full"), True)
             data = Path(env["AGENTPLUGINS_HOME"])
             identities.append(identity(data))
+            self.author_saved(SimpleNamespace(data=data, global_root=Path(env["XDG_CONFIG_HOME"]) / "devin"),
+                              self.row(0), len(calls))
             calls.append(list(argv))
             if len(calls) == 1:
                 if mutation == "mode":
@@ -853,8 +1119,11 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                                      [row["status"] for row in selected_rows])
 
     def test_summary_requires_exact_versions_complete_selection_and_new_proof(self):
-        # Missing proof is refused independently of all old success booleans.
-        base = self.report([self.row(i) for i in range(30)])
+        base = self.completed_report()
+        self.assertTrue(summary(base, self.fixtures, fixture_sha256=self.fixture_hash)["installation_acceptance_passed"])
+        missing = copy.deepcopy(base)
+        missing["results"][0].pop("windsurf_installation_audit")
+        self.assertFalse(summary(missing, self.fixtures, fixture_sha256=self.fixture_hash)["installation_acceptance_passed"])
         for key, value in (("platform", "darwin"), ("architecture", "arm64"), ("target", "cursor"),
                            ("kind", "skill"), ("cases_attempted", 29), ("full_coverage", False),
                            ("fixture_sha256", "0" * 64), ("passed", 25),

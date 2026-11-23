@@ -1456,6 +1456,41 @@ def execute(cli, env, project, target, label, *args, capture=None):
     return {"stage": label, "exit_code": result["exit_code"], "result": "passed"}
 
 
+def check_copilot_cold_project_unchanged(project, before, receipts):
+    """Protect the whole Project while allowing exact private install artifacts."""
+    # CLI compose.go puts committed packages/state here before verify-only
+    # activation refuses missing consent. Directory journals are removed by
+    # dirswap.Commit before activation; staging must leave no private residue.
+    directories = {".uap", ".uap/managed", ".uap/managed/clients", ".uap/managed/clients/copilot",
+                   ".uap/plugin-data", ".uap/operations-v2", ".uap/installer-tmp"}
+    files = {".uap/state-v2.json", ".uap/mutation.lock", ".uap/environment.lock"}
+    packages = set()
+    for alias, installation_id in receipts:
+        physical = alias + "-" + hashlib.sha256(installation_id.encode()).hexdigest()[:12]
+        packages.update((".uap/managed/clients/copilot/" + physical, ".uap/plugin-data/" + physical))
+    after = scoped_snapshot([project])
+    for key in before.keys() | after.keys():
+        if key in before and key in after and before[key] == after[key]:
+            continue
+        # Even existing private files/empty directories remain protected.
+        if key in before or key not in after:
+            raise AssertionError("cold Copilot locked install modified existing Project state")
+        if key.startswith("metadata:0:"):
+            relative, value = key.removeprefix("metadata:0:"), after[key]
+            kind = ("directory" if isinstance(value, tuple) and stat.S_ISDIR(value[0]) else
+                    "file" if isinstance(value, tuple) and stat.S_ISREG(value[0]) else None)
+        elif key.startswith("directory:0:"):
+            relative, kind = key.removeprefix("directory:0:"), "directory"
+        elif key.startswith(project.name + "/") and re.fullmatch(r"[0-9a-f]{64}", str(after[key])):
+            relative, kind = key.removeprefix(project.name + "/").replace("\\", "/"), "file"
+        else:
+            raise AssertionError("cold Copilot locked install created unsafe Project state")
+        owned_package = any(relative == root or relative.startswith(root + "/") for root in packages)
+        if (kind is None or not (owned_package or kind == "directory" and relative in directories
+                                 or kind == "file" and relative in files)):
+            raise AssertionError("cold Copilot locked install modified native or unowned Project state")
+
+
 def verify_copilot_cold_project_refusal(cli, env, project):
     """A locked agreement cannot grant Copilot's remembered folder consent."""
     reason = "copilot has not remembered the selected project folder; rerun installation to restore folder trust"
@@ -1466,7 +1501,9 @@ def verify_copilot_cold_project_refusal(cli, env, project):
     if read_trust() != (None, "absent"):
         raise AssertionError("cold Copilot Project already has native folder trust config")
     native_home = scoped_snapshot([Path(env["HOME"])])
+    project_before = scoped_snapshot([project])
     agreement = {name: (project / name).read_bytes() for name in ("uap.toml", "uap.lock")}
+    receipts = ()
     try:
         refused = invoke([cli, "install", "--locked", "--yes", "--scope", "project",
                           "--project-root", str(project), "--format", "json"], env, project, 180)
@@ -1500,10 +1537,12 @@ def verify_copilot_cold_project_refusal(cli, env, project):
                     or result.get("reason") != reason
                     or result.get("next_actions") != [{"kind": "activate", "reason": reason}]
                     or not isinstance(result.get("installation_id"), str)
-                    or not result["installation_id"].strip()):
+                    or not result["installation_id"].strip()
+                    or ("installation_id" in action and action["installation_id"] != result["installation_id"])):
                 raise AssertionError("cold Copilot closure failed for a reason other than folder consent")
         if len({row["installation_id"] for row in results}) != len(results):
             raise AssertionError("cold Copilot consent refusal reused installation receipts")
+        receipts = tuple((action["alias"], result["installation_id"]) for action, result in zip(actions, results))
         return {"stage": "cold Copilot Project folder consent refused", "exit_code": 1,
                 "result": "expected_refusal", "reason": "missing_remembered_folder_consent",
                 "bindings": len(results), "cold_native_restore_qualified": False}
@@ -1511,6 +1550,7 @@ def verify_copilot_cold_project_refusal(cli, env, project):
         guard()
         if scoped_snapshot([Path(env["HOME"])]) != native_home:
             raise AssertionError("cold Copilot locked install modified native HOME")
+        check_copilot_cold_project_unchanged(project, project_before, receipts)
         if read_trust() != (None, "absent"):
             raise AssertionError("cold Copilot locked install wrote native folder trust")
         if any((project / name).read_bytes() != value for name, value in agreement.items()):

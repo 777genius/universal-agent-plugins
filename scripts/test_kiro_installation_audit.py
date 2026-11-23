@@ -8,8 +8,10 @@ import os
 from pathlib import Path
 from runpy import run_path
 import shutil
+import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from unittest.mock import patch
 import uuid
@@ -148,14 +150,14 @@ class KiroInstallationTests(unittest.TestCase):
     def setUpClass(cls):
         cls.audit = run_path(str(ROOT / "scripts/live-install-audit.py"))
 
-    def fixture(self, root, kind):
+    def fixture(self, root, kind, resources):
         case = root / "case"
         for relative in ("home/.config", "home/.cache", "home/.local/share", "project", "uap-data"):
             (case / relative).mkdir(parents=True)
         env = self.audit["isolated_client_env"](case / "home", case, case / "uap-data")
         with patch.object(sys, "platform", "darwin"):
             observer = prepared.KiroInstallationAudit("/fixture/agentplugins", env, case / "project", case, self.audit, kind)
-        self.addCleanup(observer.close)
+        resources.callback(observer.close)
         return observer
 
     @staticmethod
@@ -235,8 +237,8 @@ class KiroInstallationTests(unittest.TestCase):
             for index in range(30):
                 if kind == "plugin" and index == 13:
                     continue
-                with self.subTest(kind=kind, index=index), tempfile.TemporaryDirectory() as directory:
-                    observer = self.fixture(Path(directory).resolve(), kind)
+                with self.subTest(kind=kind, index=index), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                    observer = self.fixture(Path(directory).resolve(), kind, case_resources)
                     documents = raw(kind, index, observer.project)
                     row = self.row(kind, index, documents)
                     original_status = row["status"]
@@ -248,8 +250,8 @@ class KiroInstallationTests(unittest.TestCase):
                     self.assertEqual(row["public_target_states"]["after-add"]["states"], [proof["public_state"]])
 
     def test_exact_signed_marketing_refusal_only(self):
-        with tempfile.TemporaryDirectory() as directory:
-            observer = self.fixture(Path(directory).resolve(), "plugin")
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+            observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
             diagnostic = ('agentplugins: no eligible directory release for "marketing-kit": '
                           '777genius/marketing-kit: release does not support complete target set; missing kiro\n')
             add = [observer.cli, "add", "marketing-kit", "--target", "kiro", "--scope", "user", "--format", "json"]
@@ -279,8 +281,8 @@ class KiroInstallationTests(unittest.TestCase):
     def test_installation_admission_does_not_reclassify_or_trust_native_status(self):
         for status in ("package-installed-native-unqualified", "installation-lifecycle-observed",
                        "passed", "incomplete-native-proof"):
-            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "plugin")
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
                 documents = raw("plugin", 22, observer.project)
                 row = self.row("plugin", 22, documents)
                 row["status"] = status
@@ -294,8 +296,8 @@ class KiroInstallationTests(unittest.TestCase):
                 self.assertEqual(row["status"], status)
         # The normal raw-Skill status is also insufficient without the six
         # actual public observations and held source/ownership projections.
-        with tempfile.TemporaryDirectory() as directory:
-            observer = self.fixture(Path(directory).resolve(), "skill")
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+            observer = self.fixture(Path(directory).resolve(), "skill", case_resources)
             documents = raw("skill", 0, observer.project)
             row = self.row("skill", 0, documents)
             self.assertEqual(row["status"], "incomplete-native-proof")
@@ -305,8 +307,8 @@ class KiroInstallationTests(unittest.TestCase):
     def test_unknown_cache_foreign_bytes_mode_hardlink_and_parent_changes_refuse(self):
         for change in ("cache", "foreign", "mode", "hardlink", "symlink", "parent",
                        "data-mode", "data-parent", "wrong-scope"):
-            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "plugin")
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
                 documents = raw("plugin", 0, observer.project)
                 if change == "cache":
                     (observer.home / "unknown-native-cache").write_text("leftover")
@@ -331,8 +333,8 @@ class KiroInstallationTests(unittest.TestCase):
                     self.finish(observer, "plugin", 0, documents)
 
     def test_atomic_shared_replacement_requires_exact_returned_bytes_and_held_original(self):
-        with tempfile.TemporaryDirectory() as directory:
-            observer = self.fixture(Path(directory).resolve(), "plugin")
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+            observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
             documents = raw("plugin", 0, observer.project)
             row = self.row("plugin", 0, documents)
             sequence = self.sequence(observer, "plugin", 0, documents)
@@ -359,18 +361,18 @@ class KiroInstallationTests(unittest.TestCase):
                      lambda d: d["cleanup"]["results"][0].update(installation_id="reminted"),
                      lambda d: d["post_remove_list"]["data"]["installations"].append({"foreign": True})]
         for mutate in mutations:
-            with self.subTest(mutation=mutate), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "skill")
+            with self.subTest(mutation=mutate), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "skill", case_resources)
                 documents = raw("skill", 0, observer.project); mutate(documents)
                 with self.assertRaises(ValueError): self.finish(observer, "skill", 0, documents)
 
     def test_owned_skill_bytes_and_shared_foreign_member_are_checked_in_held_reads(self):
-        with tempfile.TemporaryDirectory() as directory:
-            observer = self.fixture(Path(directory).resolve(), "skill")
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+            observer = self.fixture(Path(directory).resolve(), "skill", case_resources)
             with patch(__name__ + ".skill_body", return_value=b"wrong upstream bytes"), self.assertRaises(ValueError):
                 self.finish(observer, "skill", 0, raw("skill", 0, observer.project))
-        with tempfile.TemporaryDirectory() as directory:
-            observer = self.fixture(Path(directory).resolve(), "plugin")
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+            observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
             documents = raw("plugin", 0, observer.project)
             row = self.row("plugin", 0, documents)
             # Full successful envelopes without any actual owned native image
@@ -399,8 +401,8 @@ class KiroInstallationTests(unittest.TestCase):
 
     def test_reviewed_transient_native_projection_iid_and_foreign_alias_attacks_are_rejected(self):
         for mutation in ("top-level-member", "transient-cache", "wrong-mcp-value", "fresh-iid", "foreign-hardlink"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "plugin")
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
                 documents = raw("plugin", 0, observer.project)
                 if mutation == "fresh-iid":
                     documents["install"]["data"]["actions"][0]["installation_id"] = "11111111-1111-4111-8111-111111111111"
@@ -428,8 +430,8 @@ class KiroInstallationTests(unittest.TestCase):
     def test_source_bound_private_receipt_and_projection_cannot_be_substituted(self):
         for mutation in ("receipt-source", "receipt-id", "receipt-profile", "receipt-user-profile",
                          "receipt-null-profile", "receipt-locator", "projection", "extra-object"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "plugin")
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
                 documents = raw("plugin", 0, observer.project)
                 original = observer.observe
                 positions = []
@@ -455,8 +457,8 @@ class KiroInstallationTests(unittest.TestCase):
 
     def test_project_private_profile_cannot_use_unbound_user_semantics(self):
         for mutation in ("missing", "empty", "user"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "skill")
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "skill", case_resources)
                 documents = raw("skill", 0, observer.project)
                 original = observer.observe
                 def adversarial(argv, outcome):
@@ -473,8 +475,8 @@ class KiroInstallationTests(unittest.TestCase):
 
     def test_native_writer_lock_is_held_before_calls_and_immutable_afterward(self):
         for mutation in (None, "bytes", "mode", "replace", "hardlink", "symlink", "remove"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "plugin")
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
                 lock = observer.mcp.with_name(observer.mcp.name + ".agentplugins.lock")
                 self.assertIn(lock, observer.initial_paths)
                 self.assertIn(lock, observer.protected_files)
@@ -497,8 +499,8 @@ class KiroInstallationTests(unittest.TestCase):
     def test_owned_active_root_cleanup_and_deterministic_private_physical_identity(self):
         for kind in ("plugin", "skill"):
             for mutation in ("retained-active", "reminted-private", "late-receipt-change"):
-                with self.subTest(kind=kind, mutation=mutation), tempfile.TemporaryDirectory() as directory:
-                    observer = self.fixture(Path(directory).resolve(), kind)
+                with self.subTest(kind=kind, mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                    observer = self.fixture(Path(directory).resolve(), kind, case_resources)
                     documents = raw(kind, 0, observer.project)
                     original, calls, active = observer.observe, [], []
                     def adversarial(argv, outcome):
@@ -527,10 +529,60 @@ class KiroInstallationTests(unittest.TestCase):
                     observer.observe = adversarial
                     with self.assertRaises(ValueError): self.finish(observer, kind, 0, documents)
 
+    def test_fixture_closes_custody_before_directory_cleanup_even_on_failure(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail), tempfile.TemporaryDirectory() as directory:
+                try:
+                    with ExitStack() as resources:
+                        observer = self.fixture(Path(directory).resolve(), "plugin", resources)
+                        descriptors = [observer.mcp_fd, *(entry[0] for entry in observer.protected_files.values())]
+                        if fail:
+                            raise AssertionError("controlled fixture failure")
+                except AssertionError as error:
+                    self.assertTrue(fail)
+                    self.assertEqual(str(error), "controlled fixture failure")
+                self.assertTrue(Path(directory).is_dir())
+                self.assertIsNone(observer.mcp_fd)
+                self.assertFalse(observer.protected_files)
+                for fd in descriptors:
+                    with self.assertRaises(OSError):
+                        os.fstat(fd)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX FIFO evidence fixture")
+    def test_evidence_fifo_refuses_without_waiting_for_writer(self):
+        program = textwrap.dedent('''
+            from contextlib import ExitStack
+            from pathlib import Path
+            import os
+            import tempfile
+            from test_kiro_installation_audit import KiroInstallationTests
+
+            KiroInstallationTests.setUpClass()
+            fixture = KiroInstallationTests()
+            with tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                observer = fixture.fixture(Path(directory).resolve(), "plugin", resources)
+                ordinary = observer.data / "ordinary.json"
+                ordinary.write_bytes(b'{"ordinary":true}')
+                assert observer.read_bytes(ordinary) == b'{"ordinary":true}'
+                fifo = observer.data / "state-v2.json"
+                os.mkfifo(fifo, 0o600)
+                try:
+                    observer.read_document(fifo)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("non-regular evidence was accepted")
+            print("ordinary-read-and-fifo-refusal-confirmed")
+        ''')
+        result = subprocess.run([sys.executable, "-c", program], cwd=ROOT / "scripts",
+                                capture_output=True, text=True, timeout=10, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "ordinary-read-and-fifo-refusal-confirmed")
+
     def test_constructor_closes_every_opened_descriptor_on_stat_or_held_read_failure(self):
         original_open, original_read, original_stat = os.open, os.pread, os.fstat
         for failure in ("read", "stat"):
-            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
                 opened, reads, failures = [], [], []
                 def tracked_open(*args, **kwargs):
                     fd = original_open(*args, **kwargs); opened.append(fd); return fd
@@ -544,7 +596,7 @@ class KiroInstallationTests(unittest.TestCase):
                     return original_stat(fd)
                 with patch.object(os, "open", tracked_open), patch.object(os, "pread", read), \
                      patch.object(os, "fstat", descriptor_stat), self.assertRaises(OSError):
-                    self.fixture(Path(directory).resolve(), "plugin")
+                    self.fixture(Path(directory).resolve(), "plugin", case_resources)
                 self.assertEqual(len(opened), 2)
                 for fd in opened:
                     with self.assertRaises(OSError): original_stat(fd)
@@ -631,8 +683,8 @@ class KiroInstallationTests(unittest.TestCase):
     def complete_report(self, kind):
         rows = []
         for index in range(30):
-            with tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), kind)
+            with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), kind, case_resources)
                 if kind == "plugin" and index == 13:
                     row = {"index": 13, "identity": "marketing-kit", "source": "marketing-kit", "target": "kiro", "kind": kind,
                            "status": "documented-or-source-unsupported", "native_file_delta": 0,
