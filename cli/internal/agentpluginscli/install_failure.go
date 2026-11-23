@@ -132,6 +132,9 @@ type installFailure struct {
 	Next      string
 	Retryable bool
 	Detail    string
+
+	// Keep the run-wide stop policy when a binding's displayed kind becomes SKIPPED.
+	stopsNamespaceRetry bool
 }
 
 // describeBindingFailure explains why one binding did not succeed. A binding
@@ -150,6 +153,7 @@ func describeBindingFailure(outcome environment.BindingOutcome) *installFailure 
 		}
 	}
 	cause := failure.Kind
+	failure.stopsNamespaceRetry = cause == failureProcessCleanup || cause == failureRecovery
 	if outcome.Status == environment.BindingNotAttempted && cause != failureProcessCleanup {
 		failure.Kind = failureSkipped
 	}

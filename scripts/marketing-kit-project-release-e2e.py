@@ -220,19 +220,26 @@ def verify_pinned_launcher(cli, env, project):
 
 
 def signed_identity_diagnostic(data, distribution, pinned):
-    """Preserve bounded public tuple evidence, never arbitrary CLI output or env."""
-    def bounded(value):
-        if value is None or type(value) in (bool, int):
+    """Preserve trusted public literals; fingerprint unexpected string values."""
+    expected = {"id": distribution, "release_status": "active", **pinned}
+    def public_value(field, value):
+        if value is None:
+            return None
+        if type(value) is str:
+            if type(expected.get(field)) is str and value == expected[field]:
+                return expected[field]
+            return {"type": "str", "length": len(value),
+                    "sha256": hashlib.sha256(value.encode("utf-8", errors="surrogatepass")).hexdigest()}
+        if field == "release_sequence" and type(value) is int and 0 < value < 1 << 64:
             return value
-        return value[:200] if isinstance(value, str) else {"type": type(value).__name__}
+        return {"type": type(value).__name__}
     release = data.get("selected_release")
-    fields = ("id", "release_status", *pinned)
     return {"cli_version": _CLI_VERSION.get(), "distribution": distribution,
             "snapshot_sequence": data["snapshot_sequence"], "snapshot_digest": data["snapshot_digest"],
-            "selected_distribution": bounded(data.get("selected_distribution")),
-            "expected_release": {"id": distribution, "release_status": "active", **pinned},
-            "observed_release": {key: bounded(release.get(key) if isinstance(release, dict) else None)
-                                 for key in fields}}
+            "selected_distribution": public_value("id", data.get("selected_distribution")),
+            "expected_release": expected,
+            "observed_release": {key: public_value(key, release.get(key) if isinstance(release, dict) else None)
+                                 for key in expected}}
 
 
 def inspect_signed_closure(cli, env, project, target, expected_policy=None):

@@ -168,26 +168,30 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 proof = subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
                 self.assertEqual([member["binding_at_capture"] for member in proof["members"]], expected)
                 self.assertEqual([row["authentication"] for row in expected],
-                                 ["not_required", "not_checked", "not_checked", "not_required"]
-                                 if activation == "active" else ["not_checked"] * 4)
+                                 ["not_required" if activation == "active"
+                                  and alias in ("marketing-kit", "playwright") else "not_checked"
+                                  for alias in f["audit"]["MARKETING_KIT_DISTRIBUTIONS"]])
                 self.assertFalse(proof["writer_closure_claimed"])
 
     def test_exact_project_authentication_and_raw_public_agreement_required(self):
-        for index, wrong in ((index, value) for index in range(4)
-                             for value in ("auth_pending", "not_required" if index in (1, 2) else "not_checked",
-                                           "failed", "authenticated", "pending", "unknown", "", None, "missing")):
-            for location in ("both", "raw", "public"):
-                with self.subTest(index=index, wrong=wrong, location=location), TemporaryDirectory() as directory:
-                    f = self.fixture(Path(directory).resolve())
-                    state = json.loads(f["state"].read_text())
-                    binding = next(iter(state["installations"][index]["clients"].values()))
-                    for label, row in (("raw", binding), ("public", f["public"][index]["clients"][0])):
-                        if location not in ("both", label): continue
-                        if wrong == "missing": row.pop("authentication")
-                        else: row["authentication"] = wrong
-                    f["state"].write_text(json.dumps(state))
-                    with self.assertRaisesRegex(ValueError, "authentication"):
-                        self.capture(f)
+        for alias in ("marketing-kit", "notion", "hubspot-crm", "playwright"):
+            expected = "not_required" if alias in ("marketing-kit", "playwright") else "not_checked"
+            for wrong in ("auth_pending", "not_checked" if expected == "not_required" else "not_required",
+                          "failed", "authenticated", "pending", "unknown", "", None, "missing"):
+                for location in ("both", "raw", "public"):
+                    with self.subTest(alias=alias, wrong=wrong, location=location), TemporaryDirectory() as directory:
+                        f = self.fixture(Path(directory).resolve())
+                        state = json.loads(f["state"].read_text())
+                        record = next(row for row in state["installations"] if row["declared_name"] == alias)
+                        public = next(row for row in f["public"] if row["name"] == alias)
+                        binding = next(iter(record["clients"].values()))
+                        for label, row in (("raw", binding), ("public", public["clients"][0])):
+                            if location not in ("both", label): continue
+                            if wrong == "missing": row.pop("authentication")
+                            else: row["authentication"] = wrong
+                        f["state"].write_text(json.dumps(state))
+                        with self.assertRaisesRegex(ValueError, "authentication"):
+                            self.capture(f)
 
     def test_active_local_qualification_requires_absent_catalog_and_prepared_never_promotes(self):
         for alias in ("marketing-kit", "playwright"):
@@ -256,8 +260,10 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             with self.subTest(raw=raw), TemporaryDirectory() as directory:
                 f = self.fixture(Path(directory).resolve())
                 state = json.loads(f["state"].read_text())
-                next(iter(state["installations"][0]["clients"].values()))["authentication"] = raw
-                f["public"][0]["clients"][0]["authentication"] = public
+                record = next(row for row in state["installations"] if row["declared_name"] == "marketing-kit")
+                view = next(row for row in f["public"] if row["name"] == "marketing-kit")
+                next(iter(record["clients"].values()))["authentication"] = raw
+                view["clients"][0]["authentication"] = public
                 f["state"].write_text(json.dumps(state))
                 with self.assertRaises(ValueError) as failure:
                     self.capture(f)

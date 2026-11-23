@@ -94,6 +94,9 @@ func (report *agentReport) addProblem(failure installFailure, item string) {
 	for index := range report.Problems {
 		previous := report.Problems[index].Failure
 		if previous.Kind == failure.Kind && previous.Summary == failure.Summary && previous.Next == failure.Next && previous.Retryable == failure.Retryable {
+			if failure.stopsNamespaceRetry {
+				report.Problems[index].Failure.stopsNamespaceRetry = true
+			}
 			report.Problems[index].Items = append(report.Problems[index].Items, item)
 			return
 		}
@@ -116,7 +119,7 @@ func retryableAgents(reports []agentReport) []agentReport {
 	var retryable []agentReport
 	for _, report := range reports {
 		for _, problem := range report.Problems {
-			if problem.Failure.Kind == failureProcessCleanup || problem.Failure.Kind == failureRecovery {
+			if problem.Failure.stopsNamespaceRetry || problem.Failure.Kind == failureProcessCleanup || problem.Failure.Kind == failureRecovery {
 				return nil // The namespace must be safe before any agent retries.
 			}
 		}

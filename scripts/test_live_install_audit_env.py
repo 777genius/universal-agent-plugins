@@ -3549,10 +3549,56 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertEqual(observed["snapshot_digest"], runner["FIXED_REFUSAL_POLICY"]["snapshot_digest"])
         self.assertEqual(observed["expected_release"]["release_sequence"], 2)
         self.assertEqual(observed["observed_release"]["release_sequence"], 1)
-        self.assertEqual(len(observed["observed_release"]["repository"]), 200)
+        self.assertEqual(observed["observed_release"]["repository"], {
+            "type": "str", "length": 300, "sha256": hashlib.sha256(b"x" * 300).hexdigest()})
+        self.assertEqual(observed["observed_release"]["resolved_revision"], {
+            "type": "str", "length": 40,
+            "sha256": hashlib.sha256(b"128b01ff2b4f7242ad061ad823d5e4018af6b2e4").hexdigest()})
+        self.assertEqual(observed["observed_release"]["package_path"],
+                         runner["FIXED_SIGNED_CLOSURE"][distribution]["package_path"])
         self.assertNotIn("must-not-appear", text)
         self.assertNotIn("private_unselected_field", text)
         self.assertLess(len(text), 2500)
+
+    def test_marketing_kit_signed_tuple_diagnostic_redacts_sensitive_allowlisted_values(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        inspect = runner["inspect_signed_closure"]
+        distribution = runner["REQUIRED_DISTRIBUTIONS"]["playwright"]
+        sensitive = (
+            ("allowlisted-uri-secret", "https://alice:allowlisted-uri-secret@host.invalid/private"),
+            ("allowlisted-private-secret", "allowlisted-private-secret arbitrary\nsensitive text"),
+            ("allowlisted-repository-secret", "allowlisted-repository-secret/private"),
+            ("allowlisted-path-secret", "private/allowlisted-path-secret"),
+            ("allowlisted-version-secret", "0.1.0+allowlisted-version-secret"),
+            ("allowlisted-surrogate-secret", "allowlisted-surrogate-secret" + chr(0xDCFF)),
+        )
+        for field in ("selected_distribution", "id", "release_status",
+                      *runner["FIXED_SIGNED_CLOSURE"][distribution]):
+            for canary, value in sensitive:
+                with self.subTest(field=field, canary=canary):
+                    def invoke(command, *_):
+                        response = self._marketing_kit_info_response(runner, command[2])
+                        if command[2] == distribution:
+                            data = response["_json"]["data"]
+                            if field == "selected_distribution":
+                                data[field] = value
+                            else:
+                                data["selected_release"][field] = value
+                        return response
+                    with patch.dict(inspect.__globals__, {"invoke": invoke}):
+                        with self.assertRaisesRegex(AssertionError, "immutable source identity changed") as caught:
+                            inspect("agentplugins", {}, Path("."), "codex")
+                    text = str(caught.exception)
+                    observed = json.loads(text.split(": ", 1)[1])
+                    selected = (observed["selected_distribution"] if field == "selected_distribution"
+                                else observed["observed_release"][field])
+                    self.assertEqual(selected, {"type": "str", "length": len(value),
+                        "sha256": hashlib.sha256(value.encode("utf-8", errors="surrogatepass")).hexdigest()})
+                    self.assertNotIn(canary, text)
+                    self.assertNotIn("alice", text)
+                    self.assertLess(len(text), 2500)
 
     def test_marketing_kit_workflow_separates_current_lifecycle_and_historical_abort(self):
         workflow = (Path(__file__).resolve().parents[1] /
