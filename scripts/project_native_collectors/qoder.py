@@ -123,19 +123,22 @@ def observe_skills_surface(ctx, top_help):
     body = _probe(ctx, "skills-help", ("skills", "--help"))
     result.update(status="help-observed", usage=_skill_help(body))
     listing = _help_entry(body, "Commands", "list")
-    if re.fullmatch(r"  list(?: \[options\])?[ \t]{2,}(?:List\b[^\n]*|Lists discovered agent skills\.)", listing) is None:
+    if re.fullmatch(r"  list(?: \[options\])?[ \t]{2,}(?:List discovered Skills|Lists discovered agent skills\.)", listing) is None:
         return result
     body = _probe(ctx, "skills-list-help", ("skills", "list", "--help"))
     result["list_usage"] = _skill_help(body, listing=True)
     option = _help_entry(body, "Options", r"(?:-[A-Za-z], )?--json")
+    options = _help_section(body, "Options")
+    json_options = [row for row in options
+                    if re.match(r"  (?:-[A-Za-z], )?--json", row)]
+    if not options or (json_options and json_options != [option]):
+        # A malformed/ambiguous JSON option must not authorize either format.
+        return result
     arguments, catalog_format = ["skills", "list"], "plaintext"
     if re.fullmatch(r"  (?:-[A-Za-z], )?--json[ \t]{2,}[^\n]+", option) is not None:
         arguments.append("--json")
         catalog_format = "json"
-    elif (not _help_section(body, "Options")
-          or any(re.match(r"  (?:-[A-Za-z], )?--json", row)
-                 for row in _help_section(body, "Options"))):
-        # A malformed/ambiguous JSON option must not authorize a fallback.
+    elif json_options:
         return result
     result.update(status="opaque-catalog-captured", catalog_format=catalog_format,
                   baseline=_skill_catalogs(ctx, "empty", arguments))

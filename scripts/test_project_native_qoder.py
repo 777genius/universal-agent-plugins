@@ -178,9 +178,12 @@ class QoderAcquisitionContract(unittest.TestCase):
                 ("skills-help", b"  list <source>  List selected Skill\n", 6),
                 ("skills-help", b"  list [options]  Install and list Skills\n", 6),
                 ("skills-help", b"  list [options]  Lists and installs agent skills.\n", 6),
+                ("skills-help", b"  list [options]  List discovered Skills. Install afterward\n", 6),
                 ("skills-help", b"  list [options]  Lists discovered agent skills. Install afterward\n", 6),
                 ("skills-help", b"  list [options]  List Skills\n  list <source>  Mutate\n", 6),
                 ("skills-list-help", b"  --json-file <path>  Write JSON\n", 7),
+                ("skills-list-help", b"  --json  Output JSON\n  --json-file <path>  Write JSON\n", 7),
+                ("skills-list-help", b"  --json-file <path>  Write JSON\n  -j, --json  Output JSON\n", 7),
                 ("skills-list-help", b"  --json <path>  Write JSON\n", 7),
                 ("skills-list-help", b"  --json  Output JSON\n  --json <path>  Write JSON\n", 7)):
             with self.subTest(replacement=replacement):
