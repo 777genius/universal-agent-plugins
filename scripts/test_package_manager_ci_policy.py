@@ -308,7 +308,12 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         ):
             event_paths = re.findall(r"(?m)^      - " + re.escape(path) + r"$", self.body)
             self.assertEqual(len(event_paths), 2, path)
-        self.assertRegex(self.body, r"(?m)^  cancel-in-progress:.*pull_request.*push.*$")
+        # Only an obsolete PR check may be cancelled; main push checks must
+        # never be cancelled by this workflow's concurrency expression.
+        cancel_lines = re.findall(r"(?m)^  cancel-in-progress:.*$", self.body)
+        self.assertEqual(cancel_lines, [
+            "  cancel-in-progress: " + "$" + "{{ github.event_name == 'pull_request' }}"
+        ])
 
     def test_each_preflight_rejection_is_an_independent_fail_closed_step(self):
         # One native command per Actions step: Windows PowerShell must never
