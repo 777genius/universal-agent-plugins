@@ -109,7 +109,7 @@ const nativeClientCases = (['hermes', 'antigravity'] as const).flatMap((client) 
 );
 
 for (const { client, locale, theme, width } of nativeClientCases) {
-  test(`${client} ${locale} ${theme} route copies an eligible install command at ${width}px`, async ({ page, context }, testInfo) => {
+  test(`${client} ${locale} ${theme} route copies its eligible source command at ${width}px`, async ({ page, context }, testInfo) => {
     const t = wording(locale);
     const direction = locale === 'ar' ? 'rtl' : 'ltr';
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
@@ -152,25 +152,22 @@ for (const { client, locale, theme, width } of nativeClientCases) {
       expect(firstStep.y).toBeLessThan(lastStep.y);
     }
     await expect(page.locator('.v-application')).toHaveClass(new RegExp(`v-theme--${theme}`));
-    const { command, selector } = await context7InstallExample(page, client);
+    const { command, selector, pinned } = await context7InstallExample(page, client);
     const install = page.locator('.agent-page__install');
     const snippet = install.locator('.command-snippet--add');
     await expect(snippet).toHaveCount(1);
     await expect(snippet.locator('code')).toHaveText(command);
     await expect(snippet.locator('pre')).toHaveCSS('direction', 'ltr');
-    if (selector) {
-      await expect(install.locator('p code')).toHaveText(selector);
-      await expect(install).toContainText(t('registryUi.install.pinnedCatalogSource'));
-    } else {
-      await expect(install).not.toContainText(t('registryUi.install.pinnedCatalogSource'));
-    }
+    await expect(install.locator('p code')).toHaveText(selector);
+    if (pinned) await expect(install).toContainText(t('registryUi.install.pinnedCatalogSource'));
+    else await expect(install).not.toContainText(t('registryUi.install.pinnedCatalogSource'));
     const repairNotice = t('registryUi.install.antigravityRepairUnavailable', { version: '0.1.115' });
     await expect(install).not.toContainText(repairNotice);
     await expect(page.locator('.agent-page__steps article').nth(2).locator('p'))
       .toHaveText(t('registryUi.agentPage.useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin'));
     await expect(install).not.toContainText(t('registryUi.agentPage.packageExampleSourceHint'));
     // Page-level clipping can hide an expanded grid without increasing scrollWidth.
-    for (const content of [install, ...(selector ? [install.locator('p code')] : [])]) {
+    for (const content of [install, install.locator('p code')]) {
       const bounds = await content.evaluate((element) => {
         const { left, right } = element.getBoundingClientRect();
         return { left, right, viewport: window.innerWidth };

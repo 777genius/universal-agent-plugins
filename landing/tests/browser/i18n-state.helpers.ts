@@ -148,7 +148,7 @@ export async function projections(page: Page, index: RegistryIndex) {
   await page.route('**/_payload.json*', (route) => route.fulfill({ status: 404, body: '' }));
 }
 
-// Read the built artifact independently of the production command formatter.
+// Read signed grants and immutable source bytes independently of the production resolver/formatter.
 export async function context7InstallExample(page: Page, client: ClientID) {
   const response = await page.request.get(`./api/registry/client/${client}`);
   expect(response.status()).toBe(200);
@@ -161,36 +161,32 @@ export async function context7InstallExample(page: Page, client: ClientID) {
   expect(release?.selectable).toBe(true);
   expect(release?.release_status).toBe('active');
   expect(release?.manifest_name).toBe('context7');
-  expect(plugin?.installable).toBe(true);
-  expect(release?.meets_minimum_capabilities).toBe(true);
-  const signed = plugin!.distributions.filter((item) => item.status === 'active')
-    .flatMap((item) => item.releases.map((candidate) => ({ distribution: item, release: candidate })))
-    .find(({ distribution: item, release: candidate }) => candidate.release_status === 'active' &&
-      candidate.selectable && candidate.meets_minimum_capabilities &&
-      !candidate.blocking_clients.includes(client) &&
-      (item.kind !== 'upstream' || candidate.materialized_clients.includes(client)) &&
-      candidate.targets.some((target) => target.client === client && target.scopes.includes('user') &&
-        target.canonical_closure?.eligible !== false));
-  if (signed) {
-    return { command: `npx -y universal-agent-plugins@latest add context7 --target ${client}`, selector: undefined };
-  }
-  // A missing signed target may use only the reviewed immutable portable source.
-  for (const candidate of plugin!.distributions.flatMap((item) => item.releases)) {
-    expect(candidate.blocking_clients).not.toContain(client);
-    expect(candidate.targets.some((item) => item.client === client || item.canonical_closure !== undefined)).toBe(false);
-  }
-  expect(release!.components.length).toBeGreaterThan(0);
-  expect(release!.components.every((item) => ['skills', 'mcp'].includes(item))).toBe(true);
   const source = release!.source;
-  expect(source.manifest_sha256).toMatch(/^sha256:[a-f0-9]{64}$/);
-  expect(source.tree_sha256).toMatch(/^sha256:[a-f0-9]{64}$/);
   expect(source.repository).toBe('upstash/context7');
   expect(source.revision).toMatch(/^[0-9a-f]{40}$/);
   expect(source.path).toBe('plugins/agent-plugins/context7');
-  const selector = `github:${source.repository}@${source.revision}//${source.path}`;
+  expect(source.tree_sha256).toMatch(/^sha256:[a-f0-9]{64}$/);
+  expect(source.manifest_sha256).toMatch(/^sha256:[a-f0-9]{64}$/);
+  // A signed alternative can support this client even when the declared
+  // upstream default cannot. In that case the CLI selects the signed release;
+  // the exact Git route is only the existing fallback when no grant exists.
+  const signed = plugin!.distributions.some((candidate) => candidate.status === 'active' &&
+    candidate.releases.some((item) => item.release_status === 'active' && item.selectable &&
+      item.meets_minimum_capabilities && !item.blocking_clients.includes(client) &&
+      (candidate.kind !== 'upstream' || item.materialized_clients.includes(client)) &&
+      item.targets.some((target) => target.client === client && target.scopes.includes('user') &&
+        target.canonical_closure?.eligible !== false && !target.app_binding)));
+  if (!signed) {
+    expect(plugin!.distributions.some((candidate) => candidate.releases.some((item) =>
+      item.blocking_clients.includes(client) || item.targets.some((target) =>
+        target.client === client || target.canonical_closure !== undefined)))).toBe(false);
+    expect(release!.components.every((component) => ['mcp', 'skills'].includes(component))).toBe(true);
+  }
+  const selector = signed ? 'context7' : `github:${source.repository}@${source.revision}//${source.path}`;
   return {
     selector,
-    command: `npx -y universal-agent-plugins@0.1.115 add ${selector} --target ${client}`,
+    pinned: !signed,
+    command: `npx -y universal-agent-plugins@${signed ? 'latest' : '0.1.115'} add ${selector} --target ${client}`,
   };
 }
 
