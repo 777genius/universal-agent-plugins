@@ -471,7 +471,7 @@ class KiroInstallationAudit:
         self.skill_name = None
         self.protected_files = {}
         self.initial_paths = set()
-        self.mcp_fd = os.open(self.mcp, os.O_RDONLY | os.O_NOFOLLOW)
+        self.mcp_fd = os.open(self.mcp, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
             self.original_stat = os.fstat(self.mcp_fd)
             self.original_bytes = self.held_bytes(self.mcp_fd)
@@ -483,7 +483,7 @@ class KiroInstallationAudit:
                         self.anchors[path] = self.directory(path)
                     elif path != self.mcp:
                         kiro_require(len(self.protected_files) < 128)
-                        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+                        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
                         try:
                             info, body = os.fstat(fd), self.held_bytes(fd)
                         except BaseException:
@@ -545,7 +545,7 @@ class KiroInstallationAudit:
                      and not any(key.startswith(("link:", "root-link:")) for key in image)
                      and not any(value in ("unreadable", "symlink", "non-regular") for value in image.values()))
         kiro_digest(image)
-        fd = os.open(self.mcp, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(self.mcp, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
             info = os.fstat(fd)
             body = self.held_bytes(fd)
@@ -566,7 +566,7 @@ class KiroInstallationAudit:
 
     def read_bytes(self, path):
         kiro_require(path.is_absolute() and self.audit["path_inside_case"](path, self.case))
-        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
             info = os.fstat(fd)
             kiro_require(info.st_nlink == 1)
@@ -684,7 +684,7 @@ class KiroInstallationAudit:
             path = self.project / ".kiro/skills" / self.skill_name / "SKILL.md"
             if path.exists() or path.is_symlink():
                 kiro_require(self.audit["path_inside_case"](path, self.case))
-                fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+                fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
                 try:
                     info = os.fstat(fd)
                     kiro_require(info.st_nlink == 1)

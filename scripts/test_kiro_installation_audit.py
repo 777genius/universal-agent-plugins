@@ -230,6 +230,79 @@ class KiroInstallationTests(unittest.TestCase):
         item = FIXTURES["skills" if kind == "skill" else "plugin_aliases"][index]
         return observer.finish(row, item, index, FIXTURES), row
 
+    @unittest.skipUnless(hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"), "POSIX FIFO control")
+    def test_unprotected_state_and_projection_fifos_refuse_before_blocking_open(self):
+        for kind in ("plugin", "skill"):
+            for role in ("state", "projection"):
+                with self.subTest(kind=kind, role=role), tempfile.TemporaryDirectory() as temporary:
+                    observer = self.fixture(Path(temporary).resolve(), kind)
+                    state_root = observer.data if kind == "plugin" else observer.project / ".uap"
+                    path = state_root / ("state-v2.json" if role == "state" else "managed/mcp.json")
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    os.mkfifo(path, 0o600)
+                    # Neither native snapshot root contains this authority file.
+                    observer.image()
+                    original_open = os.open
+                    opened = []
+
+                    def nonblocking_open(candidate, flags, *args, **kwargs):
+                        if Path(candidate) == path:
+                            self.assertTrue(flags & os.O_NOFOLLOW)
+                            self.assertTrue(flags & os.O_NONBLOCK)
+                            opened.append(Path(candidate))
+                        return original_open(candidate, flags, *args, **kwargs)
+
+                    with patch.object(prepared.os, "open", side_effect=nonblocking_open):
+                        with self.assertRaises(ValueError):
+                            observer.read_document(path)
+                    self.assertEqual(opened, [path])
+                    self.assertTrue(path.is_fifo())
+                    observer.guard()
+
+    @unittest.skipUnless(hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"), "POSIX FIFO control")
+    def test_held_nonregular_file_refuses_before_any_read(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "fifo"
+            os.mkfifo(path, 0o600)
+            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                with patch.object(prepared.os, "pread", side_effect=AssertionError("nonregular read attempted")):
+                    with self.assertRaises(ValueError):
+                        prepared.KiroInstallationAudit.held_bytes(descriptor)
+            finally:
+                os.close(descriptor)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"), "POSIX FIFO control")
+    def test_constructor_fifo_refusal_closes_all_acquired_descriptors(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve() / "case"
+            for relative in ("home/.config", "home/.cache", "home/.local/share", "project", "uap-data"):
+                (case / relative).mkdir(parents=True)
+            env = self.audit["isolated_client_env"](case / "home", case, case / "uap-data")
+            fifo = case / "home/unowned-fifo"
+            os.mkfifo(fifo, 0o600)
+            original_open = os.open
+            descriptors = []
+
+            def nonblocking_open(path, flags, *args, **kwargs):
+                if Path(path) == fifo:
+                    self.assertTrue(flags & os.O_NOFOLLOW)
+                    self.assertTrue(flags & os.O_NONBLOCK)
+                descriptor = original_open(path, flags, *args, **kwargs)
+                descriptors.append(descriptor)
+                return descriptor
+
+            with patch.object(sys, "platform", "darwin"), \
+                    patch.object(prepared.os, "open", side_effect=nonblocking_open):
+                with self.assertRaises(ValueError):
+                    prepared.KiroInstallationAudit("/fixture/agentplugins", env,
+                        case / "project", case, self.audit, "plugin")
+            self.assertTrue(descriptors)
+            for descriptor in descriptors:
+                with self.assertRaises(OSError):
+                    os.fstat(descriptor)
+            self.assertTrue(fifo.is_fifo())
+
     def test_all_sources_keep_exact_states_and_complete_six_envelopes(self):
         for kind in ("plugin", "skill"):
             for index in range(30):
