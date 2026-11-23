@@ -266,7 +266,7 @@ def verify_projection(managed, package, native, data, service, port, cli_hash, a
     require(metadata == {"protocol": 1, "sha256": cli_hash, "cliVersion": "0.1.0-development"},
             "User generated launcher metadata differs")
     argv = ["--internal-stdio-v1", str(managed), str(data), str(managed), "plugin", "--",
-            sys.executable, str(service)]
+            "python3", str(service)]
     stdio = {"command": str(managed / LAUNCHER), "args": argv,
              "env": {"PLUGIN_ROOT": str(managed), "PLUGIN_DATA": str(data)}}
     url = "http://127.0.0.1:" + str(port) + "/mcp"
@@ -408,7 +408,7 @@ def run(root, report):
         (package / "plugin.json").write_text(json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
                                                       "name": NAME, "version": "1.0.0"}))
         (package / "mcp.json").write_text(json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
-            "mcpServers": {STDIO: {"type": "stdio", "command": sys.executable, "args": [str(service)]},
+            "mcpServers": {STDIO: {"type": "stdio", "command": "python3", "args": [str(service)]},
                            HTTP: {"type": "streamable-http", "url": "http://127.0.0.1:" + str(port) + "/mcp"}}}))
         source = snapshot([package, service], root)
         inventory("before-add", False)
