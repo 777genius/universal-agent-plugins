@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, join, resolve } from 'node:path';
+import { delimiter, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 // Exercise the actual evidence runner with a disposable process adapter, never
@@ -10,6 +11,11 @@ import test from 'node:test';
 const adapter = `#!${process.execPath}
 const fs = require('node:fs'), p = require('node:path');
 const args = process.argv.slice(4), mode = process.env.MOCK_MODE;
+// Synthetic identities observed in the original public 0.1.116 run.
+const packageAliases = {
+ 'frontend-design': 'skill-b0a5b0253f26020d7acb797250495459c1bd758fe440530b3db1347e',
+ 'ui-radar': 'skill-7f6b1bf3b1c4ba0c55922be29ac0e545672db905d8183e83e57a28da',
+};
 const command = args[0], root = process.cwd(), marker = p.join(root, 'mock-identity');
 const envelope = (command, data) => console.log(JSON.stringify({schema_version:1,command,result:'success',data}));
 if (command === 'version') { envelope('version', {version:'mock-version'}); process.exit(0); }
@@ -23,12 +29,12 @@ if (command === 'skills') {
  const website = skill==='ui-radar', url='https://uizze.com';
  const source = website ? {web:{url,skill,index_url:url+'/.well-known/agent-skills/index.json',index_sha256:'a'.repeat(64),raw_tree_digest:digest,normalizer:'agent-skill-package/v1',files:[{path:'SKILL.md',url:url+'/SKILL.md',sha256:'a'.repeat(64)}]}} : {git:{repository:'anthropics/skills',kind:'skill',skill,path:'skills/frontend-design',resolved_skill_path:'skills/frontend-design',commit:'b'.repeat(40),raw_tree_digest:digest,normalizer:'agent-skill-package/v1'}};
  const sourceKey = website?'https-skill:'+url+':'+skill:'github-skill:anthropics/skills:'+skill+':skills/frontend-design';
- fs.writeFileSync(p.join(root,'uap.lock'),JSON.stringify({lock_version:1,packages:[{alias:mode==='identity'?'other':skill,source,source_key:mode==='wrong-source'?'wrong-source':sourceKey,tree_digest:digest,manifest_digest:digest,targets:['codex']}]}));
+ fs.writeFileSync(p.join(root,'uap.lock'),JSON.stringify({lock_version:1,packages:[{alias:mode==='identity'?'other':packageAliases[skill],source,source_key:mode==='wrong-source'?'wrong-source':sourceKey,tree_digest:digest,manifest_digest:digest,targets:['codex']}]}));
  if(mode==='json') console.log('not JSON');
  else console.log(JSON.stringify({schema_version:1,command:'skills add',result:'success',status:'succeeded',readiness:mode==='reported-ready'?'ready':'needs_action',items:[{alias:skill,targetId:'codex',status:'succeeded'}]}));
 } else if(command === 'info') {
  const skill=fs.readFileSync(marker,'utf8');
- envelope('info',{name:skill,source:skill==='ui-radar'?'https://uizze.com':'anthropics/skills/skills/frontend-design',installation_id:'verified-id',clients:[{client_id:'codex',package_revision:{tree_digest:'sha256:'+'a'.repeat(64),manifest_digest:'sha256:'+'a'.repeat(64),resolved_revision:skill==='ui-radar'?undefined:'b'.repeat(40)},native_discovery_reconciled:mode==='reported-ready'}]});
+ envelope('info',{name:packageAliases[skill],source:skill==='ui-radar'?'https://uizze.com':'anthropics/skills/skills/frontend-design',installation_id:'verified-id',clients:[{client_id:'codex',package_revision:{tree_digest:'sha256:'+'a'.repeat(64),manifest_digest:'sha256:'+'a'.repeat(64),resolved_revision:skill==='ui-radar'?undefined:'b'.repeat(40)},native_discovery_reconciled:mode==='reported-ready'}]});
 } else if(command === 'remove') {
  if(args[1]!=='verified-id') throw Error('unverified selector');
  const skill=fs.readFileSync(marker,'utf8');
@@ -50,7 +56,7 @@ for (const mode of ['success', 'reported-ready', 'wrong-source', 'stale-requirem
       const temp = join(root, 'tmp'); mkdirSync(temp);
       const home = join(root, 'home'); mkdirSync(home);
       const report = join(root, 'report');
-      const output = spawnSync(process.execPath, ['--experimental-strip-types', resolve('landing/scripts/skills-install-native-live-e2e.ts')], {
+      const output = spawnSync(process.execPath, ['--experimental-strip-types', fileURLToPath(new URL('../scripts/skills-install-native-live-e2e.ts', import.meta.url))], {
         env: { ...process.env, PATH: bin + delimiter + process.env.PATH, HOME: home, CODEX_HOME: join(home, '.codex'),
           XDG_CONFIG_HOME: join(home, 'config'), XDG_CACHE_HOME: join(home, 'cache'), XDG_DATA_HOME: join(home, 'data'),
           TMPDIR: temp, TMP: temp, TEMP: temp, UAP_E2E_LIVE_SKILLS: '1', UAP_E2E_PUBLISHED_CLI: '1',

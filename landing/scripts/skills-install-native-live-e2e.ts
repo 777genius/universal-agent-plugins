@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -218,10 +219,10 @@ try {
         assert.equal(lock.lock_version, 1);
         assert.equal(lock.packages?.length, 1);
         const pin = lock.packages[0];
-        assert.equal(pin.alias, fixture.skill);
-        assert.equal(added.items[0].alias, pin.alias);
+        assert.equal(added.items[0].alias, fixture.skill);
         assert.deepEqual(pin.targets, ['codex']);
         let expectedSource: string;
+        let expectedSourceKey: string;
         let expectedRevision: string | undefined;
         const sha256 = /^sha256:[a-f0-9]{64}$/;
         if (fixture.source.includes('github.com') || fixture.source.includes('githubusercontent.com')) {
@@ -234,14 +235,14 @@ try {
           assert.match(git.commit, /^[a-f0-9]{40}$/);
           assert.match(git.raw_tree_digest, sha256);
           assert.equal(git.normalizer, 'agent-skill-package/v1');
-          assert.equal(pin.source_key, 'github-skill:anthropics/skills:' + fixture.skill + ':skills/frontend-design');
+          expectedSourceKey = 'github-skill:anthropics/skills:' + fixture.skill + ':skills/frontend-design';
           expectedSource = 'anthropics/skills/skills/frontend-design';
           expectedRevision = git.commit;
         } else {
           const web = pin.source?.web;
           assert.equal(web?.url, fixture.source);
           assert.equal(web.skill, fixture.skill);
-          assert.equal(pin.source_key, 'https-skill:' + fixture.source + ':' + fixture.skill);
+          expectedSourceKey = 'https-skill:' + fixture.source + ':' + fixture.skill;
           assert.match(web.raw_tree_digest, sha256);
           assert.match(web.index_sha256, /^[a-f0-9]{64}$/);
           assert.equal(new URL(web.index_url).origin, new URL(fixture.source).origin);
@@ -256,6 +257,11 @@ try {
           // provenance remains in the verified lock, not a fabricated info field.
           expectedRevision = undefined;
         }
+        assert.equal(pin.source_key, expectedSourceKey);
+        // The saved package identity is the normalized manifest name, while
+        // skills add reports the selected Skill's public declaration alias.
+        const packageAlias = 'skill-' + createHash('sha256').update(expectedSourceKey).digest('hex').slice(0, 56);
+        assert.equal(pin.alias, packageAlias);
         assert.match(pin.tree_digest, /^sha256:[a-f0-9]{64}$/);
         assert.match(pin.manifest_digest, /^sha256:[a-f0-9]{64}$/);
         const common = ['--target', 'codex', '--scope', 'project', '--project-root', project, '--format', 'json'];
