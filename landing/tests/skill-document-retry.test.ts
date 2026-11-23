@@ -23,7 +23,8 @@ function setup(t: TestContext, responses: (url: string, options?: RequestInit) =
   global.onMounted = (fn: () => void) => { mount = fn; };
   global.onScopeDispose = (fn: () => void) => { dispose = fn; };
   global.watch = (_refs: unknown, fn: () => void) => { changed = fn; };
-  t.mock.method(globalThis, 'fetch', (url, options) => responses(String(url), options));
+  const fetchMock: typeof fetch = (url, options) => responses(String(url), options);
+  t.mock.method(globalThis, 'fetch', fetchMock);
   const id = { value: 'skills-sh:example/first:first' } as Ref<string>;
   const name = { value: 'first' } as Ref<string>;
   const state = useSkillDocument(id, name);
