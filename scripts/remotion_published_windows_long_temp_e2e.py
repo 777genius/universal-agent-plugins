@@ -16,6 +16,8 @@ import shutil
 import subprocess
 import tempfile
 
+from remotion_windows_long_temp_e2e import physical_temp_root, temp_root_authority
+
 FIXTURE_SHA256 = "e22cb3b5b23e74a9e03b55e24a684ab93038f89cf18e28fd5d9755175754c0d9"
 REMOTION_SHA = "c7cb2fdcacd134fb2ccb9b7a44f9ffa44e467271"
 
@@ -59,6 +61,57 @@ def diagnostic_path(path, root):
             "key_sha256": hashlib.sha256(relative.encode("utf-8", "surrogatepass")).hexdigest()}
 
 
+def snapshot_key_area(key):
+    """Label an already held key lexically; never authorize or reread a path."""
+    if type(key) is not str or len(key) > 4096:
+        return "unqualified"
+    normalized = key.replace("\\", "/")
+    for prefix, area in (
+            ("home/.codex/skills/.system/", "codex-system-skills"),
+            ("home/.local/state/codex-sqlite/", "sqlite-runtime"),
+            ("home/.codex/", "codex-profile"),
+            ("home/", "other-home")):
+        if normalized.startswith(prefix):
+            return area
+    return "other-protected-root"
+
+
+def held_snapshot_read_failures(local, retained_entries):
+    """Project only source-enumerated causes bound to retained unreadable keys."""
+    try:
+        held = local.get("snapshot_failures")
+        if type(held) is not dict or type(held.get("entries")) is not list:
+            return []
+        keys = {entry["key_sha256"]: {candidate["root_index"]
+                                     for candidate in entry["root_candidates"]}
+                for entry in retained_entries}
+        operations = {"initial-lstat", "open", "opened-fstat", "read",
+                      "final-fstat", "final-lstat", "close", "walk"}
+        reasons = {"opened-identity-changed", "read-size-changed", "held-identity-changed",
+                   "name-identity-changed", "os-error", "value-error", "walk-error"}
+        result = []
+        for entry in held["entries"][:DIAGNOSTIC_LIMIT]:
+            if type(entry) is not dict:
+                continue
+            key, index = entry.get("key_sha256"), entry.get("root_index")
+            if (type(key) is not str or key not in keys
+                    or type(index) is not int or index not in keys[key]):
+                continue
+            operation, reason = entry.get("operation"), entry.get("reason")
+            record = {
+                "key_sha256": key, "root_index": index,
+                "operation": operation if type(operation) is str and operation in operations else "unavailable",
+                "reason": reason if type(reason) is str and reason in reasons else "unavailable",
+            }
+            for name in ("errno", "winerror"):
+                value = entry.get(name)
+                record[name] = value if type(value) is int and 0 <= value <= 65535 else None
+            result.append(record)
+        return result
+    except Exception:
+        return []
+
+
 def snapshot_failure_facts(local, root):
     state, roots = local.get("state"), local.get("roots")
     if type(state) is not dict or type(roots) is not tuple:
@@ -78,10 +131,11 @@ def snapshot_failure_facts(local, root):
             if isinstance(protected, Path) and key.startswith(protected.name + "/"):
                 roles.append({"root_index": index, **diagnostic_path(protected, root)})
         entries.append({"key_sha256": hashlib.sha256(key.encode("utf-8", "surrogatepass")).hexdigest(),
-                        "root_candidates": roles})
+                        "root_candidates": roles, "area": snapshot_key_area(key)})
     return {"category": "protected-snapshot-unreadable", "unreadable_count": count,
             "entries": entries, "entries_omitted": max(0, count - len(entries)),
-            "overlong_keys": overlong}
+            "overlong_keys": overlong,
+            "read_failures": held_snapshot_read_failures(local, entries)}
 
 
 def directory_failure_facts(local, root):
@@ -181,8 +235,6 @@ def main():
                              errors="replace", timeout=30)
     if version.returncode != 0 or version.stdout.strip() != "agentplugins 0.1.102":
         raise SystemExit("published npm CLI version does not match 0.1.102")
-    short = Path(tempfile.mkdtemp(prefix="uap-remotion-short-", dir=os.environ["RUNNER_TEMP"]))
-    long = Path(tempfile.mkdtemp(prefix="uap-live-30x30-"))
     evidence = {
         "source_checkout_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(),
         "fixture_sha256": FIXTURE_SHA256,
@@ -192,18 +244,39 @@ def main():
         "published_version": version.stdout.strip(),
         "published_tag": "agentplugins-v0.1.102",
         "results": {},
+        "temp_roots": {},
     }
     failures = []
+    created_roots, physical_roots = {}, {}
     try:
-        short_length = len(str(short / "skill-24"))
-        long_length = len(str(long / "skill-24"))
-        if long_length < 65 or long_length <= short_length:
-            raise RuntimeError("default Windows TEMP is not longer than runner TEMP")
+        for label, options in (
+                ("runner-temp", {"prefix": "uap-remotion-short-", "dir": os.environ["RUNNER_TEMP"]}),
+                ("default-windows-temp", {"prefix": "uap-live-30x30-"})):
+            created = Path(tempfile.mkdtemp(**options))
+            created_roots[label] = (created, None)
+            evidence["temp_roots"][label] = {
+                "created_root_chars": len(str(created / "skill-24")),
+                "cleanup": "retained-unverified",
+            }
+            authority = temp_root_authority(created)
+            created_roots[label] = (created, authority)
+            physical_roots[label] = physical_temp_root(created, authority)
+            evidence["temp_roots"][label]["root_chars"] = len(str(physical_roots[label] / "skill-24"))
+        short, long = physical_roots["runner-temp"], physical_roots["default-windows-temp"]
+        created_lengths = {label: row["created_root_chars"]
+                           for label, row in evidence["temp_roots"].items()}
+        for shorter, longer in (
+                (created_lengths["runner-temp"], created_lengths["default-windows-temp"]),
+                (len(str(short / "skill-24")), len(str(long / "skill-24")))):
+            if longer < 65 or longer <= shorter:
+                raise RuntimeError("default Windows TEMP is not longer than runner TEMP")
         for label, root in (("runner-temp", short), ("default-windows-temp", long)):
             try:
                 row = audit.do_case(str(cli), "codex", "skill", item, 24, root,
                                     fixtures["plugin_declared_names"], fixtures["signed_release_pins"])
                 evidence["results"][label] = {"root_chars": len(str(root / "skill-24")), "case": row}
+                if not row.get("codex_runtime_proof"):
+                    raise RuntimeError("strict native Codex runtime proof is missing")
                 if row.get("status") != "passed":
                     failures.append(f"{label}: native E2E case did not PASS")
             except Exception as error:
@@ -213,14 +286,31 @@ def main():
                 # coordinate, never exception text, paths or native profile data.
                 failures.append(f"{label}: {type(error).__name__} at "
                                 f"{site['file']}:{site['line']}:{site['function']}")
-                evidence["results"][label] = {"root_chars": len(str(root / "skill-24")),
-                                              "error_type": type(error).__name__,
-                                              "source_site": site,
-                                              "failure_diagnostics": diagnostic}
+                evidence["results"].setdefault(label, {"root_chars": len(str(root / "skill-24"))}).update({
+                    "error_type": type(error).__name__,
+                    "source_site": site,
+                    "failure_diagnostics": diagnostic,
+                })
+    except Exception as error:
+        failures.append(f"TEMP setup: {type(error).__name__}")
+        evidence["setup_error"] = {"error_type": type(error).__name__,
+                                   "source_site": sanitized_failure_site(error, repo)}
     finally:
+        # Retain disposable roots; a pathname check cannot authorize a later
+        # recursive deletion. Product removal remains inside audit.do_case.
+        for label, (created, authority) in created_roots.items():
+            try:
+                if authority is None or temp_root_authority(created) != authority:
+                    raise ValueError("created TEMP root authority is unverified or changed")
+                evidence["temp_roots"][label]["cleanup"] = "retained-for-evidence"
+            except Exception as error:
+                failures.append(f"{label}: TEMP ownership {type(error).__name__}")
+                evidence["temp_roots"][label].update({
+                    "cleanup": "retained-unverified",
+                    "cleanup_error_type": type(error).__name__,
+                    "cleanup_source_site": sanitized_failure_site(error, repo),
+                })
         report.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
-        for root in (short, long):
-            shutil.rmtree(root, ignore_errors=True)
     if failures:
         raise SystemExit("; ".join(failures))
     print("Published npm 0.1.102 Codex Remotion lifecycle PASS in both Windows TEMP profiles")

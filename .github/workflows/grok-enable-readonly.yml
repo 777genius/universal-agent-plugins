@@ -37,7 +37,8 @@ concurrency:
 jobs:
   readonly:
     runs-on: ubuntu-24.04
-    timeout-minutes: 18
+    # Reserve time for signature-verified cold acquisition and the bounded native gate.
+    timeout-minutes: 60
     env:
       EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -54,6 +55,7 @@ jobs:
           go-version: '1.26.11'
           cache: false
       - name: Provision a signature-verified minimal Ubuntu runtime
+        timeout-minutes: 30
         run: |
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends debootstrap ubuntu-keyring
@@ -71,6 +73,7 @@ jobs:
             "$RUNNER_TEMP/grok-runtime-root/work" "$RUNNER_TEMP/grok-runtime-input"
           mkdir -m 700 "$RUNNER_TEMP/grok-readonly-evidence"
       - name: Build the pinned upstream descriptor-mount dependency
+        timeout-minutes: 8
         run: |
           sudo apt-get install --yes --no-install-recommends \
             build-essential meson ninja-build pkg-config libcap-dev libselinux1-dev curl xz-utils

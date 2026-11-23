@@ -449,43 +449,118 @@ def version_evidence(argv, env, cwd):
     return {"status": "reported", "value": value[:200], "exit_code": 0}
 
 
-def native_file_digest(path):
+_NATIVE_READ_OPERATIONS = frozenset((
+    "initial-lstat", "open", "opened-fstat", "read", "final-fstat",
+    "final-lstat", "close", "walk",
+))
+_NATIVE_READ_REASONS = frozenset((
+    "opened-identity-changed", "read-size-changed", "held-identity-changed",
+    "name-identity-changed", "os-error", "value-error", "walk-error",
+))
+
+
+def native_read_failure(facts, operation, reason, error=None):
+    """Best-effort facts from an existing refusal; never inspect error text."""
+    try:
+        if (type(facts) is not dict or operation not in _NATIVE_READ_OPERATIONS
+                or reason not in _NATIVE_READ_REASONS):
+            return
+        record = {"operation": operation, "reason": reason}
+        for name in ("errno", "winerror"):
+            try:
+                value = getattr(error, name, None)
+            except Exception:
+                value = None
+            record[name] = value if type(value) is int and 0 <= value <= 65535 else None
+        facts.update(record)
+    except Exception:
+        pass
+
+
+def snapshot_read_failure(facts, root_index, key, detail):
+    """Retain at most sixteen hashed existing snapshot keys, without I/O."""
+    try:
+        if type(facts) is not dict or type(key) is not str or type(detail) is not dict:
+            return
+        count, entries = facts.get("count", 0), facts.setdefault("entries", [])
+        if type(count) is not int or not 0 <= count < (1 << 20) or type(entries) is not list:
+            return
+        facts["count"] = count + 1
+        if len(entries) >= 16 or len(key) > 4096:
+            return
+        if type(root_index) is not int or not 0 <= root_index <= 65535:
+            return
+        record = {"root_index": root_index,
+                  "key_sha256": hashlib.sha256(key.encode("utf-8", "surrogatepass")).hexdigest()}
+        operation, reason = detail.get("operation"), detail.get("reason")
+        if (type(operation) is str and operation in _NATIVE_READ_OPERATIONS
+                and type(reason) is str and reason in _NATIVE_READ_REASONS):
+            record.update(operation=operation, reason=reason)
+        for name in ("errno", "winerror"):
+            value = detail.get(name)
+            record[name] = value if type(value) is int and 0 <= value <= 65535 else None
+        entries.append(record)
+    except Exception:
+        pass
+
+
+def native_file_digest(path, *, failure_facts=None):
     """Hash one held regular file; a pathname swap cannot redirect or block the read."""
+    operation = "initial-lstat"
+
+    def unreadable(reason, error=None):
+        try:
+            native_read_failure(failure_facts, operation, reason, error)
+        except Exception:
+            pass
+        return "unreadable"
+
     try:
         initial = path.lstat()
         if stat.S_ISLNK(initial.st_mode):
             return "symlink"
         if not stat.S_ISREG(initial.st_mode):
             return "non-regular"
+        operation = "open"
         descriptor = NATIVE_ARTIFACTS["open_member"](path)
         try:
+            operation = "opened-fstat"
             opened = os.fstat(descriptor)
             if not stat.S_ISREG(opened.st_mode):
                 return "non-regular"
             if not NATIVE_ARTIFACTS["same_opened"](initial, opened):
-                return "unreadable"
+                return unreadable("opened-identity-changed")
             sha, remaining = hashlib.sha256(), opened.st_size + 1
             while remaining:
+                operation = "read"
                 chunk = os.read(descriptor, min(remaining, 1024 * 1024))
                 if not chunk:
                     break
                 sha.update(chunk)
                 remaining -= len(chunk)
             identity = NATIVE_ARTIFACTS["identity"]
-            if (remaining != 1 or identity(opened) != identity(os.fstat(descriptor))
-                    or identity(initial) != identity(path.lstat())):
-                return "unreadable"
+            if remaining != 1:
+                return unreadable("read-size-changed")
+            operation = "final-fstat"
+            if identity(opened) != identity(os.fstat(descriptor)):
+                return unreadable("held-identity-changed")
+            operation = "final-lstat"
+            if identity(initial) != identity(path.lstat()):
+                return unreadable("name-identity-changed")
             return sha.hexdigest()
         finally:
+            previous_operation = operation
+            operation = "close"
             os.close(descriptor)
-    except (OSError, ValueError):
-        return "unreadable"
+            operation = previous_operation
+    except (OSError, ValueError) as error:
+        return unreadable("os-error" if isinstance(error, OSError) else "value-error", error)
 
 
-def snapshot(root, *, include_directories=False):
+def snapshot(root, *, include_directories=False, failure_facts=None):
     """Record native entries; Gemini repeat also preserves ordinary directory identities."""
     found = {}
-    for target_root in root:
+    for root_index, target_root in enumerate(root):
         if target_root.is_symlink():
             found[f"{target_root.name}/.native-root"] = "symlink"
             continue
@@ -495,9 +570,17 @@ def snapshot(root, *, include_directories=False):
         def walk_error(error):
             try:
                 relative = Path(error.filename).relative_to(target_root)
-                found[f"{target_root.name}/{relative}/.walk-error"] = "unreadable"
+                key = f"{target_root.name}/{relative}/.walk-error"
             except (TypeError, ValueError):
-                found[f"{target_root.name}/.walk-error"] = "unreadable"
+                key = f"{target_root.name}/.walk-error"
+            found[key] = "unreadable"
+            if failure_facts is not None:
+                try:
+                    detail = {}
+                    native_read_failure(detail, "walk", "walk-error", error)
+                    snapshot_read_failure(failure_facts, root_index, key, detail)
+                except Exception:
+                    pass
 
         for base, dirs, files in os.walk(target_root, followlinks=False, onerror=walk_error):
             for name in dirs[:]:
@@ -517,7 +600,17 @@ def snapshot(root, *, include_directories=False):
             for name in files:
                 path = Path(base) / name
                 relative = str(path.relative_to(target_root))
-                found[f"{target_root.name}/{relative}"] = native_file_digest(path)
+                key = f"{target_root.name}/{relative}"
+                if failure_facts is None:
+                    found[key] = native_file_digest(path)
+                else:
+                    detail = {}
+                    found[key] = native_file_digest(path, failure_facts=detail)
+                    if found[key] == "unreadable":
+                        try:
+                            snapshot_read_failure(failure_facts, root_index, key, detail)
+                        except Exception:
+                            pass
     return found
 
 
@@ -615,7 +708,9 @@ def failed_case_diagnostics(row):
 def scoped_snapshot(roots, *, snapshotter=None):
     """Record protected file and directory identities without following links."""
     roots = tuple(Path(root) for root in roots)
-    state = (snapshot if snapshotter is None else snapshotter)(roots)
+    snapshot_failures = {}
+    state = (snapshot(roots, failure_facts=snapshot_failures)
+             if snapshotter is None else snapshotter(roots))
     # The shared audit records failed file reads and walk errors as
     # 'unreadable'. Identical failures before/after must not prove isolation.
     if any(digest == "unreadable" for digest in state.values()):
@@ -3148,10 +3243,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         foreign_root = (".qoder/skills" if target == "qoder" else
                         ".grok/skills" if target == "grok" else
                         project_skill_roots[0])
-        # Pi trusts only UAP-owned executable Skills in the selected project.
-        # Keep the independent foreign Skill in B, alongside A's ordinary
-        # foreign-file sentinel, without bypassing Pi's project trust refusal.
-        foreign_project = case_root / "project-b" if target == "pi" else project
+        # Generic Pi audits isolate the unrelated executable Skill in B.
+        # Explicit cohorts use A's strict foreign/prepared or clean/native oracle.
+        foreign_project = (case_root / "project-b"
+                           if target == "pi" and pi_skills is None else project)
         project_foreign = foreign_project / foreign_root / "foreign-neighbor" / "SKILL.md"
     if pi_skills == "clean-native":
         project_foreign = None  # Fresh clean cohort only; never remove an existing sentinel.
@@ -3172,7 +3267,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         else:
             project_foreign.write_text("---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
     pi_foreign_project = None
-    if target == "pi" and kind == "skill":
+    if target == "pi" and kind == "skill" and pi_skills is None:
         foreign_project = case_root / "project-b"
         if (not foreign_project.is_dir() or foreign_project.is_symlink()
                 or not path_inside_case(foreign_project, case_root)):
