@@ -210,7 +210,7 @@ def raw_skills_fixture(rows, states):
         if phase != "before":
             dto = {"schema_version": 1, "command": "agentplugins remove" if phase == "remove" else "skills add", "result": "success"}
             if phase != "remove": dto.update(status="succeeded", readiness="ready", items=[{"alias": "benchmark-note", "targetId": "cline", "destinationPath": active, "status": "unchanged" if phase == "repeat" else "succeeded"}])
-            argv = ["/inert/agentplugins", "remove", iid, "--target", "cline", "--scope", "project", "--project-root", project, "--yes", "--no-ui", "--format", "json"] if phase == "remove" else add
+            argv = ["/inert/agentplugins", "remove", iid, "--target", "cline", "--scope", "project", "--project-root", project, "--yes", "--format", "json"] if phase == "remove" else add
             command(phase, argv, outside, dto)
         for scope, cwd in (("a", project), ("b", "/inert/cycle/project-b"), ("user", outside)):
             baseline = {"a": "final-a", "b": "final-b", "user": "removed-user"}[scope]

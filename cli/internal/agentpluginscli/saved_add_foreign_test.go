@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
@@ -187,5 +188,61 @@ func TestSavedAddInputErrorsPrecedeOwnershipInspection(t *testing.T) {
 				t.Fatalf("argument refusal mutated intent or acquired source: %v", readErr)
 			}
 		})
+	}
+}
+
+// An unmanaged installation must remain unchanged after a saved-add refusal.
+// Ownership advice names the client and inspection command without promising
+// automatic ownership transfer.
+func TestSavedAddNamesTheClientAndInspectionForAnUnmanagedInstallation(t *testing.T) {
+	repo := dependencyRepo(t)
+	f, _, _ := dependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientCodex, executable: true})
+	head := exec.CommandContext(t.Context(), "git", "rev-parse", "HEAD")
+	head.Dir = repo
+	rev, err := head.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := githubIdentity("acme/demo", strings.TrimSpace(string(rev)), "")
+	dependencyRun(t, f, "add", source, "--target", "codex", "--no-save", "--yes", "--format", "json")
+	state, err := f.store.Load()
+	if err != nil || len(state.Installations) != 1 || len(state.EnvironmentReceipts) != 0 {
+		t.Fatalf("fixture must hold exactly one unmanaged installation: %+v %v", state, err)
+	}
+	id := state.Installations[0].InstallationID
+
+	_, _, err = f.execute(false, "add", source, "--target", "codex", "--yes")
+	if err == nil {
+		t.Fatal("saved add adopted an unmanaged installation")
+	}
+	var foreign *environment.ForeignBindingError
+	if !errors.As(err, &foreign) {
+		t.Fatalf("typed cause lost: %v", err)
+	}
+	command := "agentplugins info " + id + " --scope user"
+	for _, want := range []string{"existing package ownership", "Codex", "installation " + id, command, "cannot transfer ownership automatically"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("message lacks %q:\n%s", want, err)
+		}
+	}
+	for _, forbidden := range []string{"agentplugins remove", "--no-save", "--external-uninstalled"} {
+		if strings.Contains(err.Error(), forbidden) {
+			t.Fatalf("unsafe ownership advice %q: %v", forbidden, err)
+		}
+	}
+	stateAfter, loadErr := f.store.Load()
+	if loadErr != nil || !reflect.DeepEqual(state, stateAfter) {
+		t.Fatalf("ownership refusal changed the existing installation: %+v %v", stateAfter, loadErr)
+	}
+
+}
+
+func TestEarlyForeignBindingLeavesOtherErrorsAlone(t *testing.T) {
+	other := errors.New("drift: demo/codex")
+	if got := earlyForeignBinding(App{}, other); !errors.Is(got, other) {
+		t.Fatalf("unrelated error rewritten: %v", got)
+	}
+	if earlyForeignBinding(App{}, nil) != nil {
+		t.Fatal("nil error invented")
 	}
 }

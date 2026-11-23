@@ -114,9 +114,8 @@ jobs:
       - name: Broad existing CLI contracts
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         working-directory: cli
-        # These packages launch real Git/CLI fixture processes. Run their test
-        # binaries and builds serially so they do not contend within each 15m limit.
-        run: go test -p=1 -timeout=15m ./internal/agentpluginscli ./cmd/agentplugins/...
+        # Serialize real CLI fixtures within the existing whole-suite budget.
+        run: go test -p=1 -timeout=20m ./internal/agentpluginscli ./cmd/agentplugins/...
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:

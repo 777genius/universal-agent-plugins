@@ -36,9 +36,6 @@ func (p HuhPrompter) SelectTargets(ctx context.Context, r prompt.TargetSelection
 	if err != nil {
 		return prompt.TargetSelectionResult{}, err
 	}
-	if err := writeSkipped(p.Output, r.SkippedLabels, !p.NoColor); err != nil {
-		return prompt.TargetSelectionResult{}, err
-	}
 	result, err := t.SelectMany(ctx, req)
 	return targetResult(r, result, err)
 }

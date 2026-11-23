@@ -3,6 +3,10 @@ package agentpluginscli
 import (
 	"context"
 	"strings"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
 func inspectSavedAddRoot(ctx context.Context, app App, opts *options, source string) error {
@@ -45,4 +49,45 @@ func canPreviewSavedAddOwnership(snapshot environmentSnapshot, alias, derivedAli
 		}
 	}
 	return true
+}
+
+// Annotations use the actual acquired source, while alias and saved-selector
+// refusals remain with the authoritative resolver. Product identity alone is
+// insufficient to diagnose ownership of an unselected Directory distribution.
+func inspectSavedAddSelection(ctx context.Context, app App, opts *options, source string, loaded *loadedPackage) (map[domain.ClientID]prompt.TargetChoice, error) {
+	if app.Installer == nil || loaded == nil || explicitLocalPath(source) || localArchiveInput(source) {
+		return nil, nil
+	}
+	key := savedDirectSourceKey(source)
+	if loaded.directorySelection != nil {
+		key = "directory:" + loaded.directorySelection.DistributionID
+	}
+	if key == "" {
+		return nil, nil
+	}
+	alias := dependencyManifestAlias(loaded.envelope.Manifest.Name)
+	snapshot, err := snapshotEnvironmentContext(ctx, app, false)
+	if err != nil {
+		return nil, err
+	}
+	if canPreviewSavedAddOwnership(snapshot, opts.alias, alias, key) {
+		if err := checkSavedAddOwnership(ctx, app, key, alias); err != nil {
+			return nil, err
+		}
+	}
+	view, err := app.Installer.Inspect(ctx)
+	if err != nil {
+		return nil, err
+	}
+	observed, err := environment.ObserveForEnvironment(view, app.environmentID())
+	if err != nil {
+		return nil, err
+	}
+	annotations := map[domain.ClientID]prompt.TargetChoice{}
+	for _, binding := range observed {
+		if binding.Managed && binding.SourceKey == key {
+			annotations[domain.ClientID(binding.ClientID)] = prompt.TargetChoice{Note: "already in your list", Info: "kept even if unchecked"}
+		}
+	}
+	return annotations, nil
 }

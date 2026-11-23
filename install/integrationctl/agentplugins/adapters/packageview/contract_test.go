@@ -149,7 +149,7 @@ func TestGeneratedStagingRequiresLiveHandle(t *testing.T) {
 
 func TestNativeReadProfileIdentity(t *testing.T) {
 	want := "packageview-local-" + runtime.GOOS + "-v1"
-	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+	if runtime.GOOS == "darwin" && (runtime.GOARCH == "arm64" || runtime.GOARCH == "amd64") {
 		want = "packageview-local-darwin-quiescent-apfs-v2"
 	}
 	if ReadProfile != want {

@@ -93,11 +93,16 @@ func snapshotEnvironmentContext(ctx context.Context, app App, verifyPrevious ...
 // runSavedEnvironment shares preflight, confirmation and publication with deps sync.
 // The candidate is fully validated before either intent file is published.
 func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot environmentSnapshot, requirements environment.Requirements, locked environment.Lock, manifest []byte, aliases []string, attest *environment.Attestation, targets []string) error {
-	request, err := prepareSavedSync(cmd, app, opts, snapshot, requirements, locked, manifest, aliases, attest, targets)
+	stop := startCommandActivity(cmd, app, opts, "Preparing saved dependency review")
+	request, err := prepareSavedSync(cmd, stopPluginActivityOnWrite(app, stop), opts, snapshot, requirements, locked, manifest, aliases, attest, targets)
+	stop()
 	if err != nil {
 		if opts.environmentOutput != nil {
 			return earlyForeignBinding(app, err)
 		}
+		return err
+	}
+	if err := renderSavedTargetNotice(cmd, opts, locked, aliases, targets); err != nil {
 		return err
 	}
 	if opts.dryRun {
