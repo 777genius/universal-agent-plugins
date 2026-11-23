@@ -2310,6 +2310,32 @@ INHERITED_RUNTIME_ENV_KEYS = frozenset({
     "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS", "GIT_SSL_CAINFO",
 })
 
+def isolate_published_npm_cache(case_root, env):
+    """Keep the pinned npm launcher's executable cache outside protected HOME.
+
+    Only the published Windows npm .cmd caller selects this fresh case-owned
+    root. The real npm shim still authenticates its release asset on every
+    invocation. Never exempt a HOME entry from scoped_snapshot or alter the
+    native Codex profile.
+    """
+    if (not isinstance(case_root, Path) or not case_root.is_absolute()
+            or case_root.is_symlink() or not case_root.is_dir()
+            or case_root.resolve(strict=True) != case_root
+            or type(env) is not dict):
+        raise ValueError("published npm bootstrap requires a canonical disposable case")
+    cache = case_root / ".published-npm-bootstrap-cache"
+    if cache.exists() or cache.is_symlink():
+        raise ValueError("published npm bootstrap cache must be initially absent")
+    cache.mkdir(mode=0o700)
+    info = cache.lstat()
+    if (not stat.S_ISDIR(info.st_mode) or cache.is_symlink()
+            or cache.resolve(strict=True) != cache
+            or not path_inside_case(cache, case_root)):
+        raise ValueError("published npm bootstrap cache has no case-owned authority")
+    env["AGENTPLUGINS_CACHE_DIR"] = str(cache)
+    return cache, (info.st_mode, info.st_dev, info.st_ino)
+
+
 def isolated_client_env(home, case_root, data):
     """Every native client authority root must belong to this disposable case."""
     home, case_root, data = (p.resolve(strict=True) for p in (home, case_root, data))
@@ -3282,6 +3308,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if native_target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
     env = isolated_client_env(home, case_root, data)
+    published_npm_cache = None
+    if (os.name == "nt" and (target, kind) == ("codex", "skill")
+            and Path(cli).suffix.casefold() == ".cmd"):
+        published_npm_cache = isolate_published_npm_cache(case_root, env)
     kiro_installation = None
     if kiro_installation_case:
         kiro_installation = PREPARED_INSTALLATION["KiroInstallationAudit"](
@@ -3312,6 +3342,14 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     historical_add_verified = historical_repeat_add_verified = False
     historical_repeat_lifecycle_verified = False
     def assert_case_unchanged():
+        # The npm shim's private executable cache is never a foreign Codex
+        # HOME entry. Refuse changes to the explicit sandbox cache authority.
+        if published_npm_cache is not None:
+            cache, anchored = published_npm_cache
+            current = cache.lstat()
+            if (cache.is_symlink() or not path_inside_case(cache, case_root)
+                    or (current.st_mode, current.st_dev, current.st_ino) != anchored):
+                raise ValueError("published npm bootstrap cache root changed")
         # Native clients and acquired packages execute as subprocesses.
         # Re-anchor before and after each call; otherwise an ancestor symlink
         # can make os.walk/read_text silently inspect a foreign profile.

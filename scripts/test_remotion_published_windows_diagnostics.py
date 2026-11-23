@@ -381,6 +381,44 @@ class PublishedTemporaryRootContracts(unittest.TestCase):
 
 
 
+class PublishedNpmBootstrapIsolationContracts(unittest.TestCase):
+    def test_cache_is_fresh_case_owned_and_outside_protected_home(self):
+        audit = load_audit()
+        with tempfile.TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve(strict=True) / "skill-24"
+            case.mkdir()
+            home = case / "home"
+            home.mkdir()
+            env = {"HOME": str(home), "LOCALAPPDATA": str(home / "AppData/Local")}
+            cache, anchored = audit.isolate_published_npm_cache(case, env)
+            self.assertEqual(env["AGENTPLUGINS_CACHE_DIR"], str(cache))
+            self.assertEqual(cache.parent, case)
+            self.assertFalse(cache.is_relative_to(home))
+            self.assertEqual((cache.lstat().st_mode, cache.lstat().st_dev,
+                              cache.lstat().st_ino), anchored)
+            self.assertEqual(list(cache.iterdir()), [])
+            with self.assertRaisesRegex(ValueError, "initially absent"):
+                audit.isolate_published_npm_cache(case, env)
+
+    def test_preexisting_cache_and_noncanonical_case_refused_without_side_effects(self):
+        audit = load_audit()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve(strict=True)
+            case = root / "skill-24"
+            case.mkdir()
+            cache = case / ".published-npm-bootstrap-cache"
+            cache.mkdir()
+            (cache / "keep.txt").write_text("foreign")
+            env = {}
+            with self.assertRaisesRegex(ValueError, "initially absent"):
+                audit.isolate_published_npm_cache(case, env)
+            self.assertEqual((cache / "keep.txt").read_text(), "foreign")
+            self.assertNotIn("AGENTPLUGINS_CACHE_DIR", env)
+            with self.assertRaisesRegex(ValueError, "canonical disposable case"):
+                audit.isolate_published_npm_cache(case / "..", env)
+            self.assertNotIn("AGENTPLUGINS_CACHE_DIR", env)
+
+
 class NativeReadFailureFactsTest(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()
