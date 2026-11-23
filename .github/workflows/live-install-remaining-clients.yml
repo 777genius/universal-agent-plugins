@@ -13,6 +13,7 @@ on:
       - 'scripts/windsurf_installation_audit.py'
       - 'scripts/test_windsurf_global_skill_audit.py'
       - 'scripts/test_windsurf_installation_audit.py'
+      - 'scripts/testdata/windsurf_projection_oracle/**'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/test_kimi_repeat_log_audit.py'
       - 'scripts/devin_project_auto_install_e2e.py'
@@ -344,6 +345,14 @@ jobs:
           AUDIT_DOCKER_EXECUTABLE: ${{ steps.kiro-docker.outputs.executable }}
         shell: bash
         run: |
+          audit_go_bin=""
+          if [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then
+            # The independent projection uses the same pinned compiler as the CLI.
+            audit_go="$(command -v go)"
+            [[ "$audit_go" == /* && -f "$audit_go" && -x "$audit_go" ]]
+            [[ "$(GOTOOLCHAIN=local "$audit_go" version)" == 'go version go1.26.11 linux/amd64' ]]
+            audit_go_bin="${audit_go%/*}:"
+          fi
           audit_node_bin=""
           if [[ "$AUDIT_TARGET" == kiro ]]; then
             # Preserve setup-node's selected runtime before narrowing Kiro's PATH.
@@ -356,7 +365,10 @@ jobs:
             [[ "$AUDIT_DOCKER_EXECUTABLE" == /* && -f "$AUDIT_DOCKER_EXECUTABLE" && -x "$AUDIT_DOCKER_EXECUTABLE" ]]
             audit_docker_bin="${AUDIT_DOCKER_EXECUTABLE%/*}:"
           fi
-          export PATH="${audit_node_bin}${audit_docker_bin}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+          export PATH="${audit_go_bin}${audit_node_bin}${audit_docker_bin}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+          if [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then
+            [[ "$(command -v go)" == "$audit_go" ]]
+          fi
           if [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == plugin ]]; then
             [[ "$(command -v docker)" == "$AUDIT_DOCKER_EXECUTABLE" ]]
           fi

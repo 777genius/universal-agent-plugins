@@ -5,6 +5,8 @@ Complete public JSON and native images stay in memory. Reports contain bounded
 hashes, counts and checked public states, never native profile contents.
 """
 import copy
+import atexit
+from functools import lru_cache
 import hashlib
 import json
 import os
@@ -12,11 +14,13 @@ from pathlib import Path
 import re
 import stat
 import sys
+import subprocess
+from tempfile import TemporaryDirectory
 import tomllib
 from uuid import UUID
 
 from windsurf_global_skill_audit import (CASES as GLOBAL_SKILL_CASES, frame_changes,
-    frame, member, read_file, strict_json, managed_digest, content, compact, sha)
+    frame, member, read_file, strict_json, managed_digest, immutable_source_digest, content, compact, sha)
 
 ACCEPTANCE = "windsurf-global-installation"
 PREPARED = {"materialization": "materialized", "activation": "prepared",
@@ -29,6 +33,79 @@ COMPONENT_REFUSALS = {23: "itential-builder", 24: "google-cloud-storage",
                      27: "cometchat-skills", 28: "uizze-ui-slop"}
 CLIENT_VERSION = "devin 3000.12.57 (96542e930752)"
 CLI_VERSION = "agentplugins 0.1.115"
+ROOT = Path(__file__).resolve().parents[1]
+
+
+@lru_cache(maxsize=4)
+def projection_helper(producer_revision=None):
+    """Compile the canonical audit composition once, outside every case HOME."""
+    temporary = TemporaryDirectory(prefix="windsurf-projection-oracle-")
+    atexit.register(temporary.cleanup)
+    binary = Path(temporary.name) / "oracle"
+    subprocess.run(["go", "build", "-buildvcs=false", "-trimpath", "-o", str(binary),
+                    "./scripts/testdata/windsurf_projection_oracle"], cwd=ROOT,
+                   check=True, capture_output=True, timeout=180)
+    return str(binary), producer_file(str(binary))
+
+
+def producer_file(cli):
+    """Pin the named executable to bounded held bytes, including replacement."""
+    fd = os.open(cli, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        info = os.fstat(fd)
+        require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == os.getuid()
+                and 0 < info.st_size <= 256 << 20)
+        def identity(value):
+            return (value.st_mode, value.st_dev, value.st_ino, value.st_uid, value.st_gid,
+                    value.st_nlink, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+        digest, size = hashlib.sha256(), 0
+        while size < info.st_size:
+            body = os.read(fd, min(65536, info.st_size - size))
+            require(bool(body))
+            size += len(body)
+            digest.update(body)
+        require(identity(info) == identity(os.fstat(fd)) == identity(os.lstat(cli)))
+        return {"identity": identity(info), "sha256": digest.hexdigest()}
+    finally:
+        os.close(fd)
+
+
+def verify_projection_producer(cli):
+    """This lane qualifies the source-built workflow CLI, never another release."""
+    original = producer_file(cli)
+    built = subprocess.run(["go", "version", "-m", cli], check=True, capture_output=True,
+                           text=True, timeout=30).stdout
+    revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
+                              capture_output=True, text=True, timeout=30).stdout.strip()
+    require("\tpath\tgithub.com/777genius/plugin-kit-ai/cli/cmd/agentplugins\n" in built
+            and "\tbuild\tvcs.revision=" + revision + "\n" in built
+            and "\tbuild\tvcs.modified=false\n" in built)
+    # VCS labels alone cannot authorize locally changed producer code.
+    subprocess.run(["git", "diff", "--quiet", "HEAD"], cwd=ROOT,
+                   check=True, capture_output=True, timeout=30)
+    untracked = subprocess.run(["git", "ls-files", "--others", "--exclude-standard"],
+                              cwd=ROOT, check=True, capture_output=True, timeout=30).stdout
+    require(not untracked)
+    require(producer_file(cli) == original)
+    return {"revision": revision, "executable": original}
+
+
+def canonical_projection(request, producer_revision=None):
+    """Return only production-rendered expected bytes/digest; no receipt input."""
+    try:
+        binary, original = projection_helper(producer_revision)
+        require(producer_file(binary) == original)
+        completed = subprocess.run([binary], input=encoded(request, 1 << 20),
+                                   check=True, capture_output=True, timeout=90)
+        require(producer_file(binary) == original)
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError("independent Windsurf source projection is unavailable") from error
+    result = strict_json(completed.stdout)
+    require(type(result) is dict and set(result) == {
+        "tree_digest", "manifest_digest", "delivery_digest", "staging_path"})
+    require(all(type(result.get(key)) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", result[key])
+                for key in ("tree_digest", "manifest_digest", "delivery_digest")))
+    return result
 
 
 def require(condition):
@@ -125,6 +202,7 @@ class WindsurfInstallationAudit:
     def __init__(self, cli, env, project, case_root, audit, *, native_runtime=None):
         require(sys.platform == "linux" and type(cli) is str and Path(cli).is_absolute())
         self.cli, self.audit, self.native_runtime = cli, audit, native_runtime
+        self.producer = verify_projection_producer(cli)
         self.case, self.project = Path(case_root), Path(project)
         self.home, self.data = self.case / "home", self.case / "uap-data"
         self.xdg = self.home / ".config"
@@ -181,7 +259,7 @@ class WindsurfInstallationAudit:
             self.foreign = native_runtime.skills / "foreign-windsurf-global-audit/SKILL.md"
         self.anchors[self.global_root] = ordinary(self.global_root)
         self.native_roots = (self.home / ".windsurf", self.home / ".devin", self.global_root)
-        self.observations, self.saved_observations = [], []
+        self.observations, self.saved_observations, self.source_projection = [], [], None
         self.initial = self.image()
         self.initial_saved = self.saved_image()
         self.project_initial = self.audit["scoped_snapshot"]((self.project,))
@@ -213,7 +291,7 @@ class WindsurfInstallationAudit:
                     locked = docs["uap.lock"]
                     require(type(locked) is dict and type(locked.get("lock_version")) is int
                             and locked["lock_version"] == 1 and type(locked.get("packages")) is list)
-                deliveries = {}
+                deliveries, sources = {}, {}
                 state = docs.get("state-v2.json", {"schema_version": 5, "installations": []})
                 require(type(state) is dict and type(state.get("schema_version")) is int
                         and state["schema_version"] == 5 and type(state.get("installations")) is list)
@@ -230,6 +308,14 @@ class WindsurfInstallationAudit:
                         with member(data_fd, relative) as managed_fd:
                             tree = frame(managed_fd)
                             deliveries[relative] = {"image": tree, "digest": managed_digest(managed_fd, tree)}
+                        revision = binding.get("package_revision")
+                        require(type(revision) is dict and type(revision.get("tree_digest")) is str
+                                and re.fullmatch(r"sha256:[0-9a-f]{64}", revision["tree_digest"]))
+                        source_relative = "store/packages/agentplugins-tree-sha256-v1/" + revision["tree_digest"][7:] + "/package"
+                        with member(data_fd, source_relative) as source_fd:
+                            source_image = frame(source_fd)
+                            sources[source_relative] = {"image": source_image,
+                                "digest": immutable_source_digest(source_fd, source_image)}
                 require(observed == frame(data_fd))
         except OSError as error:
             raise ValueError("Devin Global saved installation authority is unavailable") from error
@@ -248,6 +334,7 @@ class WindsurfInstallationAudit:
                                      "discovery-v1-cache.json", "discovery-v1-cache.json.lock"}
                      and not key.startswith(("store/", "security/", "managed/"))}
         return {"documents": docs, "blobs": blobs, "authorities": authorities, "deliveries": deliveries,
+                "sources": sources,
                 "managed_authority": {key: value for key, value in observed.items() if key.startswith("managed/")},
                 "ancillary": content(ancillary),
                 "managed": content({key: value for key, value in observed.items()
@@ -340,6 +427,7 @@ class WindsurfInstallationAudit:
                 **({"preserved_native_proof": reference} if reference is not None else {}),
                 "scope": "user", "canonical_client_id": "windsurf", "fixture_index": index,
                 "source": source, "identity": identity, "public_state": state,
+                "source_projection": self.source_projection,
                 "native_runtime_qualified": False, "writer_closure_claimed": False,
                 "native_roots": [".windsurf", ".devin", ".config/devin"],
                 "project_unchanged": True, "original_native_preserved": True,
@@ -475,7 +563,7 @@ class WindsurfInstallationAudit:
         uses the existing Windsurf receipt digest and finite custody readers.
         Prepared components may legitimately leave the native profile unchanged.
         """
-        first = None
+        first, expected = None, None
         for saved in self.saved_observations[:4]:
             docs = saved["documents"]
             require(set(docs) == {"uap.toml", "uap.lock", "state-v2.json"})
@@ -541,6 +629,16 @@ class WindsurfInstallationAudit:
                     and locked.get("manifest_digest") == "sha256:" + sha(compact(intent)))
             require(origin.get("repository", "").lower() == repo.lower()
                     and origin.get("package_subpath", "") == subpath)
+            independent = GLOBAL_SKILL_CASES[source] if source.startswith("github:") else fixtures["signed_release_pins"][source]
+            require(all(revision.get(key) == independent[key] for key in ("tree_digest", "manifest_digest")))
+            source_relative = "store/packages/agentplugins-tree-sha256-v1/" + independent["tree_digest"][7:] + "/package"
+            source_observation = saved["sources"][source_relative]
+            require(source_observation["digest"] == independent["tree_digest"])
+            if expected is None:
+                expected = self.expected_projection(source_relative, source_observation, independent, record, binding)
+                self.source_projection = {"tree_digest": independent["tree_digest"],
+                    "manifest_digest": independent["manifest_digest"], "delivery_digest": expected}
+            require(saved["deliveries"][relative]["digest"] == expected)
             objects = binding.get("native_objects")
             require(type(objects) is list and all(type(obj) is dict for obj in objects))
             receipts = [obj for obj in objects if obj.get("kind") == "managed_package_directory"]
@@ -548,7 +646,7 @@ class WindsurfInstallationAudit:
                     "kind": "managed_package_directory", "logical_name": identity, "path": locator,
                     "managed_digest": saved["deliveries"][relative]["digest"], "protection_class": "managed"}
                     and len(saved["deliveries"][relative]["image"]) > 1)
-            agreement = (record, saved["blobs"]["uap.toml"], saved["blobs"]["uap.lock"], saved["deliveries"])
+            agreement = (record, saved["blobs"]["uap.toml"], saved["blobs"]["uap.lock"], saved["deliveries"], saved["sources"])
             require(first is None or agreement == first)
             first = agreement
         for saved in self.saved_observations[4:]:
@@ -558,6 +656,44 @@ class WindsurfInstallationAudit:
                     and relative not in saved["managed"]
                     and all(record.get("clients") == {} for record in intent["installations"])
                     and not any(value[0] == "file" for value in saved["managed"].values()))
+
+    def expected_projection(self, relative, observed, pin, record, binding):
+        """Independently pinned source bytes → canonical projection → delivery."""
+        require(verify_projection_producer(self.cli) == self.producer)
+        data_path = ""
+        receipt_id = binding.get("data_receipt_id")
+        if receipt_id:
+            receipts = record.get("data_receipts")
+            require(type(receipts) is dict and type(receipts.get(receipt_id)) is dict)
+            receipt = receipts[receipt_id]
+            data_path = str(self.data / "plugin-data" / binding["physical_artifact_id"])
+            require(receipt.get("data_receipt_id") == receipt_id
+                    and receipt.get("physical_backend_id") == binding["physical_artifact_id"]
+                    and receipt.get("scope") == "user" and receipt.get("state") == "owned"
+                    and receipt.get("locator") == data_path
+                    and receipt.get("ownership_digest") == "sha256:" + sha(
+                        ("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + data_path).encode()))
+        fd = os.open(self.case, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        try:
+            require(self.directory_identity(os.fstat(fd)) == self.anchors[self.case])
+            with member(fd, "uap-data/" + relative) as source_fd:
+                require(frame(source_fd) == observed["image"]
+                        and immutable_source_digest(source_fd, observed["image"]) == pin["tree_digest"])
+                with TemporaryDirectory(prefix="windsurf-expected-projection-") as temporary:
+                    result = canonical_projection({"source_root": str(self.data / relative),
+                        "tree_digest": pin["tree_digest"], "manifest_digest": pin["manifest_digest"],
+                        "physical_artifact_id": binding["physical_artifact_id"], "active_path": binding["target_locator"],
+                        "data_path": data_path, "cli": self.cli, "cli_version": CLI_VERSION.removeprefix("agentplugins "),
+                        "work_root": str(Path(temporary).resolve())},
+                        self.producer["revision"] if self.producer is not None else None)
+                require(frame(source_fd) == observed["image"]
+                        and result["tree_digest"] == pin["tree_digest"]
+                        and result["manifest_digest"] == pin["manifest_digest"])
+        finally:
+            os.close(fd)
+        self.guard()
+        require(verify_projection_producer(self.cli) == self.producer)
+        return result["delivery_digest"]
 
 
 def summary(report, fixtures, *, fixture_sha256):
@@ -645,6 +781,12 @@ def summary(report, fixtures, *, fixture_sha256):
                             "listed_identity", "repeat_verified", "repeat_native_unchanged", "repeat_lock_unchanged",
                             "removal_verified", "post_list_schema_valid"))
                         and row.get("post_removal_leftovers") == [])
+                projection = proof.get("source_projection")
+                independent = GLOBAL_SKILL_CASES[source] if source.startswith("github:") else fixtures["signed_release_pins"][source]
+                require(type(projection) is dict and set(projection) == {"tree_digest", "manifest_digest", "delivery_digest"}
+                        and all(projection.get(key) == independent[key] for key in ("tree_digest", "manifest_digest"))
+                        and type(projection.get("delivery_digest")) is str
+                        and re.fullmatch(r"sha256:[0-9a-f]{64}", projection["delivery_digest"]))
             result["installation_verified_negative_coverage" if negative else "installation_passed"] += 1
             if not negative:
                 result["installation_active_skill_lifecycle_passed" if index in ACTIVE_SLOTS

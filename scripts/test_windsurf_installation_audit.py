@@ -8,6 +8,7 @@ from pathlib import Path
 from io import StringIO
 from runpy import run_path
 import stat
+import subprocess
 import sys
 from tempfile import TemporaryDirectory
 import unittest
@@ -20,6 +21,39 @@ from windsurf_installation_audit import (ACTIVE_SLOTS, ACTIVE_SKILLS, CLIENT_VER
     COMPONENT_REFUSALS, PREPARED, WindsurfInstallationAudit, selected, summary)
 
 ROOT = Path(__file__).resolve().parents[1]
+VERIFY_PRODUCER = installation.verify_projection_producer
+
+
+def source_pin(files):
+    """Independent inert producer's packagedigest framing, never a receipt."""
+    directories = set()
+    for name in files:
+        directories.update(parent.as_posix() for parent in Path(name).parents if str(parent) != ".")
+    stream = bytearray()
+    def field(value):
+        body = value.encode()
+        stream.extend(len(body).to_bytes(8, "big") + body)
+    field("agentplugins.package-tree\0sha256\0v1")
+    for name in sorted(directories | set(files)):
+        directory = name in directories
+        for value in ("entry", name, "directory" if directory else "file", "040000" if directory else "100644", ""):
+            field(value)
+        body = b"" if directory else files[name]
+        stream.extend(len(body).to_bytes(8, "big") + body)
+    return {"tree_digest": "sha256:" + hashlib.sha256(stream).hexdigest(),
+            "manifest_digest": "sha256:" + hashlib.sha256(files["plugin.json"]).hexdigest()}
+
+
+def delivery_pin(root):
+    """Independent producer framing includes executable launcher mode."""
+    stream = bytearray()
+    for path in sorted(root.rglob("*")):
+        name = path.relative_to(root).as_posix()
+        file = path.is_file()
+        body = path.read_bytes() if file else b""
+        execute = file and bool(path.stat().st_mode & 0o111)
+        stream.extend(f'{"file" if file else "dir"}\0{name}\0{str(execute).lower()}\0{len(body)}\0'.encode() + body)
+    return "sha256:" + hashlib.sha256(stream).hexdigest()
 
 
 @unittest.skipUnless(sys.platform == "linux", "Exact Linux Devin Global installation audit")
@@ -30,6 +64,43 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         cls.fixture_bytes = (ROOT / "tests/live-install/fixtures.json").read_bytes()
         cls.fixtures = json.loads(cls.fixture_bytes)
         cls.fixture_hash = hashlib.sha256(cls.fixture_bytes).hexdigest()
+
+    def setUp(self):
+        # Replace production pins only in this inert suite. Positives are real
+        # canonical Go projections from these independently framed source trees.
+        self.fixtures = copy.deepcopy(type(self).fixtures)
+        self.sources, self.pins = {}, {}
+        for index in range(30):
+            source, identity = selected(self.fixtures, index)
+            files = {"plugin.json": json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": identity, "version": "1.0.0"}, separators=(",", ":")).encode(),
+                     "README.md": b"Independent source bytes must be delivered.\n",
+                     "hooks/inert.json": b"{}"}
+            skills = ("unit-skill",) if index in ACTIVE_SLOTS else ()
+            if skills:
+                files["skills/unit-skill/SKILL.md"] = b"---\nname: unit-skill\ndescription: Inert independent Skill\n---\nUnit bytes.\n"
+            else:
+                files["mcp.json"] = json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": {"unit-server": {
+                    "type": "streamable-http", "url": "https://unit.invalid/" + identity}}}, separators=(",", ":")).encode()
+            pin = {**source_pin(files), "name": identity, "version": "1.0.0", "skills": skills}
+            self.sources[source], self.pins[source] = files, pin
+            if not source.startswith("github:"):
+                self.fixtures["signed_release_pins"][source].update(source_pin(files))
+        self.addCleanup(patch.stopall)
+        patch.object(installation, "GLOBAL_SKILL_CASES", self.pins).start()
+        # The transport is deliberately inert; all byte/digest/projection code
+        # remains real. Producer-binary provenance has separate controls below.
+        patch.object(installation, "verify_projection_producer", return_value=None).start()
+        observer_globals = self.audit["WINDSURF_INSTALLATION"]["WindsurfInstallationAudit"].__init__.__globals__
+        patch.dict(observer_globals, {"GLOBAL_SKILL_CASES": self.pins,
+            "verify_projection_producer": lambda cli: None,
+            "projection_helper": installation.projection_helper}).start()
+        temporary = TemporaryDirectory(prefix="windsurf-unit-fixtures-")
+        self.addCleanup(temporary.cleanup)
+        fixture_path = Path(temporary.name) / "fixtures.json"
+        self.fixture_bytes = json.dumps(self.fixtures).encode()
+        self.fixture_hash = hashlib.sha256(self.fixture_bytes).hexdigest()
+        fixture_path.write_bytes(self.fixture_bytes)
+        patch.dict(self.audit["main"].__globals__, {"FIXTURES": fixture_path}).start()
 
     def fixture(self, root, cli="/fixture/agentplugins", *, saved=None):
         case = root / "plugin-case"
@@ -69,7 +140,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         if source.startswith("github:"):
             node["source"] = source[len("github:"):].rsplit("@", 1)[0]
             client["package_revision"] = {"resolved_revision": source.rsplit("@", 1)[1],
-                "tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "b" * 64}
+                **{key: self.pins[source][key] for key in ("tree_digest", "manifest_digest")}}
         else:
             pin = self.fixtures["signed_release_pins"][source]
             node["source"] = pin["repository"] + "/" + pin["path"]
@@ -126,23 +197,41 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             return
         data = observer.data
         if position == 0:
-            from test_windsurf_global_skill_audit import source_digest
             node = self.raw_list(row["index"])["data"]["installations"][0]
             client = node["clients"][0]
             identity, source = row["identity"], row["source"]
             physical = identity[:51].rstrip(".-") + "-" + hashlib.sha256(node["installation_id"].encode()).hexdigest()[:12]
             active = data / "managed/clients/windsurf" / physical
-            active.mkdir(parents=True)
-            files = {"plugin.json": json.dumps({"name": identity, "version": "1.0.0"}).encode(),
-                     "mcp.json": b'{"mcpServers":{}}'}
-            for name, body in files.items(): (active / name).write_bytes(body)
+            source_root = data / "store/packages/agentplugins-tree-sha256-v1" / client["package_revision"]["tree_digest"][7:] / "package"
+            for name, body in self.sources[source].items():
+                path = source_root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(body)
+            data_path, data_receipt = "", None
+            if any(server.get("type") == "stdio" for server in json.loads(self.sources[source].get("mcp.json", b"{}")).get("mcpServers", {}).values()):
+                data_path = str(data / "plugin-data" / physical)
+                Path(data_path).mkdir(parents=True)
+                receipt_id = "data_" + hashlib.sha256("\0".join((node["installation_id"], physical, "user")).encode()).hexdigest()[:24]
+                data_receipt = {"data_receipt_id": receipt_id, "physical_backend_id": physical, "scope": "user",
+                    "locator": data_path, "state": "owned", "ownership_digest": "sha256:" + hashlib.sha256(
+                        ("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + data_path).encode()).hexdigest()}
+                (Path(data_path) / ".agentplugins-data-owner.json").write_text(json.dumps(data_receipt))
+            with TemporaryDirectory(prefix="windsurf-unit-projection-") as temporary:
+                projected = installation.canonical_projection({"source_root": str(source_root),
+                    **{key: self.pins[source][key] for key in ("tree_digest", "manifest_digest")},
+                    "physical_artifact_id": physical, "active_path": str(active), "data_path": data_path,
+                    "cli": getattr(observer, "cli", "/fixture/agentplugins"), "cli_version": CLI_VERSION.removeprefix("agentplugins "),
+                    "work_root": str(Path(temporary).resolve())})
+                shutil.copytree(projected["staging_path"], active)
             binding_id = "client_" + hashlib.sha256("\0".join((node["installation_id"], "windsurf", "user", str(active))).encode()).hexdigest()[:24]
             revision = client["package_revision"]
             binding = {**copy.deepcopy(client), "client_binding_id": binding_id,
                 "physical_artifact_id": physical, "target_locator": str(active),
                 "native_profile_root": str(observer.global_root),
                 "native_objects": [{"kind": "managed_package_directory", "object_id": "package:windsurf:" + physical,
-                    "logical_name": identity, "path": str(active), "managed_digest": source_digest(files), "protection_class": "managed"}]}
+                    "logical_name": identity, "path": str(active), "managed_digest": delivery_pin(active), "protection_class": "managed"}]}
+            if data_receipt is not None:
+                binding["data_receipt_id"] = data_receipt["data_receipt_id"]
             if source.startswith("github:"):
                 repo, commit = source[7:].rsplit("@", 1); repo = repo.lower(); subpath = ""
                 dep = f'git = "https://github.com/{repo}.git"\ncommit = "{commit}"\n'
@@ -161,6 +250,8 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             state = {"schema_version": 5, "installations": [{"installation_id": node["installation_id"], "declared_name": identity,
                 "source": {"repository": repo, "package_subpath": subpath, "resolved_revision": commit, "tree_digest": revision["tree_digest"]},
                 "package": {"manifest_digest": revision["manifest_digest"]}, "clients": {binding_id: binding}}]}
+            if data_receipt is not None:
+                state["installations"][0]["data_receipts"] = {data_receipt["data_receipt_id"]: data_receipt}
             (data / "state-v2.json").write_text(json.dumps(state))
             (data / "uap.toml").write_text(f'schema_version = 1\n[dependencies.{json.dumps(identity)}]\n' + dep
                 + f'[targets]\nwindsurf = [{json.dumps(identity)}]\n')
@@ -189,10 +280,25 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         # Reuse the existing transport fixture, never its verdict: all native
         # source/receipt/inventory/custody methods below are the real verifier.
         import test_windsurf_global_skill_audit as native_fixture
+        files = dict(native_fixture.SOURCE_FILES)
+        files["plugin.json"] = json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": "elements-of-style", "version": "1.0.0"}, separators=(",", ":")).encode()
+        unit_pin = source_pin(files)
+        substituted = patch.dict(vars(native_fixture), {"SOURCE_FILES": files,
+            "UNIT_TREE": unit_pin["tree_digest"], "UNIT_MANIFEST": unit_pin["manifest_digest"]})
+        substituted.start()
+        self.addCleanup(substituted.stop)
+        class CanonicalTransport(native_fixture.InertPublicAndNative):
+            def author_installation(self, env, cwd):
+                super().author_installation(env, cwd)
+                native_fixture.write(self.managed / "plugin.json", files["plugin.json"])
+                binding = self.state["installations"][0]["clients"][self.binding_id]
+                binding["native_objects"][0]["managed_digest"] = native_fixture.source_digest(files)
+                native_fixture.write(self.data / "state-v2.json", native_fixture.packed(self.state))
         live = native_fixture.audit
         with TemporaryDirectory(prefix="windsurf-installation-unit-") as temporary:
             root = Path(temporary).resolve()
-            transport = native_fixture.InertPublicAndNative(root, transport_mode)
+            transport = CanonicalTransport(root, transport_mode)
             cls = live.WINDSURF_GLOBAL_AUDIT["WindsurfGlobalSkillAudit"]
             globals_copy = {**vars(live), "WINDSURF_GLOBAL_AUDIT": {
                 **live.WINDSURF_GLOBAL_AUDIT, "WindsurfGlobalSkillAudit": cls}}
@@ -241,7 +347,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                     row, native_fixture.ITEM, 26, self.fixtures))
                 return row
 
-            pins = {**native_fixture.proof.CASES, native_fixture.ITEM: transport.expected_pin}
+            pins = {**self.pins, native_fixture.ITEM: transport.expected_pin}
             with patch.dict(cls.__init__.__globals__, {
                     "BINARY_SHA": native_fixture.hashed(transport.binary.read_bytes()), "CASES": pins}),                     patch.object(installation, "GLOBAL_SKILL_CASES", pins),                     patch.dict(live.WINDSURF_GLOBAL_AUDIT, {"WindsurfGlobalSkillAudit": real_factory}),                     patch.dict(live.AGENT_BINARIES, {"devin": str(transport.binary)}, clear=True),                     patch.object(live, "call", side_effect=public_call),                     patch.dict(live.NATIVE_RESEARCH, {"run_probe": transport.run_probe}),                     patch.object(live, "_do_case", side_effect=completed_case):
                 result = live.do_case("/fixture/agentplugins", "windsurf", "plugin", native_fixture.ITEM, 26,
@@ -513,6 +619,147 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             observer.observe(*sequence[1])
             with self.assertRaises(ValueError): observer.finish(row, row["source"], row["index"], self.fixtures)
 
+    def forged_sequence(self, observer, row, mutation):
+        for position, entry in enumerate(self.authored_sequence(observer, row, self.sequence(observer, row))):
+            if position == 0:
+                state_path = observer.data / "state-v2.json"
+                state = json.loads(state_path.read_bytes())
+                binding = next(iter(state["installations"][0]["clients"].values()))
+                active = Path(binding["target_locator"])
+                if mutation == "arbitrary-package":
+                    shutil.rmtree(active)
+                    active.mkdir()
+                    (active / "plugin.json").write_text('{"name":"arbitrary","version":"0.0.0"}')
+                    (active / "mcp.json").write_text('{"mcpServers":{}}')
+                elif mutation == "mcp-drop":
+                    (active / "mcp.json").write_text('{"mcpServers":{}}')
+                elif mutation == "mcp-drift":
+                    document = json.loads((active / "mcp.json").read_bytes())
+                    document["mcpServers"]["unit-server"]["url"] = "https://substituted.invalid/"
+                    (active / "mcp.json").write_text(json.dumps(document))
+                elif mutation == "skill-drift":
+                    (active / "skills/unit-skill/SKILL.md").write_text("Self-consistent unrelated Skill bytes.\n")
+                elif mutation == "command-drift":
+                    path = next((active / "skills").glob("*/SKILL.md"))
+                    path.write_text("Self-consistent unrelated rendered command.\n")
+                elif mutation == "stdio-drift":
+                    document = json.loads((active / "mcp.json").read_bytes())
+                    document["mcpServers"]["unit-server"]["args"][0] = "/unrelated/plugin-root"
+                    (active / "mcp.json").write_text(json.dumps(document))
+                else:
+                    (active / "README.md").write_text("Self-consistent unrelated asset bytes.\n")
+                binding["native_objects"][0]["managed_digest"] = delivery_pin(active)
+                state_path.write_text(json.dumps(state))
+            yield entry
+
+    def test_self_consistent_wrong_delivery_receipt_cannot_replace_independent_source_projection(self):
+        for index, mutation in ((0, "arbitrary-package"), (0, "mcp-drop"), (0, "mcp-drift"),
+                                (0, "asset-drift"), (26, "skill-drift")):
+            with self.subTest(index=index, mutation=mutation), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                row = self.row(index)
+                for argv, outcome in self.forged_sequence(observer, row, mutation):
+                    observer.observe(argv, outcome)
+                saved = observer.saved_observations[0]
+                binding = next(iter(saved["documents"]["state-v2.json"]["installations"][0]["clients"].values()))
+                receipt = binding["native_objects"][0]
+                delivery = next(iter(saved["deliveries"].values()))
+                self.assertEqual(receipt["managed_digest"], delivery["digest"])
+                self.assertEqual(saved["sources"][next(iter(saved["sources"]))]["digest"], self.pins[row["source"]]["tree_digest"])
+                with self.assertRaises(ValueError): observer.finish(row, row["source"], index, self.fixtures)
+
+    def test_canonical_stdio_data_cwd_and_rendered_command_projection_and_wrong_bytes(self):
+        source = self.fixtures["plugin_aliases"][0]
+        files = self.sources[source]
+        files["mcp.json"] = json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": {
+            "unit-server": {"type": "stdio", "command": "node", "args": ["${PLUGIN_ROOT}/server.js", "${PLUGIN_DATA}/state"],
+                "cwd": "${PLUGIN_DATA}", "env": {"UNIT_DATA": "${PLUGIN_DATA}"}}}}, separators=(",", ":")).encode()
+        files["io.github.777genius.agentplugins/commands/echo.md"] = b"---\ndescription: Inert echo command\ndisable-model-invocation: false\n---\nEcho inert source bytes.\n"
+        self.pins[source].update(source_pin(files))
+        self.fixtures["signed_release_pins"][source].update(source_pin(files))
+        for mutation in (None, "stdio-drift", "command-drift"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                cli = root / "agentplugins"
+                cli.write_bytes(b"#!/bin/sh\nexit 0\n")
+                cli.chmod(0o700)
+                observer, _ = self.fixture(root, str(cli))
+                row = self.row(0)
+                iterator = self.forged_sequence(observer, row, mutation) if mutation else self.authored_sequence(observer, row, self.sequence(observer, row))
+                for position, (argv, outcome) in enumerate(iterator):
+                    if position == 0:
+                        state = json.loads((observer.data / "state-v2.json").read_bytes())
+                        binding = next(iter(state["installations"][0]["clients"].values()))
+                        active = Path(binding["target_locator"])
+                        self.assertTrue(list((active / "skills").glob("*/SKILL.md")))
+                        config = json.loads((active / "mcp.json").read_bytes())["mcpServers"]["unit-server"]
+                        if mutation is None:
+                            data = state["installations"][0]["data_receipts"][binding["data_receipt_id"]]["locator"]
+                            self.assertEqual(config["env"]["UNIT_DATA"], data)
+                            self.assertIn(data, config["args"])
+                            self.assertTrue(config["command"].startswith(str(active) + "/"))
+                    observer.observe(argv, outcome)
+                if mutation:
+                    with self.assertRaises(ValueError): observer.finish(row, source, 0, self.fixtures)
+                else:
+                    proof = observer.finish(row, source, 0, self.fixtures)
+                    self.assertEqual(proof["source_projection"]["tree_digest"], self.pins[source]["tree_digest"])
+                    self.assertFalse(proof["native_runtime_qualified"])
+
+    def test_producer_vcs_and_changed_checkout_cannot_authorize_another_binary(self):
+        revision = "a" * 40
+        base = ("fixture: go1.26.11\n\tpath\tgithub.com/777genius/plugin-kit-ai/cli/cmd/agentplugins\n"
+                "\tbuild\tvcs.revision=" + revision + "\n\tbuild\tvcs.modified=false\n")
+        for mutation in (None, "revision", "missing-vcs", "dirty-binary", "dirty-checkout", "untracked"):
+            with self.subTest(mutation=mutation):
+                built = base
+                if mutation == "revision": built = built.replace(revision, "b" * 40)
+                elif mutation == "missing-vcs": built = "fixture: go1.26.11\n"
+                elif mutation == "dirty-binary": built = built.replace("modified=false", "modified=true")
+                def command(argv, **kwargs):
+                    if argv[:3] == ["go", "version", "-m"]: return SimpleNamespace(stdout=built)
+                    if argv[:3] == ["git", "rev-parse", "HEAD"]: return SimpleNamespace(stdout=revision + "\n")
+                    if argv[:2] == ["git", "diff"] and mutation == "dirty-checkout":
+                        raise subprocess.CalledProcessError(1, argv)
+                    return SimpleNamespace(stdout=b"foreign.go\n" if mutation == "untracked" else b"")
+                with patch.object(installation, "producer_file", return_value={"sha256": "inert"}), \
+                        patch.object(installation.subprocess, "run", side_effect=command):
+                    if mutation is None:
+                        self.assertEqual(VERIFY_PRODUCER("/fixture/cli")["revision"], revision)
+                    else:
+                        with self.assertRaises((ValueError, subprocess.CalledProcessError)):
+                            VERIFY_PRODUCER("/fixture/cli")
+
+    def test_cached_projection_helper_bytes_identity_and_child_time_changes_refuse(self):
+        for mutation in ("bytes", "replace", "mode", "during-child"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                binary = Path(temporary) / "oracle"
+                binary.write_bytes(b"inert executable bytes\n")
+                binary.chmod(0o700)
+                original = installation.producer_file(str(binary))
+                if mutation == "bytes": binary.write_bytes(b"substituted executable bytes\n")
+                elif mutation == "replace":
+                    pending = binary.with_name("replacement")
+                    pending.write_bytes(binary.read_bytes()); pending.chmod(0o700); pending.replace(binary)
+                elif mutation == "mode": binary.chmod(0o500)
+                def child(*args, **kwargs):
+                    binary.write_bytes(b"changed during oracle child\n")
+                    return SimpleNamespace(stdout=b"{}")
+                with patch.object(installation, "projection_helper", return_value=(str(binary), original)), \
+                        patch.object(installation.subprocess, "run", side_effect=child) as invoked:
+                    with self.assertRaises(ValueError): installation.canonical_projection({})
+                    self.assertEqual(invoked.call_count, int(mutation == "during-child"))
+
+    def test_original_cli_identity_must_survive_until_source_projection(self):
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            row = self.row(0)
+            for argv, outcome in self.authored_sequence(observer, row, self.sequence(observer, row)):
+                observer.observe(argv, outcome)
+            observer.producer = {"revision": "original", "executable": {"sha256": "original"}}
+            with patch.object(installation, "verify_projection_producer", return_value={"revision": "original", "executable": {"sha256": "substituted"}}):
+                with self.assertRaises(ValueError): observer.finish(row, row["source"], 0, self.fixtures)
+
     def test_saved_binding_delivery_lock_repeat_and_removal_are_required(self):
         for mutation in ("no-saved", "manifest-missing", "lock-missing", "state-missing", "wrong-source",
                          "wrong-revision", "wrong-binding", "wrong-state", "wrong-lock", "wrong-lock-intent",
@@ -774,24 +1021,17 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
     def integrated_native_case(self, cli, root, index, mode="good"):
         """Real combined route with complete 16/26/1/8 Skill sets and inert I/O."""
         import test_windsurf_global_skill_audit as native_fixture
-        # Independent literal packagedigest preimages for the authored test
-        # files below. Production source pins are never used for inert bytes.
-        digests = {
-            22: ("51e1ae43dc56a04dc78e19caa4de20770df0131f631ce1244ac00a562d5be22e", "78163fe349ca9830bcc6c13f875c62406d814dce006cb882a4fff5b94dd85d89"),
-            25: ("3b6992d52cf94825bf93f7bca7b28123ea9b16a239bedbe3cadcf2c2bb375259", "f935ed81b4e58a7498613b90b5ddfe6a5ca5aa0d4961cd76bd5399107326821d"),
-            26: ("4cf078c031e51e4bf846c8aa0c7e16e8f139290a2405b56933c378bd5265de57", "7f863d62e433cda5dd3cc8e06198a8d526275b498f9f91f699283870a54123f7"),
-            29: ("11d1cffcbbee21931c852b685a564ee3b9566f6e651ad5cb5a470362a74b07c4", "cd286b901c0aff9d9af3b42bfbf51e3a836dde3c351f1d81e6a1354b3370e16e"),
-        }
         item, identity = selected(self.fixtures, index)
         pin = copy.deepcopy(native_fixture.proof.CASES[item])
-        pin.update(tree_digest="sha256:" + digests[index][0], manifest_digest="sha256:" + digests[index][1])
         names = pin["skills"]
         bodies = {name: (f"---\nname: {name}\ndescription: {native_fixture.DESCRIPTION}\n---\nA unit-only fixture.\n").encode()
                   for name in names}
-        files = {"plugin.json": native_fixture.packed({"name": identity, "version": pin["version"]})}
+        files = {"plugin.json": native_fixture.packed({"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+            "name": identity, "version": pin["version"]})}
         for name in names:
             files.update({f"skills/{name}/SKILL.md": bodies[name],
                           f"skills/{name}/references/note.txt": native_fixture.REFERENCE})
+        pin.update(source_pin(files))
 
         class CompleteTransport(native_fixture.InertPublicAndNative):
             def __init__(self):
@@ -855,7 +1095,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             def retain_instance(instance, *args, **kwargs):
                 original_init(instance, *args, **kwargs)
                 transport.verifier = instance
-            pins = {**native_fixture.proof.CASES, item: pin}
+            pins = {**self.pins, item: pin}
             with patch.dict(original_init.__globals__, {"CASES": pins,
                     "BINARY_SHA": native_fixture.hashed(transport.binary.read_bytes())}), \
                     patch.dict(installation_globals, {"GLOBAL_SKILL_CASES": pins}), \
@@ -1002,19 +1242,22 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
 
         with TemporaryDirectory() as temporary:
             output = Path(temporary).resolve() / "report"
+            oracle = installation.projection_helper(None)[0]
+            original_popen = self.audit["subprocess"].Popen
+            def oracle_only(argv, *args, **kwargs):
+                self.assertEqual(argv, [oracle], "native/public child forbidden in this inert data-mode regression")
+                return original_popen(argv, *args, **kwargs)
             previous_umask = os.umask(0o022)
             try:
                 with patch.dict(live, {"call": public_call, "version_evidence": version,
                         "vendor_bootstrap_attested": lambda: True, "AGENT_BINARIES": {"devin": cli}}), \
-                        patch.object(self.audit["subprocess"], "Popen", side_effect=AssertionError(
-                            "child forbidden in this inert data-mode regression")) as children, \
+                        patch.object(self.audit["subprocess"], "Popen", side_effect=oracle_only), \
                         patch.object(self.audit["platform"], "machine", return_value="x86_64"), \
                         patch.object(sys, "stdout", StringIO()), \
                         patch.object(sys, "argv", ["audit", "--cli", cli, "--kind", "plugin", "--target", "windsurf",
                             "--limit", "30", "--acceptance", "windsurf-global-installation", "--report-dir", str(output)]):
                     with self.assertRaises(StopAfterFirstCase):
                         self.audit["main"]()
-                    children.assert_not_called()
             finally:
                 os.umask(previous_umask)
             report = json.loads((output / "windsurf-plugin.json").read_text())
@@ -1095,9 +1338,13 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                         return {"status": "reported", "value": CLI_VERSION if argv[1] == "version" else CLIENT_VERSION,
                                 "exit_code": 0}
                     output = root / ("report-" + name)
+                    selected_pins = dict(self.pins)
+                    for index in admitted:
+                        source = self.fixtures["plugin_aliases"][index]
+                        selected_pins[source] = pins[source]
                     with patch.dict(live, {"do_case": do_case, "vendor_bootstrap_attested": lambda: True,
                             "AGENT_BINARIES": {"devin": binary}, "version_evidence": version}), \
-                            patch.dict(observer_globals, {"GLOBAL_SKILL_CASES": pins}), \
+                            patch.dict(observer_globals, {"GLOBAL_SKILL_CASES": selected_pins}), \
                             patch.object(sys, "platform", "linux"), \
                             patch.object(self.audit["platform"], "machine", return_value="x86_64"), \
                             patch.object(sys, "stdout", StringIO()), \

@@ -103,6 +103,7 @@ def report(kind, target="cursor"):
                "native_component_candidates": [], "native_residuals": [], "post_removal_leftovers": [],
                "post_skill_tree_delta": [], "post_removal_skill": None, "post_lock_pinned": False,
                "repeat_project_unchanged": True if target == "grok" else None,
+               "cursor_repeat_project_unchanged": True if target == "cursor" else None,
                "retained_passive_native_files": [], "signed_release_observation": [],
                "skill_path": f".cursor/skills/{identity}/SKILL.md" if kind == "skill" else None}
         if target == "grok":
@@ -138,6 +139,19 @@ def report(kind, target="cursor"):
 
 
 class PreparedInstallationTest(unittest.TestCase):
+    def test_cursor_skill_summary_requires_exact_project_repeat_custody(self):
+        for value in (None, False, True, 1, "true", "missing"):
+            with self.subTest(value=value):
+                document = report("skill")
+                row = document["results"][0]
+                self.assertIs(row["repeat_verified"], True)
+                if value == "missing":
+                    row.pop("cursor_repeat_project_unchanged")
+                else:
+                    row["cursor_repeat_project_unchanged"] = value
+                result = self.summary(document)
+                self.assertIs(result["installation_acceptance_passed"], value is True)
+
     def summary(self, value):
         mode = ("grok-prepared-skills-installation" if value["target"] == "grok" else
                 "cursor-prepared-skills-installation" if value["kind"] == "skill" else "cursor-prepared-installation")

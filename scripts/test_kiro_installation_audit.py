@@ -1,6 +1,7 @@
 """Inert filesystem/public-call tests; no Kiro discovery or runtime claim."""
 from copy import deepcopy
 from contextlib import ExitStack, redirect_stdout, redirect_stderr
+import base64
 import hashlib
 import io
 import json
@@ -150,11 +151,13 @@ class KiroInstallationTests(unittest.TestCase):
     def setUpClass(cls):
         cls.audit = run_path(str(ROOT / "scripts/live-install-audit.py"))
 
-    def fixture(self, root, kind, resources):
+    def fixture(self, root, kind, resources, seed=None):
         case = root / "case"
         for relative in ("home/.config", "home/.cache", "home/.local/share", "project", "uap-data"):
             (case / relative).mkdir(parents=True)
         env = self.audit["isolated_client_env"](case / "home", case, case / "uap-data")
+        if seed is not None:
+            seed(case)
         with patch.object(sys, "platform", "darwin"):
             observer = prepared.KiroInstallationAudit("/fixture/agentplugins", env, case / "project", case, self.audit, kind)
         resources.callback(observer.close)
@@ -265,6 +268,158 @@ class KiroInstallationTests(unittest.TestCase):
             observer.observations[0][1]["stderr_full"] += "other failure\n"
             with self.assertRaises(ValueError):
                 observer.finish(row, "marketing-kit", 13, FIXTURES)
+
+    def test_removed_saved_authorities_are_empty_at_remove_and_final_list(self):
+        for kind in ("plugin", "skill"):
+            for phase in (4, 5):
+                for residue in ("dependency", "dev-dependency", "target", "package", "malformed", "symlink", "empty"):
+                    with self.subTest(kind=kind, phase=phase, residue=residue), tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                        observer = self.fixture(Path(directory).resolve(), kind, resources)
+                        documents = raw(kind, 0, observer.project)
+                        saved = observer.project if kind == "skill" else observer.data
+                        original = observer.observe
+                        def observe_saved(argv, outcome):
+                            if len(observer.observations) == phase:
+                                manifest = 'schema_version = 1\n'
+                                if residue in ("dependency", "dev-dependency"):
+                                    section = "dependencies" if residue == "dependency" else "dev-dependencies"
+                                    manifest += f'[{section}]\nowned = "*"\n'
+                                if residue == "target":
+                                    manifest += '[targets]\nkiro = ["owned"]\n'
+                                (saved / "uap.toml").write_text(manifest)
+                                (saved / "uap.lock").write_text(json.dumps({"lock_version": 1, "packages":
+                                    [{"alias": "owned"}] if residue == "package" else []}))
+                                if residue == "malformed":
+                                    (saved / "uap.lock").write_text('{"lock_version":1,"packages":[]')
+                                if residue == "symlink":
+                                    (saved / "uap.lock").unlink()
+                                    (saved / "uap.lock").symlink_to(observer.mcp)
+                            return original(argv, outcome)
+                        with patch.object(observer, "observe", observe_saved):
+                            if residue == "empty":
+                                proof, _ = self.finish(observer, kind, 0, documents)
+                                self.assertEqual(proof["status"], "verified-installation-lifecycle")
+                            else:
+                                with self.assertRaises((ValueError, OSError)):
+                                    self.finish(observer, kind, 0, documents)
+
+    def test_marketing_refusal_protects_saved_state_managed_and_foreign_data_at_both_calls(self):
+        for phase in (0, 1):
+            for relative in ("uap.toml", "uap.lock", "state-v2.json", "managed/clients/kiro/orphan/payload", "foreign-data", "security/assessment"):
+                with self.subTest(phase=phase, relative=relative), tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                    observer = self.fixture(Path(directory).resolve(), "plugin", resources)
+                    add = [observer.cli, "add", "marketing-kit", "--target", "kiro", "--scope", "user", "--format", "json"]
+                    listed = [observer.cli, "list", "--target", "kiro", "--scope", "user", "--format", "json"]
+                    refusal = self.outcome(None, 1, 'agentplugins: no eligible directory release for "marketing-kit": '
+                        '777genius/marketing-kit: release does not support complete target set; missing kiro\n')
+                    inventory = self.outcome({"schema_version": 1, "command": "list", "result": "success", "data": {"installations": []}})
+                    if phase:
+                        observer.observe(add, refusal)
+                    path = observer.data / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("forbidden mutation")
+                    with self.assertRaises(ValueError):
+                        observer.observe(listed if phase else add, inventory if phase else refusal)
+
+    def test_marketing_refusal_allows_exact_cache_producer_files(self):
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+            observer = self.fixture(Path(directory).resolve(), "plugin", resources)
+            inputs = ROOT / "cli/cmd/agentplugins/directory_bootstrap_inputs"
+            snapshot = (inputs / "snapshot.json").read_bytes()
+            cache = {"schema_version": 1, "sequence": json.loads(snapshot)["sequence"],
+                     "snapshot": base64.b64encode(snapshot).decode(),
+                     "envelope": base64.b64encode((inputs / "envelope.json").read_bytes()).decode()}
+            diagnostic = ('agentplugins: no eligible directory release for "marketing-kit": '
+                          '777genius/marketing-kit: release does not support complete target set; missing kiro\n')
+            for argv, outcome in (
+                    ([observer.cli, "add", "marketing-kit", "--target", "kiro", "--scope", "user", "--format", "json"], self.outcome(None, 1, diagnostic)),
+                    ([observer.cli, "list", "--target", "kiro", "--scope", "user", "--format", "json"], self.outcome({"schema_version": 1, "command": "list", "result": "success", "data": {"installations": []}}))):
+                path = observer.data / "directory-v1-cache.json"
+                temporary = observer.data / ".directory-v1-cache.fixture.tmp"
+                # JSON whitespace preserves the real signed artifacts and
+                # yields a valid producer record beyond the default 1 MiB.
+                temporary.write_text(json.dumps(cache) + "\n" + " " * (1 << 20))
+                self.assertGreater(temporary.stat().st_size, 1 << 20)
+                temporary.chmod(0o600)
+                temporary.replace(path)
+                lock = observer.data / "directory-v1-cache.json.lock"
+                lock.touch(mode=0o600, exist_ok=True)
+                observer.observe(argv, outcome)
+            row = {"index": 13, "identity": "marketing-kit", "source": "marketing-kit", "target": "kiro", "kind": "plugin",
+                   "status": "documented-or-source-unsupported", "sentinels_preserved": True, "native_residuals": [],
+                   **{k: False for k in ("listed_identity", "failed_install_registered", "failed_install_residue", "post_remove_identity_registered")}}
+            self.assertEqual(observer.finish(row, "marketing-kit", 13, FIXTURES)["status"], "verified-installation-negative")
+
+    def test_refusal_preserves_preexisting_data_bytes_identity_and_links(self):
+        for mutation in ("bytes", "replacement", "hardlink", "attach-unlink", "symlink", "mode", "lock-bytes"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                def seed(case):
+                    path = case / "uap-data/foreign-file"
+                    path.write_bytes(b"foreign bytes")
+                observer = self.fixture(Path(directory).resolve(), "plugin", resources, seed)
+                path = observer.data / "foreign-file"
+                if mutation == "bytes": path.write_bytes(b"changed")
+                elif mutation == "replacement":
+                    temporary = path.with_suffix(".new"); temporary.write_bytes(path.read_bytes()); temporary.replace(path)
+                elif mutation == "hardlink": os.link(path, observer.case / "hardlink")
+                elif mutation == "attach-unlink":
+                    alias = observer.case / "hardlink"
+                    os.link(path, alias); alias.unlink()
+                elif mutation == "symlink": path.unlink(); path.symlink_to(observer.mcp)
+                elif mutation == "mode": path.chmod(0o600)
+                else:
+                    lock = observer.data / "directory-v1-cache.json.lock"
+                    lock.write_bytes(b"intent hidden in cache lock"); lock.chmod(0o600)
+                with self.assertRaises(ValueError):
+                    observer.observe([observer.cli, "add", "marketing-kit"], self.outcome(None, 1))
+
+    def test_refusal_cache_reads_use_producer_bounds_without_widening_foreign_files(self):
+        encoded = lambda length: 4 * ((length + 2) // 3)
+        limits = {"directory-v1-cache.json": encoded(4 << 20) + encoded(16 << 10) + 4096,
+                  "discovery-v1-cache.json": encoded((16 << 10) + (16 << 20) + (16 << 10) + (10 << 20)) + 4096,
+                  "foreign-file": 1 << 20}
+        for name, limit in limits.items():
+            for size in ((1 << 20) + 128, limit + 1):
+                with self.subTest(name=name, size=size), tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                    observer = self.fixture(Path(directory).resolve(), "plugin", resources)
+                    path = observer.data / name
+                    # These are inert complete cache-shaped JSON records. Trust
+                    # verification remains the producer's job; this tests its
+                    # permitted wire size without adding a second cache engine.
+                    body = {"schema_version": 1, "sequence": 1, "snapshot": "e30=", "envelope": "e30="}
+                    if name.startswith("discovery"):
+                        body.update(pointer="e30=", search="e30=")
+                    with path.open("wb") as stream:
+                        stream.write(json.dumps(body).encode())
+                        stream.write(b" " * (size - stream.tell()))
+                    path.chmod(0o600)
+                    if name != "foreign-file" and size <= limit:
+                        self.assertEqual(observer.refusal_image(), observer.refusal_initial)
+                    else:
+                        with self.assertRaises(ValueError): observer.refusal_image()
+
+    def test_removal_preserves_unrelated_saved_entries(self):
+        for kind in ("plugin", "skill"):
+            for mutate in (False, True):
+                with self.subTest(kind=kind, mutate=mutate), tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                    def seed(case):
+                        saved = case / ("project" if kind == "skill" else "uap-data")
+                        (saved / "uap.toml").write_text('schema_version = 1\n[dependencies]\nforeign = "1.0.0"\n[targets]\nclaude = ["foreign"]\n')
+                        (saved / "uap.lock").write_text('{"lock_version":1,"packages":[{"alias":"foreign","version":"1.0.0"}]}')
+                    observer = self.fixture(Path(directory).resolve(), kind, resources, seed)
+                    original = observer.observe
+                    def observe_saved(argv, outcome):
+                        if mutate and len(observer.observations) == 4:
+                            saved = observer.project if kind == "skill" else observer.data
+                            (saved / "uap.lock").write_text('{"lock_version":1,"packages":[]}')
+                        return original(argv, outcome)
+                    with patch.object(observer, "observe", observe_saved):
+                        if mutate:
+                            with self.assertRaises(ValueError):
+                                self.finish(observer, kind, 0, raw(kind, 0, observer.project))
+                        else:
+                            proof, _ = self.finish(observer, kind, 0, raw(kind, 0, observer.project))
+                            self.assertEqual(proof["status"], "verified-installation-lifecycle")
 
     def test_direct_prepared_source_match_preserves_default_pinned_lifecycle(self):
         item = FIXTURES["plugin_aliases"][21]
@@ -651,6 +806,8 @@ class KiroInstallationTests(unittest.TestCase):
                         self.assertEqual(argv[2], documents["list"]["data"]["installations"][0]["installation_id"])
                         if kind == "skill":
                             shutil.rmtree(skill.parent)
+                            (project / "uap.toml").write_text("schema_version = 1\n")
+                            (project / "uap.lock").write_text('{"lock_version":1,"packages":[]}')
                         else:
                             if index in prepared.KIRO_ACTIVE:
                                 shutil.rmtree(mcp.parent.parent / "skills" / identity)

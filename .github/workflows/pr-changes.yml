@@ -131,7 +131,7 @@ jobs:
             esac
             case "$path" in
               scripts/prepare-codex-linux-sandbox.sh|scripts/run-native-client-matrix.py) remaining_chatgpt=true ;;
-              scripts/devin_project_auto_install_e2e.py|scripts/test_devin_project_auto_install_e2e.py) remaining_windsurf=true ;;
+              scripts/devin_project_auto_install_e2e.py|scripts/test_devin_project_auto_install_e2e.py|scripts/testdata/windsurf_projection_oracle/*) remaining_windsurf=true ;;
               .github/workflows/live-install-remaining-clients.yml|.github/workflows/pr-changes.yml|scripts/live-install-audit.py|scripts/prepared_installation_audit.py|scripts/test_prepared_installation_audit.py|scripts/test_kiro_installation_audit.py|scripts/windsurf_global_skill_audit.py|scripts/windsurf_installation_audit.py|scripts/test_windsurf_global_skill_audit.py|scripts/test_windsurf_installation_audit.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|tests/live-install/fixtures.json) remaining_full=true ;;
             esac
             case "$path" in

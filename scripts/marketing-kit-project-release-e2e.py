@@ -914,7 +914,13 @@ def check_refusal_profile_unchanged(env, project, before):
     current = refusal_profile_snapshot(env, project, {})
     if current["protected"] != before["protected"] or current["parent"] != before["parent"]:
         raise AssertionError("corrupt restore changed protected native/Project state")
-    previous, observed = before["data"], current["data"]
+    check_refusal_data_unchanged(data, before, current["data"])
+
+
+def check_refusal_data_unchanged(data, before, observed, *, store_pins=()):
+    """Keep durable User data strict; grant only finite verified cold caches."""
+    previous = before["data"]
+    store_files, store_directories = copilot_cold_store_additions(data, previous, observed, store_pins)
     created_root = (previous.get("root-kind:0") == "absent"
                     and observed.get("root-kind:0") == "directory")
     for key, value in previous.items():
@@ -925,8 +931,10 @@ def check_refusal_profile_unchanged(env, project, before):
     files = {"directory-v1-cache.json", "directory-v1-cache.json.lock"}
     if not before.get("directory_only"):
         files.update((REFUSAL_SCANNER_PATH, *before["subjects"]))
+    files.update(store_files)
     directories = {parent.as_posix() for name in files
                    for parent in Path(name).parents if parent != Path(".")}
+    directories.update(store_directories)
     allowed = set()
     if created_root:
         entry = data.lstat()
@@ -945,7 +953,8 @@ def check_refusal_profile_unchanged(env, project, before):
             allowed.update((key, f"directory:0:{relative}"))
         elif (stat.S_ISREG(entry.st_mode) and entry.st_nlink == 1
               and relative in files):
-            mode = 0o700 if relative == REFUSAL_SCANNER_PATH else 0o600
+            mode = (store_files[relative] if relative in store_files else
+                    0o700 if relative == REFUSAL_SCANNER_PATH else 0o600)
             if stat.S_IMODE(entry.st_mode) != mode:
                 raise AssertionError("corrupt restore created unsafe cache file")
             digest_key = f"{data.name}/{Path(relative)}"
@@ -962,13 +971,70 @@ def check_refusal_profile_unchanged(env, project, before):
                         or assessment.get("policy") != REFUSAL_CACHE_POLICY
                         or assessment.get("schema_version") != 1):
                     raise AssertionError("corrupt restore created unrelated assessment")
-            elif relative.endswith(".lock") and entry.st_size != 0:
+            elif relative == "store/store.lock":
+                body, status = audit["copilot_settings_read"](path, data.parent)
+                if (status is not None or re.fullmatch(
+                        r'\{"pid":[1-9][0-9]*,"acquired_at":"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,9})?Z"\}\n', body) is None):
+                    raise AssertionError("cold Copilot created invalid store coordination lock")
+            elif relative.endswith(".lock") and relative not in store_files and entry.st_size != 0:
                 raise AssertionError("corrupt restore created invalid Directory cache lock")
             allowed.update((key, digest_key))
         else:
             raise AssertionError("corrupt restore created unexpected cache/data entry")
     if (observed.keys() - previous.keys()) - allowed:
         raise AssertionError("corrupt restore created unexpected data state")
+
+
+def copilot_cold_store_additions(data, previous, observed, pins):
+    """Use the existing held-tree digest authority for exact new store entries.
+
+    Published agentplugins-v0.1.116 (4f6b29938d02b91cbe1f42533d100468883a094e)
+    compose.go keeps EnvironmentStoreRoot at cacheRoot/store for Project scope.
+    environmentstore/store.go publishes only metadata.json and package below
+    packages/<algorithm>/<digest>; processlock owns store.lock. Deferred staging
+    cleanup may leave the .staging directory, never entries beneath it.
+    """
+    if not pins:
+        return {}, set()
+    helpers = audit["WINDSURF_GLOBAL_AUDIT"]
+    custody = audit["CLAUDE_RETIREMENT_AUDIT"]
+    files, directories = {"store/store.lock": 0o600}, {"store", "store/.staging"}
+    for pin in pins:
+        entry = "store/packages/agentplugins-tree-sha256-v1/" + pin["tree_digest"][7:]
+        # Existing content and directory membership acquire no new allowance.
+        if "metadata:0:" + entry in previous or "metadata:0:" + entry not in observed:
+            continue
+        root = data / entry
+        metadata, _ = copilot_owned_json(root / "metadata.json", data.parent)
+        if (not isinstance(metadata, dict)
+                or set(metadata) - {"schema_version", "digest_algorithm", "tree_digest", "executable_files", "source"}
+                or type(metadata.get("schema_version")) is not int or metadata["schema_version"] != 1
+                or metadata.get("digest_algorithm") != "agentplugins-tree-sha256-v1"
+                or metadata.get("tree_digest") != pin["tree_digest"]):
+            raise AssertionError("cold Copilot created unrelated immutable store metadata")
+        descriptor = custody["open_directory"](root / "package")
+        try:
+            frame = helpers["frame"](descriptor)
+            if helpers["immutable_source_digest"](descriptor, frame) != pin["tree_digest"]:
+                raise AssertionError("cold Copilot created unpinned immutable source bytes")
+            executables = sorted(name for name, value in frame.items()
+                                 if value["kind"] == "file" and value["mode"] & 0o111)
+            if metadata.get("executable_files", []) != executables:
+                raise AssertionError("cold Copilot store executable inventory changed")
+            custody["named_directory"](root / "package", descriptor)
+            if helpers["frame"](descriptor) != frame:
+                raise AssertionError("cold Copilot source changed during custody check")
+        finally:
+            os.close(descriptor)
+        files[entry + "/metadata.json"] = 0o600
+        directories.add(entry)
+        for name, value in frame.items():
+            relative = entry + "/package" + ("/" + name if name else "")
+            if value["kind"] == "dir":
+                directories.add(relative)
+            else:
+                files[relative] = 0o700 if value["mode"] & 0o111 else 0o600
+    return files, directories
 
 
 def profile_snapshot(env, project):
@@ -1498,6 +1564,25 @@ def check_copilot_cold_project_unchanged(project, before, receipts):
             raise AssertionError("cold Copilot locked install modified native or unowned Project state")
 
 
+def copilot_cold_data_snapshot(data):
+    """Enrich only this custody checkpoint with link, owner and ctime facts."""
+    observed = scoped_snapshot([data])
+    for key, value in tuple(observed.items()):
+        if not key.startswith("metadata:0:"):
+            continue
+        entry = (data / key.removeprefix("metadata:0:")).lstat()
+        identity = (entry.st_mode, entry.st_dev, entry.st_ino)
+        if stat.S_ISREG(entry.st_mode):
+            identity += (entry.st_mtime_ns,)
+        if identity != value:
+            raise AssertionError("cold Copilot data changed during custody snapshot")
+        # Directory link counts/ctime change when legitimate cache children appear.
+        observed[key] = (*value, entry.st_uid, entry.st_gid)
+        if not stat.S_ISDIR(entry.st_mode):
+            observed[key] += (entry.st_nlink, entry.st_ctime_ns)
+    return observed
+
+
 def verify_copilot_cold_project_refusal(cli, env, project):
     """A locked agreement cannot grant Copilot's remembered folder consent."""
     reason = "copilot has not remembered the selected project folder; rerun installation to restore folder trust"
@@ -1509,6 +1594,8 @@ def verify_copilot_cold_project_refusal(cli, env, project):
         raise AssertionError("cold Copilot Project already has native folder trust config")
     native_home = scoped_snapshot([Path(env["HOME"])])
     project_before = scoped_snapshot([project])
+    data_before = refusal_profile_snapshot(env, project, {"packages": list(FIXED_SIGNED_CLOSURE.values())})
+    data_before["data"] = copilot_cold_data_snapshot(Path(env["AGENTPLUGINS_HOME"]))
     agreement = {name: (project / name).read_bytes() for name in ("uap.toml", "uap.lock")}
     receipts = ()
     try:
@@ -1555,6 +1642,8 @@ def verify_copilot_cold_project_refusal(cli, env, project):
                 "bindings": len(results), "cold_native_restore_qualified": False}
     finally:
         guard()
+        check_refusal_data_unchanged(Path(env["AGENTPLUGINS_HOME"]), data_before,
+            copilot_cold_data_snapshot(Path(env["AGENTPLUGINS_HOME"])), store_pins=tuple(FIXED_SIGNED_CLOSURE.values()))
         if scoped_snapshot([Path(env["HOME"])]) != native_home:
             raise AssertionError("cold Copilot locked install modified native HOME")
         check_copilot_cold_project_unchanged(project, project_before, receipts)

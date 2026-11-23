@@ -13,6 +13,7 @@ import os
 import re
 import stat
 import sys
+import tomllib
 from pathlib import Path, PurePosixPath
 
 
@@ -322,6 +323,7 @@ def skill_preparation(row, item, target="cursor"):
             and (not grok or row.get("retained_passive_native_files") == [])
             and "repeat_project_unchanged" in row
             and (row["repeat_project_unchanged"] is True if grok else row["repeat_project_unchanged"] is None)
+            and (target != "cursor" or row.get("cursor_repeat_project_unchanged") is True)
             and all(row.get(key) is True for key in (
                 "lock_written", "lock_contains_identity", "lock_exact_source_pinned", "skill_bytes_match")))
 
@@ -495,6 +497,8 @@ class KiroInstallationAudit:
                             raise
                         self.protected_files[path] = (fd, info, body)
             self.initial = self.image()
+            self.refusal_initial = self.refusal_image()
+            self.saved_initial = self.saved_authorities()
         except BaseException:
             self.close()
             raise
@@ -513,10 +517,10 @@ class KiroInstallationAudit:
                 info.st_size, info.st_mtime_ns)
 
     @staticmethod
-    def held_bytes(fd):
+    def held_bytes(fd, limit=1 << 20):
         before = os.fstat(fd)
-        kiro_require(stat.S_ISREG(before.st_mode) and before.st_nlink in (0, 1) and before.st_size <= 1 << 20)
-        body = os.pread(fd, (1 << 20) + 1, 0)
+        kiro_require(stat.S_ISREG(before.st_mode) and before.st_nlink in (0, 1) and before.st_size <= limit)
+        body = os.pread(fd, limit + 1, 0)
         after = os.fstat(fd)
         kiro_require(len(body) == before.st_size and KiroInstallationAudit.file_identity(after)
                      == KiroInstallationAudit.file_identity(before) and after.st_nlink == before.st_nlink)
@@ -568,13 +572,13 @@ class KiroInstallationAudit:
         self.guard()
         return image
 
-    def read_bytes(self, path):
+    def read_bytes(self, path, *, limit=1 << 20):
         kiro_require(path.is_absolute() and self.audit["path_inside_case"](path, self.case))
         fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
         try:
             info = os.fstat(fd)
             kiro_require(info.st_nlink == 1)
-            body = self.held_bytes(fd)
+            body = self.held_bytes(fd, limit)
             kiro_require(self.file_identity(path.lstat()) == self.file_identity(info))
             return body
         finally:
@@ -582,6 +586,95 @@ class KiroInstallationAudit:
 
     def read_document(self, path):
         return json.loads(self.read_bytes(path), object_pairs_hook=kiro_unique_pairs, parse_constant=kiro_nonfinite)
+
+    def refusal_snapshot(self, roots):
+        """Add local file link/ctime and owner custody to shared snapshots."""
+        image = self.audit["scoped_snapshot"](roots)
+        for key, value in tuple(image.items()):
+            if not key.startswith("metadata:"):
+                continue
+            _, index, relative = key.split(":", 2)
+            info = (roots[int(index)] / relative).lstat()
+            identity = (info.st_mode, info.st_dev, info.st_ino)
+            if stat.S_ISREG(info.st_mode):
+                identity += (info.st_mtime_ns,)
+            kiro_require(identity == value)
+            image[key] = (*value, info.st_uid, info.st_gid)
+            # Cache children legitimately change directory links and ctime.
+            if not stat.S_ISDIR(info.st_mode):
+                image[key] += (info.st_nlink, info.st_ctime_ns)
+        return image
+
+    def refusal_image(self):
+        """Protect saved authority and every managed/foreign leaf on refusal.
+
+        main.go names these two cache records; their cache adapters retain
+        only an exact .lock peer after authenticated reconciliation. This
+        grants no exception to store, security, state, intent or managed trees.
+        Existing snapshot and bounded file readers supply custody checks; the
+        audit does not implement another cache verifier or state engine.
+        """
+        self.guard()
+        roots = (self.data, self.project)
+        image = self.refusal_snapshot(roots)
+        kiro_require(not any(key.startswith(("link:", "root-link:")) for key in image)
+                     and not any(value in ("unreadable", "symlink", "non-regular") for value in image.values()))
+        # Canonical cache.go record ceilings: base64 payload(s) + JSON overhead.
+        # directoryv1 encodes snapshot/envelope separately; discoveryv1 bounds
+        # their aggregate with pointer and search. Other reads remain 1 MiB.
+        encoded = lambda size: 4 * ((size + 2) // 3)
+        caches = {"directory-v1-cache.json": encoded(4 << 20) + encoded(16 << 10) + 4096,
+                  "discovery-v1-cache.json": encoded((16 << 10) + (16 << 20) + (16 << 10) + (10 << 20)) + 4096}
+        permitted = set(caches) | {name + ".lock" for name in caches}
+        for root in roots:
+            for path in root.rglob("*"):
+                kiro_require(self.audit["path_inside_case"](path, self.case))
+                info = path.lstat()
+                kiro_require(info.st_uid == os.geteuid())
+                if stat.S_ISDIR(info.st_mode):
+                    self.directory(path)
+                    continue
+                limit = caches.get(path.name, 1 << 20) if path.parent == self.data else 1 << 20
+                body = self.read_bytes(path, limit=limit)
+                if path.parent == self.data and path.name in permitted:
+                    kiro_require(stat.S_IMODE(info.st_mode) == 0o600
+                                 and (not path.name.endswith(".lock") or body == b""))
+        kiro_require(image == self.refusal_snapshot(roots))
+        for name in permitted:
+            image.pop("uap-data/" + name, None)
+            image.pop("metadata:0:" + name, None)
+        kiro_digest(image)
+        return image
+
+    def saved_authorities(self):
+        """Read the saved graph through existing bounded custody and parsers."""
+        root = self.project if self.kind == "skill" else self.data
+        manifest, locked = root / "uap.toml", root / "uap.lock"
+        result = {"dependencies": {}, "dev-dependencies": {}, "targets": {}, "packages": []}
+        if manifest.exists() or manifest.is_symlink():
+            value = tomllib.loads(self.read_bytes(manifest).decode("utf-8", errors="strict"))
+            kiro_require(exact(value.get("schema_version"), 1)
+                         and all(type(value.get(key, {})) is dict for key in ("dependencies", "dev-dependencies"))
+                         and type(value.get("targets", {})) is dict
+                         and all(type(targets) is list and all(type(alias) is str for alias in targets)
+                                 for targets in value.get("targets", {}).values()))
+            result.update({key: value.get(key, {}) for key in ("dependencies", "dev-dependencies")})
+            result["targets"] = {key: targets for key, targets in value.get("targets", {}).items() if targets}
+        if locked.exists() or locked.is_symlink():
+            value = self.read_document(locked)
+            kiro_require(type(value) is dict and exact(value.get("lock_version"), 1)
+                         and type(value.get("packages")) is list
+                         and all(type(package) is dict and type(package.get("alias")) is str for package in value["packages"]))
+            result["packages"] = value["packages"]
+        return result
+
+    def removed_saved_authorities(self):
+        remaining = self.saved_authorities()
+        alias = self.skill_name if self.kind == "skill" else self.deliveries[0]["record"]["declared_name"]
+        kiro_require(exact(remaining, self.saved_initial)
+                     and alias not in remaining["dependencies"] and alias not in remaining["dev-dependencies"]
+                     and not any(alias in values for values in remaining["targets"].values())
+                     and not any(package["alias"] == alias for package in remaining["packages"]))
 
     def tree_contents(self, root):
         self.directory(root)
@@ -720,6 +813,9 @@ class KiroInstallationAudit:
                                      and not any(type(binding) is not dict or binding.get("client_id") == "kiro"
                                                  for binding in record["clients"].values())
                                      for record in state["installations"]))
+            self.removed_saved_authorities()
+        else:
+            kiro_require(self.refusal_image() == self.refusal_initial)
         self.observations.append((list(argv), copy.deepcopy(outcome), image))
 
     def finish(self, row, item, index, fixtures):
@@ -740,6 +836,7 @@ class KiroInstallationAudit:
         listed = [self.cli, "list", "--target", "kiro", *scope, "--format", "json"]
         negative = self.kind == "plugin" and index == 13
         if negative:
+            kiro_require(self.refusal_image() == self.refusal_initial)
             kiro_require(source == identity == "marketing-kit" and len(self.observations) == 2
                          and [x[0] for x in self.observations] == [add, listed]
                          and all(image == self.initial for _, _, image in self.observations))

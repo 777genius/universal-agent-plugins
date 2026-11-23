@@ -2640,6 +2640,165 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                          "operation": "install", "outcome": "incomplete", "reason": reason,
                          "next_actions": [{"kind": "activate", "reason": reason}]} for alias in aliases]}}
 
+    @contextmanager
+    def _cold_copilot_data_case(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            home, data, project = (root / name for name in ("home", "data", "project"))
+            for directory in (home, data, project): directory.mkdir(mode=0o700)
+            (home / ".copilot").mkdir(mode=0o700)
+            (project / "uap.toml").write_text("retained portable manifest")
+            (project / "uap.lock").write_text("retained signed lock")
+            foreign = data / "foreign-receipt.json"
+            foreign.write_text("unmanaged data remains unchanged")
+            foreign.chmod(0o600)
+            env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+            yield runner, env, project, data
+
+    def test_marketing_kit_cold_copilot_expected_refusal_rejects_installer_data_writes(self):
+        for relative in ("state-v2.json", "uap.toml", "uap.lock", "managed/plugin",
+                         "operations-v2/receipt", "plugin-data/data", "foreign-receipt.json",
+                         "store/packages/unowned/package", "store/.staging/entry-leftover/file"):
+            with self.subTest(path=relative), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                def invoke(*_):
+                    path = data / relative
+                    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    path.write_text("unexpected durable state")
+                    path.chmod(0o600)
+                    return self._marketing_kit_copilot_consent_response(runner, project)
+                with patch.dict(verify.__globals__, {"invoke": invoke}):
+                    with self.assertRaises(AssertionError): verify("unused", env, project)
+
+    def test_marketing_kit_cold_copilot_preserves_existing_file_link_custody(self):
+        for remove_alias in (False, True):
+            with self.subTest(remove_alias=remove_alias), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                original = data / "foreign-receipt.json"
+                before = runner["scoped_snapshot"]([data])
+                def invoke(*_):
+                    alias = data.parent / "outside-data-alias"
+                    os.link(original, alias)
+                    if remove_alias: alias.unlink()
+                    # Shared snapshot equality is deliberately insufficient:
+                    # bytes, inode, mode and mtime all survive this mutation.
+                    self.assertEqual(runner["scoped_snapshot"]([data]), before)
+                    return self._marketing_kit_copilot_consent_response(runner, project)
+                with patch.dict(verify.__globals__, {"invoke": invoke}):
+                    with self.assertRaisesRegex(AssertionError, "existing data entry"):
+                        verify("unused", env, project)
+
+    def test_marketing_kit_cold_copilot_exception_still_checks_installer_data(self):
+        for mutation in (False, True):
+            with self.subTest(mutation=mutation), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                def invoke(*_):
+                    if mutation: (data / "state-v2.json").write_text("unexpected")
+                    raise RuntimeError("subject process failed")
+                with patch.dict(verify.__globals__, {"invoke": invoke}):
+                    if mutation:
+                        with self.assertRaises(AssertionError): verify("unused", env, project)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "subject process failed"):
+                            verify("unused", env, project)
+
+    def test_marketing_kit_cold_copilot_clean_cache_and_receipt_bound_project_positive(self):
+        with self._cold_copilot_data_case() as (runner, env, project, data):
+            verify = runner["verify_copilot_cold_project_refusal"]
+            foreign_before = runner["scoped_snapshot"]([data])
+            def invoke(*_):
+                for name, body in (("directory-v1-cache.json", b"signed Directory cache"),
+                                   ("directory-v1-cache.json.lock", b"")):
+                    path = data / name; path.write_bytes(body); path.chmod(0o600)
+                response = self._marketing_kit_copilot_consent_response(runner, project)
+                alias = response["_json"]["actions"][0]["alias"]
+                iid = response["_json"]["results"][0]["installation_id"]
+                physical = alias + "-" + hashlib.sha256(iid.encode()).hexdigest()[:12]
+                managed = project / ".uap/managed/clients/copilot" / physical
+                managed.mkdir(parents=True, mode=0o700)
+                (managed / "plugin.json").write_text("receipt-bound materialization")
+                (project / ".uap/state-v2.json").write_text("Project state may be retained")
+                return response
+            with patch.dict(verify.__globals__, {"invoke": invoke}):
+                result = verify("unused", env, project)
+            self.assertEqual(result["result"], "expected_refusal")
+            self.assertFalse(result["cold_native_restore_qualified"])
+            after = runner["scoped_snapshot"]([data])
+            self.assertTrue(all(after[key] == value for key, value in foreign_before.items()))
+
+    @unittest.skipUnless(os.name == "posix", "published Ubuntu cold-cache descriptor custody")
+    def test_marketing_kit_cold_copilot_cache_allowance_is_exact_and_source_bound(self):
+        mutations = (None, "source-bytes", "metadata", "executables", "state-in-entry", "unknown-entry",
+                     "nonempty-staging", "lock", "source-mode", "hardlink", "symlink", "fifo",
+                     "existing-addition", "existing-rewrite")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                helpers = runner["audit"]["WINDSURF_GLOBAL_AUDIT"]
+                custody = runner["audit"]["CLAUDE_RETIREMENT_AUDIT"]
+                # Exercise the cache-coordinate join with an inert independently
+                # held source; the reused digest engine has its own contracts.
+                source = data.parent / "source"
+                source.mkdir(mode=0o700)
+                (source / "plugin.json").write_bytes(b'{"name":"inert-cache"}\n')
+                (source / "plugin.json").chmod(0o600)
+                fd = custody["open_directory"](source)
+                try: digest = helpers["immutable_source_digest"](fd, helpers["frame"](fd))
+                finally: os.close(fd)
+                distribution = runner["REQUIRED_DISTRIBUTIONS"]["marketing-kit"]
+                pins = runner["FIXED_SIGNED_CLOSURE"]
+                pin = {**pins[distribution], "tree_digest": digest}
+                entry = data / "store/packages/agentplugins-tree-sha256-v1" / digest[7:]
+                metadata = {"schema_version": 1, "digest_algorithm": "agentplugins-tree-sha256-v1",
+                            "tree_digest": digest, "source": {}}
+                def populate():
+                    import shutil
+                    entry.mkdir(parents=True, mode=0o700)
+                    shutil.copytree(source, entry / "package")
+                    path = entry / "metadata.json"
+                    path.write_text(json.dumps(metadata)); path.chmod(0o600)
+                    (data / "store/.staging").mkdir(mode=0o700)
+                    for directory in (data / "store", data / "store/packages",
+                                      data / "store/packages/agentplugins-tree-sha256-v1"):
+                        directory.chmod(0o700)
+                if mutation and mutation.startswith("existing-"): populate()
+                def invoke(*_):
+                    if not (mutation and mutation.startswith("existing-")): populate()
+                    lock = data / "store/store.lock"
+                    lock.write_text('{"pid":123,"acquired_at":"2026-11-23T12:00:00Z"}\n')
+                    lock.chmod(0o600)
+                    if mutation == "source-bytes": (entry / "package/plugin.json").write_text("wrong bytes")
+                    elif mutation == "metadata": (entry / "metadata.json").write_text("{}")
+                    elif mutation == "executables":
+                        (entry / "metadata.json").write_text(json.dumps({**metadata, "executable_files": ["unknown"]}))
+                    elif mutation == "state-in-entry": (entry / "state-v2.json").write_text("unowned")
+                    elif mutation == "unknown-entry": (entry.parent / ("0" * 64)).mkdir(mode=0o700)
+                    elif mutation == "nonempty-staging": (data / "store/.staging/entry-unfinished").mkdir(mode=0o700)
+                    elif mutation == "lock": lock.write_text("not a producer process lock")
+                    elif mutation == "source-mode": (entry / "package/plugin.json").chmod(0o644)
+                    elif mutation == "hardlink": os.link(entry / "package/plugin.json", source / "linked")
+                    elif mutation == "symlink":
+                        (entry / "package/plugin.json").unlink()
+                        (entry / "package/plugin.json").symlink_to(source / "plugin.json")
+                    elif mutation == "fifo":
+                        (entry / "package/plugin.json").unlink()
+                        os.mkfifo(entry / "package/plugin.json", 0o600)
+                    elif mutation == "existing-addition": (entry / "package/extra").write_text("unowned")
+                    elif mutation == "existing-rewrite": (entry / "package/plugin.json").write_text("changed")
+                    return self._marketing_kit_copilot_consent_response(runner, project)
+                descriptors = Path("/proc/self/fd")
+                count = len(list(descriptors.iterdir())) if descriptors.is_dir() else None
+                with patch.dict(pins, {distribution: pin}), patch.dict(verify.__globals__, {"invoke": invoke}):
+                    if mutation is None:
+                        self.assertEqual(verify("unused", env, project)["result"], "expected_refusal")
+                    else:
+                        with self.assertRaises((AssertionError, RuntimeError, ValueError)): verify("unused", env, project)
+                if count is not None:
+                    self.assertEqual(len(list(descriptors.iterdir())), count, "cache custody leaked a descriptor")
+
     def test_marketing_kit_copilot_consent_refusal_requires_exact_causal_closure(self):
         mutations = [
             lambda r, *_: r.update(exit_code=0),
@@ -5927,6 +6086,43 @@ module.exports = {
         self.assertEqual(report["github_sha"], "a" * 40)
         self.assertEqual(report["pr_head_sha"], "b" * 40)
         self.assertEqual(report["results"][0]["status"], "client-unavailable")
+
+    @unittest.skipUnless(sys.platform == "linux", "Ubuntu Windsurf projection toolchain prelude")
+    def test_windsurf_workflow_preserves_selected_go_and_refuses_wrong_version(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        step = workflow.split("      - name: Run explicit installation contracts and preserve native outcomes\n", 1)[1]
+        prelude = textwrap.dedent(step.split("        run: |\n", 1)[1]
+            .split("          # Keep installation", 1)[0])
+        # Execute the actual prelude only: no vendor, audit, or native process.
+        script = prelude + '\n[[ "$(command -v go)" == "$EXPECTED_GO" ]]\nprintf "%s\\n" "$(command -v go)"\n'
+        for version in ("go version go1.26.11 linux/amd64", "go version go1.26.10 linux/amd64"):
+            with self.subTest(version=version), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                selected = root / "setup-go/bin/go"
+                vendor = root / "runner/vendor-root/usr/bin/go"
+                home = root / "home"
+                for directory in (selected.parent, vendor.parent, home): directory.mkdir(parents=True)
+                selected.write_text('#!/bin/bash\n[[ "$#" == 1 && "$1" == version && "$GOTOOLCHAIN" == local ]] || exit 64\n'
+                    'printf "%s\\n" "$0" >> "$TEST_GO_LOG"\nprintf "%s\\n" "$TEST_GO_VERSION"\n')
+                vendor.write_text('#!/bin/bash\nprintf "vendor invoked\\n" >> "$TEST_VENDOR_LOG"\nexit 79\n')
+                selected.chmod(0o700); vendor.chmod(0o700)
+                selected_log, vendor_log = root / "selected-go.log", root / "vendor-go.log"
+                env = {"PATH": str(selected.parent) + ":/usr/bin:/bin", "HOME": str(home),
+                       "RUNNER_TEMP": str(root / "runner"), "AUDIT_TARGET": "windsurf", "AUDIT_KIND": "plugin",
+                       "EXPECTED_GO": str(selected), "TEST_GO_VERSION": version,
+                       "TEST_GO_LOG": str(selected_log), "TEST_VENDOR_LOG": str(vendor_log)}
+                result = subprocess.run(["/bin/bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
+                                        env=env, capture_output=True, text=True, timeout=10)
+                if version == "go version go1.26.11 linux/amd64":
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, str(selected) + "\n")
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(result.stdout, "")
+                self.assertTrue(selected_log.is_file(), "selected compiler version was never checked")
+                self.assertEqual(selected_log.read_text(), str(selected) + "\n")
+                self.assertFalse(vendor_log.exists())
 
     def test_both_matrix_workflows_export_pr_source_head(self):
         for relative_path in (
