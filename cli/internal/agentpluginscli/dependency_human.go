@@ -9,29 +9,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
-const undetectedAutomaticInstallReason = "client is not detected; install or configure it before selecting it"
-
-// Only this neutral missing-client fact is folded. Every actionable reason stays.
-func humanSkippedTargetLabels(skipped []targetSkip) []string {
-	var labels []string
-	missing := map[domain.ClientID]bool{}
-	for _, target := range skipped {
-		if target.Reason == undetectedAutomaticInstallReason {
-			missing[target.Client] = true
-			continue
-		}
-		labels = append(labels, prompt.SafeText(reviewClientName(target.Client)+": "+target.Reason))
-	}
-	if len(missing) > 0 {
-		noun := "agents"
-		if len(missing) == 1 {
-			noun = "agent"
-		}
-		labels = append(labels, fmt.Sprintf("%d %s not detected; install or configure an agent before selecting it", len(missing), noun))
-	}
-	return labels
-}
-
 func humanDependencyVerb(action string) string {
 	if action == "" {
 		return "Operation"

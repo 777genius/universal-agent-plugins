@@ -23,7 +23,7 @@ QUESTION = "Apply these changes? [y/N]"
 ACK = re.compile(rb"(?:^|[\r\n])Changes confirmed\.\r?\n")
 ACTIVITY = re.compile(rb"\r\x1b\[2K([^\r\n]*)(?=[\r\n])")
 RESULT = re.compile(r"(?:^|[\r\n])Install ([^\r\n]+?) for ([^\r\n:]+): ([^\s]+)[^\r\n]*(?=[\r\n]|$)")
-INSTALLATION = re.compile(r"(?m)^Installation: ([^/\s]+)\r?$")
+INSTALLATION = re.compile(rf"(?m)^Installation: ([^/\s]+) \({re.escape(PLUGIN)}\)\r?$")
 
 
 def arguments(installer):
@@ -112,7 +112,8 @@ def completed_result(raw, after):
           [(PLUGIN, LABELS[target]) for target in TARGETS],
           "Directory result did not cover exactly the plugin and two selected agents")
     installation_ids = INSTALLATION.findall(text)
-    check(len(installation_ids) == 1 and all(outcome == "completed" for _, _, outcome in results),
+    check(len(installation_ids) == 1 and len(re.findall(r"(?m)^Installation:", text)) == 1
+          and all(outcome == "completed" for _, _, outcome in results),
           "Directory result lost one saved installation or did not complete")
     # These are real operation outcomes, not evidence that MCP/auth is ready.
     return {"installation_id": installation_ids[0],
