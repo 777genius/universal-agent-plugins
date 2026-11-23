@@ -35,7 +35,10 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	f.preparePackage(t)
 	foreign := copilotRawForeign(t, f)
 	before := copilotRawInventories(t, f, "before", nil)
-	events := copilotRawRead(t, f.base.Events)
+	eventsExist, events, err := copilotRawEventSnapshot(f.base.Events)
+	if err != nil {
+		t.Fatal("raw initial MCP event snapshot refused", err)
+	}
 	argv := []string{f.installer, "skills", "add", nativeRawProjectSkillsSource, "--skill", copilotRawSkill, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--no-ui", "--format", "json"}
 	first := f.command(t, "raw-add", f.outside, f.env(), argv, 45*time.Second)
 	copilotRawReady(t, first.Stdout, false)
@@ -56,7 +59,7 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	if !reflect.DeepEqual(before, copilotRawInventories(t, f, "repeat", &binding)) {
 		t.Fatal("repeat changed foreign catalogs")
 	}
-	removed := f.command(t, "raw-remove", f.outside, f.env(), []string{f.installer, "remove", installed.InstallationID, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--no-ui", "--format", "json"}, 45*time.Second)
+	removed := f.command(t, "raw-remove", f.outside, f.env(), []string{f.installer, "remove", installed.InstallationID, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--format", "json"}, 45*time.Second)
 	value, err := projectNativeRuntimeJSON(removed.Stdout)
 	doc, ok := value.(map[string]any)
 	if err != nil || !ok || doc["schema_version"] != json.Number("1") || doc["command"] != "agentplugins remove" || doc["result"] != "success" {
@@ -81,10 +84,70 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	if _, err := os.Lstat(binding.TargetLocator); !os.IsNotExist(err) {
 		t.Fatal("raw removed package remains", err)
 	}
-	if !bytes.Equal(events, copilotRawRead(t, f.base.Events)) {
-		t.Fatal("ordinary catalog invoked MCP probe")
+	afterEventsExist, afterEvents, err := copilotRawEventSnapshot(f.base.Events)
+	if err != nil || eventsExist != afterEventsExist || !bytes.Equal(events, afterEvents) {
+		t.Fatal("ordinary catalog mutated MCP probe events", err)
 	}
 	f.check(t)
+}
+
+// copilotRawEventSnapshot distinguishes absent output from an empty native event
+// file. This no-provider journey must preserve event presence and bytes.
+// The shared bounded owner/regular-file read rejects unsafe existing leaves.
+func copilotRawEventSnapshot(path string) (bool, []byte, error) {
+	if err := projectNativeRuntimeParents(path); err != nil {
+		return false, nil, err
+	}
+	_, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		if parentErr := projectNativeRuntimeParents(path); parentErr != nil {
+			return false, nil, parentErr
+		}
+		return false, nil, nil
+	}
+	if err != nil {
+		return false, nil, err
+	}
+	body, err := projectNativeRuntimeRead(path, 1<<20)
+	if err != nil {
+		return false, nil, err
+	}
+	return true, body, nil
+}
+
+func TestCopilotRawEventSnapshotPreservesAbsenceAndRefusesAliases(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "events.jsonl")
+	if _, _, err := copilotRawEventSnapshot(filepath.Join(root, "missing-parent", "events.jsonl")); err == nil {
+		t.Fatal("missing event parent must not resemble an absent leaf")
+	}
+	exists, body, err := copilotRawEventSnapshot(path)
+	if err != nil || exists || len(body) != 0 {
+		t.Fatal("uncreated event file must remain absent", err)
+	}
+	if err := os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	exists, body, err = copilotRawEventSnapshot(path)
+	if err != nil || !exists || len(body) != 0 {
+		t.Fatal("present empty event file must not resemble absence", err)
+	}
+	if err := os.WriteFile(path, []byte("event\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	exists, body, err = copilotRawEventSnapshot(path)
+	if err != nil || !exists || string(body) != "event\n" {
+		t.Fatal("existing event bytes must remain observable", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "foreign-events"), path); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := copilotRawEventSnapshot(path); err == nil {
+		t.Fatal("event snapshot must refuse symlinked leaf")
+	}
 }
 
 func copilotRawLogEvidence(t *testing.T, f *copilotProjectAttempt) {
