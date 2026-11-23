@@ -8,9 +8,9 @@ import (
 )
 
 type mainSupersessionWorkflow struct {
-	On map[string]yaml.Node `yaml:"on"`
+	On          map[string]yaml.Node `yaml:"on"`
 	Concurrency struct {
-		Group string `yaml:"group"`
+		Group  string `yaml:"group"`
 		Cancel string `yaml:"cancel-in-progress"`
 	} `yaml:"concurrency"`
 }
@@ -18,9 +18,9 @@ type mainSupersessionWorkflow struct {
 func TestCIMainPushEvidenceIsNeverCancelledByNextMerge(t *testing.T) {
 	const suffix = "${{ github.event_name }}-${{ github.event_name == 'pull_request' && (github.event.pull_request.number || github.ref) || github.run_id }}"
 	const prOnly = "${{ github.event_name == 'pull_request' }}"
-	cases := []struct{
+	cases := []struct {
 		file, prefix string
-		triggers []string
+		triggers     []string
 	}{
 		{"package-manager-e2e.yml", "package-manager-e2e", []string{"pull_request", "push", "schedule", "workflow_dispatch"}},
 		{"source-transports.yml", "source-transports", []string{"pull_request", "push", "workflow_dispatch"}},
