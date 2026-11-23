@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 )
 
 func (t *Terminal) selectPlain(ctx context.Context, req MultiSelectRequest) (Selection, error) {
@@ -12,8 +14,10 @@ func (t *Terminal) selectPlain(ctx context.Context, req MultiSelectRequest) (Sel
 	if err != nil {
 		return Selection{}, err
 	}
+	theme := terminaltheme.Theme{Enabled: !t.renderer.NoColor}
+	view, below := annotatedRequest(req, terminaltheme.Theme{}), plainUnavailable(req.UnavailableHeading, req.Unavailable, theme)
 	for range 3 {
-		if err := u.render(req.SelectRequest, true); err != nil {
+		if err := u.render(view, true, below); err != nil {
 			return Selection{}, err
 		}
 		if _, err := fmt.Fprint(u.out, "Use all/none, or q to cancel.\n> "); err != nil {

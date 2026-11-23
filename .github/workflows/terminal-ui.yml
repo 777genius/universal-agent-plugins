@@ -113,9 +113,9 @@ jobs:
       - name: Broad existing CLI contracts
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         working-directory: cli
-        # Windows exhausted the package-wide 15m alarm while its active
-        # HTTPS fixture had run for only 6s. Keep per-case deadlines unchanged.
-        run: go test -v -timeout=${{ runner.os == 'Windows' && '25m' || '15m' }} ./internal/agentpluginscli ./cmd/agentplugins/...
+        # Non-Windows whole-suite budget follows REQUIRED_TEST_TIMEOUT.
+        # Keep the qualified Windows package budget and per-case deadlines.
+        run: go test -v -timeout=${{ runner.os == 'Windows' && '25m' || '20m' }} ./internal/agentpluginscli ./cmd/agentplugins/...
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:

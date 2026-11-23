@@ -35,6 +35,14 @@ type MultiSelectRequest struct {
 	SelectRequest
 	MinSelected int
 	Filterable  bool
+	// Annotations decorate options by ID: a secondary note in parentheses and
+	// a short informational addition.
+	Annotations map[string]Annotation
+	// Unavailable explains clients that cannot be selected. The terminal shows
+	// it below the list under UnavailableHeading and degrades to one line when
+	// the screen is too short.
+	UnavailableHeading string
+	Unavailable        []Unavailable
 }
 
 var (

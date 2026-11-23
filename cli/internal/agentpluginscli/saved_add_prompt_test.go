@@ -89,8 +89,8 @@ func TestSavedAddDefaultsOnlySafelyDetectedTargets(t *testing.T) {
 			} else if prompted != 0 {
 				t.Fatalf("%d detected clients unexpectedly prompted", count)
 			}
-			diagnostics := output.String() + strings.Join(menu.SkippedLabels, "\n")
-			for _, reason := range []string{"not detected", "could not be inspected safely", "use --no-save"} {
+			diagnostics := output.String() + prompt.SkippedClientsNotice(menu.Skipped)
+			for _, reason := range []string{"not found on this computer", "could not be inspected safely", "install it separately with --no-save"} {
 				if !strings.Contains(diagnostics, reason) {
 					t.Fatalf("missing %q in %q", reason, diagnostics)
 				}
