@@ -14,6 +14,33 @@ async function capture(page: Page, name: string) {
   await page.screenshot({ path: resolve(directory, `${name}.png`) });
 }
 
+type TileBox = { x: number; y: number; width: number; right: number };
+
+// Every agent tile has the same width, and a short last row sits centered
+// under the full rows instead of leaving a hole on one side.
+async function expectCenteredEqualTiles(page: Page, tiles: TileBox[], rows: number[]) {
+  const widths = tiles.map((tile) => tile.width);
+  expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(0.5);
+  const strip = (await page.locator('.client-strip').boundingBox())!;
+  const center = strip.x + strip.width / 2;
+  for (const row of rows) {
+    const items = tiles.filter((tile) => Math.round(tile.y) === row);
+    const left = Math.min(...items.map((tile) => tile.x));
+    const right = Math.max(...items.map((tile) => tile.right));
+    expect(Math.abs((left + right) / 2 - center)).toBeLessThanOrEqual(1);
+  }
+}
+
+async function tileGeometry(page: Page) {
+  const tiles = await page.locator('.client-strip > li').evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const rect = node.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, right: rect.right };
+    }),
+  );
+  return { tiles, rows: [...new Set(tiles.map((tile) => Math.round(tile.y)))] };
+}
+
 async function waitForCommand(page: Page) {
   await hydrated(page);
   await expect(page.locator('.hero__window .command-snippet')).toBeVisible({
@@ -101,6 +128,7 @@ for (const width of [1440, 1024, 390, 320]) {
       expect(item.x).toBeGreaterThanOrEqual(0);
       expect(item.right).toBeLessThanOrEqual(width + 0.5);
     }
+    await expectCenteredEqualTiles(page, geometry, rows);
     expect(
       await page
         .locator('.client-strip__copy strong')
@@ -137,6 +165,19 @@ for (const width of [1440, 1024, 390, 320]) {
     await capture(page, `hero-layout-${width}`);
   });
 }
+
+test('right-to-left agent rows stay centered with equal tiles', async ({ page }) => {
+  for (const width of [1440, 768, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('./ar/');
+    await hydrated(page);
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('.client-strip > li')).toHaveCount(clientLandingPages.length);
+    const { tiles, rows } = await tileGeometry(page);
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    await expectCenteredEqualTiles(page, tiles, rows);
+  }
+});
 
 test('selected targets produce one complete copyable command with keyboard activation', async ({
   page,

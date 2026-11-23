@@ -120,6 +120,9 @@ func clonePrepareRequest(req Request) Request {
 }
 
 func validatePrepareInput(ctx context.Context, req Request) error {
+	if len(req.ClientSurfaces) != 0 && len(req.Targets) > 0 {
+		return fmt.Errorf("%w: group surface observations must be per target", ErrInvalidRequest)
+	}
 	if req.ConfirmPluginEnable && (req.Operation != OpRepair || req.Scope != domain.ScopeProject || req.InstallationID == "" || len(req.Targets) > 1 || req.ClientID == "" && len(req.Targets) == 0) {
 		return fmt.Errorf("%w: explicit plugin enablement requires one selected Project repair", ErrInvalidRequest)
 	}

@@ -321,9 +321,14 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                     new.write_bytes(original)
                     changed.append(True)
                 return block
+            # Capture the real phase snapshot *before* installing the injected
+            # read fault. Otherwise snapshot() consumes os.read and replaces
+            # the file before the native held-descriptor path is exercised.
+            final = case["audit"].snapshot([case["profile"]])
+            started, finished = case["phase_started"], case["clock"].now()
             with patch.object(os, "read", side_effect=swap):
-                case["observer"].checkpoint("after-public-repeat-add", final,
-                                            interval=interval)
+                case["observer"].checkpoint(
+                    "after-public-repeat-add", final, interval=(started, finished))
             self.assertEqual(changed, [True])
             self.assertFalse(case["observer"].finish(final))
             self.assertRegex(case["observer"].reason,
@@ -370,10 +375,15 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                 handle = original(*args)
                 opened.append(handle)
                 return handle
+            # snapshot() itself opens ordinary files through the CRT.
+            # Keep transfer injection scoped to the actual NTFS-held observer,
+            # not to the preceding independent phase snapshot construction.
+            final = case["audit"].snapshot([case["profile"]])
+            started, finished = case["phase_started"], case["clock"].now()
             with (patch.object(native.kernel, "OpenFileById", side_effect=capture),
                   patch.object(native.msvcrt, "open_osfhandle", side_effect=OSError("transfer control"))):
-                case["observer"].checkpoint("after-public-repeat-add", final,
-                                            interval=interval)
+                case["observer"].checkpoint(
+                    "after-public-repeat-add", final, interval=(started, finished))
             self.assertEqual(len(opened), 1)
             self.assertFalse(case["observer"].finish(final))
             flags = ctypes.c_uint32()

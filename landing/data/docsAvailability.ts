@@ -10,6 +10,8 @@ export const docsAvailability = {
   supportBoundary: 'build/',
   customLogicGuide: 'build/checks.html',
   restoreOnAnotherMachine: 'use/manage.html',
+  sdk: 'sdk/',
+  sdkManagement: 'sdk/typescript-management.html',
 } as const;
 export type DocsPageId = keyof typeof docsAvailability;
 export const ownedDocsRoot = 'https://777genius.github.io/universal-agent-plugins/docs/';

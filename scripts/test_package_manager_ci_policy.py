@@ -321,7 +321,16 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         native = NATIVE_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("types: [opened, synchronize, reopened, ready_for_review]", native)
         self.assertIn("github.event.pull_request.draft == false", native)
-        self.assertIn("client: [codex, claude, opencode]", native)
+        # The PR classifier may narrow a client's cells, but an unavailable
+        # classification or a shared source change must still admit all three.
+        self.assertIn(
+            'client: ${{ fromJSON(needs.changes.outputs.native_clients || '
+            '\'["codex","claude","opencode"]\') }}',
+            native,
+        )
+        self.assertIn("opencode-v2-project:", native)
+        self.assertIn("target: linux-amd64", native)
+        self.assertIn("client: opencode", native)
         self.assertIn("--project-components", native)
         self.assertIn("schedule:", native)
         self.assertIn("workflow_dispatch:", native)

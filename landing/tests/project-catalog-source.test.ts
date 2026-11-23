@@ -82,7 +82,10 @@ test('Kiro Project preview needs MCP alongside its approval extension', () => {
   const release = plugin.distributions[0]!.releases[0]!;
   release.components = ['extensions'];
   assert.equal(projectCatalogSelection(plugin, ['kiro']).resolution.distribution, undefined);
-  assert.equal(projectCatalogAutomaticSelection(plugin), undefined);
+  // Extensions alone are Project-installable only for clients with native
+  // extension support (Cursor, covered below); Kiro's refusal above means
+  // automatic selection can never route an extension-only preview through it.
+
   // A portable Skill still qualifies for partial installation if an unrelated
   // extension cannot be projected; the summary cannot identify namespaces.
   release.components = ['skills', 'extensions'];

@@ -83,7 +83,7 @@ func refineProjectPlan(in clients.PlanInput, plan *domain.DeliveryPlan) error {
 		return err
 	}
 	plan.NativeRegistryRoot, plan.NativeRegistryExecutable = root, ""
-	if plan.Status == domain.PlanUnsupported || !shared.OnlyNativeComponents(plan.Components) {
+	if plan.Status == domain.PlanUnsupported || !kiroNativeComponents(plan.Components) {
 		return nil
 	}
 	plan.Status, plan.Activation, plan.Verification = domain.PlanReady, domain.ActivationPrepared, domain.VerificationPackageValid

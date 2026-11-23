@@ -13,6 +13,30 @@ from test_live_install_audit_env import load_audit
 
 
 class KimiRepeatLogAuditTest(unittest.TestCase):
+    def test_pinned_native_skill_log_gate_refuses_other_versions_and_contexts(self):
+        audit = load_audit()
+        admits = audit.kimi_log_evidence_eligible
+        for version in ("2.3.2", "2.5.2"):
+            with self.subTest(qualified=version):
+                self.assertTrue(admits("kimi", "skill", "linux",
+                    {"status": "reported", "value": version, "exit_code": 0}))
+        for version in ("2.3.1", "2.4.1", "2.5.3", "2.3.2\\n", None, False, 232):
+            with self.subTest(unqualified=version):
+                self.assertFalse(admits("kimi", "skill", "linux",
+                    {"status": "reported", "value": version, "exit_code": 0}))
+        valid = {"status": "reported", "value": "2.3.2", "exit_code": 0}
+        for target, kind, platform in (
+            ("claude", "skill", "linux"), ("kimi", "plugin", "linux"),
+            ("kimi", "skill", "darwin"), ("kimi", "skill", "win32")):
+            with self.subTest(target=target, kind=kind, platform=platform):
+                self.assertFalse(admits(target, kind, platform, valid))
+        for invalid in (None, [], {}, {"status": "reported", "value": "2.3.2"},
+                        {"status": "not-probed", "value": "2.3.2", "exit_code": 0},
+                        {"status": "reported", "value": "2.3.2", "exit_code": False},
+                        {"status": "reported", "value": "2.3.2", "exit_code": 1}):
+            with self.subTest(invalid=invalid):
+                self.assertFalse(admits("kimi", "skill", "linux", invalid))
+
     def fixture(self):
         temporary = TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

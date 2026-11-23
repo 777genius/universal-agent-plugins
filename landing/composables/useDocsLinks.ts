@@ -21,6 +21,8 @@ export const useDocsLinks = () => {
   const buildGuide = link('build', ownedPageUrl('build'));
   const supportBoundary = link('supportBoundary', ownedPageUrl('supportBoundary'));
   const customLogicGuide = link('customLogicGuide', ownedPageUrl('customLogicGuide'));
+  const sdkGuide = link('sdk', ownedPageUrl('sdk'));
+  const sdkManagementGuide = link('sdkManagement', ownedPageUrl('sdkManagement'));
   // The maintained manage pages share a stable project-restore fragment.
   const restoreGuide = link(
     'restoreOnAnotherMachine',
@@ -47,5 +49,9 @@ export const useDocsLinks = () => {
     useGuideEnglishFallback: computed(() => useGuide.value.englishFallback),
     buildGuideEnglishFallback: computed(() => buildGuide.value.englishFallback),
     supportBoundaryEnglishFallback: computed(() => supportBoundary.value.englishFallback),
+    sdkGuideUrl: computed(() => sdkGuide.value.url),
+    sdkGuideEnglishFallback: computed(() => sdkGuide.value.englishFallback),
+    sdkManagementGuideUrl: computed(() => sdkManagementGuide.value.url),
+    sdkManagementGuideEnglishFallback: computed(() => sdkManagementGuide.value.englishFallback),
   };
 };

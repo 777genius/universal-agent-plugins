@@ -2,6 +2,7 @@ name: Remotion Windows source long TEMP E2E
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'install/integrationctl/agentplugins/adapters/sourceacquisition/**'
       - 'scripts/live-install-audit.py'
@@ -27,6 +28,7 @@ permissions:
 
 jobs:
   remotion-long-temp:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
     runs-on: windows-2025
     timeout-minutes: 35
     steps:

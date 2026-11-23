@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Live, non-mocked UAP install/remove evidence. Runs only on disposable profiles."""
 import argparse
+import base64
 from contextlib import ExitStack
 import hashlib
 import json
@@ -22,6 +23,8 @@ from urllib.parse import urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
+QODER_PREPARED_ACCEPTANCE = "qoder-prepared-skills-installation"
+QODER_PREPARED_AUDIT = None
 CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
 HISTORICAL_CODEX = run_path(str(ROOT / "scripts/published_codex_baseline.py"))
 CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
@@ -30,6 +33,9 @@ OPENCODE_BOOTSTRAP_AUDIT = run_path(str(ROOT / "scripts/opencode_bootstrap_audit
 NATIVE_ARTIFACTS = run_path(str(ROOT / "scripts/native_client_project_artifacts.py"))
 PREPARED_INSTALLATION = run_path(str(ROOT / "scripts/prepared_installation_audit.py"))
 WINDSURF_INSTALLATION = run_path(str(ROOT / "scripts/windsurf_installation_audit.py"))
+COPILOT_CATALOG_PROBE = run_path(str(ROOT / "scripts/native_client_research.py"))["run_probe"]
+PI_SKILL_ACCEPTANCES = {"pi-foreign-prepared-skills-installation": "foreign-prepared",
+                        "pi-clean-native-skills": "clean-native"}
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -661,6 +667,25 @@ def scoped_snapshot(roots, *, snapshotter=None):
                     record_metadata(index, path, path.relative_to(root).as_posix())
     return state
 
+def copilot_snapshot_delta(before, after):
+    """Bounded failure diagnostics; snapshot values and unsafe names stay private."""
+    keys = sorted(key for key in before.keys() | after.keys()
+                  if (key in before) != (key in after) or before.get(key) != after.get(key))
+    items = []
+    for key in keys[:20]:
+        item = {"key_sha256": hashlib.sha256(key.encode("utf-8", "surrogatepass")).hexdigest()}
+        if (re.fullmatch(r"[A-Za-z0-9_.:/-]{1,192}", key)
+                and not key.startswith("/") and ":/" not in key and ".." not in key):
+            item["key"] = key
+        for label, snapshot in (("before", before), ("after", after)):
+            item[label + "_present"] = key in snapshot
+            if key in snapshot:
+                value = json.dumps(snapshot[key], ensure_ascii=True, separators=(",", ":")).encode()
+                item[label + "_sha256"] = hashlib.sha256(value).hexdigest() if len(value) <= 8192 else None
+        items.append(item)
+    return {"comparison": "protected snapshot after permitted process logs were excluded",
+            "changed_key_count": len(keys), "items": items, "omitted_key_count": max(0, len(keys) - len(items))}
+
 def check_copilot_snapshot_unchanged(home, case_root, before, after, stage, log_limit):
     """Only this real read may create bounded new vendor process logs."""
     prefix = home.name + "/" + str(Path(".copilot") / "logs") + os.sep
@@ -679,7 +704,12 @@ def check_copilot_snapshot_unchanged(home, case_root, before, after, stage, log_
         after.pop(key)
         after.pop("metadata:0:" + Path(relative).as_posix(), None)
     if after != before:
-        raise AssertionError(stage + ": native query modified protected state")
+        failure = AssertionError(stage + ": native query modified protected state")
+        try:
+            failure.copilot_snapshot_delta = copilot_snapshot_delta(before, after)
+        except Exception as error:
+            failure.copilot_snapshot_delta = {"diagnostic_error": type(error).__name__}
+        raise failure
 
 def copilot_skill_repeat_log_only(before, after, home, case_root):
     """Admit only empty, new, owned process logs from the Copilot Skills repeat probe.
@@ -1826,6 +1856,35 @@ def kiro_direct_prepared_installation(node, identity, target, kind, item):
                     for key in ("tree_digest", "manifest_digest")))
 
 
+def expected_signed_release_pin(item, target, signed_release_pins):
+    """Keep the default pin except the exact signed49 Pi Context7 fallback.
+
+    Authority: official snapshot49 SHA256
+    f54f905f55d05477ee01ae6028a8d32e10b8b8db58784f81f624642ae71f2452.
+    The active upstream release has no Pi target. Signed49's active community
+    release7 supports Pi/User; source selection tries that eligible distribution
+    after the default. Never derive an expected release from an observed row.
+    """
+    pin = (signed_release_pins or {}).get(item)
+    if (target, item) != ("pi", "context7"):
+        return pin
+    default = {
+        "distribution": "upstash/context7", "repository": "upstash/context7",
+        "path": "plugins/agent-plugins/context7",
+        "revision": "769c6cd22c3d95462d1f55d789e9532cabefa5a9", "sequence": 1,
+        "tree_digest": "sha256:08eed3b67f2e71a11b68baa594380c2f69ec1bc97584d701deaf7942ac34c0d8",
+        "manifest_digest": "sha256:d01781acd899aefa9445a290cf43a481230321934d62f9c8a2aab06a89718236",
+    }
+    if pin != default or type(pin.get("sequence")) is not int:
+        return None
+    return {
+        "distribution": "777genius/context7", "repository": "777genius/universal-agent-plugins-registry",
+        "path": "plugins/context7", "revision": "8360159c07140d17cbd4060a110553092c9cd245", "sequence": 7,
+        "tree_digest": "sha256:635e673ec3aa8440a2826dc3a677ebe652b63e542db2e861b61d2df7f55e48b3",
+        "manifest_digest": "sha256:1c1b8633e99d8ae10ed804b2c98532c4e08049b95f6229a6dd0b3746bdaea496",
+    }
+
+
 def matching_installations(response, identity, target, kind, item, signed_release_pins=None, *, kiro_prepared=False):
     """Verify the frozen Registry release, never only live self-consistency."""
     signed_release_pins = signed_release_pins or {}
@@ -1861,6 +1920,10 @@ def matching_installations(response, identity, target, kind, item, signed_releas
         ]
         if not verified_clients:
             continue
+        if (kind, target, item) == ("plugin", "pi", "context7"):
+            verified_clients = [client for client in verified_clients if client.get("scope") == "user"]
+            if not verified_clients:
+                continue
         source = node.get("source", "")
         if kind == "skill":
             accepted = source == expected_source
@@ -2207,6 +2270,7 @@ def isolated_client_env(home, case_root, data):
         "GIT_CONFIG_GLOBAL": str(case_root / "empty.gitconfig"),
         "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never",
         "KIMI_CODE_NO_AUTO_UPDATE": "1",
+        "CLINE_NO_AUTO_UPDATE": "1",
         "CI": "true", "DO_NOT_TRACK": "1",
         **{key: str(path) for key, path in roots.items()},
     })
@@ -2329,6 +2393,14 @@ def copilot_settings_read(path, case_root):
     finally:
         for descriptor in reversed(descriptors):
             os.close(descriptor)
+
+
+def kimi_log_evidence_eligible(target, kind, platform, version):
+    """Only pinned native Kimi Skills versions may enter strict log-append proof."""
+    return (target == "kimi" and kind == "skill" and platform == "linux"
+            and isinstance(version, dict) and version.get("status") == "reported"
+            and version.get("value") in ("2.3.2", "2.5.2")
+            and type(version.get("exit_code")) is int and version["exit_code"] == 0)
 
 
 def kimi_log_fact(facts, reason, changed=None):
@@ -2617,23 +2689,396 @@ def audit_client_id(target, kind):
     return "codex" if (target, kind) == ("chatgpt", "plugin") else target
 
 
+def pi_project_skill_audit():
+    global PI_PROJECT_SKILL_AUDIT
+    if PI_PROJECT_SKILL_AUDIT is None:
+        PI_PROJECT_SKILL_AUDIT = run_path(str(ROOT / "scripts/pi_project_skill_audit.py"))
+    return PI_PROJECT_SKILL_AUDIT
+
+
+def qoder_prepared_audit():
+    """Load the optional proof only on its explicitly selected Qoder route."""
+    global QODER_PREPARED_AUDIT
+    if QODER_PREPARED_AUDIT is None:
+        QODER_PREPARED_AUDIT = run_path(str(ROOT / "scripts/qoder_prepared_skill_audit.py"))
+    return QODER_PREPARED_AUDIT
+
+
+def public_skill_revision(revision):
+    """Exact read_public.go projection; private Skill provenance stays private."""
+    if type(revision) is not dict:
+        raise ValueError("private Skill revision is malformed")
+    result = {}
+    for key in ("tree_digest", "manifest_digest"):
+        value = revision.get(key)
+        if type(value) is not str or re.fullmatch(r"sha256:[0-9a-f]{64}", value) is None:
+            raise ValueError("private Skill revision digest is malformed")
+        result[key] = value
+    for key in ("version", "distribution_id"):
+        value = revision.get(key, "")
+        if type(value) is not str:
+            raise ValueError("private Skill revision field is malformed")
+        if value:
+            result[key] = value
+    resolved = revision.get("resolved_revision", "")
+    if type(resolved) is not str:
+        raise ValueError("private Skill immutable revision is malformed")
+    if re.fullmatch(r"[0-9a-f]{40}", resolved.strip()):
+        result["resolved_revision"] = resolved.strip()
+    sequence = revision.get("release_sequence", 0)
+    if type(sequence) is not int or not 0 <= sequence < 2**64:
+        raise ValueError("private Skill release sequence is malformed")
+    if sequence:
+        result["release_sequence"] = sequence
+    return result
+
+
+class CopilotProjectSkillAudit:
+    """Bind a whole-plugin Skill to original receipts, never destinationPath."""
+
+    def __init__(self, home, project, data, env, item, listed, audits):
+        self.home, self.project, self.data = home, project, data
+        self.case, self.env, self.item = project.parent, env, item
+        self.require(home.parent == self.case and data.parent == self.case)
+        self.require(hasattr(os, "geteuid") and hasattr(os, "O_DIRECTORY"))
+        roots = (self.case, home, project, data, home / ".copilot")
+        def stamp(path):
+            value = path.lstat()
+            self.require(stat.S_ISDIR(value.st_mode) and path.resolve(strict=True) == path
+                         and value.st_uid == os.geteuid())
+            return value.st_mode, value.st_dev, value.st_ino, value.st_uid, value.st_gid
+        anchors = {path: stamp(path) for path in roots}
+        native_guard = copilot_native_roots_guard(home, env, project)
+        def guard():
+            try:
+                native_guard()
+                self.require(all(stamp(path) == expected for path, expected in anchors.items()))
+            except (OSError, ValueError, AssertionError) as error:
+                failure = RuntimeError("Copilot whole Project Skill root custody changed")
+                failure.copilot_project_skill_proof = self.evidence
+                raise failure from error
+        self.roots_guard = guard
+        self.evidence = {"status": "receipt-bound-whole-project-skill", "catalogs": {}}
+        self.owner = self.inspect(listed)
+        self.active = Path(self.owner["active"])
+        for authority in (self.active.parent, project / ".github/copilot", project / ".git"):
+            parent = authority
+            while parent != project:
+                anchors[parent] = stamp(parent)
+                parent = parent.parent
+        self.fd = CLAUDE_RETIREMENT_AUDIT["open_directory"](self.active)
+        audits.callback(os.close, self.fd)
+        self.tree = CLAUDE_RETIREMENT_AUDIT["tree"](self.fd)[0]
+        self.require(all(row[7 if row[0] == "file" else 4] == os.geteuid() for row in self.tree.values()))
+        self.evidence["resource_custody"] = {
+            "file_count": sum(row[0] == "file" for row in self.tree.values()),
+            "bytes": sum(row[5] for row in self.tree.values() if row[0] == "file"),
+            "snapshot_sha256": hashlib.sha256(json.dumps(self.tree, sort_keys=True).encode()).hexdigest(),
+            "digest_scope": "full resource byte/metadata custody; receipt managed digest joined, not recomputed as Go package digest"}
+        self.trust = self.read(home / ".copilot/config.json")
+        self.settings = self.read(project / ".github/copilot/settings.local.json")
+        self.evidence["owner"] = self.owner
+        self.recheck()
+
+    @staticmethod
+    def require(value):
+        if not value:
+            raise ValueError("Copilot whole Project Skill ownership is unresolved")
+
+    @staticmethod
+    def refusal(error):
+        site = {"error": type(error).__name__}
+        current = error.__traceback__
+        for _ in range(32):
+            if current is None:
+                break
+            if current.tb_frame.f_code.co_filename == __file__ and current.tb_frame.f_code.co_name in (
+                    "__init__", "inspect", "read", "recheck", "catalogs"):
+                site.update(method=current.tb_frame.f_code.co_name, line=current.tb_lineno)
+            current = current.tb_next
+        return site
+
+    def read(self, path):
+        self.roots_guard()
+        self.require(path.lstat().st_uid == os.geteuid())
+        text, error = copilot_settings_read(path, self.case)
+        self.require(error is None)
+        return copilot_json_document(text)
+
+    def inspect(self, listed):
+        self.roots_guard()
+        item = self.item
+        self.require(type(listed.get("schema_version")) is int and listed["schema_version"] == 1
+                     and listed.get("command") == "list" and listed.get("result") == "success")
+        matches = matching_installations(listed, item["name"], "copilot", "skill", item)
+        self.require(len(matches) == 1 and locked_skill_is_pinned(self.project, item, "copilot"))
+        public = matches[0]
+        self.require(type(public.get("installation_id")) is str and bool(public["installation_id"])
+                     and len(public["clients"]) == 1)
+        self.require(str(uuid.UUID(public["installation_id"])) == public["installation_id"])
+        state = self.read(self.project / ".uap/state-v2.json")
+        self.require(type(state.get("schema_version")) is int and state["schema_version"] == 5)
+        records = [v for v in state["installations"] if v.get("clients")]
+        self.require(len(records) == 1 and records[0]["installation_id"] == public["installation_id"])
+        record = records[0]
+        self.require(type(record["clients"]) is dict and len(record["clients"]) == 1)
+        binding_id, binding = next(iter(record["clients"].items()))
+        source_key = f'github-skill:{item["repo"]}:{item["name"]}:skills/{item["folder"]}'
+        declared = "skill-" + hashlib.sha256(source_key.encode()).hexdigest()[:56]
+        self.require(type(binding_id) is str and bool(binding_id)
+                     and binding["client_binding_id"] == binding_id
+                     and record["declared_name"] == public["name"] == declared
+                     and record["origin_mode"] == "direct")
+        for key in ("client_id", "scope", "materialization", "activation", "authentication", "policy", "verification"):
+            self.require(json.dumps(binding[key], sort_keys=True) == json.dumps(public["clients"][0][key], sort_keys=True))
+        self.require(public["clients"][0]["package_revision"] == public_skill_revision(binding["package_revision"]))
+        self.require(binding["client_id"] == "copilot" and binding["scope"] == "project"
+                     and binding["materialization"] == "materialized" and binding["policy"] == "allowed"
+                     and binding["verification"] == "installation_verified"
+                     and binding["activation"] in ("active", "prepared")
+                     and binding["authentication"] in ("not_required", "not_checked")
+                     and binding["affected_surfaces"] == ["copilot"]
+                     and binding["native_profile_root"] == str(self.project))
+        lock = self.read(self.project / "uap.lock")
+        pins = [v for v in lock["packages"] if v.get("alias") == item["name"]]
+        self.require(len(pins) == 1)
+        pin, revision, source, package = pins[0], binding["package_revision"], record["source"], record["package"]
+        self.require(source["stable_source_key"] == source_key
+                     and source["source_binding_id"] == "src_" + hashlib.sha256(source_key.encode()).hexdigest()[:24]
+                     and source["repository"] == item["repo"] and source["package_subpath"] == "skills/" + item["folder"]
+                     and source["resolved_revision"] == revision["resolved_revision"] == item["ref"]
+                     and source["tree_digest"] == revision["tree_digest"] == pin["tree_digest"]
+                     and package["manifest_digest"] == revision["manifest_digest"] == pin["manifest_digest"]
+                     and package["declared_name"] == declared and package["format_id"] == "agent-plugins/1.0.0"
+                     and package["inventory"]["skills"] == [item["name"]]
+                     and not package["inventory"].get("mcp_present", False))
+        skill = revision["skill"]
+        self.require(skill["name"] == item["name"] and skill["requested_path"] == "skills/" + item["folder"]
+                     and skill["resolved_path"] == "skills/" + item["folder"]
+                     and skill["normalizer"] == "agent-skill-package/v1"
+                     and skill["raw_tree_digest"] == pin["source"]["git"]["raw_tree_digest"])
+        self.require(all(re.fullmatch(r"sha256:[0-9a-f]{64}", value) is not None
+                         for value in (revision["tree_digest"], revision["manifest_digest"], skill["raw_tree_digest"])))
+        physical = binding["physical_artifact_id"]
+        expected_physical = declared[:51].rstrip(".-") + "-" + hashlib.sha256(public["installation_id"].encode()).hexdigest()[:12]
+        self.require(physical == expected_physical)
+        active = self.project / ".uap/managed/clients/copilot" / physical
+        self.require(binding["target_locator"] == str(active) and path_inside_case(active, self.case))
+        expected_binding = "client_" + hashlib.sha256("\0".join(
+            (public["installation_id"], "copilot", "project", str(active))).encode()).hexdigest()[:24]
+        self.require(binding_id == expected_binding)
+        market = "agentplugins-" + hashlib.sha256(physical.encode()).hexdigest()[:12]
+        key = declared + "@" + market
+        objects = binding["native_objects"]
+        self.require(type(objects) is list and len(objects) == 2)
+        managed = [v for v in objects if v.get("kind") == "managed_package_directory"]
+        registered = [v for v in objects if v.get("kind") == "copilot_project_plugin_registration"]
+        self.require(len(managed) == len(registered) == 1)
+        digest = managed[0]["managed_digest"]
+        self.require(re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is not None)
+        self.require(managed[0] == {"object_id": "package:copilot:" + physical,
+            "kind": "managed_package_directory", "logical_name": declared, "path": str(active),
+            "managed_digest": digest, "protection_class": "managed"})
+        registration = {"Marketplace": market, "Plugin": declared,
+                        "Directory": active.relative_to(self.project).as_posix()}
+        reg_digest = "sha256:" + hashlib.sha256(b"copilot-project-registration-v1\0" +
+            json.dumps(registration, separators=(",", ":")).encode()).hexdigest()
+        settings_path = self.project / ".github/copilot/settings.local.json"
+        self.require(registered[0] == {"object_id": "copilot_project_plugin_registration:" + key,
+            "kind": "copilot_project_plugin_registration", "logical_name": key, "path": str(settings_path),
+            "managed_digest": reg_digest, "protection_class": "managed"})
+        receipts = binding["receipts"]
+        self.require(type(receipts) is list and bool(receipts))
+        for receipt in receipts:
+            self.require(receipt["phase"] == "committed" and receipt["client_binding_id"] == binding_id
+                and receipt["active_path"] == str(active) and receipt["after_digest"] == digest
+                and type(receipt["operation_id"]) is str and bool(receipt["operation_id"])
+                and type(receipt["sequence"]) is int and receipt["sequence"] > 0
+                and receipt["mutation_type"] == "directory_swap"
+                and receipt["environment_authority"]["environment_id"] == "project-default"
+                and receipt["environment_authority"]["client_id"] == "copilot"
+                and receipt["environment_authority"]["expected_action"] in ("install", "repair")
+                and receipt["environment_authority"]["alias"] == item["name"]
+                and receipt["environment_authority"]["source_key"] == source_key)
+        environment = state["environment_receipts"]
+        self.require(len(environment) == 1)
+        receipt = environment[0]
+        self.require(receipt["phase"] == "committed" and receipt["environment_id"] == "project-default"
+                     and receipt["alias"] == item["name"] and receipt["client_id"] == "copilot"
+                     and receipt["installation_id"] == public["installation_id"]
+                     and receipt["client_binding_id"] == binding_id and receipt["source_key"] == source_key
+                     and receipt["package_digest"] == revision["tree_digest"]
+                     and receipt["desired_action"] in ("install", "repair")
+                     and type(receipt["receipt_id"]) is str and bool(receipt["receipt_id"]))
+        self.require(self.read(active / "plugin.json") == {"$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json", "name": declared})
+        path = active / "skills" / item["name"] / "SKILL.md"
+        text, error = copilot_settings_read(path, self.case)
+        self.require(error is None)
+        body = text.encode()
+        self.require(hashlib.sha1(b"blob " + str(len(body)).encode() + b"\0" + body).hexdigest() == item["skill_md_git_blob_sha1"])
+        settings = self.read(settings_path)
+        self.require(settings["extraKnownMarketplaces"][market] == {"source": {"source": "directory", "path": registration["Directory"]}}
+                     and settings["enabledPlugins"][key] is True)
+        self.require(str(self.project) in self.read(self.home / ".copilot/config.json")["trustedFolders"])
+        return {"installation_id": public["installation_id"], "binding_id": binding_id, "physical": physical,
+                "active": str(active), "skill_path": path.relative_to(self.project).as_posix(),
+                "name": declared, "marketplace": market, "key": key, "managed_digest": digest,
+                "source": source, "revision": revision, "binding_receipts": receipts,
+                "environment_receipt": receipt, "settings": settings,
+                "private_binding": binding, "package": package}
+
+    def recheck(self):
+        try:
+            self.roots_guard()
+            CLAUDE_RETIREMENT_AUDIT["named_directory"](self.active, self.fd)
+            self.require(CLAUDE_RETIREMENT_AUDIT["tree"](self.fd)[0] == self.tree)
+            self.require(self.read(self.home / ".copilot/config.json") == self.trust
+                         and self.read(self.project / ".github/copilot/settings.local.json") == self.settings)
+        except (OSError, ValueError) as error:
+            failure = RuntimeError("Copilot whole Project Skill custody changed")
+            failure.copilot_project_skill_proof = self.evidence
+            raise failure from error
+
+    def catalogs(self, phase, *, removed=False):
+        self.roots_guard()
+        if not removed:
+            self.recheck()
+        before = scoped_snapshot((self.home, self.data, self.project))
+        captured, documents = [], []
+        self.evidence["catalogs"][phase] = captured
+        remaining = 1 << 20
+        try:
+            for verb in ("plugin", "skill"):
+                if remaining <= 0:
+                    break
+                self.roots_guard()
+                if not removed:
+                    self.recheck()
+                record, stdout, stderr = COPILOT_CATALOG_PROBE(
+                    [AGENT_BINARIES["copilot"], verb, "list", "--json"], self.project,
+                    dict(self.env, COPILOT_HOME=str(self.home / ".copilot"),
+                         COPILOT_OFFLINE="true", COPILOT_AUTO_UPDATE="false"), self.case,
+                    "copilot-" + phase + "-" + verb, timeout=30, limit=remaining, memory_only=True)
+                truncated = len(stdout) + len(stderr) > remaining
+                kept_stdout = stdout[:remaining]
+                kept_stderr = stderr[:remaining - len(kept_stdout)]
+                remaining -= len(kept_stdout) + len(kept_stderr)
+                retained = {}
+                for name, raw in (("stdout", kept_stdout), ("stderr", kept_stderr)):
+                    try:
+                        retained[name] = raw.decode("utf-8")
+                    except UnicodeError:
+                        retained[name + "_base64"] = base64.b64encode(raw).decode()
+                captured.append({**record, **retained, "capture": "bounded-memory",
+                    "retained_stdout_bytes": len(kept_stdout), "retained_stderr_bytes": len(kept_stderr),
+                    "capture_truncated": truncated,
+                    "cleanup_scope": "selected process group killed and waited; no escaped-tree or writer-closure claim"})
+                try:
+                    documents.append(copilot_json_document(stdout.decode("utf-8"))
+                        if not truncated and record.get("error") is None and record.get("exit") == 0 and not stderr else None)
+                except (ValueError, UnicodeError):
+                    documents.append(None)
+        finally:
+            failures = []
+            checks = [self.roots_guard, lambda: check_copilot_snapshot_unchanged(self.home, self.case, before,
+                scoped_snapshot((self.home, self.data, self.project)), "Copilot whole Skill catalogs", 2)]
+            if not removed:
+                checks.append(self.recheck)
+            for check in checks:
+                try:
+                    check()
+                except Exception as error:
+                    failures.append(error)
+                    if hasattr(error, "copilot_snapshot_delta"):
+                        self.evidence.setdefault("protected_snapshot_deltas", {})[phase] = error.copilot_snapshot_delta
+            if failures:
+                self.evidence["custody_refusal"] = self.refusal(failures[0])
+                failure = RuntimeError("Copilot whole Project Skill protected state changed during catalogs")
+                failure.copilot_project_skill_proof = self.evidence
+                raise failure from failures[0]
+        self.require(len(documents) == 2 and all(type(v) is list for v in documents))
+        self.require(all(type(row) is dict for rows in documents for row in rows))
+        self.require(sum(v["stdout_bytes"] + v["stderr_bytes"] for v in captured) <= 1 << 20)
+        plugin_keys, skill_names, skill_paths = set(), set(), set()
+        for row in documents[0]:
+            self.require(set(row) in ({"name", "marketplace", "version", "enabled", "source"},
+                {"name", "marketplace", "version", "enabled", "source", "installedFrom"})
+                and all(type(row[key]) is str for key in ("name", "marketplace", "version", "source"))
+                and type(row["enabled"]) is bool and bool(row["name"]) and row["source"] in ("live", "builtin"))
+            if "installedFrom" in row:
+                self.require(type(row["installedFrom"]) is str and Path(row["installedFrom"]).is_absolute()
+                    and str(Path(row["installedFrom"])) == row["installedFrom"]
+                    and not any(c in row["installedFrom"] for c in "\0\r\n"))
+            key = (row["name"].casefold(), row["marketplace"].casefold())
+            self.require(key not in plugin_keys); plugin_keys.add(key)
+        for row in documents[1]:
+            self.require(set(row) == {"name", "description", "source", "path", "enabled"}
+                and all(type(row[key]) is str for key in ("name", "description", "source", "path"))
+                and type(row["enabled"]) is bool and bool(row["name"]) and bool(row["source"])
+                and Path(row["path"]).is_absolute() and str(Path(row["path"])) == row["path"]
+                and not any(c in row["path"] for c in "\0\r\n")
+                and row["name"].casefold() not in skill_names and row["path"] not in skill_paths)
+            skill_names.add(row["name"].casefold()); skill_paths.add(row["path"])
+        plugins = [v for v in documents[0] if v.get("name") == self.owner["name"] and v.get("marketplace") == self.owner["marketplace"]]
+        skills = [v for v in documents[1] if v.get("name") == self.item["name"]]
+        if removed:
+            self.require(not plugins and not skills and not self.active.exists() and not self.active.is_symlink())
+            with os.scandir(self.fd) as entries:
+                self.require(not any(entries))
+            state = self.read(self.project / ".uap/state-v2.json")
+            self.require(type(state.get("schema_version")) is int and state["schema_version"] == 5
+                and type(state.get("installations")) is list
+                and all(type(row) is dict and not row.get("clients") for row in state["installations"])
+                and type(state.get("environment_receipts", [])) is list and not state.get("environment_receipts", []))
+            self.evidence["after_remove_state"] = state
+            settings = self.read(self.project / ".github/copilot/settings.local.json")
+            expected = json.loads(json.dumps(self.settings))
+            expected["extraKnownMarketplaces"].pop(self.owner["marketplace"])
+            expected["enabledPlugins"].pop(self.owner["key"])
+            self.require(settings == expected and self.read(self.home / ".copilot/config.json") == self.trust)
+        else:
+            self.require(len(plugins) == len(skills) == 1)
+            plugin, skill = plugins[0], skills[0]
+            self.require(plugin.get("enabled") is True and plugin.get("source") == "live"
+                         and plugin.get("installedFrom") == str(self.active)
+                         and type(plugin.get("version")) is str)
+            self.require(skill.get("enabled") is True and skill.get("source") == "plugin"
+                         and skill.get("path") == str(self.active / "skills" / self.item["name"]))
+            description = self.evidence.setdefault("observed_description", skill["description"])
+            self.require(description == skill["description"])
+        return True
+
+
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             signed_release_pins=None, *, client_version=None, historical_baseline=False,
-            historical_plugins=False, installation_audit=None, installation_fixtures=None):
+            historical_plugin_archive=False, qoder_prepared=False, pi_skills=None,
+            installation_audit=None, installation_fixtures=None):
     with ExitStack() as audits:
         return _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                         signed_release_pins, audits, client_version,
                         **({"historical_baseline": True} if historical_baseline else {}),
-                        **({"historical_plugins": True} if historical_plugins else {}),
+                        **({"historical_plugin_archive": True} if historical_plugin_archive else {}),
+                        **({"qoder_prepared": True} if qoder_prepared else {}),
+                        **({"pi_skills": pi_skills} if pi_skills is not None else {}),
                         **({"installation_audit": installation_audit,
                             "installation_fixtures": installation_fixtures} if installation_audit else {}))
 
 
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
              signed_release_pins, audits, client_version, *, historical_baseline=False,
-             historical_plugins=False, installation_audit=None, installation_fixtures=None):
-    if historical_plugins and ((target, kind) != ("codex", "plugin") or historical_baseline):
+             historical_plugin_archive=False, qoder_prepared=False, pi_skills=None,
+             installation_audit=None, installation_fixtures=None):
+    if historical_plugin_archive and ((target, kind) != ("codex", "plugin") or historical_baseline):
         raise ValueError("historical archived feed requires its distinct Codex plugin lane")
+    if qoder_prepared and (target, kind, sys.platform) != ("qoder", "skill", "linux"):
+        raise ValueError("Qoder Prepared observation requires Linux Project Skills")
+    qoder_skill_audit = None
+    qoder_skill_proof = None
+    if pi_skills is not None and ((target, kind, sys.platform) != ("pi", "skill", "linux")
+            or pi_skills not in ("foreign-prepared", "clean-native")):
+        raise ValueError("Pi dual-cohort observation requires Linux Project Skills")
+    pi_skill_audit = None
+    pi_skill_proof = None
     installation_routes = dict(PREPARED_INSTALLATION["ROUTES"])
     installation_routes.update(PREPARED_INSTALLATION["KIRO_ROUTES"])
     installation_routes[WINDSURF_INSTALLATION["ACCEPTANCE"]] = ("windsurf", "plugin")
@@ -2692,6 +3137,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         native_foreign.write_text("unmanaged native neighbor must survive\n")
     # A pre-existing, unrelated project Skill is an independently owned neighbor.
     project_skill_roots = project_skill_scan_roots(target)
+    if qoder_prepared:
+        project_skill_roots.append(".qoder/skills")
     project_foreign = None
     if kind == "skill" and project_skill_roots:
         # Qoder's UAP-managed bundle is not an unmanaged native Skill location.
@@ -2705,6 +3152,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         # foreign-file sentinel, without bypassing Pi's project trust refusal.
         foreign_project = case_root / "project-b" if target == "pi" else project
         project_foreign = foreign_project / foreign_root / "foreign-neighbor" / "SKILL.md"
+    if pi_skills == "clean-native":
+        project_foreign = None  # Fresh clean cohort only; never remove an existing sentinel.
+    if pi_skills is not None:
+        for folder in (project / ".pi/skills", project / ".pi/extensions"):
+            folder.mkdir(parents=True, exist_ok=True)
     if project_foreign:
         if not path_inside_case(project_foreign, case_root):
             raise ValueError("foreign Skill neighbor escapes disposable case")
@@ -2759,7 +3211,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     codex_add_ready = False
     codex_repeat_ready = False
     historical_observer = (HISTORICAL_CODEX["PublishedBaseline"](cli, env, project)
-                           if historical_baseline or historical_plugins else None)
+                           if historical_baseline or historical_plugin_archive else None)
     historical_plugin_feed = None
     historical_add_verified = historical_repeat_add_verified = False
     historical_repeat_lifecycle_verified = False
@@ -2789,6 +3241,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     raise ValueError("Gemini audit context settings changed after external execution")
             if codex_runtime is not None:
                 codex_runtime.guard()
+            if pi_skill_audit is not None:
+                pi_skill_audit.checked("guard")
+            if qoder_skill_audit is not None:
+                qoder_skill_audit.checked("guard")
             if codex_plugin_sqlite is not None:
                 codex_plugin_sqlite.guard()
             if windsurf_installation is not None:
@@ -2801,7 +3257,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     def audited_call(*args, **kwargs):
         assert_case_unchanged()
         requested_full = kwargs.get("capture_full", False)
-        if installation_audit or historical_plugins:
+        if installation_audit or historical_plugin_archive:
             # Explicit installation qualification needs complete, bounded and
             # unambiguous public receipts; preserve the existing call deadline.
             kwargs["capture_full"] = True
@@ -2816,18 +3272,20 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             windsurf_installation.observe(list(args[0]), outcome)
         if kiro_installation is not None:
             kiro_installation.observe(list(args[0]), outcome)
-        if (installation_audit or historical_plugins) and not requested_full:
+        if (installation_audit or historical_plugin_archive) and not requested_full:
             outcome.pop("stdout_full", None)
             outcome.pop("stderr_full", None)
         return outcome
 
-    if historical_plugins:
+    if historical_plugin_archive:
         # Observe the unchanged npm CLI's real default-feed refusal first.
         # The explicit archive is authenticated by that same pinned CLI before
         # the ordinary strict native lifecycle and its SQLite checkpoints run.
+        if (target, kind, index, item) not in (("codex", "plugin", 0, "atlassian"),
+                                              ("codex", "plugin", 1, "context7")):
+            raise ValueError("historical archive requires the two pinned Codex plugins")
         historical_plugin_feed = HISTORICAL_CODEX["prepare_plugin_archive"](
-            historical_observer, audited_call, item, (signed_release_pins or {})[item])
-
+            historical_observer, audited_call, item, signed_release_pins[item])
     if gemini_skill_case:
         # The pinned native list initializes a model context even without a model call.
         # Its optional tree includes transient UAP package snapshots; discovery is unchanged.
@@ -2933,6 +3391,14 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # inherited Windows Firebase child pipe handles masking parent exit.
     file_capture = (sys.platform == "win32" and kind == "plugin" and item == "firebase")
     capture_option = {"capture_files": True} if file_capture else {}
+    if pi_skills is not None:
+        pi_skill_audit = pi_project_skill_audit()["PiProjectSkillAudit"](
+            home, project, data, item, globals(), audits, pi_skills, env, client_version, cli, audited_call)
+        pi_skill_proof = pi_skill_audit.evidence
+    if qoder_prepared:
+        qoder_skill_audit = qoder_prepared_audit()["QoderPreparedSkillAudit"](
+            home, project, data, item, globals(), audits)
+        qoder_skill_proof = qoder_skill_audit.evidence
     output = audited_call([cli, *args], env, project, add_timeout, **capture_option)
     added_json = output.pop("_json", None)
     native_components = (native_components_from_add(added_json)
@@ -2961,6 +3427,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         skill_path = copilot_project_skill_path(project, item, added_json, matching)
         # The bounded receipt-bound read already verified the exact Git blob.
         skill_bytes_match = skill_path is not None
+    # The raw-add lane proves the path from its own receipt envelope; the whole
+    # Skill audit lane proves ownership through CopilotProjectSkillAudit instead.
+    copilot_raw_add_case = bool(copilot_skill_case and skill_path is not None)
     kiro_direct_prepared = bool(kiro_installation_case and len(matching) == 1
         and kiro_direct_prepared_installation(matching[0], identity, native_target, kind, item))
     grok_prepared = (grok_prepared_skill_installations(
@@ -2975,6 +3444,31 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if kind == "plugin" and isinstance(item, str) and not item.startswith("github:")
         else [])
     listed_identity = len(matching) == 1
+    if pi_skill_audit is not None:
+        pi_skill_audit.checked("installed", listed_json, added_json)
+    if qoder_skill_audit is not None:
+        qoder_skill_audit.checked("installed", listed_json, added_json)
+        skill_path = str(Path(qoder_skill_audit.owner["native_path"]).relative_to(project) / "SKILL.md")
+        skill_bytes_match = matches_pinned_skill_bytes(project, skill_path, item["skill_md_git_blob_sha1"])
+    copilot_skill_audit = None
+    copilot_skill_proof = None
+    copilot_skill_native = {}
+    if target == "copilot" and kind == "skill" and listed_identity and skill_path is None and lock_pinned:
+        try:
+            copilot_skill_audit = CopilotProjectSkillAudit(home, project, data, env, item, listed_json, audits)
+            skill_path = copilot_skill_audit.owner["skill_path"]
+            skill_bytes_match = matches_pinned_skill_bytes(project, skill_path, item["skill_md_git_blob_sha1"])
+            copilot_skill_proof = copilot_skill_audit.evidence
+        except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+            copilot_skill_proof = {"status": "unqualified-whole-project-skill-owner",
+                                   "refusal": CopilotProjectSkillAudit.refusal(error)}
+
+    def copilot_catalogs(phase, removed=False):
+        try:
+            return copilot_skill_audit.catalogs(phase, removed=removed)
+        except (ValueError, KeyError, TypeError, AttributeError, OSError) as error:
+            copilot_skill_proof.setdefault("refusals", {})[phase] = CopilotProjectSkillAudit.refusal(error)
+            return False
     failed_install_registered = has_target_registration(listed_json, identity, native_target) if (
         output["exit_code"] != 0) else False
     failed_install_residue = bool(output["exit_code"] != 0 and (
@@ -2992,6 +3486,12 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         (kind == "plugin" or
          (bool(skill_path) and lock_pinned and skill_bytes_match))
     )
+    if copilot_skill_audit is not None and installed:
+        copilot_skill_audit.require(added_json.get("schema_version") == 1
+            and type(added_json.get("schema_version")) is int and added_json.get("result") == "success"
+            and added_json.get("command") == "skills add" and added_json.get("scope") == "project"
+            and added_json.get("scope_selection_reason") == "explicit")
+        copilot_skill_native["after-add"] = copilot_catalogs("after-add")
     if gemini_skill_case and installed:
         gemini_baseline_before = snapshot(native_roots, include_directories=True)
         gemini_runtime = GEMINI_RUNTIME_AUDIT["GeminiRepeatAudit"](
@@ -3047,19 +3547,16 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     repeat_project_unchanged = None
     repeat_verified = False
     kimi_repeat_log_proof = None
-    kimi_log_case = (target == "kimi" and kind == "skill" and sys.platform == "linux"
-                     and isinstance(client_version, dict) and client_version.get("status") == "reported"
-                     and client_version.get("value") == "2.5.2"
-                     and type(client_version.get("exit_code")) is int and client_version["exit_code"] == 0)
+    kimi_log_case = kimi_log_evidence_eligible(target, kind, sys.platform, client_version)
     kimi_repeat_log_facts = ({"captures": {phase: {} for phase in ("before", "after-add", "post-list")},
                               "append": {"reason": "not-reached"}} if kimi_log_case else None)
     if installed:
         before_repeat_native = snapshot(native_roots, include_directories=gemini_runtime is not None)
         before_repeat_runtime = (codex_runtime.temporary_git_state()
                                  if codex_runtime is not None else None)
-        repeat_project_snapshot = scoped_snapshot if copilot_skill_case else snapshot
+        repeat_project_snapshot = scoped_snapshot if copilot_raw_add_case else snapshot
         before_repeat_project = (repeat_project_snapshot([project / root for root in project_skill_roots])
-                                 if grok_prepared or copilot_skill_case else None)
+                                 if grok_prepared or copilot_raw_add_case else None)
         lock_root = project if kind == "skill" else data
         lock_paths = (lock_root / "uap.toml", lock_root / "uap.lock")
         def lock_state():
@@ -3106,7 +3603,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 and node["clients"][0]["package_revision"] == matching[0]["clients"][0]["package_revision"]]
         copilot_repeat_path = (copilot_project_skill_path(
             project, item, repeat_add_json, repeat_matches, repeated=True)
-            if copilot_skill_case else None)
+            if copilot_raw_add_case else None)
         repeat_identity_ids = sorted(
             entry["installation_id"] for entry in repeat_matches)
         if codex_runtime is not None:
@@ -3130,7 +3627,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     before_repeat_native, after_repeat_native, before_repeat_runtime)
             elif gemini_runtime is not None:
                 repeat_native_runtime_only = gemini_repeat_valid
-            elif copilot_skill_case:
+            elif copilot_raw_add_case:
                 repeat_native_runtime_only = copilot_skill_repeat_log_only(
                     before_repeat_native, after_repeat_native, home, case_root)
             elif kimi_log_case:
@@ -3138,16 +3635,25 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     kimi_log_before, kimi_log_after, kimi_log_listed, added_json, repeat_add_json, repeat_add,
                     before_repeat_native, after_repeat_native, kimi_repeat_log_facts["append"])
                 repeat_native_runtime_only = kimi_repeat_log_proof is not None
+            elif copilot_skill_audit is not None:
+                # The existing Copilot read guard admits only two new bounded
+                # process logs, never changed configuration or arbitrary cache.
+                copilot_skill_audit.recheck()
+                wrapped_before = {home.name + "/" + key: value for key, value in before_repeat_native.items()}
+                wrapped_after = {home.name + "/" + key: value for key, value in after_repeat_native.items()}
+                check_copilot_snapshot_unchanged(home, case_root, wrapped_before, wrapped_after,
+                                                "Copilot Skill public repeat", 2)
+                repeat_native_runtime_only = True
         repeat_project_unchanged = (repeat_project_snapshot([project / root for root in project_skill_roots])
-                                    == before_repeat_project if grok_prepared or copilot_skill_case else None)
+                                    == before_repeat_project if grok_prepared or copilot_raw_add_case else None)
         repeat_lock_unchanged = lock_state() == before_repeat_lock
         historical_repeat_lifecycle_verified = bool(
             repeat_add["exit_code"] == 0 and repeat_list["exit_code"] == 0
             and len(repeat_matches) == 1
             and repeat_identity_ids == sorted(entry["installation_id"] for entry in matching)
             and (repeat_native_unchanged or repeat_native_runtime_only) and repeat_lock_unchanged
-            and (not (grok_prepared or copilot_skill_case) or repeat_project_unchanged)
-            and (not copilot_skill_case or copilot_repeat_path == skill_path)
+            and (not (grok_prepared or copilot_raw_add_case) or repeat_project_unchanged)
+            and (not copilot_raw_add_case or copilot_repeat_path == skill_path)
         )
         repeat_verified = bool(historical_repeat_lifecycle_verified
                                and (not codex_skill_case or codex_repeat_ready)
@@ -3155,6 +3661,21 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         if historical_baseline:
             historical_repeat_add_verified = HISTORICAL_CODEX["historical_add"](
                 repeat_add_json, repeat_matches, item, project / skill_path, repeated=True)
+        if copilot_skill_audit is not None:
+            copilot_skill_audit.require(repeat_add_json.get("schema_version") == 1
+                and type(repeat_add_json.get("schema_version")) is int and repeat_add_json.get("result") == "success"
+                and repeat_add_json.get("command") == "skills add" and repeat_add_json.get("scope") == "project"
+                and repeat_add_json.get("scope_selection_reason") == "explicit")
+            fresh_owner = copilot_skill_audit.inspect(repeat_list_json)
+            stable_owner = all(fresh_owner[key] == copilot_skill_audit.owner[key] for key in (
+                "installation_id", "binding_id", "physical", "active", "skill_path", "managed_digest", "source", "revision",
+                "binding_receipts", "environment_receipt", "package", "settings"))
+            repeat_verified = repeat_verified and stable_owner
+            copilot_skill_native["repeat-add"] = copilot_catalogs("repeat-add")
+    if pi_skill_audit is not None and repeat_verified:
+        pi_skill_audit.checked("checkpoint", "repeat-add", repeat_list_json, repeat_add_json)
+    if qoder_skill_audit is not None and repeat_verified:
+        qoder_skill_audit.checked("checkpoint", "repeat-add", repeat_list_json, repeat_add_json)
     # BUG-039: independent native ID+version proof before UAP removes it.
     qoder_native_before_remove = None
     if target == "qoder" and kind == "plugin" and installed and repeat_verified:
@@ -3209,6 +3730,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                        native_uninstall and native_uninstall["completed"] else [])
         # Grok project Skills have generated bundle names; never select by raw alias.
         selector = matching[0]["installation_id"] if grok_prepared or kiro_installation_case else identity
+        if pi_skill_audit is not None:
+            pi_skill_audit.checked("begin_remove")
+        if qoder_skill_audit is not None:
+            qoder_skill_audit.checked("begin_remove")
         cleanup = audited_call([cli, "remove", selector, "--target", target, *scope,
                         *attestation, "--format", "json"], env, project, 60)
         cleanup_json = cleanup.pop("_json", None)
@@ -3227,6 +3752,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     post_list = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
     post_list_json = post_list.pop("_json", None) if post_list else None
+    if qoder_skill_audit is not None and cleanup and cleanup["exit_code"] == 0:
+        qoder_skill_audit.checked("removed", post_list_json, cleanup_json)
     if codex_runtime is not None and cleanup and cleanup["exit_code"] == 0:
         codex_runtime.checkpoint("removed", False)
         assert_case_unchanged()
@@ -3236,6 +3763,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             home, env, project, identity, owners={} if item == "marketing-kit" else None,
             owned_call=audited_call)
         assert_case_unchanged()
+    if copilot_skill_audit is not None and cleanup and cleanup["exit_code"] == 0:
+        copilot_skill_native["after-remove"] = copilot_catalogs("after-remove", removed=True)
+    if pi_skill_audit is not None and cleanup and cleanup["exit_code"] == 0:
+        pi_skill_audit.checked("removed", post_list_json, cleanup_json)
     copilot_after_remove = (copilot_settings_sanitized_shape(home, case_root, identity)
                             if copilot_before is not None and cleanup else None)
     post_skill_tree_delta = []
@@ -3268,7 +3799,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 post_list_empty = not entries
         except (KeyError, TypeError):
             pass
-    if copilot_skill_case:
+    if copilot_raw_add_case:
         post_list_schema_valid = (post_list_schema_valid
                                   and copilot_skill_success_response(post_list_json, "list"))
     old_ids = {entry["installation_id"] for entry in matching}
@@ -3354,7 +3885,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     removal_verified = bool(
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
-        and (not copilot_skill_case or (post_list_empty
+        and (not copilot_raw_add_case or (post_list_empty
              and copilot_skill_success_response(cleanup_json, "remove")))
         # This fresh case owns the whole signed kit closure. An original or
         # reminted child record must not survive even when native state is empty.
@@ -3373,6 +3904,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                                   and not post_removal_leftovers and not post_lock_pinned
                                   and not post_skill_tree_delta))
     )
+    if copilot_skill_audit is not None:
+        removal_verified = removal_verified and copilot_skill_native.get("after-remove") is True
     diagnostics = (output["stdout_tail"] + "\n" + output["stderr_tail"]).lower()
     install_refused = is_cli_refusal(output)
     # Still remove an installed-but-unready Skill, but never call its lifecycle
@@ -3448,7 +3981,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         and response.get("next_actions") in (None, []))
         for phase, response in (("after-add", added_json), ("repeat-add", repeat_add_json))}
         if kind == "skill" else None)
-    if copilot_skill_case:
+    if copilot_raw_add_case:
         for phase, response, matches in (("after-add", listed_json, matching),
                                           ("repeat-add", repeat_list_json, repeat_matches)):
             skill_public_ready[phase] = (skill_public_ready[phase]
@@ -3459,12 +3992,29 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # before/add/repeat/remove native inventories in this catalog lane.
     if status == "passed" and (native_target, kind) == ("pi", "plugin"):
         status = "package-installed-native-unqualified"
+    if status == "passed" and copilot_skill_audit is not None and copilot_skill_native != {
+            "after-add": True, "repeat-add": True, "after-remove": True}:
+        status = "incomplete-native-proof"
+    if (pi_skill_audit is not None and pi_skills == "foreign-prepared"
+            and status == "incomplete-native-proof" and installed and repeat_verified
+            and removal_verified and sentinels_preserved
+            and pi_skill_proof.get("status") == "prepared-lifecycle-verified"):
+        status = "prepared-lifecycle-passed"
+    if pi_skills == "clean-native" and status == "passed" and pi_skill_proof.get("status") != "native-lifecycle-verified":
+        status = "incomplete-native-proof"
+    # This explicit route proves file delivery, never native session Ready.
+    if (qoder_skill_audit is not None and status == "incomplete-native-proof"
+            and installed and repeat_verified and removal_verified and sentinels_preserved
+            and qoder_skill_proof.get("status") == "prepared-lifecycle-verified"):
+        status = "prepared-lifecycle-passed"
     historical_archive_status = status
-    if historical_plugins and status == "passed":
+    if historical_plugin_archive and status == "passed":
         status = "historical-archive-lifecycle-observed"
     if kiro_installation_case and status == "passed":
         status = "installation-lifecycle-observed"
     row = {"kind": kind, "index": index, "identity": identity, "target": target,
+            "pi_project_skill_proof": pi_skill_proof,
+            "qoder_prepared_skill_proof": qoder_skill_proof,
             **({target + "_preparation_envelopes": PREPARED_INSTALLATION["observe"](
                 kind, identity, {"install": added_json, "list": listed_json,
                                  "repeat_add": repeat_add_json, "repeat_list": repeat_list_json,
@@ -3501,6 +4051,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                     installation_ids=old_ids | set(repeat_identity_ids) if kind == "skill" else None,
                     skill_source=f'{item["repo"]}/skills/{item["folder"]}' if kind == "skill" else None)},
             "public_skill_ready": skill_public_ready,
+            "copilot_project_skill_proof": copilot_skill_proof,
+            "copilot_project_skill_native": copilot_skill_native if copilot_skill_audit is not None else None,
             "repeat_add": repeat_add, "repeat_list": repeat_list,
             "repeat_installation_ids": repeat_identity_ids,
             "repeat_native_unchanged": repeat_native_unchanged,
@@ -3542,10 +4094,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             **({"historical_add_verified": historical_add_verified,
                 "historical_repeat_add_verified": historical_repeat_add_verified,
                 "historical_repeat_lifecycle_verified": historical_repeat_lifecycle_verified}
-               if historical_baseline else {}),
+               if historical_observer is not None else {}),
             **({"historical_plugin_feed": historical_plugin_feed,
                 "historical_archive_status": historical_archive_status}
-               if historical_plugins else {}),
+               if historical_plugin_archive else {}),
             "codex_public_add_ready": codex_add_ready if codex_skill_case else None,
             "codex_public_repeat_ready": codex_repeat_ready if codex_skill_case else None,
             "codex_runtime_proof": codex_runtime.evidence() if codex_runtime is not None else None,
@@ -3599,8 +4151,9 @@ def expected_negative_coverage(row, cli_version=None):
         if (row.get("status") == "prepared-lifecycle-passed"
                 and row.get("prepared_components_only") is True):
             return True
-        # Only these immutable sources in the verified 0.1.95 / 0.1.101 / 0.1.102
-        # catalog have a clean lifecycle but no attributable native component.
+        # Only these immutable sources in the verified 0.1.95 / 0.1.101 /
+        # 0.1.102 / 0.1.115 catalog have a clean lifecycle but no attributable
+        # native component. Their partial support remains explicitly unqualified.
         # An unknown or newly unqualified source must still fail this audit.
         non_native_direct_sources = {
             "github:itential/builder-skills@2ccdf77358b018ad4df125422a067fe84e63de1d",
@@ -3681,21 +4234,29 @@ def main():
     p.add_argument("--target", required=True)
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--report-dir", required=True)
-    p.add_argument("--acceptance", choices=("native", HISTORICAL_CODEX["ACCEPTANCE"],
-                                         HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"],
+    p.add_argument("--acceptance", choices=("native", "pi-foreign-prepared-skills-installation",
+                                         "pi-clean-native-skills", HISTORICAL_CODEX["ACCEPTANCE"],
+                                         HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"], QODER_PREPARED_ACCEPTANCE,
                                          *PREPARED_INSTALLATION["ACCEPTANCES"],
                                          *PREPARED_INSTALLATION["KIRO_ACCEPTANCES"],
                                          WINDSURF_INSTALLATION["ACCEPTANCE"]),
                    default="native")
     args = p.parse_args()
+    pi_mode = PI_SKILL_ACCEPTANCES.get(args.acceptance)
+    if pi_mode is not None and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != ("pi", "skill", "linux", "x86_64", 30):
+        p.error("Pi dual-cohort acceptance requires all 30 Pi Skills on pinned Linux x86_64")
+    qoder_prepared = args.acceptance == QODER_PREPARED_ACCEPTANCE
+    if qoder_prepared and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
+            "qoder", "skill", "linux", "x86_64", 30):
+        p.error("Qoder Prepared installation requires all 30 Project Skills on Linux x86_64")
     historical_baseline = args.acceptance == HISTORICAL_CODEX["ACCEPTANCE"]
+    historical_plugin_archive = args.acceptance == HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"]
     if historical_baseline and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
             "codex", "skill", "linux", "x86_64", 2):
         p.error("Historical npm observation requires exactly two Codex Skills on Linux x86_64")
-    historical_plugins = args.acceptance == HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"]
-    if historical_plugins and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
+    if historical_plugin_archive and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
             "codex", "plugin", "linux", "x86_64", 2):
-        p.error("Historical archived feed requires exactly two Codex plugins on Linux x86_64")
+        p.error("Historical archive observation requires exactly two Codex plugins on Linux x86_64")
     prepared_installation = args.acceptance in PREPARED_INSTALLATION["ACCEPTANCES"]
     kiro_installation = args.acceptance in PREPARED_INSTALLATION["KIRO_ACCEPTANCES"]
     if kiro_installation and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
@@ -3731,10 +4292,13 @@ def main():
               "fixture_count": len(cases), "cases_attempted": 0,
               "source_selection_complete": args.limit == 30,
               "full_coverage": False, "results": []}
+    if pi_mode is not None:
+        report["acceptance"] = args.acceptance
+        report["pi_skill_cohort"] = pi_mode
     if historical_baseline:
         report["acceptance"] = args.acceptance
         report.update(HISTORICAL_CODEX["summary"](report, doc))
-    if historical_plugins:
+    if historical_plugin_archive:
         report["acceptance"] = args.acceptance
         report.update(HISTORICAL_CODEX["plugin_summary"](report, doc))
     if prepared_installation:
@@ -3751,8 +4315,10 @@ def main():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     native_target = audit_client_id(args.target, args.kind)
     signed_release_pins = effective_signed_release_pins(doc, native_target)
-    if args.target == "chatgpt":
+    if args.target == "chatgpt" or qoder_prepared or pi_mode is not None:
         report["canonical_client_id"] = native_target
+    if qoder_prepared:
+        report["acceptance"] = args.acceptance
     eligible_binaries = EXECUTABLE.get(native_target, ())
     if not vendor_bootstrap_attested():
         report["blocker"] = "Vendor bootstrap was not verified; no native-client PASS is permitted"
@@ -3801,17 +4367,27 @@ def main():
                           if AGENT_BINARIES.get(name))
             report["client_binary"] = native
             report["client_version"] = version_evidence([native, "--version"], probe_env, probe_case)
+        if qoder_prepared and any(
+                report[field] != {"status": "reported", "value": expected, "exit_code": 0}
+                or type(report[field].get("exit_code")) is not int
+                for field, expected in (("cli_version", "agentplugins 0.1.115"),
+                                        ("client_version", "1.1.81"))):
+            report["blocker"] = "Qoder Prepared installation requires exact CLI 0.1.115 and native 1.1.81 probes"
+            save()
+            return 2
         save()
         for i, item in enumerate(selected):
             try:
                 result = do_case(cli, args.target, args.kind, item, i, runroot,
                                  doc["plugin_declared_names"],
                                  signed_release_pins,
+                                 **({"pi_skills": pi_mode} if pi_mode is not None else {}),
+                                 **({"qoder_prepared": True} if qoder_prepared else {}),
                                  **({"client_version": report.get("client_version")}
                                     if (args.target, args.kind) in (("gemini", "skill"), ("kimi", "skill"))
-                                    or args.target == "opencode" else {}),
+                                    or args.target == "opencode" or pi_mode is not None else {}),
                                  **({"historical_baseline": True} if historical_baseline else {}),
-                                 **({"historical_plugins": True} if historical_plugins else {}),
+                                 **({"historical_plugin_archive": True} if historical_plugin_archive else {}),
                                  **({"installation_audit": args.acceptance} if prepared_installation else {}),
                                  **({"installation_audit": args.acceptance, "installation_fixtures": doc}
                                     if windsurf_installation or kiro_installation else {}))
@@ -3822,7 +4398,14 @@ def main():
                                        if args.kind == "plugin" else item["name"]),
                           "status": "harness-error", "error": repr(e),
                           "error_traceback": bounded_error_traceback(e)}
-                if historical_plugins and isinstance(e, HISTORICAL_CODEX["ArchiveUnavailable"]):
+                if args.target == "copilot" and args.kind == "skill" and isinstance(
+                        getattr(e, "copilot_project_skill_proof", None), dict):
+                    result["copilot_project_skill_proof"] = e.copilot_project_skill_proof
+                if isinstance(getattr(e, "pi_project_skill_proof", None), dict):
+                    result["pi_project_skill_proof"] = e.pi_project_skill_proof
+                if isinstance(getattr(e, "qoder_prepared_skill_proof", None), dict):
+                    result["qoder_prepared_skill_proof"] = e.qoder_prepared_skill_proof
+                if historical_plugin_archive and isinstance(e, HISTORICAL_CODEX["ArchiveUnavailable"]):
                     result["historical_plugin_feed"] = e.observation
             report["results"].append(result)
             report["cases_attempted"] += 1
@@ -3848,13 +4431,33 @@ def main():
     save()
     print(f'{args.target} {args.kind}: {passed}/{args.limit} native PASS; '
           f'verified_negative={len(accepted_negatives)}; attempted={report["cases_attempted"]}')
+    if pi_mode is not None:
+        report.update(pi_project_skill_audit()["summary"](report, doc, args.acceptance))
+        save()
+        print(f'Pi {pi_mode}: {report["pi_cohort_verified"]}/30; native PASS={passed}')
+        return 0 if report["pi_cohort_acceptance_passed"] else 1
+    if qoder_prepared:
+        report.update(qoder_prepared_audit()["summary"](report, doc, args.acceptance))
+        save()
+        print(f'Qoder Prepared installation: {report["installation_passed"]}/30 installed; '
+              'native activation remains unqualified; native PASS count unchanged')
+        return 0 if report["installation_acceptance_passed"] else 1
+    if historical_plugin_archive:
+        report.update(HISTORICAL_CODEX["plugin_summary"](report, doc))
+        save()
+        print(f'Historical signed sequence-48 plugin lifecycles: '
+              f'{report["archived_plugin_lifecycles_observed"]}/2; '
+              f'current default refusals observed={report["current_default_refusals_observed"]}/2 '
+              '(NONPASS; no current production compatibility claim); default native PASS=0; '
+              'archive native PASS count unchanged')
+        return 0 if report["historical_plugin_observation_complete"] else 1
     if historical_baseline:
         report.update(HISTORICAL_CODEX["summary"](report, doc))
         save()
         print(f'Historical npm lifecycle observations: {report["historical_lifecycle_observed"]}/2; '
               'modern public readiness remains unavailable; native PASS count unchanged')
         return 0 if report["historical_observation_complete"] else 1
-    if historical_plugins:
+    if historical_plugin_archive:
         report.update(HISTORICAL_CODEX["plugin_summary"](report, doc))
         save()
         print(f'Historical archived plugin lifecycles: {report["archived_plugin_lifecycles_observed"]}/2; '
