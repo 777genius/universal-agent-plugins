@@ -11,8 +11,9 @@ import test from 'node:test';
 const adapter = `#!${process.execPath}
 const fs = require('node:fs'), p = require('node:path');
 const args = process.argv.slice(4), mode = process.env.MOCK_MODE;
-// Synthetic identities observed in the original public 0.1.116 run.
-const packageAliases = {
+// Synthetic manifest names observed in the original public 0.1.116 run.
+// The saved lock alias is the public Skill name.
+const packageNames = {
  'frontend-design': 'skill-b0a5b0253f26020d7acb797250495459c1bd758fe440530b3db1347e',
  'ui-radar': 'skill-7f6b1bf3b1c4ba0c55922be29ac0e545672db905d8183e83e57a28da',
 };
@@ -29,12 +30,13 @@ if (command === 'skills') {
  const website = skill==='ui-radar', url='https://uizze.com';
  const source = website ? {web:{url,skill,index_url:url+'/.well-known/agent-skills/index.json',index_sha256:'a'.repeat(64),raw_tree_digest:digest,normalizer:'agent-skill-package/v1',files:[{path:'SKILL.md',url:url+'/SKILL.md',sha256:'a'.repeat(64)}]}} : {git:{repository:'anthropics/skills',kind:'skill',skill,path:'skills/frontend-design',resolved_skill_path:'skills/frontend-design',commit:'b'.repeat(40),raw_tree_digest:digest,normalizer:'agent-skill-package/v1'}};
  const sourceKey = website?'https-skill:'+url+':'+skill:'github-skill:anthropics/skills:'+skill+':skills/frontend-design';
- fs.writeFileSync(p.join(root,'uap.lock'),JSON.stringify({lock_version:1,packages:[{alias:mode==='identity'?'other':packageAliases[skill],source,source_key:mode==='wrong-source'?'wrong-source':sourceKey,tree_digest:digest,manifest_digest:digest,targets:['codex']}]}));
+ fs.writeFileSync(p.join(root,'uap.lock'),JSON.stringify({lock_version:1,packages:[{alias:mode==='identity'?'other':skill,source,source_key:mode==='wrong-source'?'wrong-source':sourceKey,tree_digest:digest,manifest_digest:digest,targets:['codex']}]}));
  if(mode==='json') console.log('not JSON');
  else console.log(JSON.stringify({schema_version:1,command:'skills add',result:'success',status:'succeeded',readiness:mode==='reported-ready'?'ready':'needs_action',items:[{alias:skill,targetId:'codex',status:'succeeded'}]}));
 } else if(command === 'info') {
  const skill=fs.readFileSync(marker,'utf8');
- envelope('info',{name:packageAliases[skill],source:skill==='ui-radar'?'https://uizze.com':'anthropics/skills/skills/frontend-design',installation_id:'verified-id',clients:[{client_id:'codex',package_revision:{tree_digest:'sha256:'+'a'.repeat(64),manifest_digest:'sha256:'+'a'.repeat(64),resolved_revision:skill==='ui-radar'?undefined:'b'.repeat(40)},native_discovery_reconciled:mode==='reported-ready'}]});
+ if(args[1]!==skill) throw Error('Expected saved public alias');
+ envelope('info',{name:mode==='declared-name'?'other':packageNames[skill],source:skill==='ui-radar'?'https://uizze.com':'anthropics/skills/skills/frontend-design',installation_id:'verified-id',clients:[{client_id:'codex',package_revision:{tree_digest:'sha256:'+'a'.repeat(64),manifest_digest:'sha256:'+'a'.repeat(64),resolved_revision:skill==='ui-radar'?undefined:'b'.repeat(40)},native_discovery_reconciled:mode==='reported-ready'}]});
 } else if(command === 'remove') {
  if(args[1]!=='verified-id') throw Error('unverified selector');
  const skill=fs.readFileSync(marker,'utf8');
@@ -47,7 +49,7 @@ if (command === 'skills') {
 else if(command === 'list') envelope('list',{installations:[]});
 else throw Error('unexpected command '+args.join(' '));
 `;
-for (const mode of ['success', 'reported-ready', 'wrong-source', 'stale-requirement', 'json', 'identity', 'remove-error', 'leftover', 'foreign']) {
+for (const mode of ['success', 'reported-ready', 'wrong-source', 'stale-requirement', 'json', 'identity', 'declared-name', 'remove-error', 'leftover', 'foreign']) {
   test(`published lifecycle harness: ${mode}`, () => {
     const root = mkdtempSync(join(tmpdir(), 'uap-lifecycle-test-'));
     try {

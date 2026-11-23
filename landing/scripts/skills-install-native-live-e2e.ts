@@ -258,17 +258,17 @@ try {
           expectedRevision = undefined;
         }
         assert.equal(pin.source_key, expectedSourceKey);
-        // The saved package identity is the normalized manifest name, while
-        // skills add reports the selected Skill's public declaration alias.
-        const packageAlias = 'skill-' + createHash('sha256').update(expectedSourceKey).digest('hex').slice(0, 56);
-        assert.equal(pin.alias, packageAlias);
+        // Saved aliases use the public Skill name; info exposes the distinct
+        // normalized manifest name derived from the verified source identity.
+        const packageName = 'skill-' + createHash('sha256').update(expectedSourceKey).digest('hex').slice(0, 56);
+        assert.equal(pin.alias, fixture.skill);
         assert.match(pin.tree_digest, /^sha256:[a-f0-9]{64}$/);
         assert.match(pin.manifest_digest, /^sha256:[a-f0-9]{64}$/);
         const common = ['--target', 'codex', '--scope', 'project', '--project-root', project, '--format', 'json'];
         const infoOutput = invoke(['info', pin.alias, ...common]);
         evidence.lifecycle.info = commandEvidence(infoOutput);
         const info = completeJSON(infoOutput, 'info').data;
-        assert.equal(info.name, pin.alias);
+        assert.equal(info.name, packageName);
         assert.equal(info.source, expectedSource);
         assert.ok(typeof info.installation_id === 'string' && info.installation_id.length > 0);
         assert.equal(info.clients?.length, 1);
