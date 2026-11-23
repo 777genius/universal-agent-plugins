@@ -6,17 +6,20 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
-func TestSavedTargetNoticeCompactsOnlyNeutralMissingAgents(t *testing.T) {
+func TestSavedTargetNoticeGroupsMissingAgentsAndKeepsActionableReasons(t *testing.T) {
 	for _, count := range []int{0, 1, 15} {
 		t.Run(fmt.Sprint(count), func(t *testing.T) {
 			var skipped []targetSkip
 			for i := range count {
-				skipped = append(skipped, targetSkip{Client: domain.ClientID(fmt.Sprintf("absent-%d", i)), Reason: undetectedAutomaticInstallReason})
+				skipped = append(skipped, targetSkip{Client: domain.ClientID(fmt.Sprintf("absent-%d", i)), Kind: prompt.SkipNotDetected})
 			}
 			if count > 0 {
 				skipped = append(skipped, skipped[0]) // Same fact is not another agent.
@@ -25,14 +28,25 @@ func TestSavedTargetNoticeCompactsOnlyNeutralMissingAgents(t *testing.T) {
 				targetSkip{Client: "claude", Reason: "client configuration could not be inspected safely; correct it and retry"},
 				targetSkip{Client: "codex", Reason: "use --no-save"},
 				targetSkip{Client: "kiro", Reason: "manual activation required"},
-				targetSkip{Client: "cursor", Reason: undetectedAutomaticInstallReason + "; policy review required"})
-			labels := humanSkippedTargetLabels(skipped)
+				targetSkip{Client: "cursor", Kind: prompt.SkipNotDetected, Reason: "not detected; policy review required"})
+			var request prompt.TargetSelectionRequest
+			app := App{Prompter: fakePrompter{selectFn: func(value prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
+				request = value
+				return prompt.TargetSelectionResult{IDs: value.DefaultIDs}, nil
+			}}}
+			cmd := &cobra.Command{}
+			cmd.SetContext(t.Context())
+			clients := []domain.DetectedClient{{ClientID: domain.ClientClaude}, {ClientID: domain.ClientCodex}}
+			if _, _, err := promptTargetChoices(cmd, app, clients, skipped, clients); err != nil {
+				t.Fatal(err)
+			}
+			groups := prompt.GroupSkipped(request.Skipped)
 			wantLines := 4
 			if count > 0 {
 				wantLines++
 			}
-			text := strings.Join(labels, "\n")
-			if len(labels) != wantLines || strings.Contains(text, "absent-") {
+			text := prompt.SkippedClientsNotice(request.Skipped)
+			if len(groups) != wantLines {
 				t.Fatalf("missing-agent notice still dominates: %q", text)
 			}
 			for _, warning := range []string{"could not be inspected safely", "use --no-save", "manual activation required", "policy review required"} {
@@ -40,8 +54,16 @@ func TestSavedTargetNoticeCompactsOnlyNeutralMissingAgents(t *testing.T) {
 					t.Fatalf("actionable warning %q lost: %q", warning, text)
 				}
 			}
-			if count > 0 && !strings.Contains(text, fmt.Sprintf("%d agent", count)) {
-				t.Fatalf("wrong missing-agent count: %q", text)
+			if count > 0 {
+				var missing int
+				for _, group := range groups {
+					if group.Detail == "not found on this computer; install or configure it first" {
+						missing += len(group.Names)
+					}
+				}
+				if missing != count {
+					t.Fatalf("wrong deduplicated missing-agent count: got %d, want %d", missing, count)
+				}
 			}
 		})
 	}

@@ -8,8 +8,9 @@ const path = require('node:path');
 const { isolationArguments, gate, ordinary, inventoryScreenshot } = require('./cursor_editor_observation.cjs');
 
 const directories = { userData: '/owned/userdata', extensions: '/owned/extensions', project: '/owned/project' };
-// A synthetic usage control only: actual 3.30.14 help must admit these rows.
-const help = 'Cursor 3.30.14\nUsage: cursor [options] [paths...]\n\nOptions:\n'
+// Required usage/option rows from pinned 3.30.14 help; this is a grammar
+// control, not evidence of an Editor launch or component observation.
+const help = 'Cursor 3.30.14\nUsage: cursor [options][paths...]\n\nOptions:\n'
   + '  -n --new-window              Open a new window\n'
   + '  --user-data-dir <dir>        Isolated user data\n'
   + '  --extensions-dir <dir>       Isolated extensions\n';
@@ -26,8 +27,9 @@ test('missing, ambiguous and value-taking lookalikes do not admit a launch', () 
     help.replace('--extensions-dir <dir>', '--extensions-dir <source>'),
     help + '  --user-data-dir <dir>        Second option\n',
     help.replace('Cursor 3.30.14', 'Cursor 3.30.15'),
-    help.replace('Usage: cursor [options] [paths...]', 'Examples:'),
-    help + 'Usage: cursor [options] [paths...]\n',
+    help.replace('Usage: cursor [options][paths...]', 'Examples:'),
+    help.replace('Usage: cursor [options][paths...]', 'Usage: cursor [options] [paths...]'),
+    help + 'Usage: cursor [options][paths...]\n',
     help + '\x00',
     'x'.repeat(65537),
   ]) assert.throws(() => isolationArguments(body, directories), /help-refused/u);

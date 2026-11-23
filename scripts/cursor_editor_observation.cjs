@@ -10,7 +10,7 @@ function isolationArguments(help, directories) {
   const rows = help.split(/\r?\n/u);
   if (rows[0] !== 'Cursor 3.30.14'
       || rows.filter(row => row.startsWith('Usage:')).length !== 1
-      || !rows.includes('Usage: cursor [options] [paths...]')) throw new Error('help-refused');
+      || !rows.includes('Usage: cursor [options][paths...]')) throw new Error('help-refused');
   for (const pattern of [
     /^\s+(?:-n[ ,]+)?--new-window\s{2,}\S.*$/u,
     /^\s+--user-data-dir <dir>\s{2,}\S.*$/u,
