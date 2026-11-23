@@ -407,6 +407,224 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 row[key] = value
                 with self.assertRaises(ValueError): self.finish(observer, row)
 
+    def neutral_frames(self, observer):
+        for name, body in (("mcp_config.json", b'{"mcpServers":{}}\n'),
+                           ("mcp_config.json.agentplugins.lock", b"")):
+            path = observer.global_root / name
+            with path.open("xb") as stream:
+                stream.write(body)
+            path.chmod(0o600)
+        (observer.global_root / "skills").mkdir(mode=0o700)
+        frames = []
+        for _ in range(6):
+            image = observer.image()
+            observer.infrastructure_frames.append(observer._infrastructure_frame(image))
+            frames.append(image)
+        return frames
+
+    def test_terminal_original_image_remains_valid_without_retained_infrastructure(self):
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            frames = [observer.image() for _ in range(6)]
+            observer.infrastructure_frames = [(None, None)] * 6
+            with patch.object(observer, "_neutral_file", side_effect=AssertionError("unneeded neutral read")):
+                expected, roles = observer._expected_removed_image(frames, mcp=True, skills=True)
+            self.assertEqual(expected, observer.initial)
+            self.assertEqual(roles, [])
+            (observer.global_root / "late").write_text("foreign")
+            with self.assertRaisesRegex(ValueError, "native-image drift"):
+                observer._expected_removed_image(frames, mcp=True, skills=True)
+
+    def test_retained_neutral_infrastructure_keeps_original_image_and_exact_final_image(self):
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            initial = copy.deepcopy(observer.initial)
+            frames = self.neutral_frames(observer)
+            expected, roles = observer._expected_removed_image(frames, mcp=True, skills=True)
+            self.assertEqual(expected, frames[5])
+            self.assertEqual(observer.initial, initial)
+            self.assertEqual(roles, ["mcp_document", "skills_parent", "writer_lock"])
+            self.assertNotEqual(expected, initial)
+            self.assertEqual(observer.foreign.read_bytes(), b"unmanaged Devin Global neighbor must survive\n")
+            (observer.global_root / "unknown").write_text("foreign")
+            with self.assertRaisesRegex(ValueError, "native-image drift"):
+                observer._expected_removed_image(frames, mcp=True, skills=True)
+
+    def test_neutral_document_shape_is_strict_and_whitespace_independent(self):
+        valid = (b'{"mcpServers":{}}', b'{\n "mcpServers": {}\n}\n')
+        invalid = (b'{}', b'[]', b'{"mcpServers":[]}', b'{"mcpServers":{"foreign":{}}}',
+                   b'{"mcpServers":{},"foreign":false}', b'{"mcpServers":{},"mcpServers":{}}',
+                   b'{"mcpServers":{},"foreign":NaN}', b'{"mcpServers":{}} trailing', b' ' * 4097,
+                   b'\xff', b'\xef\xbb\xbf{"mcpServers":{}}') + tuple(
+                       '{"mcpServers":{}}'.encode(encoding)
+                       for encoding in ("utf-16", "utf-16-le", "utf-16-be",
+                                        "utf-32", "utf-32-le", "utf-32-be"))
+        for body in (*valid, *invalid):
+            with self.subTest(body=body[:64]), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                frames = self.neutral_frames(observer)
+                (observer.global_root / "mcp_config.json").write_bytes(body)
+                frames[4] = observer.image()
+                frames[5] = observer.image()
+                if body in valid:
+                    expected, _ = observer._expected_removed_image(frames, mcp=True, skills=True)
+                    self.assertEqual(expected, frames[5])
+                else:
+                    with self.assertRaises(ValueError):
+                        observer._expected_removed_image(frames, mcp=True, skills=True)
+
+    def test_retained_infrastructure_rejects_foreign_links_modes_and_replaced_authority(self):
+        for mutation in ("mode", "hardlink", "symlink", "replaced-lock", "nonempty-lock",
+                         "nonempty-skills", "replaced-skills", "foreign", "no-mcp", "no-skills"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                frames = self.neutral_frames(observer)
+                lock = observer.global_root / "mcp_config.json.agentplugins.lock"
+                skills = observer.global_root / "skills"
+                if mutation == "mode":
+                    lock.chmod(0o644)
+                elif mutation == "hardlink":
+                    os.link(lock, observer.case / "lock-peer")
+                elif mutation == "symlink":
+                    lock.unlink()
+                    lock.symlink_to(observer.foreign)
+                elif mutation == "replaced-lock":
+                    lock.rename(observer.case / "old-lock")
+                    with lock.open("xb"):
+                        pass
+                    lock.chmod(0o600)
+                elif mutation == "nonempty-lock":
+                    lock.write_bytes(b"foreign")
+                elif mutation == "nonempty-skills":
+                    (skills / "foreign").write_bytes(b"foreign")
+                elif mutation == "replaced-skills":
+                    skills.rename(observer.case / "old-skills")
+                    skills.mkdir(mode=0o700)
+                elif mutation == "foreign":
+                    observer.foreign.write_bytes(b"changed foreign")
+                with self.assertRaises(ValueError):
+                    for position in (4, 5):
+                        frames[position] = observer.image()
+                        observer.infrastructure_frames[position] = observer._infrastructure_frame(frames[position])
+                    observer._expected_removed_image(frames,
+                        mcp=mutation != "no-mcp", skills=mutation != "no-skills")
+
+    def test_same_bytes_replacement_cannot_renew_stable_retained_lock(self):
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            frames = self.neutral_frames(observer)
+            lock = observer.global_root / "mcp_config.json.agentplugins.lock"
+            lock.rename(observer.case / "old-lock")
+            with lock.open("xb"):
+                pass
+            lock.chmod(0o600)
+            for position in (4, 5):
+                frames[position] = observer.image()
+                observer.infrastructure_frames[position] = observer._infrastructure_frame(frames[position])
+            self.assertEqual(frames[4], frames[5])
+            self.assertNotEqual(observer.infrastructure_frames[0][0][0][2],
+                                observer.infrastructure_frames[5][0][0][2])
+            with self.assertRaises(ValueError):
+                observer._expected_removed_image(frames, mcp=True, skills=True)
+
+    def test_empty_replacement_cannot_renew_stable_retained_skills_parent(self):
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            frames = self.neutral_frames(observer)
+            skills = observer.global_root / "skills"
+            skills.rename(observer.case / "old-skills")
+            skills.mkdir(mode=0o700)
+            for position in (4, 5):
+                frames[position] = observer.image()
+                observer.infrastructure_frames[position] = observer._infrastructure_frame(frames[position])
+            self.assertEqual(frames[4], frames[5])
+            self.assertEqual(list(skills.iterdir()), [])
+            self.assertEqual(observer.infrastructure_frames[0][1][0], 0o40700)
+            self.assertEqual(observer.infrastructure_frames[5][1][0], 0o40700)
+            self.assertNotEqual(observer.infrastructure_frames[0][1][2],
+                                observer.infrastructure_frames[5][1][2])
+            with self.assertRaises(ValueError):
+                observer._expected_removed_image(frames, mcp=True, skills=True)
+
+    def test_optional_retention_capture_cannot_reject_exact_original_restoration(self):
+        for body in (b"not neutral", b"x" * 4097):
+            with self.subTest(size=len(body)), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                row = self.row(0)
+                lock = observer.global_root / "mcp_config.json.agentplugins.lock"
+                with lock.open("xb") as stream:
+                    stream.write(body)
+                lock.chmod(0o600)
+                for position, (argv, outcome) in enumerate(self.sequence(observer, row)):
+                    if position == 4:
+                        lock.unlink()
+                    observer.observe(argv, outcome)
+                proof = observer.finish(row, row["source"], 0, self.fixtures)
+                self.assertEqual(proof["terminal_mode"], "restored-original-image")
+                self.assertEqual(proof["retained_infrastructure"], [])
+                self.assertEqual(proof["terminal_native_image"], proof["initial_native_image"])
+                if len(body) > 4096:
+                    self.assertIsNone(observer.infrastructure_frames[0])
+
+    def test_same_invalid_retained_lock_never_gains_optional_proof(self):
+        for body in (b"not neutral", b"x" * 4097):
+            with self.subTest(size=len(body)), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                row = self.row(0)
+                for name, content in (("mcp_config.json", b'{"mcpServers":{}}'),
+                                      ("mcp_config.json.agentplugins.lock", body)):
+                    path = observer.global_root / name
+                    with path.open("xb") as stream:
+                        stream.write(content)
+                    path.chmod(0o600)
+                for argv, outcome in self.sequence(observer, row):
+                    observer.observe(argv, outcome)
+                with self.assertRaises(ValueError):
+                    observer.finish(row, row["source"], 0, self.fixtures)
+
+    def test_optional_capture_never_swallows_original_or_outer_guard_failures(self):
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            image = observer.image()
+            for guards in ((ValueError("before guard"),), (None, ValueError("after guard"))):
+                with self.subTest(guards=len(guards)), \
+                        patch.object(observer, "guard", side_effect=guards), \
+                        patch.object(observer, "_lock_frame", side_effect=ValueError("optional capture")):
+                    with self.assertRaisesRegex(ValueError, "guard"):
+                        observer._infrastructure_frame(image)
+            (observer.global_root / "redirect").symlink_to(observer.foreign)
+            with patch.object(observer, "_infrastructure_frame", side_effect=AssertionError("capture must not run")) as capture:
+                with self.assertRaises(ValueError):
+                    observer.observe(*self.sequence(observer, self.row(0))[0])
+                capture.assert_not_called()
+
+    def test_summary_requires_exact_terminal_retention_proof(self):
+        report = self.completed_report()
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            row = self.row(0)
+            for name, body in (("mcp_config.json", b'{"mcpServers":{}}\n'),
+                               ("mcp_config.json.agentplugins.lock", b"")):
+                path = observer.global_root / name
+                with path.open("xb") as stream:
+                    stream.write(body)
+                path.chmod(0o600)
+            row["windsurf_installation_audit"] = self.finish(observer, row)
+            report["results"][0] = row
+        proof = report["results"][0]["windsurf_installation_audit"]
+        self.assertEqual(proof["terminal_mode"], "retained-neutral-infrastructure")
+        self.assertEqual(proof["retained_infrastructure"], ["mcp_document", "writer_lock"])
+        self.assertTrue(summary(report, self.fixtures, fixture_sha256=self.fixture_hash)["installation_acceptance_passed"])
+        for field, value in (("terminal_mode", "restored-original-image"),
+                             ("retained_infrastructure", []),
+                             ("retained_infrastructure", ["writer_lock"]),
+                             ("retained_infrastructure", ["mcp_document", "writer_lock", "writer_lock"]),
+                             ("terminal_native_image", proof["initial_native_image"])):
+            with self.subTest(field=field, value=value):
+                changed = copy.deepcopy(report)
+                changed["results"][0]["windsurf_installation_audit"][field] = value
+                self.assertFalse(summary(changed, self.fixtures, fixture_sha256=self.fixture_hash)["installation_acceptance_passed"])
+
     def completed_report(self, cli="/fixture/agentplugins"):
         rows = []
         for index in range(30):
@@ -422,7 +640,8 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         self.assertTrue(summary(original, self.fixtures, fixture_sha256=self.fixture_hash)["installation_acceptance_passed"])
         for mutation in ("missing-proof", "source", "index-bool", "residue", "sentinel", "repeat", "global-omitted",
                          "image-count", "negative-image", "state-promotion", "writer-claim", "model-native-count",
-                         "missing-row", "duplicate-row", "cli-bool"):
+                         "missing-row", "duplicate-row", "cli-bool", "terminal-mode",
+                         "terminal-hash", "terminal-count", "terminal-roles", "negative-terminal"):
             with self.subTest(mutation=mutation):
                 report = copy.deepcopy(original)
                 row = report["results"][0]
@@ -443,6 +662,12 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 elif mutation == "missing-row": report["results"].pop()
                 elif mutation == "duplicate-row": report["results"][1] = copy.deepcopy(row)
                 elif mutation == "cli-bool": report["cli_version"]["exit_code"] = False
+                elif mutation == "terminal-mode": proof["terminal_mode"] = "unqualified"
+                elif mutation == "terminal-hash": proof["terminal_native_image"]["sha256"] = "0" * 64
+                elif mutation == "terminal-count": proof["terminal_native_image"]["entries"] += 1
+                elif mutation == "terminal-roles": proof["retained_infrastructure"] = ["unknown"]
+                elif mutation == "negative-terminal":
+                    report["results"][13]["windsurf_installation_audit"]["terminal_mode"] = "retained-neutral-infrastructure"
                 self.assertFalse(summary(report, self.fixtures, fixture_sha256=self.fixture_hash)["installation_acceptance_passed"])
 
     def test_full_parsed_observations_survive_caller_consumption_without_output_export(self):
