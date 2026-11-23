@@ -274,7 +274,7 @@ class DevinUserNativeContracts(unittest.TestCase):
             metadata_path = launcher.parent / "metadata.json"
             metadata_path.write_text(json.dumps(metadata))
             argv = ["--internal-stdio-v1", str(managed), str(data), str(managed), "plugin", "--",
-                    sys.executable, str(service)]
+                    "python3", str(service)]
             stdio = {"command": str(launcher), "args": argv,
                      "env": {"PLUGIN_ROOT": str(managed), "PLUGIN_DATA": str(data)}}
             projected = {"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
