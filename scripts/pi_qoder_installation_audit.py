@@ -116,6 +116,32 @@ def _stable_dir(value):
     return {key: value[key] for key in ("kind", "device", "inode", "mode", "uid", "gid")}
 
 
+
+def unchanged_private_tmp_frame(before, after):
+    """Refuse any residue or replacement; an empty tmp root may change timestamps.
+
+    A successfully removed temporary child necessarily updates its containing
+    directory's mtime/ctime on ordinary POSIX filesystems. That alone does not
+    mean a private file survived. Keep the held root's mode, device, inode,
+    ownership, links and all non-timestamp facts unchanged; every child must
+    remain byte-for-byte and metadata-identical to the original snapshot.
+    """
+    if (type(before) is not dict or type(after) is not dict
+            or set(before) != set(after) or "" not in before
+            or before[""].get("kind") != "dir" or after[""].get("kind") != "dir"
+            or set(before[""]) != set(after[""])):
+        return False
+    for relative, original in before.items():
+        current = after[relative]
+        if relative:
+            if not exact(original, current):
+                return False
+        elif any(not exact(value, current[key]) for key, value in original.items()
+                 if key not in ("modified_ns", "changed_ns")):
+            return False
+    return True
+
+
 def lifecycle_row(row, kind, uid, *, acceptance=None):
     """The same original row gates at finish and at the report's final join."""
     clean = acceptance == PI_CLEAN_ACCEPTANCE
@@ -601,7 +627,8 @@ class PiQoderInstallationAudit:
                     require(exact(_stable_dir(current[rel]), _stable_dir(old)), "native directory authority was replaced")
         for path, old in self.foreign.items():
             require(self._file(Path(path)) == old, "foreign sentinel changed")
-        require(exact(frame(self.dirs[self.case / "tmp"][0]), self.tmp_frame), "public command left private temp residue")
+        require(unchanged_private_tmp_frame(self.tmp_frame, frame(self.dirs[self.case / "tmp"][0])),
+                "public command left private temp residue")
         return image
 
     def _hold_saved(self):

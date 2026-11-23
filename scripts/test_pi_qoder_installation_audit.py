@@ -862,6 +862,38 @@ class PiQoderInstallationAuditTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.exercise_main_project("pi-foreign-prepared-skills-installation", phase="install", mutate=cold_store)
 
+
+    def test_disposable_tmp_with_cleaned_child_preserves_custody_without_false_residue(self):
+        def cleaned_child(fixture, _outcome):
+            temporary = fixture.case / "tmp" / "temporary-only"
+            write(temporary, b"never retained")
+            temporary.unlink()
+            self.assertEqual(list((fixture.case / "tmp").iterdir()), [])
+
+        row, _ = self.exercise_main_project(
+            "pi-clean-native-skills", metadata_mutation=lambda f, _a, o: cleaned_child(f, o))
+        self.assertTrue(row["pi_qoder_installation_audit"]["installation_qualified"])
+        self.assertTrue(row["pi_qoder_installation_audit"]["native_discovery_qualified"] is False)
+
+        # Root replacement remains a refusal even if the new root is empty.
+        before = {"": {"kind": "dir", "device": 1, "inode": 2, "mode": 16832,
+                       "links": 2, "bytes": 4096, "modified_ns": 100,
+                       "changed_ns": 100, "uid": 1000, "gid": 1000}}
+        changed = copy.deepcopy(before)
+        changed[""]["modified_ns"] += 1
+        changed[""]["changed_ns"] += 1
+        self.assertTrue(installation.unchanged_private_tmp_frame(before, changed))
+        for key in ("device", "inode", "mode", "links", "bytes", "uid", "gid"):
+            with self.subTest(key=key):
+                attacked = copy.deepcopy(changed)
+                attacked[""][key] += 1
+                self.assertFalse(installation.unchanged_private_tmp_frame(before, attacked))
+        for member in ("unowned", ".hidden", "subdir"):
+            with self.subTest(member=member):
+                retained = copy.deepcopy(changed)
+                retained[member] = {"kind": "file", "sha256": digest(b"unowned")}
+                self.assertFalse(installation.unchanged_private_tmp_frame(before, retained))
+
     def test_clean_pi_metadata_is_one_exact_read_only_capture_not_a_seventh_lifecycle_phase(self):
         for fault in ("argv", "revision", "schema-bool", "complete", "candidate", "duplicate-json",
                       "stderr", "tmp-write", "same-byte-foreign-replacement"):
