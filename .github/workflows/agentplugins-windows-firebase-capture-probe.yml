@@ -180,10 +180,53 @@ jobs:
                   'temp_profile': 'original-windows-default', 'case_root_chars': case_root_chars,
                   'case': row
               }, indent=2) + '\n', encoding='utf-8')
+              # Fixed diagnostic scalars only: no native output, paths,
+              # environment, dependency names or captured file contents.
+              install = row.get('install')
+              install = install if type(install) is dict else {}
+              failure = row.get('runtime_failure_facts')
+              failure = failure if type(failure) is dict else {}
+              allowed_failure_fields = {
+                  'status': ('observed-unqualified', 'refused-unqualified'),
+                  'refusal_phase': ('case-root', 'native-projection', 'staging-binding',
+                                    'source-envelope', 'owned-data', 'locked-npm-runtime',
+                                    'npm-cache', 'held-custody'),
+                  'refusal_class': ('missing', 'deadline', 'invalid-state'),
+              }
+              failure_summary = {
+                  key: failure[key] for key, allowed in allowed_failure_fields.items()
+                  if failure.get(key) in allowed
+              }
+              runtime_facts = failure.get('facts')
+              if (type(runtime_facts) is list and len(runtime_facts) <= 16
+                      and all(type(fact) is dict for fact in runtime_facts)):
+                  failure_summary['reported_runtime_count'] = len(runtime_facts)
+                  failure_summary['runtime_present_count'] = sum(
+                      fact.get('runtime_present') is True for fact in runtime_facts)
+                  for key in ('staging', 'targets'):
+                      groups = [fact.get(key) for fact in runtime_facts]
+                      if all(type(group) is list and len(group) <= 16
+                             and all(type(item) is dict for item in group) for group in groups):
+                          items = [item for group in groups for item in group]
+                          failure_summary[key] = {
+                              'reported_count': len(items),
+                              'node_modules_count': sum(item.get('node_modules') is True for item in items),
+                              'bin_count': sum(item.get('bin') is True for item in items),
+                              'marker_count': sum(type(item.get('marker')) is dict
+                                                  and item['marker'].get('present') is True for item in items),
+                              'entrypoint_count': sum(type(item.get('entrypoint')) is dict
+                                                      and item['entrypoint'].get('present') is True for item in items),
+                          }
+              exit_code = install.get('exit_code')
+              timed_out = install.get('timeout')
               print(json.dumps({'status': row.get('status'),
                                 'repeat_verified': row.get('repeat_verified'),
                                 'removal_verified': row.get('removal_verified'),
-                                'sentinels_preserved': row.get('sentinels_preserved')}))
+                                'sentinels_preserved': row.get('sentinels_preserved'),
+                                'install_exit_code': exit_code if type(exit_code) is int
+                                    and -(1 << 31) <= exit_code < (1 << 32) else None,
+                                'install_timeout': timed_out if type(timed_out) is bool else None,
+                                'runtime_failure_summary': failure_summary}))
               if (row.get('status') != 'passed'
                       or row.get('repeat_verified') is not True
                       or row.get('removal_verified') is not True
