@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 
 VERSION = "0.1.116"
@@ -40,6 +41,20 @@ def tools():
     node = shutil.which("node")
     require(node, "Node prerequisite unavailable")
     node = Path(node).resolve(strict=True)
+    configured = os.environ.get("SOURCE_AUDIT_NPM_CLI")
+    if configured is not None:
+        npm = Path(configured)
+        require(npm.is_absolute() and npm.name == "npm-cli.js",
+                "SOURCE_AUDIT_NPM_CLI must be an absolute npm-cli.js")
+        try:
+            info = npm.lstat()
+        except OSError as error:
+            raise ValueError("SOURCE_AUDIT_NPM_CLI is unavailable") from error
+        require(stat.S_ISREG(info.st_mode) and not npm.is_symlink(),
+                "SOURCE_AUDIT_NPM_CLI must be a regular non-link file")
+        # The workflow supplies the exact isolated npm12 installation. Never
+        # fall back to an older setup-node shim when an explicit input is bad.
+        return node, npm.resolve(strict=True)
     candidates = [node.parent / "node_modules/npm/bin/npm-cli.js",
                   node.parent.parent / "lib/node_modules/npm/bin/npm-cli.js"]
     npm = shutil.which("npm")

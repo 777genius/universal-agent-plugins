@@ -18,6 +18,38 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class AcquisitionBoundaryTests(unittest.TestCase):
+    def test_explicit_npm_cli_wins_over_older_path_shim(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            node = root / "node"
+            node.write_bytes(b"trusted-node-fixture")
+            old = root / "old/npm-cli.js"
+            old.parent.mkdir()
+            old.write_bytes(b"older-npm-fixture")
+            selected = root / "source-audit-npm/node_modules/npm/bin/npm-cli.js"
+            selected.parent.mkdir(parents=True)
+            selected.write_bytes(b"npm12-fixture")
+            with mock.patch.dict(os.environ, {"SOURCE_AUDIT_NPM_CLI": str(selected)}), \
+                 mock.patch.object(npm.shutil, "which", side_effect=lambda name: str(node if name == "node" else old)) as discover:
+                actual_node, actual_npm = npm.tools()
+            self.assertEqual((actual_node, actual_npm), (node.resolve(), selected.resolve()))
+            self.assertEqual(discover.call_args_list, [mock.call("node")])
+
+    def test_explicit_npm_cli_invalid_paths_refuse_without_fallback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            node = root / "node"
+            node.write_bytes(b"trusted-node-fixture")
+            directory = root / "directory/npm-cli.js"
+            directory.mkdir(parents=True)
+            for configured in ("npm-cli.js", "", str(root / "missing/npm-cli.js"), str(directory), str(node)):
+                with self.subTest(configured=configured), \
+                     mock.patch.dict(os.environ, {"SOURCE_AUDIT_NPM_CLI": configured}), \
+                     mock.patch.object(npm.shutil, "which", return_value=str(node)) as discover:
+                    with self.assertRaisesRegex(ValueError, "SOURCE_AUDIT_NPM_CLI"):
+                        npm.tools()
+                    self.assertEqual(discover.call_args_list, [mock.call("node")])
+
     def test_subprocess_failure_reports_only_bounded_npm_code(self):
         result = SimpleNamespace(returncode=1, stdout=b"", stderr=b"npm error code E401\nnpm error token=private https://user:secret@registry/\n")
         with mock.patch.object(npm.subprocess, "run", return_value=result):

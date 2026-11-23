@@ -161,7 +161,9 @@ jobs:
           python-version: '3.12'
       - name: Install pinned public npm provenance verifier
         shell: bash
-        run: npm install --global npm@12.0.2 --ignore-scripts --no-audit --no-fund
+        run: |
+          npm install --prefix "$RUNNER_TEMP/source-audit-npm" npm@12.0.2 --ignore-scripts --no-audit --no-fund --registry=https://registry.npmjs.org/
+          echo "SOURCE_AUDIT_NPM_CLI=$RUNNER_TEMP/source-audit-npm/node_modules/npm/bin/npm-cli.js" >> "$GITHUB_ENV"
       - name: Install pinned native config parser
         shell: bash
         run: ${{ runner.os == 'Windows' && 'python' || 'python3' }} -m pip install PyYAML==6.0.3
