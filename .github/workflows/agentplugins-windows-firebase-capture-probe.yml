@@ -21,7 +21,9 @@ permissions:
 jobs:
   firebase-claude:
     runs-on: windows-2025
-    timeout-minutes: 20
+    # Each case: two 1200s adds, 60s removal, three 30s lists, 10s closure.
+    # Manual dispatch runs public + source cases (85m20s), plus setup/report time.
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

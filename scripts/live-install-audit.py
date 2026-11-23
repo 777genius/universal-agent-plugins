@@ -383,12 +383,13 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
 
 
 def install_case_timeout(target, kind, item):
-    # The frozen Firebase Windows runtime can finish durable registration
-    # while a cold native runtime setup still holds the original add process.
-    # Stay bounded: a timeout or any surviving registration still FAILS E2E.
+    # The Windows Firebase add hit 180s after materialization. One cold add
+    # includes npm (600s), separate Claude probes (5 * 65s), and acquisition
+    # plus transaction overhead (275s allowance); this is not a phase diagnosis.
+    # Timeouts and surviving registrations still FAIL under the same custody.
     if (sys.platform == "win32" and kind == "plugin"
             and item == "firebase"):
-        return 180
+        return 1200
     return 105
 
 
