@@ -102,9 +102,6 @@ func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot en
 		}
 		return err
 	}
-	if err := renderSavedTargetNotice(cmd, opts, locked, aliases, targets); err != nil {
-		return err
-	}
 	if opts.dryRun {
 		return renderDependencySync(cmd, opts, request.prepared, true)
 	}

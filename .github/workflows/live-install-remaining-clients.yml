@@ -6,6 +6,13 @@ on:
     paths:
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/prepared_installation_audit.py'
+      - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/test_kiro_installation_audit.py'
+      - 'scripts/windsurf_global_skill_audit.py'
+      - 'scripts/windsurf_installation_audit.py'
+      - 'scripts/test_windsurf_global_skill_audit.py'
+      - 'scripts/test_windsurf_installation_audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/test_kimi_repeat_log_audit.py'
       - 'scripts/devin_project_auto_install_e2e.py'
@@ -35,7 +42,7 @@ jobs:
       pull-requests: read
   remaining-client-install:
     needs: changes
-    name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
+    name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }} (separate installation and native verdicts)
     if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     # Linux hosted runners do not delegate cgroup v2 for Kiro's required
     # duplex MCP containment. Test the real native client on macOS instead
@@ -67,6 +74,17 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
           python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
+      - name: Verify source-bound Cursor and cold Grok installation contracts
+        if: ${{ matrix.target == 'cursor' || matrix.target == 'grok' && matrix.kind == 'skill' }}
+        run: python3 -m unittest discover -s scripts -p 'test_prepared_installation_audit.py'
+      - name: Verify Kiro installation custody and exact refusals
+        if: ${{ matrix.target == 'kiro' }}
+        run: python3 -m unittest discover -s scripts -p 'test_kiro_installation_audit.py'
+      - name: Verify Devin Global installation and independent native custody
+        if: ${{ matrix.target == 'windsurf' && matrix.kind == 'plugin' }}
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_windsurf_global_skill_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_windsurf_installation_audit.py'
       - name: Acquire actual public vendor client where a headless Linux build exists
         id: vendor-install
         # Preserve a complete explicit client-unavailable record even when a
@@ -318,7 +336,7 @@ jobs:
           printf 'executable=%s\n' "$audit_docker" >> "$GITHUB_OUTPUT"
       - name: Build CLI under test (not the already-published binary)
         run: go build -trimpath -ldflags='-X main.version=0.1.115' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
-      - name: Run real acquisitions and report every source and outcome
+      - name: Run explicit installation contracts and preserve native outcomes
         env:
           AUDIT_KIND: ${{ matrix.kind }}
           AUDIT_TARGET: ${{ matrix.target }}
@@ -342,9 +360,20 @@ jobs:
           if [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == plugin ]]; then
             [[ "$(command -v docker)" == "$AUDIT_DOCKER_EXECUTABLE" ]]
           fi
+          # Keep installation and native verdicts explicit; Windsurf retains its four native cases.
+          audit_acceptance=native
+          case "$AUDIT_TARGET:$AUDIT_KIND" in
+            cursor:plugin) audit_acceptance=cursor-prepared-installation ;;
+            cursor:skill) audit_acceptance=cursor-prepared-skills-installation ;;
+            grok:skill) audit_acceptance=grok-prepared-skills-installation ;;
+            kiro:plugin) audit_acceptance=kiro-installation ;;
+            kiro:skill) audit_acceptance=kiro-skills-installation ;;
+            windsurf:plugin) audit_acceptance=windsurf-global-installation ;;
+          esac
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \
             --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 30 \
+            --acceptance "$audit_acceptance" \
             --report-dir "$RUNNER_TEMP/live-audit-report"
       - name: Preserve exact per-case evidence, even if vendor install or CLI fails
         if: always()

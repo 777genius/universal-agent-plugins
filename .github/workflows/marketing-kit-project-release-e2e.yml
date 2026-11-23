@@ -9,6 +9,13 @@ on:
       - 'scripts/marketing-kit-published-launcher-abort.js'
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/test_marketing_kit_codex_sqlite.py'
+      - 'scripts/marketing_kit_claude_retirement.py'
+      - 'scripts/marketing_kit_claude_discovery.py'
+      - 'scripts/test_marketing_kit_claude_retirement.py'
+      - 'scripts/test_marketing_kit_claude_discovery.py'
+      - 'scripts/claude_cache_retirement_audit.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/native_client_project_artifacts.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
@@ -21,6 +28,13 @@ on:
       - 'scripts/marketing-kit-published-launcher-abort.js'
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/test_marketing_kit_codex_sqlite.py'
+      - 'scripts/marketing_kit_claude_retirement.py'
+      - 'scripts/marketing_kit_claude_discovery.py'
+      - 'scripts/test_marketing_kit_claude_retirement.py'
+      - 'scripts/test_marketing_kit_claude_discovery.py'
+      - 'scripts/claude_cache_retirement_audit.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/native_client_project_artifacts.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
@@ -220,6 +234,9 @@ jobs:
           set -o pipefail
           python3 -m unittest scripts/test_live_install_audit_env.py -k marketing_kit_ 2>&1 | tee "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 -m unittest scripts/test_marketing_kit_codex_sqlite.py
+          if [[ "$TARGET" == claude ]]; then
+            python3 -m unittest discover -s scripts -p 'test_marketing_kit_claude_*.py'
+          fi
           python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)" --cli-version 0.1.116             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
       - name: Preserve factual outcomes including failures
         if: always()

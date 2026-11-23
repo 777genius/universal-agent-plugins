@@ -45,3 +45,26 @@ func TestSavedTargetNoticeOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestSavedTargetNoticeRenderedOnceForSelectedTargets(t *testing.T) {
+	repo, sha := savedJourneyRepository(t)
+	journey := newSavedJourney(t, repo)
+	source := "github:acme/demo@" + sha
+	journey.run(t, "add", source, "--target", "codex,claude", "--format", "json")
+	_, locked := journey.intent(t)
+	notice := savedTargetNotice(locked, []string{"demo"}, []string{"codex"})
+	for _, dryRun := range []bool{true, false} {
+		args := []string{"add", source, "--target", "codex", "--format", "human", "--yes"}
+		if dryRun {
+			args = append(args, "--dry-run")
+		}
+		output := journey.run(t, args...)
+		if count := strings.Count(output, notice); count != 1 {
+			t.Fatalf("dry-run=%t: saved target notice appeared %d times, want once:\n%s", dryRun, count, output)
+		}
+		requirements, _ := journey.intent(t)
+		if len(requirements.Targets["claude"]) != 1 {
+			t.Fatal("unselected saved target was removed")
+		}
+	}
+}

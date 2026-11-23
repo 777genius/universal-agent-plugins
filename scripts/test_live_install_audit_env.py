@@ -2393,7 +2393,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
     def _exercise_marketing_kit_scope_report(self, target, *, cleanup_failure=False,
                                               boundary_error=False, grants=7, native_error=None, native_peer_mutation=False,
                                               final_policy_error=False, final_peer_mutation=None,
-                                              native_root_redirect=None, codex_initializer=None):
+                                              native_root_redirect=None, codex_initializer=None,
+                                              copilot_refusal_mutation=None, copilot_add_failure=False,
+                                              claude_native_mutation=None):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2452,8 +2454,12 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 if exc_type is None and cleanup_failure:
                     raise OSError("disposable cleanup failed")
 
-        def execute(_cli, env, project, _target, label, *args):
+        def execute(_cli, env, project, _target, label, *args, capture=None):
             phases.append(label)
+            if label == "owner-confirmed saved add B":
+                self.assertEqual(args[:4], ("add", "marketing-kit", "--target", "copilot"))
+                if copilot_add_failure:
+                    raise AssertionError("explicit saved add failed")
             scope = args[args.index("--scope") + 1]
             key = (env["AGENTPLUGINS_HOME"], scope)
             portable = project if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
@@ -2465,7 +2471,21 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                   for name in runner["EXPECTED"]}
             elif args[0] == "remove":
                 installed[key] = {}
+            if capture is not None:
+                capture({"inert_test_only": True})
             return {"stage": label, "exit_code": 0, "result": "passed"}
+
+        def cold_consent(argv, env, project, timeout):
+            self.assertEqual(target, "copilot")
+            self.assertEqual(project.parent.name, "B")
+            self.assertEqual(argv, ["unused", "install", "--locked", "--yes", "--scope", "project",
+                                    "--project-root", str(project), "--format", "json"])
+            self.assertEqual(timeout, 180)
+            phases.append("cold Copilot Project folder consent refused")
+            response = self._marketing_kit_copilot_consent_response(runner, project)
+            if copilot_refusal_mutation is not None:
+                copilot_refusal_mutation(response, env, project)
+            return response
 
         def boundary(_cli, env, project, expected, _guards):
             self.assertEqual(project.parent.name, "E")
@@ -2528,10 +2548,48 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 return codex_initializer(runner, env, project)
             return SimpleNamespace(checkpoint=lambda *_: None, evidence=lambda: {})
 
+        # These are inert scope/report controls, like the existing public/native
+        # substitutes above. Real cache custody and native-output validation
+        # have separate adversarial filesystem/protocol tests; no native claim.
+        class ClaudeDiscovery:
+            def __init__(self, *args):
+                pass
+            def before_remove(self, env, project, scope, label):
+                phases.append("claude-before:" + label)
+                if project.parent.name == "B":
+                    self_case.assertIn("cold locked restore", phases)
+                if project.parent.name == "C":
+                    self_case.assertIn("User cold locked restore C", phases)
+                mutate_claude("before", project)
+                return {"scope": scope}
+            def after_remove(self, env, project, before, label):
+                phases.append("claude-after:" + label)
+                mutate_claude("after", project)
+                return {"inert_test_only": True, "scope": before["scope"]}
+
+        self_case = self
+        def mutate_claude(phase, project):
+            if claude_native_mutation is not None:
+                selected_phase, selected_case, victim, failure = claude_native_mutation
+                if (phase, project.parent.name) == (selected_phase, selected_case):
+                    (project.parent.parent / victim / "home/unknown-native-write").write_text("tampered")
+                    if failure:
+                        raise ValueError("injected Claude native observation failure")
+
+        class ClaudeRetirement:
+            def __init__(self, case, home, *args):
+                self.case, self.home = case, home
+            def close(self):
+                pass
+            def finish(self, *args, **kwargs):
+                return {"inert_test_only": True}
+            def verify_retained(self, *args):
+                return {"inert_test_only": True}
+
         with TemporaryDirectory() as output:
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
-                    "execute": execute, "verify_pinned_launcher": lambda *_: None,
+                    "execute": execute, "invoke": cold_consent, "verify_pinned_launcher": lambda *_: None,
                     "profile_snapshot": profile, "check_foreign": foreign,
                     "check_user_project_unchanged": project_check,
                     "inventory": inventory, "identities": lambda items, *_: items,
@@ -2549,6 +2607,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     # and native operations; SQLite semantics have their own
                     # real-database Marketing Kit regression tests.
                     "initialize_codex_sqlite": initialize_sqlite,
+                    "RemovalDiscovery": ClaudeDiscovery, "SignedClosureRetirement": ClaudeRetirement,
                     "codex_user_native_remove_attestation": lambda *_: ("--external-uninstalled",),
                     # Patch the runner binding, preserving tempfile for setup helpers.
                     "tempfile": SimpleNamespace(TemporaryDirectory=CheckedCleanup),
@@ -2556,10 +2615,84 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     patch.dict(runner["audit"], {"copilot_native_roots_guard": make_guard}), \
                     patch.object(Path, "open", checked_open), \
                     patch.object(sys, "argv", ["runner", "--target", target, "--cli", "unused",
+                                               *(["--cli-version", "0.1.116"] if target == "claude" else []),
                                                "--report", str(report_path)]), \
                     patch.object(sys, "stdout", StringIO()), patch.object(sys, "stderr", StringIO()):
                 code = main()
             return code, json.loads(report_path.read_text()), phases
+
+    def _marketing_kit_copilot_consent_response(self, runner, project):
+        reason = "copilot has not remembered the selected project folder; rerun installation to restore folder trust"
+        aliases = sorted(runner["UPDATE_ALIASES"])
+        return {"exit_code": 1, "timeout": False, "_json": {
+            "schema_version": 1, "command": "agentplugins install", "result": "failure",
+            "outcome": "partial", "scope": "project", "scope_selection_reason": "explicit",
+            "selection": {"scope": "project", "scope_selection_reason": "explicit",
+                          "project_root": str(project), "manifest_path": str(project / "uap.toml"),
+                          "lock_path": str(project / "uap.lock")},
+            "bindings": [{"alias": alias, "client_id": "copilot", "status": "incomplete", "code": "FAILED"}
+                         for alias in aliases],
+            "actions": [{"alias": alias, "client_id": "copilot", "action": "install",
+                         "package_digest": runner["FIXED_SIGNED_CLOSURE"][runner["REQUIRED_DISTRIBUTIONS"][alias]]["tree_digest"],
+                         "revision": runner["FIXED_SIGNED_CLOSURE"][runner["REQUIRED_DISTRIBUTIONS"][alias]]["resolved_revision"]}
+                        for alias in aliases],
+            "results": [{"installation_id": "refused-" + alias, "client_id": "copilot",
+                         "operation": "install", "outcome": "incomplete", "reason": reason,
+                         "next_actions": [{"kind": "activate", "reason": reason}]} for alias in aliases]}}
+
+    def test_marketing_kit_copilot_consent_refusal_requires_exact_causal_closure(self):
+        mutations = [
+            lambda r, *_: r.update(exit_code=0),
+            lambda r, *_: r.update(timeout=True),
+            lambda r, *_: r.update(_json=None),
+            lambda r, *_: r["_json"].update(scope="user"),
+            lambda r, *_: r["_json"].update(result="success"),
+            lambda r, *_: r["_json"].pop("bindings"),
+            lambda r, *_: r["_json"]["bindings"].pop(),
+            lambda r, *_: r["_json"]["bindings"][0].update(alias="unrelated"),
+            lambda r, *_: r["_json"]["bindings"][0].update(client_id="codex"),
+            lambda r, *_: r["_json"]["bindings"][0].update(status="completed"),
+            lambda r, *_: r["_json"]["bindings"][0].update(code="TIMEOUT"),
+            lambda r, *_: r["_json"].pop("selection"),
+            lambda r, *_: r["_json"]["selection"].update(scope="user"),
+            lambda r, *_: r["_json"]["selection"].update(scope_selection_reason="inferred"),
+            lambda r, *_: r["_json"]["selection"].update(project_root="/unrelated/project"),
+            lambda r, *_: r["_json"]["selection"].update(manifest_path="/unrelated/uap.toml"),
+            lambda r, *_: r["_json"]["selection"].update(lock_path="/unrelated/uap.lock"),
+            lambda r, *_: r["_json"]["actions"].pop(),
+            lambda r, *_: r["_json"]["actions"][0].update(client_id="codex"),
+            lambda r, *_: r["_json"]["actions"][0].update(revision="unreviewed"),
+            lambda r, *_: r["_json"]["results"][0].update(reason="native command timed out"),
+            lambda r, *_: r["_json"]["results"][0].update(outcome="completed"),
+            lambda r, *_: r["_json"]["results"][0].update(next_actions=[]),
+            lambda r, *_: r["_json"]["results"][0].update(
+                installation_id=r["_json"]["results"][1]["installation_id"]),
+            lambda r, e, p: (Path(e["HOME"]) / ".copilot/config.json").write_text(
+                json.dumps({"trustedFolders": [str(p)]})),
+            lambda r, e, p: (Path(e["HOME"]) / ".copilot/unowned-cache").write_text("unknown native write"),
+            lambda r, e, p: (p / "uap.lock").write_text("rewritten agreement"),
+            lambda r, e, p: (p.parent.parent / "A/home/peer-write").write_text("tampered"),
+        ]
+        for index, mutation in enumerate(mutations):
+            with self.subTest(index=index):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=mutation)
+                self.assertEqual(code, 1)
+                self.assertFalse(report["cold_native_restore_qualified"])
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertNotIn("owner-confirmed saved add B", phases)
+
+    def test_marketing_kit_copilot_refusal_does_not_qualify_failed_explicit_add(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "copilot", copilot_add_failure=True)
+        self.assertEqual(code, 1)
+        self.assertEqual(report["failure"], "explicit saved add failed")
+        self.assertFalse(report["cold_native_restore_qualified"])
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertEqual(report["scope_results"]["project"]["status"], "not_run")
+        self.assertLess(phases.index("cold Copilot Project folder consent refused"),
+                        phases.index("owner-confirmed saved add B"))
+        self.assertNotIn("remove B", phases)
 
     def test_marketing_kit_all_six_require_complete_positive_user_and_project_phases(self):
         for target in ("codex", "cursor", "claude", "gemini", "opencode", "copilot"):
@@ -2567,8 +2700,19 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 code, report, phases = self._exercise_marketing_kit_scope_report(target)
                 self.assertEqual(code, 0, report.get("failure"))
                 self.assertEqual(report["status"], "passed")
-                self.assertEqual(report["qualification_scope"], "user_and_project")
+                self.assertEqual(report["qualification_scope"],
+                    "user_and_project_installation_lifecycle_with_retained_Claude_bytes"
+                    if target == "claude" else "user_and_project")
+                if target == "claude":
+                    self.assertEqual(len(report["claude_fresh_removal_discovery"]), 4)
+                    for flag in ("full_native_removal_qualified", "physical_absence_qualified",
+                                 "writer_closure_qualified", "mcp_discovery_absence_qualified"):
+                        self.assertIs(report["native_removal_qualification"][flag], False)
                 self.assertTrue(report["two_scope_lifecycle_qualified"])
+                if target == "copilot":
+                    self.assertFalse(report["cold_native_restore_qualified"])
+                else:
+                    self.assertNotIn("cold_native_restore_qualified", report)
                 self.assertEqual(report["positive_policy"]["source_mode"], "production_default")
                 self.assertEqual(report["positive_policy"]["snapshot_sequence"], 46)
                 self.assertEqual([phase for phase in phases if phase.startswith("catalog:")],
@@ -2578,8 +2722,12 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "policy": report["positive_policy"]})
                 for scope in ("user", "project"):
                     self.assertEqual(report["scope_results"][scope], {
-                        "expectation": "positive_lifecycle", "status": "passed"})
-                required = ["add", "repeat add", "update", "repair intact", "cold locked restore",
+                        "expectation": ("owner_confirmed_saved_add_lifecycle"
+                                        if target == "copilot" and scope == "project" else "positive_lifecycle"),
+                        "status": "passed"})
+                restore = (["cold Copilot Project folder consent refused", "owner-confirmed saved add B"]
+                           if target == "copilot" else ["cold locked restore"])
+                required = ["add", "repeat add", "update", "repair intact", *restore,
                             "remove B", "remove A", "User add", "User repeat add", "User update",
                             "User repair intact", "User cold locked restore C", "User remove C", "User remove"]
                 self.assertEqual([phase for phase in phases if phase in required], required)
