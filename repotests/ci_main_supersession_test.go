@@ -27,6 +27,7 @@ func TestCIMainPushEvidenceIsNeverCancelledByNextMerge(t *testing.T) {
 		{"landing.yml", "landing", []string{"pull_request", "push", "schedule", "workflow_dispatch"}},
 		{"opencode-sdk.yml", "opencode-sdk", []string{"pull_request", "push", "workflow_dispatch"}},
 		{"coverage.yml", "coverage", []string{"pull_request", "push"}},
+		{"agentplugins-native-install.yml", "agentplugins-native-install", []string{"pull_request", "push", "workflow_run", "schedule", "workflow_dispatch"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.file, func(t *testing.T) {
