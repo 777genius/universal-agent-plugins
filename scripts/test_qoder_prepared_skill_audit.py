@@ -116,9 +116,12 @@ class QoderPreparedSkillContracts(unittest.TestCase):
                     owned["removed"] = True
                     return response({"schema_version": 1, "command": "agentplugins remove", "result": "success", "outcome": "completed", "scope": "project", "scope_selection_reason": "explicit", "actions": [{"from_revision": item["ref"], "from_digest": "sha256:" + "c" * 64, "alias": item["name"], "client_id": "qoder", "installation_id": iid, "binding_id": owned["binding"]["client_binding_id"], "action": "remove"}], "results": [{"installation_id": iid, "client_id": "qoder", "operation": "remove", "outcome": "completed"}]})
                 raise AssertionError(argv)
-            with patch.object(audit, "call", side_effect=call):
+            with patch.object(audit, "call", side_effect=call), patch.object(
+                    audit, "qoder_prepared_audit", wraps=audit.qoder_prepared_audit) as loader:
                 row = audit.do_case("/inert/agentplugins", "qoder", "skill", item, 0, root, {},
-                                     qoder_prepared=enabled)
+                                     **({"qoder_prepared": True} if enabled else {}))
+                if not enabled:
+                    loader.assert_not_called()
             self.audit, self.item = audit, item
             return row
 
@@ -163,7 +166,7 @@ class QoderPreparedSkillContracts(unittest.TestCase):
         self.assertIn("snapshot", proof["before"]["native"])
         self.assertNotIn("remove", self.calls)
 
-    def test_summary_cannot_requalify_original_actual_report(self):
+    def summary_control(self):
         row = self.exercise()
         audit = self.audit
         source = audit.QODER_PREPARED_AUDIT
@@ -171,6 +174,10 @@ class QoderPreparedSkillContracts(unittest.TestCase):
         for i in range(30):
             sample = copy.deepcopy(row); sample["index"] = i; report["results"].append(sample)
         fixtures = {"skills": [self.item] * 30}
+        return source, report, fixtures
+
+    def test_summary_cannot_requalify_original_actual_report(self):
+        source, report, fixtures = self.summary_control()
         result = source["summary"](report, fixtures, source["ACCEPTANCE"])
         self.assertTrue(result["installation_acceptance_passed"])
         self.assertEqual((report["passed"], result["installation_prepared_lifecycle_passed"]), (0, 30))
@@ -182,6 +189,121 @@ class QoderPreparedSkillContracts(unittest.TestCase):
                        lambda r: r["results"][3].update(public_skill_ready={"after-add": True, "repeat-add": True})):
             bad = copy.deepcopy(report); mutate(bad)
             self.assertFalse(source["summary"](bad, fixtures, source["ACCEPTANCE"])["installation_acceptance_passed"])
+
+    def test_summary_refuses_numeric_boolean_coercion_from_complete_control(self):
+        source, report, fixtures = self.summary_control()
+        original = copy.deepcopy(report)
+        accepts = lambda value: source["summary"](value, fixtures, source["ACCEPTANCE"])["installation_acceptance_passed"]
+        self.assertTrue(accepts(report))
+        self.assertEqual(report["passed"], 0)
+        mutations = []
+        for field in ("client_version", "cli_version"):
+            for value in (False, 0.0):
+                bad = copy.deepcopy(report)
+                bad[field]["exit_code"] = value
+                mutations.append((field + ".exit_code", value, bad))
+        for phase in ("after-add", "repeat-add"):
+            for value in (0, 0.0):
+                bad = copy.deepcopy(report)
+                bad["results"][0]["public_skill_ready"][phase] = value
+                mutations.append(("public_skill_ready." + phase, value, bad))
+        for phase in ("after-add", "repeat-add", "after-remove"):
+            for field in ("invalid_rows", "selected_installations", "selected_bindings"):
+                expected = report["results"][0]["public_target_states"][phase][field]
+                for value in (bool(expected), float(expected)):
+                    bad = copy.deepcopy(report)
+                    bad["results"][0]["public_target_states"][phase][field] = value
+                    mutations.append((phase + "." + field, value, bad))
+        for field, value, bad in mutations:
+            with self.subTest(field=field, value=value, value_type=type(value).__name__):
+                self.assertFalse(accepts(bad))
+        self.assertEqual(report, original)
+        self.assertTrue(accepts(report))
+
+
+class QoderPreparedRouteContracts(unittest.TestCase):
+    def invoke(self, *, target="qoder", kind="skill", limit=30, host="linux", machine="x86_64",
+               cli_version=None, native_version=None, vendor_outcome="success", client_available=True):
+        audit = load_audit()
+        cli_version = cli_version or {"status": "reported", "value": "agentplugins 0.1.115", "exit_code": 0}
+        native_version = native_version or {"status": "reported", "value": "1.1.81", "exit_code": 0}
+        with TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            cli = directory / "inert-cli"
+            cli.write_text("not executed")
+            argv = ["audit", "--cli", str(cli), "--target", target, "--kind", kind,
+                    "--limit", str(limit), "--report-dir", str(directory),
+                    "--acceptance", "qoder-prepared-skills-installation"]
+            with patch.object(audit.sys, "argv", argv), patch.object(audit.sys, "platform", host), \
+                 patch.object(audit.platform, "machine", return_value=machine), \
+                 patch.dict(os.environ, {"AUDIT_VENDOR_OUTCOME": vendor_outcome}), \
+                 patch.dict(audit.AGENT_BINARIES, {"qodercli": "/inert/qoder"} if client_available else {}, clear=True), \
+                 patch.object(audit, "version_evidence", side_effect=[cli_version, native_version]), \
+                 patch.object(audit, "do_case", return_value={"status": "incomplete-native-proof"}) as case, \
+                 patch.object(audit, "qoder_prepared_audit", wraps=audit.qoder_prepared_audit) as loader, \
+                 patch("builtins.print"), patch("sys.stderr"):
+                try:
+                    result = audit.main()
+                except SystemExit as refusal:
+                    result = refusal.code
+                report = directory / (target + "-" + kind + ".json")
+                document = json.loads(report.read_text()) if report.exists() else None
+            return result, document, case.call_args_list, loader.call_count
+
+    def test_failed_bootstrap_or_missing_native_retains_all_unexecuted_nonpass_rows(self):
+        for change in ({"vendor_outcome": "failure"}, {"client_available": False}):
+            with self.subTest(change=change):
+                code, report, calls, loads = self.invoke(**change)
+                self.assertEqual(code, 2)
+                self.assertEqual(report["cases_attempted"], 0)
+                self.assertIn("blocker", report)
+                self.assertEqual((calls, loads), ([], 0))
+                self.assertEqual(len(report["results"]), 30)
+                self.assertTrue(all(row["status"] == "client-unavailable" for row in report["results"]))
+                self.assertFalse(report["full_coverage"])
+                self.assertNotIn("installation_acceptance_passed", report)
+
+    def test_wrong_host_target_kind_and_count_refuse_before_case_or_loader(self):
+        for change in ({"target": "copilot"}, {"kind": "plugin"}, {"limit": 2}, {"limit": 29},
+                       {"limit": 31}, {"host": "darwin"}, {"host": "win32"}, {"machine": "aarch64"}):
+            with self.subTest(change=change):
+                code, report, calls, loads = self.invoke(**change)
+                self.assertEqual(code, 2)
+                self.assertIsNone(report)
+                self.assertEqual((calls, loads), ([], 0))
+
+    def test_wrong_cli_or_client_probe_refuses_before_any_case_effects(self):
+        for field, value in (("cli_version", "agentplugins 0.1.95"),
+                             ("cli_version", "agentplugins 0.1.115+source.abc"),
+                             ("native_version", "1.1.78"), ("native_version", "1.1.81+other")):
+            with self.subTest(field=field, value=value):
+                probe = {"status": "reported", "value": value, "exit_code": 0}
+                code, report, calls, loads = self.invoke(**{field: probe})
+                self.assertEqual(code, 2)
+                self.assertEqual(report["cases_attempted"], 0)
+                self.assertIn("blocker", report)
+                self.assertEqual((calls, loads), ([], 0))
+        for field, version in (("cli_version", "agentplugins 0.1.115"), ("native_version", "1.1.81")):
+            for change in ({"status": "not-probed"}, {"exit_code": 1}, {"exit_code": False}):
+                with self.subTest(field=field, change=change):
+                    probe = {"status": "reported", "value": version, "exit_code": 0, **change}
+                    code, report, calls, loads = self.invoke(**{field: probe})
+                    self.assertEqual(code, 2)
+                    self.assertEqual((calls, loads), ([], 0))
+
+    def test_exact_route_attempts_all_sources_but_missing_owned_proof_stays_nonpass(self):
+        code, report, calls, loads = self.invoke()
+        self.assertEqual(code, 1)
+        self.assertEqual((report["cases_attempted"], len(calls), loads), (30, 30, 1))
+        self.assertEqual(report["canonical_client_id"], "qoder")
+        self.assertEqual(report["acceptance"], "qoder-prepared-skills-installation")
+        self.assertEqual((report["passed"], report["prepared_lifecycle_passed"]), (0, 0))
+        self.assertEqual(report["installation_prepared_lifecycle_passed"], 0)
+        self.assertIs(report["installation_acceptance_passed"], False)
+        fixtures = json.loads(load_audit().FIXTURES.read_text())["skills"]
+        for index, (call, item) in enumerate(zip(calls, fixtures)):
+            self.assertEqual(call.args[1:5], ("qoder", "skill", item, index))
+            self.assertEqual(call.kwargs, {"qoder_prepared": True})
 
 
 if __name__ == "__main__":

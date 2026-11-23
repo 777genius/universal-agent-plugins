@@ -363,6 +363,8 @@ def summary(report, fixtures, acceptance):
               "installation_verified_negative_coverage": 0, "installation_acceptance_passed": False}
     if (acceptance != ACCEPTANCE or (report.get("target"), report.get("kind"), report.get("platform"),
         report.get("architecture"), report.get("canonical_client_id")) != ("qoder", "skill", "linux", "x86_64", "qoder")
+        or any(type(report.get(field)) is not dict or type(report[field].get("exit_code")) is not int
+               for field in ("client_version", "cli_version"))
         or report.get("client_version") != {"status": "reported", "value": "1.1.81", "exit_code": 0}
         or report.get("cli_version") != {"status": "reported", "value": "agentplugins 0.1.115", "exit_code": 0}
         or any(type(report.get(key)) is not int or report[key] != value for key, value in {
@@ -378,7 +380,9 @@ def summary(report, fixtures, acceptance):
             or (row.get("target"), row.get("kind"), row.get("identity"), row.get("source")) !=
                 ("qoder", "skill", item["name"], item["source"])
             or row.get("status") != "prepared-lifecycle-passed"
+            or type(row.get("public_skill_ready")) is not dict
             or row.get("public_skill_ready") != {"after-add": False, "repeat-add": False}
+            or any(value is not False for value in row["public_skill_ready"].values())
             or any(row.get(key) is not True for key in ("listed_identity", "lock_exact_source_pinned", "skill_bytes_match",
                 "repeat_verified", "repeat_lock_unchanged", "repeat_native_unchanged", "removal_verified",
                 "post_list_schema_valid", "sentinels_preserved"))
@@ -419,6 +423,8 @@ def summary(report, fixtures, acceptance):
             observation = row.get("public_target_states", {}).get(phase, {})
             expected = [] if phase == "after-remove" else [FACTS]
             if (observation.get("status") != "observed" or observation.get("invalid_rows") != 0
+                or any(type(observation.get(field)) is not int
+                       for field in ("invalid_rows", "selected_installations", "selected_bindings"))
                 or observation.get("truncated") is not False or observation.get("states") != expected
                 or observation.get("selected_installations") != len(expected)
                 or observation.get("selected_bindings") != len(expected)):

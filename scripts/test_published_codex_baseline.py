@@ -602,6 +602,159 @@ class ArchivedPluginFeedTest(unittest.TestCase):
                 self.assertEqual(feed["archive"], self.proof(source))
                 self.assertEqual(feed["archive_info"]["exit_code"], 0)
 
+    def test_real_plugin_repeat_keeps_skill_path_absent_and_finishes_both_lifecycles(self):
+        """Inert processes exercise orchestration; they are not vendor evidence."""
+        live = HistoricalModeTest().load_live()
+        fixtures = self.fixtures()
+        rows = []
+        now = BASELINE.instant("2026-11-21T12:43:09Z")
+        for index, source in enumerate(BASELINE.ARCHIVE_SOURCES):
+            with self.subTest(source=source), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / "run"
+                codex = Path(temporary) / "inert-codex"
+                codex.write_text("never executed")
+                events, observers = [], []
+                removed = False
+                pin = fixtures["signed_release_pins"][source]
+                registered = {
+                    "installation_id": "00000000-0000-4000-8000-000000000001",
+                    "name": source, "source": pin["repository"] + "/" + pin["path"],
+                    "directory": {"product_id": source, "recorded_distribution": pin["distribution"],
+                        "recorded_revision": pin["revision"], "recorded_release_sequence": pin["sequence"]},
+                    "clients": [{"client_id": "codex", "scope": "user", "materialization": "materialized",
+                        "activation": "active", "verification": "installation_verified",
+                        "package_revision": {"distribution_id": pin["distribution"],
+                            "resolved_revision": pin["revision"], "release_sequence": pin["sequence"],
+                            "tree_digest": pin["tree_digest"], "manifest_digest": pin["manifest_digest"]}}]}
+
+                class Observer:
+                    def __init__(observer, launcher, environment, project):
+                        observer.launcher, observer.environment = Path(launcher), environment
+                        observer.project, observer.home = project, Path(environment["HOME"])
+                        observer.count, observer.proof = 0, None
+                        observers.append(observer)
+                    def after_command(observer):
+                        observer.count += 1
+                        events.append(("provenance", observer.count))
+                        observer.proof = {"package": "universal-agent-plugins", "version": "0.1.95",
+                            "commit": BASELINE.COMMIT, "binary_sha256": BASELINE.DIGEST,
+                            "binary_size": BASELINE.SIZE, "launcher_sources_verified": True,
+                            "commands_verified": observer.count}
+                        if getattr(observer, "plugin_archive", None) is not None:
+                            BASELINE.archive_cache(observer, *observer.plugin_archive)
+
+                class Runtime:
+                    def __init__(runtime, binary, case_root, home, project, environment):
+                        runtime.runtime = home / ".local/state/codex-sqlite"
+                        runtime.runtime.mkdir(parents=True)
+                        runtime.pin = runtime.runtime
+                        runtime.config = home / ".codex/config.toml"
+                        runtime.config.write_bytes(live.CODEX_RUNTIME_AUDIT["_sqlite_config"](runtime.pin))
+                        runtime.observations = [{"runtime_files_fully_read": {}}]
+                    def guard(runtime):
+                        pass
+                    def checkpoint(runtime, phase):
+                        events.append(("runtime", phase))
+                    def evidence(runtime):
+                        return {"observations": runtime.observations}
+
+                def archive(observer, selected, selected_pin):
+                    self.assertEqual(selected, source)
+                    self.assertEqual(selected_pin, pin)
+                    self.assertEqual(observer.environment["AGENTPLUGINS_DIRECTORY_ORIGIN"], BASELINE.ARCHIVE_ORIGIN)
+                    return self.proof(source)
+
+                def invoke(argv, environment, project, *args, **kwargs):
+                    nonlocal removed
+                    command = argv[1]
+                    native = str(argv[0]) == str(codex)
+                    events.append(("native" if native else "command", tuple(argv[1:])))
+                    home = Path(environment["HOME"])
+                    config = home / ".codex/config.toml"
+                    marketplace = "agentplugins-" + "a" * 12
+                    spec = source + "@" + marketplace
+                    managed = home.parent / "uap-data/marketplace"
+                    base = live.CODEX_RUNTIME_AUDIT["_sqlite_config"](home / ".local/state/codex-sqlite").decode()
+                    market_config = '[marketplaces."' + marketplace + '"]\nsource = ' + json.dumps(str(managed)) + '\n'
+                    if native:
+                        self.assertEqual(environment["CODEX_HOME"], str(home / ".codex"))
+                        if argv[1:3] == ["plugin", "remove"]:
+                            self.assertEqual(argv[3:], [spec, "--json"])
+                            config.write_text(base + market_config)
+                        else:
+                            self.assertEqual(argv[1:], ["plugin", "marketplace", "remove", marketplace, "--json"])
+                            config.write_text(base)
+                        document = {"result": "success"}
+                    elif command == "info":
+                        self.assertEqual(argv[2], source)
+                        if "AGENTPLUGINS_DIRECTORY_ORIGIN" not in environment:
+                            return self.default()
+                        self.assertEqual(environment["AGENTPLUGINS_DIRECTORY_ORIGIN"], BASELINE.ARCHIVE_ORIGIN)
+                        return self.info(source)
+                    elif command == "add":
+                        self.assertEqual(argv[2], source)
+                        self.assertEqual(environment["AGENTPLUGINS_DIRECTORY_ORIGIN"], BASELINE.ARCHIVE_ORIGIN)
+                        managed.mkdir(exist_ok=True)
+                        config.write_text(base + '[plugins."' + spec + '"]\nenabled = true\n' + market_config)
+                        document = {"result": "success"}
+                    elif command == "remove":
+                        self.assertEqual(argv[2], source)
+                        self.assertIn("--external-uninstalled", argv)
+                        native_state = live.tomllib.loads(config.read_text())
+                        self.assertNotIn(spec, native_state.get("plugins", {}))
+                        self.assertNotIn(marketplace, native_state.get("marketplaces", {}))
+                        removed = True
+                        managed.rmdir()
+                        document = {"result": "success"}
+                    else:
+                        self.assertEqual(command, "list")
+                        document = {"schema_version": 1, "command": "list", "result": "success",
+                                    "data": {"installations": [] if removed else [registered]}}
+                    return {"exit_code": 0, "timeout": False, "stdout_tail": "", "stderr_tail": "",
+                            "_json": document}
+
+                with patch.object(live, "call", side_effect=invoke), patch.dict(
+                        live.AGENT_BINARIES, {"codex": str(codex)}, clear=True), patch.dict(
+                        live.CODEX_RUNTIME_AUDIT, {"CodexPluginSQLiteAudit": Runtime,
+                            "plugin_initialization": lambda *a: ({}, (), {}),
+                            "system_skill_initialization": lambda *a: ({}, (), {})}), patch.dict(
+                        live.HISTORICAL_CODEX, {"PublishedBaseline": Observer,
+                            "prepare_plugin_archive": BASELINE.prepare_plugin_archive}), patch.object(
+                        BASELINE, "archive_cache", side_effect=archive), patch.object(
+                        BASELINE, "utc_now", return_value=now), patch.dict(
+                        live.HISTORICAL_CODEX, {"historical_add": unittest.mock.Mock(
+                            side_effect=AssertionError("plugin entered the Skill observer"))}):
+                    row = live.do_case("/inert/npm-launcher", "codex", "plugin", source, index,
+                                       root, fixtures["plugin_declared_names"], fixtures["signed_release_pins"],
+                                       historical_plugin_archive=True)
+                    live.HISTORICAL_CODEX["historical_add"].assert_not_called()
+                self.assertEqual([entry[1][0] for entry in events if entry[0] == "command"],
+                                 ["info", "info", "add", "list", "add", "list", "remove", "list"])
+                self.assertEqual([entry[1] for entry in events if entry[0] == "provenance"], list(range(1, 9)))
+                self.assertEqual(len([entry for entry in events if entry[0] == "native"]), 2)
+                self.assertEqual(row["status"], "passed")
+                self.assertIsNone(row["skill_path"])
+                self.assertIsNone(row["codex_public_add_ready"])
+                self.assertIs(row["historical_repeat_add_verified"], False)
+                for key in ("repeat_verified", "removal_verified", "sentinels_preserved", "post_list_schema_valid"):
+                    self.assertIs(row[key], True, key)
+                self.assertEqual(row["historical_npm_proof"]["commands_verified"], 8)
+                self.assertEqual(row["native_residuals"], [])
+                self.assertIs(row["post_remove_identity_registered"], False)
+                for key in ("completed", "native_plugin_absent", "native_marketplace_absent"):
+                    self.assertIs(row["native_uninstall"][key], True, key)
+                self.assertEqual(row["historical_plugin_feed"]["archive"], self.proof(source))
+                self.assertIs(row["historical_plugin_feed"]["current_default"]["compatibility_passed"], False)
+                rows.append(row)
+        report = {**self.report(), "results": rows}
+        with patch.object(BASELINE, "utc_now", return_value=now):
+            summary = BASELINE.plugin_summary(report, fixtures)
+        self.assertTrue(summary["historical_plugin_observation_complete"])
+        self.assertEqual(summary["archived_plugin_lifecycles_observed"], 2)
+        self.assertEqual(summary["current_default_refusals_observed"], 2)
+        self.assertIs(summary["current_default_compatibility_passed"], False)
+        self.assertEqual(summary["current_default_native_passed"], 0)
+
     def test_plugin_mode_is_host_target_kind_count_bound_and_keeps_default_failure_on_error(self):
         live = HistoricalModeTest().load_live()
         for target, kind, count, host, machine in (

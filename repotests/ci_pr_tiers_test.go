@@ -35,9 +35,22 @@ var heavyPRLaneConditions = []string{
 	// An aggregate that reads always() runs after skipped needs, so it needs
 	// the gate itself.
 	"${{ always() && (" + heavyPRLaneGate + ") }}",
+	// Native audits retain classifier-failure fallback while still refusing
+	// cancellation and carrying the complete tier gate themselves.
+	heavyPRNativePilot,
+	heavyPRRemainingSelection,
 	// Published audits also wait for a successful npm publish run.
 	"${{ (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && (" + heavyPRLaneGate + ") }}",
 }
+
+const heavyPRNativePilot = "${{ !cancelled() && (" + heavyPRLaneGate + ") }}"
+const heavyPRRemainingSelection = "${{ !cancelled() && " +
+	"(needs.changes.result != 'success' || needs.changes.outputs.remaining_clients != '[]') && (" + heavyPRLaneGate + ") }}"
+
+// This status-bearing matrix has no direct tier gate. Only this exact
+// conjunction may inherit one through its mandatory successful native pilot.
+const heavyPRNativeMatrix = "${{ !cancelled() && needs.native-pilot.result == 'success' && " +
+	"(needs.changes.result != 'success' || needs.changes.outputs.live_clients != '[]') }}"
 
 // A newer real run supersedes the run of the same pull request; label events
 // that do not start the lane and all other events never cancel a running one.
@@ -114,10 +127,12 @@ type tierWorkflow struct {
 		Group  string `yaml:"group"`
 		Cancel string `yaml:"cancel-in-progress"`
 	} `yaml:"concurrency"`
-	Jobs map[string]struct {
-		If    string    `yaml:"if"`
-		Needs yaml.Node `yaml:"needs"`
-	} `yaml:"jobs"`
+	Jobs map[string]tierJob `yaml:"jobs"`
+}
+
+type tierJob struct {
+	If    string    `yaml:"if"`
+	Needs yaml.Node `yaml:"needs"`
 }
 
 func TestCITiers_HeavyPRLanesSkipDraftsAndRunWhenReady(t *testing.T) {
@@ -155,40 +170,113 @@ func TestCITiers_HeavyPRLanesSkipDraftsAndRunWhenReady(t *testing.T) {
 				t.Fatalf("concurrency = %+v, want group %q and cancel-in-progress %q", w.Concurrency, group, heavyPRLaneCancel)
 			}
 
-			needs := map[string][]string{}
-			for job, spec := range w.Jobs {
-				needs[job] = decodeNeeds(t, spec.Needs)
-			}
-			var gated func(job string, seen map[string]bool) bool
-			gated = func(job string, seen map[string]bool) bool {
-				if seen[job] {
-					return false
-				}
-				seen[job] = true
-				condition := strings.TrimSpace(w.Jobs[job].If)
-				if slices.Contains(heavyPRLaneConditions, condition) {
-					return true
-				}
-				// Without an explicit status function GitHub adds success(), so
-				// a job is skipped with its skipped needs. Any status function
-				// replaces that, so such a job must carry the gate itself.
-				if len(needs[job]) == 0 || readsStatusFunction(condition) {
-					return false
-				}
-				for _, parent := range needs[job] {
-					if gated(parent, seen) {
-						return true
-					}
-				}
-				return false
-			}
+			gated := heavyPRGatedJobs(t, w)
 			for job := range w.Jobs {
-				if !gated(job, map[string]bool{}) {
+				if !gated[job] {
 					t.Errorf("job %s can run on a draft pull request; use one of the conditions %q", job, heavyPRLaneConditions)
 				}
 			}
 		})
 	}
+}
+
+// Validate the whole dependency graph before recognizing any direct gate:
+// an exact gate must not hide a missing dependency or a cycle behind it.
+func validTierNeeds(needs map[string][]string) bool {
+	visiting, done := map[string]bool{}, map[string]bool{}
+	var visit func(string) bool
+	visit = func(job string) bool {
+		parents, exists := needs[job]
+		if !exists || visiting[job] {
+			return false
+		}
+		if done[job] {
+			return true
+		}
+		visiting[job] = true
+		for _, parent := range parents {
+			if !visit(parent) {
+				return false
+			}
+		}
+		delete(visiting, job)
+		done[job] = true
+		return true
+	}
+	for job := range needs {
+		if !visit(job) {
+			return false
+		}
+	}
+	return true
+}
+
+func heavyPRGatedJobs(t *testing.T, w tierWorkflow) map[string]bool {
+	t.Helper()
+	needs, result := map[string][]string{}, map[string]bool{}
+	for job, spec := range w.Jobs {
+		needs[job] = decodeNeeds(t, spec.Needs)
+	}
+	if !validTierNeeds(needs) {
+		return result
+	}
+	var gated func(string) bool
+	gated = func(job string) bool {
+		condition := strings.TrimSpace(w.Jobs[job].If)
+		if slices.Contains(heavyPRLaneConditions, condition) {
+			return true
+		}
+		if condition == heavyPRNativeMatrix {
+			return slices.Contains(needs[job], "native-pilot") &&
+				slices.Contains(needs[job], "changes") && gated("native-pilot")
+		}
+		// Without a status function, GitHub implicitly requires success() of
+		// all needs. One gated required parent is sufficient to prevent a
+		// draft run. Status-bearing jobs cannot inherit through this rule.
+		if readsStatusFunction(condition) {
+			return false
+		}
+		for _, parent := range needs[job] {
+			if gated(parent) {
+				return true
+			}
+		}
+		return false
+	}
+	for job := range w.Jobs {
+		result[job] = gated(job)
+	}
+	return result
+}
+
+// Evaluate only the job-level conditions used here. Without a status function,
+// GitHub supplies success(): cancellation or a non-successful required job skips
+// the job. An explicit status function replaces that implicit prerequisite.
+func evalTierJob(t *testing.T, w tierWorkflow, job string, ctx map[string]any) bool {
+	t.Helper()
+	spec, exists := w.Jobs[job]
+	if !exists {
+		t.Fatalf("unknown job %q", job)
+	}
+	if !readsStatusFunction(spec.If) {
+		cancelled, ok := ctx["status.cancelled"].(bool)
+		if !ok {
+			t.Fatal("implicit success() requires explicit boolean workflow cancellation status")
+		}
+		if cancelled {
+			return false
+		}
+		for _, parent := range decodeNeeds(t, spec.Needs) {
+			result, ok := ctx["needs."+parent+".result"]
+			if !ok {
+				t.Fatalf("unknown needs result for %q", parent)
+			}
+			if result != "success" {
+				return false
+			}
+		}
+	}
+	return strings.TrimSpace(spec.If) == "" || truthy(evalTemplate(t, spec.If, ctx))
 }
 
 func decodeNeeds(t *testing.T, node yaml.Node) []string {
@@ -262,6 +350,9 @@ func TestCITiers_LabelEventsBehavior(t *testing.T) {
 	const runID, number, mainRef = 7001, 42, "refs/heads/main"
 	context := func(e event) map[string]any {
 		ctx := map[string]any{
+			"status.cancelled":                        false,
+			"needs.changes.result":                    "success",
+			"needs.changes.outputs.remaining_clients": `["cursor"]`,
 			"github.event_name":                       e.name,
 			"github.event.action":                     nil,
 			"github.event.label.name":                 nil,
@@ -330,6 +421,161 @@ func TestCITiers_LabelEventsBehavior(t *testing.T) {
 					t.Errorf("group %q, want %s %q", got, tc.group, want)
 				}
 			})
+		}
+	}
+}
+
+func readTierWorkflow(t *testing.T, name string) tierWorkflow {
+	t.Helper()
+	var w tierWorkflow
+	if err := yaml.Unmarshal([]byte(readRepoFile(t, RepoRoot(t), ".github", "workflows", name)), &w); err != nil {
+		t.Fatal(err)
+	}
+	return w
+}
+
+// Draft-safety inheritance alone does not prove classifier-failure fallback:
+// removing a status function restores implicit success() and can lose fallback
+// while remaining draft-safe. Pin these three deployed native conditions too.
+func exactTierConditions(w tierWorkflow, expected map[string]string) bool {
+	for job, condition := range expected {
+		spec, exists := w.Jobs[job]
+		if !exists || strings.TrimSpace(spec.If) != condition {
+			return false
+		}
+	}
+	return true
+}
+
+var nativeAuditConditions = map[string]string{
+	"native-pilot": heavyPRNativePilot, "real-native-cli-matrix": heavyPRNativeMatrix,
+}
+
+func TestCITiers_NativeClassifierAndCancellationConditions(t *testing.T) {
+	live := readTierWorkflow(t, "live-install-audit.yml")
+	remaining := readTierWorkflow(t, "live-install-remaining-clients.yml")
+	if !exactTierConditions(live, nativeAuditConditions) ||
+		!exactTierConditions(remaining, map[string]string{"remaining-client-install": heavyPRRemainingSelection}) {
+		t.Fatal("native audit condition differs from exact cancellation, pilot and selection contract")
+	}
+	cases := []struct {
+		name, classifier, output, pilot string
+		cancelled, selection, smoke     bool
+	}{
+		{"selected clients", "success", `["claude"]`, "success", false, true, true},
+		{"successful empty selection", "success", "[]", "success", false, false, true},
+		{"failed classifier missing output", "failure", "", "success", false, true, true},
+		{"failed classifier partial output", "failure", `["claude"]`, "success", false, true, true},
+		{"failed classifier empty output", "failure", "[]", "success", false, true, true},
+		{"skipped classifier", "skipped", "", "success", false, true, true},
+		{"pilot failed", "success", `["claude"]`, "failure", false, true, false},
+		{"pilot skipped", "success", `["claude"]`, "skipped", false, true, false},
+		{"pilot cancelled", "success", `["claude"]`, "cancelled", false, true, false},
+		{"workflow cancelled after successful pilot", "success", `["claude"]`, "success", true, false, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := map[string]any{
+				"status.cancelled": tc.cancelled, "github.event_name": "pull_request",
+				"github.event.action": "synchronize", "github.event.label.name": nil,
+				"github.event.pull_request.draft": false, "github.event.pull_request.labels.*.name": []string(nil),
+				"needs.changes.result": tc.classifier, "needs.native-pilot.result": tc.pilot,
+				"needs.changes.outputs.live_clients": tc.output, "needs.changes.outputs.remaining_clients": tc.output,
+			}
+			want := map[string]bool{
+				// A job's own future result cannot alter its admission.
+				"changes":                !tc.cancelled,
+				"native-pilot":           !tc.cancelled,
+				"published-cli-smoke":    tc.smoke,
+				"real-native-cli-matrix": tc.selection && tc.pilot == "success",
+			}
+			for job, expected := range want {
+				if got := evalTierJob(t, live, job, ctx); got != expected {
+					t.Errorf("live %s admitted=%v, want %v", job, got, expected)
+				}
+			}
+			if got := evalTierJob(t, remaining, "remaining-client-install", ctx); got != tc.selection {
+				t.Errorf("remaining admitted=%v, want %v", got, tc.selection)
+			}
+		})
+	}
+}
+
+func TestCITiers_NativeGateMutationRefusals(t *testing.T) {
+	for _, mutation := range []string{"pilot-no-tier-gate", "pilot-or-tier-gate", "pilot-no-cancellation", "matrix-no-cancellation", "matrix-no-success",
+		"matrix-failure-result", "matrix-or-success", "matrix-no-selection", "matrix-nondependency-pilot", "matrix-no-classifier-dependency",
+		"matrix-indirect-pilot", "matrix-or-alternative", "missing-pilot", "cycle-behind-direct-gate",
+		"missing-dependency-behind-direct-gate"} {
+		t.Run(mutation, func(t *testing.T) {
+			w := readTierWorkflow(t, "live-install-audit.yml")
+			pilot, matrix, changes := w.Jobs["native-pilot"], w.Jobs["real-native-cli-matrix"], w.Jobs["changes"]
+			switch mutation {
+			case "pilot-no-tier-gate":
+				pilot.If = "${{ !cancelled() }}"
+			case "pilot-or-tier-gate":
+				pilot.If = "${{ !cancelled() || (" + heavyPRLaneGate + ") }}"
+			case "pilot-no-cancellation":
+				pilot.If = "${{ " + heavyPRLaneGate + " }}"
+			case "matrix-no-cancellation":
+				matrix.If = strings.Replace(matrix.If, "!cancelled() && ", "", 1)
+			case "matrix-no-success":
+				matrix.If = strings.Replace(matrix.If, "needs.native-pilot.result == 'success' && ", "", 1)
+			case "matrix-failure-result":
+				matrix.If = strings.Replace(matrix.If, "needs.native-pilot.result == 'success'", "needs.native-pilot.result == 'failure'", 1)
+			case "matrix-or-success":
+				matrix.If = "${{ !cancelled() && (needs.native-pilot.result == 'success' || needs.changes.outputs.live_clients != '[]') }}"
+			case "matrix-no-selection":
+				matrix.If = "${{ !cancelled() && needs.native-pilot.result == 'success' }}"
+			case "matrix-nondependency-pilot":
+				matrix.Needs = yaml.Node{Kind: yaml.ScalarNode, Value: "changes"}
+			case "matrix-no-classifier-dependency":
+				matrix.Needs = yaml.Node{Kind: yaml.ScalarNode, Value: "native-pilot"}
+			case "matrix-indirect-pilot":
+				matrix.Needs = yaml.Node{Kind: yaml.ScalarNode, Value: "published-cli-smoke"}
+			case "matrix-or-alternative":
+				matrix.If = strings.TrimSuffix(matrix.If, " }}") + " || true }}"
+			case "missing-pilot":
+				delete(w.Jobs, "native-pilot")
+			case "cycle-behind-direct-gate":
+				changes.Needs = yaml.Node{Kind: yaml.ScalarNode, Value: "native-pilot"}
+			case "missing-dependency-behind-direct-gate":
+				changes.Needs = yaml.Node{Kind: yaml.ScalarNode, Value: "missing"}
+			}
+			if mutation != "missing-pilot" {
+				w.Jobs["native-pilot"] = pilot
+			}
+			w.Jobs["real-native-cli-matrix"], w.Jobs["changes"] = matrix, changes
+			gated := heavyPRGatedJobs(t, w)["real-native-cli-matrix"]
+			// These status-bearing bypasses must fail graph proof independently
+			// of the stricter exact-condition check. No-cancellation variants
+			// can remain draft-safe through restored implicit success().
+			switch mutation {
+			case "pilot-no-tier-gate", "pilot-or-tier-gate", "matrix-no-success", "matrix-or-success",
+				"matrix-nondependency-pilot", "matrix-indirect-pilot", "matrix-no-classifier-dependency",
+				"matrix-or-alternative", "missing-pilot", "cycle-behind-direct-gate", "missing-dependency-behind-direct-gate":
+				if gated {
+					t.Fatal("unsafe status or dependency mutation retained graph authority")
+				}
+			}
+			if exactTierConditions(w, nativeAuditConditions) && gated {
+				t.Fatal("mutated matrix retained exact native condition and tier-gate authority")
+			}
+		})
+	}
+	// A selected-client condition cannot weaken the remaining lane's direct
+	// tier conjunction into an alternative or omit cancellation.
+	for _, condition := range []string{
+		strings.Replace(heavyPRRemainingSelection, "!cancelled() && ", "", 1),
+		"${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.remaining_clients != '[]') || (" + heavyPRLaneGate + ") }}",
+		"${{ (needs.changes.result != 'success' || needs.changes.outputs.remaining_clients != '[]') && (" + heavyPRLaneGate + ") || true }}",
+	} {
+		w := readTierWorkflow(t, "live-install-remaining-clients.yml")
+		job := w.Jobs["remaining-client-install"]
+		job.If = condition
+		w.Jobs["remaining-client-install"] = job
+		if exactTierConditions(w, map[string]string{"remaining-client-install": heavyPRRemainingSelection}) &&
+			heavyPRGatedJobs(t, w)["remaining-client-install"] {
+			t.Fatal("mutated remaining lane retained exact native condition and tier-gate authority")
 		}
 	}
 }
@@ -444,11 +690,12 @@ func expressionContains(search, item any) bool {
 
 // evalExpression implements the GitHub expression subset these rules use:
 // ||, &&, ==, !=, parentheses, string and boolean literals, context values,
-// always() and contains(), with GitHub's loose equality and truthiness.
-// Other functions, !, comparisons such as < and object filters fail the test.
+// unary !, always(), cancelled() and contains(), with GitHub's loose equality
+// and truthiness. cancelled() reads an explicit boolean workflow status value.
+// Other functions, comparisons such as < and object filters fail the test.
 func evalExpression(t *testing.T, source string, ctx map[string]any) any {
 	t.Helper()
-	tokens := regexp.MustCompile(`\|\||&&|==|!=|\(|\)|,|'[^']*'|[A-Za-z_][A-Za-z0-9_.*-]*`).FindAllString(source, -1)
+	tokens := regexp.MustCompile(`\|\||&&|==|!=|!|\(|\)|,|'[^']*'|[A-Za-z_][A-Za-z0-9_.*-]*`).FindAllString(source, -1)
 	if strings.Join(tokens, "") != strings.Join(strings.Fields(source), "") {
 		t.Fatalf("unsupported expression %q", source)
 	}
@@ -477,6 +724,14 @@ func evalExpression(t *testing.T, source string, ctx map[string]any) any {
 			expect("(")
 			expect(")")
 			return true
+		case token == "cancelled":
+			expect("(")
+			expect(")")
+			value, ok := ctx["status.cancelled"].(bool)
+			if !ok {
+				t.Fatalf("cancelled() requires explicit boolean workflow status")
+			}
+			return value
 		case token == "contains":
 			expect("(")
 			haystack := or()
@@ -496,10 +751,18 @@ func evalExpression(t *testing.T, source string, ctx map[string]any) any {
 			return value
 		}
 	}
+	var unary func() any
+	unary = func() any {
+		if peek() == "!" {
+			next()
+			return !truthy(unary())
+		}
+		return primary()
+	}
 	comparison := func() any {
-		left := primary()
+		left := unary()
 		for peek() == "==" || peek() == "!=" {
-			operator, right := next(), primary()
+			operator, right := next(), unary()
 			left = looseEqual(left, right) == (operator == "==")
 		}
 		return left

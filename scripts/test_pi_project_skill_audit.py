@@ -336,7 +336,29 @@ active=active, native=native, state=state, public=public, binding=binding, remov
                          lambda r: r["results"][4].update(repeat_verified=False),
                          lambda r: r["results"][4]["pi_project_skill_proof"].update(native_ready=mode != "clean-native"),
                          lambda r: r["results"][4].update(public_skill_ready={"after-add": False, "repeat-add": False} if mode == "clean-native" else {"after-add": True, "repeat-add": True})]
+            # These are valid full proofs; change only JSON scalar types whose
+            # Python equality would otherwise alias booleans and integers.
+            for phase in ("after-add", "repeat-add"):
+                for wrong in (int(mode == "clean-native"), float(mode == "clean-native")):
+                    mutations.append(lambda r, phase=phase, wrong=wrong:
+                        r["results"][4]["public_skill_ready"].update({phase: wrong}))
+            for phase in ("after-add", "repeat-add", "after-remove"):
+                for key in ("invalid_rows", "selected_installations", "selected_bindings"):
+                    value = report["results"][4]["public_target_states"][phase][key]
+                    for wrong in (bool(value), float(value)):
+                        mutations.append(lambda r, phase=phase, key=key, wrong=wrong:
+                            r["results"][4]["public_target_states"][phase].update({key: wrong}))
+            for key in ("client_version", "cli_version"):
+                for wrong in (False, 0.0):
+                    mutations.append(lambda r, key=key, wrong=wrong: r[key].update(exit_code=wrong))
             if mode == "clean-native":
+                for phase in ("after-add", "repeat-add", "after-remove"):
+                    for stream in ("stdin", "stdout", "stderr"):
+                        key = stream + "_bytes"
+                        value = report["results"][4]["pi_project_skill_proof"]["native_catalogs"][phase][key]
+                        for wrong in ([float(value), False] if value == 0 else [float(value)]):
+                            mutations.append(lambda r, phase=phase, key=key, wrong=wrong:
+                                r["results"][4]["pi_project_skill_proof"]["native_catalogs"][phase].update({key: wrong}))
                 mutations += [lambda r: r["results"][4]["pi_project_skill_proof"]["source_metadata"].update(stdout_sha256="0"*64),
                               lambda r: r["results"][4]["pi_project_skill_proof"]["source_metadata"].update(owned_resources_unchanged=False),
                               lambda r: r["results"][4]["pi_project_skill_proof"]["native_catalogs"]["after-add"].update(stdout_sha256="0"*64),
@@ -384,6 +406,57 @@ active=active, native=native, state=state, public=public, binding=binding, remov
                 self.assertEqual(report["pi_skill_cohort"], mode)
                 self.assertFalse(report["pi_cohort_acceptance_passed"])
                 self.assertEqual(report["pi_cohort_verified"], 0)
+
+    def test_default_and_explicit_native_routes_do_not_load_or_forward_pi_cohort(self):
+        from contextlib import redirect_stdout, redirect_stderr
+        from io import StringIO
+        for target, kind in (("pi", "skill"), ("pi", "plugin"), ("copilot", "skill")):
+            for acceptance in (None, "native"):
+                audit = load_audit()
+                with TemporaryDirectory() as temporary:
+                    argv = ["audit", "--cli", sys.executable, "--target", target,
+                            "--kind", kind, "--limit", "1", "--report-dir", temporary]
+                    if acceptance is not None:
+                        argv += ["--acceptance", acceptance]
+                    def row(*args, **kwargs):
+                        self.assertNotIn("pi_skills", kwargs)
+                        item, index = args[3:5]
+                        return {"target": target, "kind": kind, "index": index,
+                                "identity": item["name"] if kind == "skill" else item,
+                                "source": item["source"] if kind == "skill" else item,
+                                "status": "incomplete-native-proof"}
+                    with patch.object(audit.sys, "argv", argv), patch.dict(audit.AGENT_BINARIES, {target: sys.executable}), patch.object(audit, "vendor_bootstrap_attested", return_value=True), patch.object(audit, "version_evidence", return_value={"status": "reported", "value": "1.5.0", "exit_code": 0}), patch.object(audit, "do_case", side_effect=row) as cases, patch.object(audit, "pi_project_skill_audit", side_effect=AssertionError("inactive Pi observer loaded")) as loader, redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                        self.assertEqual(audit.main(), 1)
+                    cases.assert_called_once()
+                    loader.assert_not_called()
+                    report = json.loads((Path(temporary) / (target + "-" + kind + ".json")).read_text())
+                    self.assertNotIn("pi_skill_cohort", report)
+                    self.assertNotIn("pi_cohort_acceptance_passed", report)
+                    self.assertEqual(report["passed"], 0)
+
+    def test_explicit_cohort_bootstrap_absence_retains_unexecuted_nonpass_evidence(self):
+        from contextlib import redirect_stdout, redirect_stderr
+        from io import StringIO
+        for acceptance, mode in (("pi-foreign-prepared-skills-installation", "foreign-prepared"),
+                                 ("pi-clean-native-skills", "clean-native")):
+            audit = load_audit()
+            with TemporaryDirectory() as temporary:
+                argv = ["audit", "--cli", sys.executable, "--target", "pi", "--kind", "skill",
+                        "--limit", "30", "--acceptance", acceptance, "--report-dir", temporary]
+                with patch.object(audit.sys, "argv", argv), patch.object(audit.platform, "machine", return_value="x86_64"), patch.object(audit, "vendor_bootstrap_attested", return_value=False), patch.object(audit, "do_case") as cases, patch.object(audit, "version_evidence") as probes, patch.object(audit, "pi_project_skill_audit", side_effect=AssertionError("unexecuted observer loaded")) as loader, redirect_stdout(StringIO()), redirect_stderr(StringIO()):
+                    self.assertEqual(audit.main(), 2)
+                cases.assert_not_called()
+                probes.assert_not_called()
+                loader.assert_not_called()
+                report = json.loads((Path(temporary) / "pi-skill.json").read_text())
+                self.assertEqual(report["pi_skill_cohort"], mode)
+                self.assertEqual(report["cases_attempted"], 0)
+                self.assertFalse(report["full_coverage"])
+                self.assertEqual(len(report["results"]), 30)
+                self.assertTrue(all(row["status"] == "client-unavailable" for row in report["results"]))
+                self.assertEqual(report.get("passed", 0), 0)
+                self.assertEqual(report.get("verified_negative_coverage", 0), 0)
+                self.assertNotIn("pi_cohort_acceptance_passed", report)
 
     def test_main_refuses_partial_other_scope_host_and_client_before_any_case(self):
         from contextlib import redirect_stdout, redirect_stderr

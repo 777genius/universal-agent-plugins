@@ -5461,6 +5461,46 @@ module.exports = {
         with self.assertRaisesRegex(ValueError, "non-execution"):
             audit.unexecuted_source_rows([], "plugin", "grok", "passed", {})
 
+    def test_cline_updates_disabled_in_isolated_child_despite_host_override(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            home, data = case / "home", case / "data"
+            home.mkdir()
+            data.mkdir()
+            for inherited in ("0", "", "1"):
+                with self.subTest(inherited=inherited), patch.dict(
+                        os.environ, {"CLINE_NO_AUTO_UPDATE": inherited}):
+                    env = audit.isolated_client_env(home, case, data)
+                    self.assertEqual(env["CLINE_NO_AUTO_UPDATE"], "1")
+                    child = subprocess.run(
+                        [sys.executable, "-c", "import os; print(os.environ['CLINE_NO_AUTO_UPDATE'])"],
+                        env=env, cwd=case, capture_output=True, text=True, check=True)
+                    self.assertEqual(child.stdout.strip(), "1")
+
+    def test_live_workflow_cline_pin_rejects_drift_and_unobserved_version(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-audit.yml").read_text()
+        bootstrap = workflow.split("        id: native-install\n", 1)[1].split("      - name:", 1)[0]
+        self.assertIn("CLINE_NO_AUTO_UPDATE: '1'", bootstrap)
+        self.assertIn('[[ "$native_version" == 3.0.74 ]]', bootstrap)
+        validator = textwrap.dedent(workflow.split("<<'CLINE_PIN'\n", 1)[1]
+                                    .split("          CLINE_PIN", 1)[0])
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            proof = root / "full-proof"
+            proof.mkdir()
+            for value in ({"status": "reported", "value": "3.0.74", "exit_code": 0},
+                          {"status": "reported", "value": "3.0.75", "exit_code": 0},
+                          {"status": "not-probed"},
+                          {"status": "reported", "value": "3.0.74", "exit_code": False}):
+                with self.subTest(version=value):
+                    (proof / "cline-plugin.json").write_text(json.dumps({"client_version": value}))
+                    child = subprocess.run([sys.executable, "-c", validator], capture_output=True,
+                                           env={**os.environ, "RUNNER_TEMP": str(root), "KIND": "plugin"})
+                    self.assertEqual(child.returncode == 0, value.get("value") == "3.0.74"
+                                     and type(value.get("exit_code")) is int)
+
     def test_rebinds_all_client_overrides_and_strips_git_injection(self):
         audit = load_audit()
         hostile = {key: "/outside/actual-user-profile" for key in audit.PROFILE_ENV_KEYS}
@@ -13614,6 +13654,25 @@ class ClaudeWindowsCacheRetirementContracts(unittest.TestCase):
 
 @unittest.skipUnless(os.name == "posix", "Copilot whole Skill descriptor audit")
 class CopilotWholeProjectSkillAuditContracts(unittest.TestCase):
+    def test_protected_snapshot_failure_retains_bounded_private_delta(self):
+        audit = load_audit()
+        before = {"../../private-path\n": "private-before", **{f"home/item-{i:02}": "private-before" for i in range(25)}}
+        after = {key: "private-after" for key in before}
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaisesRegex(AssertionError, "modified protected state") as caught:
+                audit.check_copilot_snapshot_unchanged(root / "home", root, before, after, "test", 2)
+        delta = caught.exception.copilot_snapshot_delta
+        self.assertEqual(delta["changed_key_count"], 26)
+        self.assertEqual(len(delta["items"]), 20)
+        self.assertEqual(delta["omitted_key_count"], 6)
+        self.assertNotIn("key", delta["items"][0])
+        self.assertTrue(all(item["before_present"] and item["after_present"] for item in delta["items"]))
+        for item in delta["items"]:
+            self.assertRegex(item["before_sha256"], r"^[0-9a-f]{64}$")
+        self.assertNotIn("private-", json.dumps(delta))
+        self.assertEqual(after, {key: "private-after" for key in before})
+
     def exercise(self, *, ready=True, fault=None, preinitialized_git=False):
         audit = load_audit()
         body = b"---\nname: frontend-design\ndescription: Inert original Skill\n---\nOriginal body\n"
@@ -13917,9 +13976,6 @@ class CopilotWholeProjectSkillAuditContracts(unittest.TestCase):
         self.assertEqual(captures[0]["exit"], 0)
         self.assertIn("installedFrom", captures[0]["stdout"])
 
-
-if __name__ == "__main__":
-    unittest.main()
 
 if __name__ == "__main__":
     unittest.main()

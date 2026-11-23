@@ -24,18 +24,18 @@ from urllib.parse import urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests/live-install/fixtures.json"
+QODER_PREPARED_ACCEPTANCE = "qoder-prepared-skills-installation"
+QODER_PREPARED_AUDIT = None
 CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
 HISTORICAL_CODEX = run_path(str(ROOT / "scripts/published_codex_baseline.py"))
 CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
 GEMINI_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/gemini_runtime_audit.py"))
 OPENCODE_BOOTSTRAP_AUDIT = run_path(str(ROOT / "scripts/opencode_bootstrap_audit.py"))
 NATIVE_ARTIFACTS = run_path(str(ROOT / "scripts/native_client_project_artifacts.py"))
+COPILOT_CATALOG_PROBE = run_path(str(ROOT / "scripts/native_client_research.py"))["run_probe"]
 PI_PROJECT_SKILL_AUDIT = None
 PI_SKILL_ACCEPTANCES = {"pi-foreign-prepared-skills-installation": "foreign-prepared",
                         "pi-clean-native-skills": "clean-native"}
-QODER_PREPARED_ACCEPTANCE = "qoder-prepared-skills-installation"
-QODER_PREPARED_AUDIT = None
-COPILOT_CATALOG_PROBE = run_path(str(ROOT / "scripts/native_client_research.py"))["run_probe"]
 
 # One immutable authority for the signed Marketing Kit and its dependencies.
 MARKETING_KIT_DISTRIBUTIONS = {
@@ -638,6 +638,25 @@ def scoped_snapshot(roots, *, snapshotter=None):
                     record_metadata(index, path, path.relative_to(root).as_posix())
     return state
 
+def copilot_snapshot_delta(before, after):
+    """Bounded failure diagnostics; snapshot values and unsafe names stay private."""
+    keys = sorted(key for key in before.keys() | after.keys()
+                  if (key in before) != (key in after) or before.get(key) != after.get(key))
+    items = []
+    for key in keys[:20]:
+        item = {"key_sha256": hashlib.sha256(key.encode("utf-8", "surrogatepass")).hexdigest()}
+        if (re.fullmatch(r"[A-Za-z0-9_.:/-]{1,192}", key)
+                and not key.startswith("/") and ":/" not in key and ".." not in key):
+            item["key"] = key
+        for label, snapshot in (("before", before), ("after", after)):
+            item[label + "_present"] = key in snapshot
+            if key in snapshot:
+                value = json.dumps(snapshot[key], ensure_ascii=True, separators=(",", ":")).encode()
+                item[label + "_sha256"] = hashlib.sha256(value).hexdigest() if len(value) <= 8192 else None
+        items.append(item)
+    return {"comparison": "protected snapshot after permitted process logs were excluded",
+            "changed_key_count": len(keys), "items": items, "omitted_key_count": max(0, len(keys) - len(items))}
+
 def check_copilot_snapshot_unchanged(home, case_root, before, after, stage, log_limit):
     """Only this real read may create bounded new vendor process logs."""
     prefix = home.name + "/" + str(Path(".copilot") / "logs") + os.sep
@@ -656,7 +675,12 @@ def check_copilot_snapshot_unchanged(home, case_root, before, after, stage, log_
         after.pop(key)
         after.pop("metadata:0:" + Path(relative).as_posix(), None)
     if after != before:
-        raise AssertionError(stage + ": native query modified protected state")
+        failure = AssertionError(stage + ": native query modified protected state")
+        try:
+            failure.copilot_snapshot_delta = copilot_snapshot_delta(before, after)
+        except Exception as error:
+            failure.copilot_snapshot_delta = {"diagnostic_error": type(error).__name__}
+        raise failure
 
 def exact_native_identity(text, identity):
     """Recognize an identity token in native data, never a URL substring."""
@@ -2100,6 +2124,7 @@ def isolated_client_env(home, case_root, data):
         "GIT_CONFIG_GLOBAL": str(case_root / "empty.gitconfig"),
         "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never",
         "KIMI_CODE_NO_AUTO_UPDATE": "1",
+        "CLINE_NO_AUTO_UPDATE": "1",
         "CI": "true", "DO_NOT_TRACK": "1",
         **{key: str(path) for key, path in roots.items()},
     })
@@ -2872,6 +2897,8 @@ class CopilotProjectSkillAudit:
                     check()
                 except Exception as error:
                     failures.append(error)
+                    if hasattr(error, "copilot_snapshot_delta"):
+                        self.evidence.setdefault("protected_snapshot_deltas", {})[phase] = error.copilot_snapshot_delta
             if failures:
                 self.evidence["custody_refusal"] = self.refusal(failures[0])
                 failure = RuntimeError("Copilot whole Project Skill protected state changed during catalogs")
@@ -3308,7 +3335,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if codex_runtime is not None and installed:
         codex_runtime.checkpoint("installed", True)
         codex_add_ready = CODEX_RUNTIME_AUDIT["public_skill_ready"](added_json, matching, identity)
-        if historical_observer is not None:
+        if historical_baseline:
             historical_add_verified = HISTORICAL_CODEX["historical_add"](
                 added_json, matching, item, project / skill_path)
     # BUG-016: a single successful add/remove cannot attest idempotence.
@@ -4751,6 +4778,7 @@ def main():
     pi_mode = PI_SKILL_ACCEPTANCES.get(args.acceptance)
     if pi_mode is not None and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != ("pi", "skill", "linux", "x86_64", 30):
         p.error("Pi dual-cohort acceptance requires all 30 Pi Skills on pinned Linux x86_64")
+    qoder_prepared = args.acceptance == QODER_PREPARED_ACCEPTANCE
     historical_baseline = args.acceptance == HISTORICAL_CODEX["ACCEPTANCE"]
     historical_plugin_archive = args.acceptance == HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"]
     if historical_baseline and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
@@ -4814,6 +4842,8 @@ def main():
         report_file.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     native_target = audit_client_id(args.target, args.kind)
     report["canonical_client_id"] = native_target
+    if qoder_prepared:
+        report["acceptance"] = args.acceptance
     eligible_binaries = EXECUTABLE.get(native_target, ())
     if not vendor_bootstrap_attested():
         report["blocker"] = "Vendor bootstrap was not verified; no native-client PASS is permitted"
@@ -4863,6 +4893,14 @@ def main():
                           if AGENT_BINARIES.get(name))
             report["client_binary"] = native
             report["client_version"] = version_evidence([native, "--version"], probe_env, probe_case)
+        if qoder_prepared and any(
+                report[field] != {"status": "reported", "value": expected, "exit_code": 0}
+                or type(report[field].get("exit_code")) is not int
+                for field, expected in (("cli_version", "agentplugins 0.1.115"),
+                                        ("client_version", "1.1.81"))):
+            report["blocker"] = "Qoder Prepared installation requires exact CLI 0.1.115 and native 1.1.81 probes"
+            save()
+            return 2
         save()
         for i, item in enumerate(selected):
             try:

@@ -11,11 +11,24 @@ import sys
 _CUSTODY = run_path(str(Path(__file__).with_name("claude_cache_retirement_audit.py")))
 require = _CUSTODY["require"]
 
-# Published CLI 0.1.115 source_evidence.go projects schema-1 Directory
-# authentication to unknown for Project. This checkpoint requires not_checked
-# in both recorded and public state; the source projection alone is not proof
-# that every install path preserved it. User policy and native Skill setup
-# never qualify this exact Project checkpoint.
+# Exact published 0.1.115 producer contract for this immutable signed closure:
+# marketing-kit contains only Skills; Playwright contains a local stdio MCP.
+# With absent catalog evidence, the active/installed/allowed native qualifiers
+# produce not_required for these two aliases. Remote Notion/HubSpot remain
+# not_checked. Fresh prepared outcomes do not enter those active-only qualifiers.
+# This pinned Project fixture's mutating SDK reload has absent catalog evidence;
+# explicit catalog objects, including schema-1 unknown, need a different contract
+# and refuse here. This is installation setup, never future model/tool credentials;
+# no observed authentication value selects the oracle.
+
+
+def expected_project_authentication(alias, binding):
+    if binding["package_revision"].get("catalog_evidence") is not None:
+        raise ValueError(f"Claude cache retirement {alias} authentication catalog evidence "
+                         "differs from pinned Project checkpoint: expected=absent_or_null")
+    if alias in ("marketing-kit", "playwright") and binding.get("activation") == "active":
+        return "not_required"
+    return "not_checked"
 
 
 def authentication_checkpoint_label(row):
@@ -216,19 +229,20 @@ class SignedClosureRetirement:
                 and type(record["clients"]) is dict and len(record["clients"]) == 1)
         binding_id, binding = next(iter(record["clients"].items()))
         require(type(binding_id) is str and bool(binding_id) and binding["client_binding_id"] == binding_id)
+        expected_authentication = expected_project_authentication(alias, binding)
         checkpoint = {"client_id": ("claude",), "scope": ("project",),
                 # Installed but unready MCPs and untrusted/suppressed plugins
                 # can remain prepared in the published adapter. Exact cache,
                 # registry and receipt ownership below is still mandatory.
                 "activation": ("active", "prepared"), "materialization": ("materialized",),
                 "verification": ("installation_verified",),
-                "authentication": ("not_checked",), "policy": ("allowed",)}
+                "authentication": (expected_authentication,), "policy": ("allowed",)}
         for key, allowed in checkpoint.items():
             if binding.get(key) != clients[0].get(key) or binding.get(key) not in allowed:
                 if key == "authentication":
                     raise ValueError(f"Claude cache retirement {alias} binding field authentication "
                         f"differs from checkpoint contract: recorded={authentication_checkpoint_label(binding)}, "
-                        f"public={authentication_checkpoint_label(clients[0])}; expected=not_checked")
+                        f"public={authentication_checkpoint_label(clients[0])}; expected={expected_authentication}")
                 raise ValueError(f"Claude cache retirement {alias} binding field {key} differs from checkpoint contract")
         readiness = {key: binding[key] for key in checkpoint}
         for revision in (binding["package_revision"], clients[0]["package_revision"]):

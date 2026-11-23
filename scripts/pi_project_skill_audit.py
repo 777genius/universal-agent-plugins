@@ -642,7 +642,9 @@ def summary(report, fixtures, acceptance):
         if (type(row) is not dict or type(row.get("index")) is not int or row["index"] != index
             or (row.get("target"), row.get("kind"), row.get("identity"), row.get("source")) != ("pi", "skill", item["name"], item["source"])
             or row.get("status") != ("passed" if mode == "clean-native" else "prepared-lifecycle-passed")
-            or row.get("public_skill_ready") != {"after-add": mode == "clean-native", "repeat-add": mode == "clean-native"}
+            or type(row.get("public_skill_ready")) is not dict
+            or set(row["public_skill_ready"]) != {"after-add", "repeat-add"}
+            or any(value is not (mode == "clean-native") for value in row["public_skill_ready"].values())
             or any(row.get(key) is not True for key in ("listed_identity", "lock_exact_source_pinned", "skill_bytes_match", "repeat_verified", "repeat_lock_unchanged", "repeat_native_unchanged", "removal_verified", "post_list_schema_valid", "sentinels_preserved"))
             or any(row.get(key) is not False for key in ("failed_install_registered", "failed_install_residue", "post_remove_identity_registered", "post_lock_pinned"))
             or row.get("post_removal_skill") is not None or row.get("post_removal_leftovers") != []
@@ -679,12 +681,16 @@ def summary(report, fixtures, acceptance):
             return result
         seen.add(iid)
         facts = {**FACTS, **({"activation": "active", "authentication": "not_required"} if mode == "clean-native" else {})}
+        observations = row.get("public_target_states")
+        if type(observations) is not dict:
+            return result
         for phase in ("after-add", "repeat-add", "after-remove"):
-            observation = row.get("public_target_states", {}).get(phase, {})
+            observation = observations.get(phase)
             expected = [] if phase == "after-remove" else [facts]
-            if (observation.get("status") != "observed" or observation.get("invalid_rows") != 0
+            if (type(observation) is not dict or observation.get("status") != "observed"
                 or observation.get("truncated") is not False or observation.get("states") != expected
-                or observation.get("selected_installations") != len(expected) or observation.get("selected_bindings") != len(expected)):
+                or any(type(observation.get(key)) is not int or observation[key] != value for key, value in {
+                    "invalid_rows": 0, "selected_installations": len(expected), "selected_bindings": len(expected)}.items())):
                 return result
         metadata = proof.get("source_metadata")
         if mode == "clean-native":
@@ -712,7 +718,9 @@ def summary(report, fixtures, acceptance):
                     body = base64.b64decode(capture[stream + "_base64"], validate=True)
                 except (KeyError, ValueError, TypeError):
                     return result
-                if capture.get(stream + "_bytes") != len(body) or capture.get(stream + "_sha256") != hashlib.sha256(body).hexdigest():
+                if (type(capture.get(stream + "_bytes")) is not int
+                    or capture[stream + "_bytes"] != len(body)
+                    or capture.get(stream + "_sha256") != hashlib.sha256(body).hexdigest()):
                     return result
         for phase in ("install", "list", "repeat_add", "repeat_list", "cleanup", "post_remove_list"):
             command = row.get(phase)

@@ -48,10 +48,9 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             shutil.copytree(bundle, cache)
             revision = {"distribution_id": distribution, "version": pin["package_version"],
                         **{key: pin[key] for key in ("release_sequence", "resolved_revision", "tree_digest", "manifest_digest")}}
-            # The exact Project checkpoint requires the schema-1 Directory
-            # unknown decision to survive as not_checked for all four. This
-            # fixture does not assert every published install path preserves it.
-            authentication = "not_checked"
+            # Exact signed local components qualify active installation setup;
+            # the two remote MCP packages keep authentication unchecked.
+            authentication = "not_required" if alias in ("marketing-kit", "playwright") else "not_checked"
             client = {"client_id": "claude", "scope": "project", "activation": "active",
                       "materialization": "materialized", "authentication": authentication,
                       "policy": "allowed", "verification": "installation_verified", "package_revision": revision}
@@ -154,6 +153,9 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 for record, public in zip(state["installations"], f["public"]):
                     binding = next(iter(record["clients"].values()))
                     binding["activation"] = public["clients"][0]["activation"] = activation
+                    authentication = ("not_required" if activation == "active"
+                                      and record["declared_name"] in ("marketing-kit", "playwright") else "not_checked")
+                    binding["authentication"] = public["clients"][0]["authentication"] = authentication
                     expected.append({key: binding[key] for key in ("client_id", "scope", "activation",
                         "materialization", "verification", "authentication", "policy")})
                 f["state"].write_text(json.dumps(state))
@@ -162,13 +164,14 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 proof = subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
                 self.assertEqual([member["binding_at_capture"] for member in proof["members"]], expected)
                 self.assertEqual([row["authentication"] for row in expected],
-                                 ["not_checked"] * 4)
+                                 ["not_required", "not_checked", "not_checked", "not_required"]
+                                 if activation == "active" else ["not_checked"] * 4)
                 self.assertFalse(proof["writer_closure_claimed"])
 
     def test_exact_project_authentication_and_raw_public_agreement_required(self):
         for index, wrong in ((index, value) for index in range(4)
-                             for value in ("auth_pending", "not_required", "failed", "authenticated",
-                                           "pending", "unknown", "", None, "missing")):
+                             for value in ("auth_pending", "not_required" if index in (1, 2) else "not_checked",
+                                           "failed", "authenticated", "pending", "unknown", "", None, "missing")):
             for location in ("both", "raw", "public"):
                 with self.subTest(index=index, wrong=wrong, location=location), TemporaryDirectory() as directory:
                     f = self.fixture(Path(directory).resolve())
@@ -182,9 +185,68 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError, "authentication"):
                         self.capture(f)
 
+    def test_active_local_qualification_requires_absent_catalog_and_prepared_never_promotes(self):
+        for alias in ("marketing-kit", "playwright"):
+            for catalog in ("absent", "null"):
+                for activation in ("active", "prepared"):
+                    expected = "not_required" if activation == "active" else "not_checked"
+                    for authentication in ("not_checked", "not_required"):
+                        with (self.subTest(alias=alias, catalog=catalog, activation=activation,
+                                           authentication=authentication), TemporaryDirectory() as directory):
+                            f = self.fixture(Path(directory).resolve())
+                            state = json.loads(f["state"].read_text())
+                            index = next(i for i, row in enumerate(state["installations"])
+                                         if row["declared_name"] == alias)
+                            binding = next(iter(state["installations"][index]["clients"].values()))
+                            for row in (binding, f["public"][index]["clients"][0]):
+                                row.update(activation=activation, authentication=authentication)
+                            if catalog == "null":
+                                binding["package_revision"]["catalog_evidence"] = None
+                            f["state"].write_text(json.dumps(state))
+                            if authentication != expected:
+                                with self.assertRaisesRegex(ValueError, "authentication.*expected=" + expected):
+                                    self.capture(f)
+                            else:
+                                subject = self.capture(f)
+                                self.assertEqual(subject.owners[index]["binding_at_capture"]["authentication"], expected)
+                                subject.close()
+
+    def test_pinned_project_checkpoint_refuses_explicit_unknown_and_malformed_catalog(self):
+        explicit_unknown = {"schema_version": 1, "catalog_version": "directory-snapshot-1",
+                            "compatibility": {"claude": {"authentication": "unknown",
+                                                         "package": "projected", "verification": "schema_only"}}}
+        for index in range(4):
+            for catalog in (explicit_unknown, {}, [], "private-secret", False):
+                for authentication in ("not_checked", "not_required"):
+                    with (self.subTest(index=index, catalog=catalog, authentication=authentication),
+                          TemporaryDirectory() as directory):
+                        f = self.fixture(Path(directory).resolve())
+                        state = json.loads(f["state"].read_text())
+                        binding = next(iter(state["installations"][index]["clients"].values()))
+                        binding["package_revision"]["catalog_evidence"] = catalog
+                        binding["authentication"] = f["public"][index]["clients"][0]["authentication"] = authentication
+                        f["state"].write_text(json.dumps(state))
+                        with self.assertRaisesRegex(ValueError, "authentication catalog evidence.*expected=absent_or_null") as failure:
+                            self.capture(f)
+                        self.assertNotIn("secret", str(failure.exception))
+
+    def test_remote_authentication_never_inherits_active_local_qualification(self):
+        for alias in ("notion", "hubspot-crm"):
+            for activation in ("active", "prepared"):
+                with self.subTest(alias=alias, activation=activation), TemporaryDirectory() as directory:
+                    f = self.fixture(Path(directory).resolve())
+                    state = json.loads(f["state"].read_text())
+                    index = next(i for i, row in enumerate(state["installations"]) if row["declared_name"] == alias)
+                    binding = next(iter(state["installations"][index]["clients"].values()))
+                    for row in (binding, f["public"][index]["clients"][0]):
+                        row.update(activation=activation, authentication="not_required")
+                    f["state"].write_text(json.dumps(state))
+                    with self.assertRaisesRegex(ValueError, alias + ".*authentication.*expected=not_checked"):
+                        self.capture(f)
+
     def test_authentication_refusal_identifies_recorded_and_public_states_without_arbitrary_data(self):
         for raw, public, expected in (
-                ("not_required", "not_required", "recorded=not_required, public=not_required"),
+                ("not_checked", "not_checked", "recorded=not_checked, public=not_checked"),
                 ("not_checked", "auth_pending", "recorded=not_checked, public=auth_pending"),
                 ("foreign-secret-value", {"untrusted": "secret"}, "recorded=invalid, public=invalid")):
             with self.subTest(raw=raw), TemporaryDirectory() as directory:
@@ -196,7 +258,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 with self.assertRaises(ValueError) as failure:
                     self.capture(f)
                 self.assertIn(expected, str(failure.exception))
-                self.assertIn("expected=not_checked", str(failure.exception))
+                self.assertIn("expected=not_required", str(failure.exception))
                 self.assertNotIn("secret", str(failure.exception))
 
     def test_first_authentication_refusal_retains_all_four_exact_checkpoint_observations(self):
