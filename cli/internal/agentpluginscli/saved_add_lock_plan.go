@@ -110,6 +110,9 @@ func matchSavedRegistry(lock environment.Lock, source, alias string) (environmen
 }
 
 func runSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targets []domain.ClientID, matches []string, activation, auth bool) error {
+	stop := startCommandActivity(cmd, app, opts, "Resolving and validating saved dependency")
+	defer stop()
+	app = stopPluginActivityOnWrite(app, stop)
 	snapshot, err := snapshotEnvironment(cmd, app)
 	if err != nil {
 		return err
@@ -126,7 +129,6 @@ func runSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targ
 		return err
 	}
 	alias := requirement.Alias
-	requirement.Alias = alias
 	requirements.Dependencies[alias] = requirement
 	for _, target := range targets {
 		key := string(target)
@@ -156,5 +158,6 @@ func runSavedAdd(cmd *cobra.Command, app App, opts *options, source string, targ
 		selectedTargets = append(selectedTargets, string(target))
 	}
 	opts.environmentOutput = map[string]any{"selected_targets": selectedTargets, "saved": true, "scope": string(app.scope()), "scope_selection_reason": scopeSelectionReason(cmd, opts), "alias": alias, "manifest_path": snapshot.ManifestPath, "lock_path": snapshot.LockPath, "intent_change": !reflect.DeepEqual(snapshot.Requirements, requirements)}
+	stop()
 	return runSavedEnvironment(cmd, app, opts, snapshot, requirements, locked, manifest, []string{dependencyNodeAlias(requirements, locked, alias)}, attest, selectedTargets)
 }

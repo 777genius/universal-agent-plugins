@@ -1104,7 +1104,7 @@ func TestInteractiveAddSkipsDetectedClientThatPackageCannotServe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Not available for automatic install:\n  - ChatGPT:") {
+	if !strings.Contains(stdout, "Not available for automatic install:\n  ChatGPT:") {
 		t.Fatalf("package-aware interactive output = %q", stdout)
 	}
 	if strings.Contains(stdout, "Detected supported clients (all selected by default)") {
@@ -1127,7 +1127,7 @@ func TestInteractiveAddOffersKiroPreparationWhenAutomaticPreflightFails(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "kiro (prepare only; manual verification)") {
+	if !strings.Contains(stdout, "kiro (kiro) (prepare only) - verify manually") {
 		t.Fatalf("activation-aware interactive output = %q", stdout)
 	}
 	if !strings.Contains(stdout, "Detected supported clients (all selected by default)") {

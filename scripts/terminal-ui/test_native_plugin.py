@@ -14,7 +14,7 @@ from test_native_skills import StreamSession
 ACK = b"\r\nChanges confirmed.\r\n"
 ACTIVITY = "\r\x1b[2K⠋ Applying changes · 0s".encode()
 STOP = b"\r\x1b[2K"
-RESULT = b"Install context7 for Claude Code: completed \r\nInstall context7 for OpenAI Codex: completed \r\nInstallation: selected-id\r\n"
+RESULT = b"Install context7 for Claude Code: completed \r\nInstall context7 for OpenAI Codex: completed \r\nInstallation: selected-id (context7)\r\n"
 REVIEW = "Install context7 for Claude Code\nInstall context7 for OpenAI Codex\n" + n.QUESTION
 
 
@@ -175,7 +175,9 @@ class NativePluginContractTests(unittest.TestCase):
                     RESULT.replace(b"OpenAI Codex:", b"Other Agent:"),
                     RESULT.replace(b"completed", b"failed", 1),
                     RESULT.replace(b"context7 for Claude", b"other-plugin for Claude"),
-                    RESULT.replace(b"Installation: selected-id\r\n", b""), RESULT + RESULT):
+                    RESULT.replace(b" (context7)", b" (other-plugin)"),
+                    RESULT.replace(b" (context7)", b""),
+                    RESULT.replace(b"Installation: selected-id (context7)\r\n", b""), RESULT + RESULT):
             with self.subTest(raw=raw), self.assertRaises(AssertionError):
                 n.completed_result(raw, 0)
         for offset in (-1, len(RESULT) + 1):
