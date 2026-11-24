@@ -209,7 +209,7 @@ export async function context7InstallExample(page: Page, client: ClientID) {
   return {
     selector,
     pinned: !signed,
-    command: `npx -y universal-agent-plugins@${signed ? 'latest' : '0.1.115'} add ${selector} --target ${client}`,
+    command: `npx -y universal-agent-plugins@latest add ${selector} --target ${client}`,
   };
 }
 
