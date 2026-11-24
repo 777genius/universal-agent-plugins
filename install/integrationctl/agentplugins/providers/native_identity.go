@@ -62,7 +62,7 @@ func (observer NativeIdentityObserver) requireRegistry() error {
 }
 
 func (observer NativeIdentityObserver) env() clients.Env {
-	return clients.Env{ProjectRoots: observer.ProjectRoots, Runner: observer.Runner, NativeConfig: observer.nativeConfigKernel()}
+	return clients.Env{Runner: observer.Runner, NativeConfig: observer.nativeConfigKernel(), ProjectRoots: observer.ProjectRoots}
 }
 
 func (observer NativeIdentityObserver) nativeConfigKernel() nativeconfig.Kernel {

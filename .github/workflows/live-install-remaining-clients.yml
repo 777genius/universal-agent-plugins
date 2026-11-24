@@ -4,19 +4,34 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
+      - '.github/workflows/pr-changes.yml'
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/codex_plugin_retention_audit.py'
+      - 'scripts/test_codex_plugin_retention_audit.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/test_kimi_repeat_log_audit.py'
       - 'scripts/devin_project_auto_install_e2e.py'
       - 'scripts/test_devin_project_auto_install_e2e.py'
       - 'scripts/prepare-codex-linux-sandbox.sh'
+      - 'scripts/claude_darwin_metadata.py'
+      - 'scripts/test_claude_darwin_metadata.py'
       - 'scripts/run-native-client-matrix.py'
+      - 'scripts/project_native_cursor_acquisition.py'
+      - 'scripts/devin_structured_inventory_admission.py'
+      - 'scripts/test_devin_structured_inventory_admission.py'
+      - 'scripts/project_native_research.py'
+      - 'scripts/native_client_draft.py'
       - 'tests/live-install/fixtures.json'
+      - 'install/integrationctl/agentplugins/**'
+      - 'cli/cmd/agentplugins/**'
+      - 'cli/internal/agentpluginscli/**'
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   # pull_request runs check out a synthetic merge commit; retain the source branch HEAD too.
@@ -27,21 +42,28 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 
 jobs:
-  remaining-client-install:
-    name: Full 30 ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
+  changes:
     if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
-    # Linux hosted runners do not delegate cgroup v2 for Kiro's required
-    # duplex MCP containment. Test the real native client on macOS instead
-    # of weakening that security guard or labelling a blocked Linux run green.
+    uses: ./.github/workflows/pr-changes.yml
+    permissions:
+      pull-requests: read
+  remaining-client-install:
+    needs: changes
+    name: ${{ (((matrix.target == 'kiro' || matrix.target == 'windsurf') && matrix.kind == 'plugin') || ((matrix.target == 'kiro' || matrix.target == 'cursor') && matrix.kind == 'skill')) && 'Prepared installation 30' || matrix.target == 'vscode' && matrix.kind == 'plugin' && 'Manual preparation observation 30' || 'Full 30' }} ${{ matrix.kind }} / ${{ matrix.target }} (report even if blocked)
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.remaining_clients != '[]') && (github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
+    # Darwin refuses Kiro's automatic MCP duplex containment. This lane can
+    # measure the real native CLI and owned Prepared lifecycle, while keeping
+    # native activation incomplete until a contained host route is qualified.
     runs-on: ${{ matrix.target == 'kiro' && 'macos-15' || 'ubuntu-24.04' }}
     timeout-minutes: 80
     strategy:
       fail-fast: false
       max-parallel: 4
       matrix:
-        target: [cursor, kiro, windsurf, grok, chatgpt]
+        target: ${{ fromJSON(needs.changes.result == 'success' && needs.changes.outputs.remaining_clients || '["cursor","kiro","windsurf","grok","chatgpt"]') }}
         kind: [plugin, skill]
-        # Desktop exposes User scope; Project Skills are a documented refusal.
+        # Public ChatGPT Desktop supports User scope only; Skills use Project.
+        # Keep its documented-unsupported refusal outside this positive audit.
         exclude:
           - target: chatgpt
             kind: skill
@@ -50,16 +72,64 @@ jobs:
         with:
           persist-credentials: false
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        id: host-go
         with:
           go-version: '1.26.11'
           cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        id: host-node
         with:
           node-version: '24'
+      - name: Supply verified bubblewrap for ChatGPT native discovery
+        if: matrix.target == 'chatgpt' && matrix.kind == 'plugin'
+        shell: bash
+        run: bash scripts/prepare-codex-linux-sandbox.sh
+      - name: Retain the selected Node runtime for Kiro
+        if: matrix.target == 'kiro'
+        id: kiro-node
+        env:
+          KIRO_NODE_VERSION: ${{ steps.host-node.outputs.node-version }}
+        shell: bash
+        run: |
+          python3 - <<'KIRO_NODE'
+          import json, os, re, shutil, stat
+          from pathlib import Path
+          version = os.environ['KIRO_NODE_VERSION']
+          arch = {'ARM64': 'arm64', 'X64': 'x64'}.get(os.environ['RUNNER_ARCH'])
+          if not re.fullmatch(r'v24\.\d+\.\d+', version) or arch is None:
+              raise SystemExit('unexpected setup-node version or architecture')
+          cache = Path(os.environ['RUNNER_TOOL_CACHE']).resolve(strict=True)
+          binary = cache / 'node' / version[1:] / arch / 'bin/node'
+          selected = shutil.which('node')
+          if (selected is None or Path(selected).resolve(strict=True) != binary
+                  or not stat.S_ISREG(binary.lstat().st_mode) or not os.access(binary, os.X_OK)
+                  or any(char in str(binary.parent) for char in '\r\n' + os.pathsep)):
+              raise SystemExit('unverified setup-node PATH executable')
+          proof = dict(schema_version=1, setup_action='820762786026740c76f36085b0efc47a31fe5020',
+                       version=version, architecture=arch, executable=str(binary), bin=str(binary.parent))
+          body = json.dumps(proof, sort_keys=True) + '\n'
+          if len(body.encode()) > 4096:
+              raise SystemExit('setup-node proof exceeds bound')
+          destination = Path(os.environ['RUNNER_TEMP']) / 'vendor-proof'
+          destination.mkdir(exist_ok=True)
+          with (destination / 'node-runtime.json').open('x') as stream:
+              stream.write(body)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
+              stream.write('bin=' + str(binary.parent) + '\n')
+          KIRO_NODE
+      - name: Verify real Darwin no-ACL and hostile ACL/xattr refusals
+        if: matrix.target == 'kiro'
+        run: python3 -m unittest discover -s scripts -p 'test_claude_darwin_metadata.py' -v
       - name: Refuse inherited real client profile overrides before live cases
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
           python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
+      - name: Check bounded Codex preserved-data custody
+        if: matrix.target == 'chatgpt' && matrix.kind == 'plugin'
+        run: python3 -m unittest discover -s scripts -p 'test_codex_plugin_retention_audit.py' -v
+      - name: Check reviewed Devin publisher admission before Plugin acquisition
+        if: matrix.target == 'windsurf' && matrix.kind == 'plugin'
+        run: python3 -m unittest discover -s scripts -p 'test_devin_structured_inventory_admission.py' -v
       - name: Acquire actual public vendor client where a headless Linux build exists
         id: vendor-install
         # Preserve a complete explicit client-unavailable record even when a
@@ -73,9 +143,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$TARGET" == chatgpt && "$KIND" == plugin ]]; then
-            bash scripts/prepare-codex-linux-sandbox.sh
-          fi
           mkdir -p "$RUNNER_TEMP/vendor-proof" "$HOME/.local/bin"
           # Runner toolchain must precede any vendor-controlled executable.
           export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$HOME/.local/bin"
@@ -86,9 +153,10 @@ jobs:
                 URL="https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz"
                 BIN="cursor-agent"
               else
-                # User-scope Plugins require the editor. #931 hosted E2E
-                # has checked this exact official APT .deb SHA-256.
-                # This qualifies acquisition, not native plugin activation.
+                # User-scope Plugins require the editor. Official signed stable APT, 2026-11-15:
+                # cursor 3.30.14-1794552202 amd64, 228316960B; signer 380FF4BCDC34A4BD92A3565342A1772E62E492D6.
+                # InRelease SHA256 c325991d4e0875e9e95ade53ab95c46a331976e40fcdc392c039767d4b0bd8ab.
+                # Packages SHA256 931e88984ea91becae06457992a25a4ce55699281c0f270980d2a38854ce8e5e.
                 URL="https://downloads.cursor.com/aptrepo/pool/stable/c/cu/cursor_3.30.14_amd64.deb"
                 BIN="cursor"
               fi
@@ -111,8 +179,8 @@ jobs:
               ;;
             chatgpt)
               test "$KIND" = plugin
-              # Desktop uses the same backend as the existing Codex catalog lane.
-              # Reuse that immutable pin and the bounded regular-member installer.
+              # The public Desktop alias uses the current-source Codex backend.
+              # Reuse its reviewed SQLite-audit pin, regular-member selection and digest gate.
               python3 - "$RUNNER_TEMP" <<'CHATGPT_CODEX'
           import importlib.util, json, os, platform, stat, sys
           from pathlib import Path
@@ -125,7 +193,11 @@ jobs:
           spec = importlib.util.spec_from_file_location("chatgpt_codex_matrix", source)
           module = importlib.util.module_from_spec(spec)
           spec.loader.exec_module(module)
+          # The SQLite custody audit uses the independently reviewed 0.153.4
+          # version. The separate current-source MCP lane remains on 0.162.0.
           pin = module.PINS["linux-amd64"]["codex"]
+          if pin[2] != "rust-v0.153.4":
+              raise SystemExit("ChatGPT SQLite audit requires reviewed Codex 0.153.4")
           binary, proof = module.provision(pin, directory, "codex")
           if (binary != directory / "codex" or binary.is_symlink()
                   or not stat.S_ISREG(binary.lstat().st_mode)
@@ -133,7 +205,7 @@ jobs:
                   or binary.resolve(strict=True) != binary):
               raise SystemExit("unverified staged Codex executable")
           proof.update(public_target="chatgpt", canonical_client_id="codex",
-                       pin_family="full-catalog", executable=str(binary))
+                       pin_family="current-source", executable=str(binary))
           with (root / "vendor-proof/codex-runtime.json").open("x") as stream:
               stream.write(json.dumps(proof, sort_keys=True) + "\n")
           (root / "vendor-proof/source.txt").write_text(proof["source"] + "\n")
@@ -221,7 +293,7 @@ jobs:
           printf '%s  %s\n' "$SHA256" "$artifact" | sha256_file -c -
           if [[ "$TARGET" == cursor && "$KIND" == skill ]]; then
             mkdir -p "$RUNNER_TEMP/vendor-root"
-            # This official archive is independently digest-pinned above.
+            # The official Cursor archive is independently digest-pinned above.
             # Python 3.12's data filter rejects archive entries escaping this root.
             python3 - "$artifact" "$RUNNER_TEMP/vendor-root" <<'PY'
           import sys
@@ -246,8 +318,8 @@ jobs:
               ln -s "$executable" "$HOME/.local/bin/code"
             fi
             if [[ "$TARGET" == cursor ]]; then
-              # The signed .deb normally registers /usr/bin/cursor in postinst.
-              # Select the reviewed extracted binary without running scripts.
+              # The pinned .deb creates /usr/bin/cursor only during postinst.
+              # Select its extracted launcher without running package scripts.
               executable="$RUNNER_TEMP/vendor-root/usr/share/cursor/bin/cursor"
               test -f "$executable" && test -x "$executable" && test ! -L "$executable"
               test "$(readlink -f "$executable")" = "$executable"
@@ -294,21 +366,181 @@ jobs:
             LANG="${LANG:-C.UTF-8}" CI=true DO_NOT_TRACK=1 \
             python3 -c 'import subprocess,sys;sys.exit(subprocess.run([sys.argv[1],"--version"], timeout=30).returncode)' "$BIN" \
             | tee "$RUNNER_TEMP/vendor-proof/version.txt"
-      - name: Install real Docker CLI for Kiro plugin sources
-        if: ${{ matrix.target == 'kiro' && matrix.kind == 'plugin' }}
-        id: kiro-docker
+      - name: Build stable Docker CLI for Kiro preparation
+        if: matrix.target == 'kiro' && matrix.kind == 'plugin'
+        env:
+          KIRO_GO_VERSION: ${{ steps.host-go.outputs.go-version }}
+          KIRO_NODE_BIN: ${{ steps.kiro-node.outputs.bin }}
         shell: bash
         run: |
-          set -euo pipefail
-          # Docker Hub is in the frozen positive source set. Qualify only the
-          # real CLI prerequisite; no daemon or authenticated MCP is started.
-          export HOMEBREW_NO_AUTO_UPDATE=1
-          brew install docker
-          audit_docker="$(brew --prefix docker)/bin/docker"
-          [[ "$audit_docker" == /* && -f "$audit_docker" && -x "$audit_docker" ]]
-          printf 'executable=%s\n' "$audit_docker" | tee "$RUNNER_TEMP/vendor-proof/docker-cli.txt"
-          "$audit_docker" --version | tee -a "$RUNNER_TEMP/vendor-proof/docker-cli.txt"
-          printf 'executable=%s\n' "$audit_docker" >> "$GITHUB_OUTPUT"
+          python3 - <<'KIRO_DOCKER'
+          import hashlib, json, os, shutil, stat, sys, tempfile, time
+          from pathlib import Path
+          sys.path.insert(0, str(Path.cwd() / 'scripts'))
+          from native_client_research import run_probe
+
+          PIN = dict(repo='https://github.com/docker/cli.git', version='29.9.3',
+                     tag='5e262e04a65822eb2673011d866b422c8ce62595',
+                     commit='5457199aa57c45e990c59c89cab5f02b817238d7',
+                     tree='0b51e2783286962254ec5071e664e62646f5f4dc',
+                     homebrew='438d8fa5300704f11678319950d3d06163c5b966')
+          GIT = ['/usr/bin/git', '-c', 'core.hooksPath=/dev/null', '-c', 'core.autocrlf=false',
+                 '-c', 'credential.helper=', '-c', 'protocol.file.allow=never']
+
+          def require(value, message):
+              if not value:
+                  raise ValueError(message)
+
+          def identity(info):
+              return [info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid,
+                      info.st_nlink, info.st_size, info.st_mtime_ns, info.st_ctime_ns]
+
+          def executable(path):
+              before = path.lstat()
+              require(path.resolve(strict=True) == path and stat.S_ISREG(before.st_mode)
+                      and before.st_nlink == 1 and before.st_uid == os.getuid()
+                      and not before.st_mode & 0o022 and before.st_mode & 0o111
+                      and 0 < before.st_size <= 128 << 20, 'Docker build executable authority')
+              digest = hashlib.sha256()
+              with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
+                  require(identity(os.fstat(stream.fileno())) == identity(before), 'Docker build executable changed at open')
+                  remaining = before.st_size
+                  while remaining:
+                      chunk = stream.read(min(1 << 20, remaining))
+                      require(chunk, 'Docker build executable truncated')
+                      digest.update(chunk)
+                      remaining -= len(chunk)
+                  require(identity(os.fstat(stream.fileno())) == identity(before) and identity(path.lstat()) == identity(before),
+                          'Docker build executable changed during hash')
+              return dict(path=str(path), bytes=before.st_size, sha256=digest.hexdigest(),
+                          identity=identity(before))
+
+          def directory(path):
+              info = path.lstat()
+              require(path.resolve(strict=True) == path and stat.S_ISDIR(info.st_mode)
+                      and info.st_uid == os.getuid() and not info.st_mode & 0o022, 'Docker build directory authority')
+              return identity(info)[:6]
+
+          def output_membership(destination, expected):
+              found = set()
+              with os.scandir(destination) as entries:
+                  for entry in entries:
+                      require(entry.name in expected and entry.name not in found, 'Docker output membership differs')
+                      found.add(entry.name)
+              require(found == expected, 'Docker output membership differs')
+
+          def capture(context, label, argv, cwd, environment, maximum):
+              remaining = context['deadline'] - time.monotonic()
+              require(remaining > 0, 'Docker build original deadline')
+              record, stdout, stderr = run_probe(argv, cwd, environment, context['proof'], label,
+                                                min(maximum, remaining), 64 << 10, memory_only=True)
+              context['commands'].append(record)
+              for name, body in ((record['stdout_file'], stdout), (record['stderr_file'], stderr)):
+                  with (context['proof'] / name).open('xb') as output:
+                      output.write(body)
+              require(record['exit'] == 0 and record['error'] is None, 'Docker source/build command refused: ' + label)
+              return stdout
+
+          def source_state(context, source, environment, phase):
+              require(phase in ('before', 'after'), 'unknown Docker source phase')
+              actual = capture(context, 'docker-' + phase + '-identity',
+                               GIT + ['rev-parse', 'refs/tags/v' + PIN['version'] + '^{tag}',
+                                      'HEAD^{commit}', 'HEAD^{tree}'], source, environment, 10)
+              expected = ''.join(PIN[key] + '\n' for key in ('tag', 'commit', 'tree')).encode()
+              require(actual == expected, 'Docker source ref/tree differs')
+              status = capture(context, 'docker-' + phase + '-clean',
+                               GIT + ['status', '--porcelain=v1', '--untracked-files=all', '--ignored=matching'],
+                               source, environment, 10)
+              require(status == b'', 'Docker source is not the original clean tree')
+
+          def setup_inputs():
+              require(sys.platform == 'darwin' and os.environ['RUNNER_OS'] == 'macOS'
+                      and os.environ['KIRO_GO_VERSION'] == '1.26.11', 'Docker build host/toolchain version')
+              arch = {'ARM64': ('arm64', 'arm64'), 'X64': ('x64', 'amd64')}.get(os.environ['RUNNER_ARCH'])
+              require(arch is not None, 'Docker build architecture')
+              runner = Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
+              cache = Path(os.environ['RUNNER_TOOL_CACHE']).resolve(strict=True)
+              go = cache / 'go/1.26.11' / arch[0] / 'bin/go'
+              selected = shutil.which('go')
+              require(selected is not None and Path(selected).resolve(strict=True) == go,
+                      'unverified setup-go PATH executable')
+              node = os.environ['KIRO_NODE_BIN']
+              require(node and Path(node).is_absolute() and not any(c in node for c in '\r\n:'),
+                      'unverified setup-node bin')
+              return runner, go, arch[1], node, executable(go)
+
+          def output_cli(destination, arch, search):
+              binary, selected = destination / ('docker-darwin-' + arch), destination / 'docker'
+              require(selected.is_symlink() and os.readlink(selected) == binary.name,
+                      'Docker build output alias differs')
+              proof = executable(binary)
+              found = shutil.which('docker', path=search)
+              require(found is not None and Path(found).resolve(strict=True) == binary,
+                      'Docker build output is shadowed on audit PATH')
+              return dict(**proof, selected=str(selected))
+
+          def provision():
+              os.umask(0o077)
+              runner, go, arch, node, original_go = setup_inputs()
+              workspace = Path(tempfile.mkdtemp(prefix='kiro-docker-', dir=runner))
+              proof_root = runner / 'vendor-proof'
+              proof_root.mkdir(exist_ok=True)
+              directory(proof_root)
+              context = dict(deadline=time.monotonic() + 420, proof=proof_root, commands=[])
+              proof = dict(schema_version=1, kind='source-built-docker-cli', source=PIN,
+                           toolchain=original_go, version=PIN['version'], architecture=arch,
+                           status='failed', native_activation=False, daemon_started=False,
+                           commands=context['commands'])
+              try:
+                  build(context, proof, workspace, runner, go, arch, node, original_go)
+              finally:
+                  body = (json.dumps(proof, sort_keys=True) + '\n').encode()
+                  require(len(body) <= 64 << 10, 'Docker build receipt bound')
+                  with (proof_root / 'docker-runtime.json').open('xb') as output:
+                      output.write(body)
+
+          def build(context, proof, workspace, runner, go, arch, node, original_go):
+              source = workspace / 'gopath/src/github.com/docker/cli'
+              source.parent.mkdir(parents=True)
+              destination = runner / 'vendor-root/usr/bin'
+              destination.mkdir(parents=True, exist_ok=True)
+              parents = {path: directory(path) for path in (runner, runner / 'vendor-root', destination.parent, destination)}
+              for name in ('docker', 'docker-darwin-' + arch):
+                  require(not os.path.lexists(destination / name), 'Docker output must be absent')
+              output_membership(destination, set())
+              for name in ('home', 'tmp', 'cache'):
+                  (workspace / name).mkdir()
+              environment = dict(PATH=str(go.parent) + ':/usr/bin:/bin:/usr/sbin:/sbin',
+                                 HOME=str(workspace / 'home'), TMPDIR=str(workspace / 'tmp'), LANG='C',
+                                 GOPATH=str(workspace / 'gopath'), GOCACHE=str(workspace / 'cache'),
+                                 GOENV='off', GOTOOLCHAIN='local', GOPROXY='off', GOSUMDB='off',
+                                 GO111MODULE='auto', GOFLAGS='-p=1', GOMAXPROCS='2', CGO_ENABLED='0',
+                                 GOOS='darwin', GOARCH=arch, GO_LINKMODE='static', TARGET=str(destination),
+                                 VERSION=PIN['version'], GITCOMMIT=PIN['commit'], SOURCE_DATE_EPOCH='1793741702',
+                                 GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL='/dev/null', GIT_TERMINAL_PROMPT='0')
+              version = capture(context, 'docker-go-version', [str(go), 'version'], workspace, environment, 10)
+              require(version == ('go version go1.26.11 darwin/' + arch + '\n').encode(), 'Docker actual Go version differs')
+              capture(context, 'docker-source-clone', GIT + ['clone', '--no-checkout', '--depth=1', '--single-branch',
+                      '--branch', 'v' + PIN['version'], PIN['repo'], str(source)], workspace, environment, 120)
+              capture(context, 'docker-source-checkout', GIT + ['checkout', '--detach', PIN['commit']], source, environment, 20)
+              source_state(context, source, environment, 'before')
+              capture(context, 'docker-source-build', ['/bin/sh', str(source / 'scripts/build/binary')],
+                      source, environment, 240)
+              source_state(context, source, environment, 'after')
+              require(executable(go) == original_go, 'Docker original Go executable changed')
+              require(all(directory(path) == original for path, original in parents.items() if path != destination)
+                      and directory(destination)[:5] == parents[destination][:5], 'Docker original output parents changed')
+              output_membership(destination, {'docker', 'docker-darwin-' + arch})
+              search = ':'.join((node, '/usr/local/sbin', '/usr/local/bin', '/usr/sbin', '/usr/bin',
+                                '/sbin', '/bin', str(destination), str(Path(os.environ['HOME']) / '.local/bin')))
+              result = output_cli(destination, arch, search)
+              require(len(context['commands']) == 8 and time.monotonic() < context['deadline'], 'Docker build completion bound')
+              proof.update(status='source-built', executable=result, source_unchanged=True,
+                           build_environment=environment, setup_go='b7ad1dad31e06c5925ef5d2fc7ad053ef454303e')
+
+          if __name__ == '__main__':
+              provision()
+          KIRO_DOCKER
       - name: Build CLI under test (not the already-published binary)
         run: go build -trimpath -ldflags='-X main.version=0.1.115' -o "$RUNNER_TEMP/agentplugins-audit" ./cli/cmd/agentplugins
       - name: Run real acquisitions and report every source and outcome
@@ -316,29 +548,37 @@ jobs:
           AUDIT_KIND: ${{ matrix.kind }}
           AUDIT_TARGET: ${{ matrix.target }}
           AUDIT_VENDOR_OUTCOME: ${{ steps.vendor-install.outcome }}
-          AUDIT_DOCKER_EXECUTABLE: ${{ steps.kiro-docker.outputs.executable }}
+          KIRO_NODE_BIN: ${{ steps.kiro-node.outputs.bin }}
         shell: bash
         run: |
-          audit_node_bin=""
+          acceptance=()
           if [[ "$AUDIT_TARGET" == kiro ]]; then
-            # Preserve setup-node's selected runtime before narrowing Kiro's PATH.
-            audit_node="$(command -v node)"
-            [[ "$audit_node" == /* && -x "$audit_node" ]]
-            audit_node_bin="${audit_node%/*}:"
+            test -n "$KIRO_NODE_BIN"
+            export PATH="$KIRO_NODE_BIN:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+            if [[ "$AUDIT_KIND" == plugin ]]; then
+              acceptance=(--acceptance kiro-prepared-installation)
+            fi
+          else
+            export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
           fi
-          audit_docker_bin=""
-          if [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == plugin ]]; then
-            [[ "$AUDIT_DOCKER_EXECUTABLE" == /* && -f "$AUDIT_DOCKER_EXECUTABLE" && -x "$AUDIT_DOCKER_EXECUTABLE" ]]
-            audit_docker_bin="${AUDIT_DOCKER_EXECUTABLE%/*}:"
-          fi
-          export PATH="${audit_node_bin}${audit_docker_bin}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
-          if [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == plugin ]]; then
-            [[ "$(command -v docker)" == "$AUDIT_DOCKER_EXECUTABLE" ]]
+          if [[ "$AUDIT_TARGET" == cursor && "$AUDIT_KIND" == plugin ]]; then
+            acceptance=(--acceptance cursor-prepared-installation)
+          elif [[ "$AUDIT_TARGET" == cursor && "$AUDIT_KIND" == skill ]]; then
+            acceptance=(--acceptance cursor-prepared-skills-installation)
+          elif [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == skill ]]; then
+            acceptance=(--acceptance kiro-prepared-skills-installation)
+          elif [[ "$AUDIT_TARGET" == grok && "$AUDIT_KIND" == skill ]]; then
+            acceptance=(--acceptance grok-prepared-skills-installation)
+          elif [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then
+            acceptance=(--acceptance windsurf-prepared-installation)
+          elif [[ "$AUDIT_TARGET" == vscode && "$AUDIT_KIND" == plugin ]]; then
+            # User preparation and preserved refusal only; no uninstall attestation.
+            acceptance=(--acceptance vscode-user-manual-preparation)
           fi
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \
             --target "$AUDIT_TARGET" --kind "$AUDIT_KIND" --limit 30 \
-            --report-dir "$RUNNER_TEMP/live-audit-report"
+            --report-dir "$RUNNER_TEMP/live-audit-report" "${acceptance[@]}"
       - name: Preserve exact per-case evidence, even if vendor install or CLI fails
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

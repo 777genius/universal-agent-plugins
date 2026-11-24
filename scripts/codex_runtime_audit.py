@@ -7,6 +7,7 @@ schema and every table's contents still match the pre-install native baseline.
 """
 
 import asyncio
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -680,30 +681,46 @@ async def _close_native_transport(process):
     await asyncio.sleep(0)
 
 
-async def _finish_native(process, job, completed, readers):
+async def _finish_native(process, job, completed, readers, diagnostic=None):
+    @contextmanager
+    def operation(phase):
+        try:
+            yield
+        except BaseException:
+            if diagnostic is not None:
+                diagnostic["phase"] = phase
+            raise
+
     try:
         try:
-            process.stdin.close()
+            with operation("stdin-close"):
+                process.stdin.close()
         finally:
             if job is not None:
-                await asyncio.to_thread(job.close)
+                with operation("job-close"):
+                    await asyncio.to_thread(job.close)
             elif not completed:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-            await asyncio.wait_for(process.wait(), 5)
+                with operation("group-kill"):
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+            with operation("process-wait"):
+                await asyncio.wait_for(process.wait(), 5)
     finally:
         try:
-            for reader in readers:
-                if not reader.done():
-                    reader.cancel()
-            await asyncio.gather(*readers, return_exceptions=True)
+            with operation("reader-drain"):
+                for reader in readers:
+                    if not reader.done():
+                        reader.cancel()
+                await asyncio.gather(*readers, return_exceptions=True)
         finally:
-            await _close_native_transport(process)
+            with operation("transport-close"):
+                await _close_native_transport(process)
 
 
-async def _exchange(binary, project, profile, environment, *, sqlite_baseline=False):
+async def _exchange(binary, project, profile, environment, *, sqlite_baseline=False,
+                    versions=("0.153.4",), with_metadata=False):
     startup = {"sqlite_baseline": True} if sqlite_baseline else {}
     process, job = await _start_native(binary, project, environment, **startup)
     errors = asyncio.create_task(_drain(process.stderr, 1 << 20))
@@ -731,49 +748,71 @@ async def _exchange(binary, project, profile, environment, *, sqlite_baseline=Fa
                 raise ValueError("Codex native discovery returned an unexpected response")
         raise ValueError("Codex native discovery notification bound exceeded")
 
+    phase = "initialize-send"
     try:
         async with asyncio.timeout(15):
             await send({"id": 1, "method": "initialize", "params": {
                 "clientInfo": {"name": "agentplugins", "version": "1"},
                 "capabilities": {"experimentalApi": True}}})
+            phase = "initialize-response"
             initialized = await response(1)
+            phase = "initialize-check"
             if not _path_equal(initialized.get("codexHome"), profile):
                 raise ValueError("Codex native discovery initialized another profile")
-            if not str(initialized.get("userAgent", "")).startswith("agentplugins/0.153.4 "):
-                raise ValueError("Codex runtime audit requires the qualified native 0.153.4")
+            native_version = next((version for version in versions
+                if str(initialized.get("userAgent", "")).startswith("agentplugins/" + version + " ")), None)
+            if native_version is None:
+                raise ValueError("Codex runtime audit requires its pinned native version")
+            phase = "skills-send"
             await send({"method": "initialized"})
             await send({"id": 2, "method": "skills/list", "params": {
                 "cwds": [str(project)], "forceReload": True}})
+            phase = "skills-response"
             listing = await response(2)
+            phase = "stdin-close"
             process.stdin.close()
             await process.stdin.wait_closed()
             tail = asyncio.create_task(_drain(process.stdout, (4 << 20) - total))
             readers.append(tail)
+            phase = "process-wait"
             await process.wait()
+            phase = "reader-drain"
             await tail
             stderr = await errors
+            phase = "exit-check"
             if process.returncode != 0 or stderr:
                 raise ValueError(
                     "Codex native discovery did not exit cleanly: "
                     f"exit_code={process.returncode}, stderr_bytes={len(stderr)}, "
                     f"stderr_prefix={stderr[:2048]!r}")
             group_drain = True
+            phase = "group-check"
             while _windows_active(job) if job is not None else _posix_group_active(process.pid):
                 await asyncio.sleep(.02)  # Still inside the same finite 15-second budget.
             completed = True
-            return listing
+            return (native_version, listing) if with_metadata else listing
+    except TimeoutError as error:
+        # Preserve the strict budget and native process ownership requirements.
+        # Expose only bounded failure evidence before the existing owned cleanup.
+        raise TimeoutError(
+            f"Codex native discovery timed out: phase={phase}; "
+            f"launcher_exit_code={process.returncode!r}") from error
     finally:
         failure = sys.exception()
         diagnose = failure is not None and group_drain and job is None
+        cleanup_phase = {}
         try:
             if diagnose:
                 _note_group_drain_failure(failure, process, "before-owned-cleanup", transcript)
         finally:
             try:
-                await _finish_native(process, job, completed, readers)
+                await _finish_native(process, job, completed, readers,
+                                     diagnostic=cleanup_phase)
             except Exception as cleanup:
                 if failure is not None:
-                    raise RuntimeError(f"Codex discovery failed ({failure}); owned cleanup failed ({cleanup})") from failure
+                    raise RuntimeError(
+                        f"Codex discovery failed: phase={phase}; {failure}; "
+                        f"owned cleanup failed: phase={cleanup_phase.get('phase', 'unknown')}; {cleanup}") from failure
                 raise
             finally:
                 if diagnose:
@@ -832,7 +871,7 @@ def _references_skill_path(value, expected):
     return tail == owned_tail and os.path.samestat(observed, owned)
 
 
-def verify_skill_inventory(listing, project, identity, selected, foreign, present):
+def _skill_inventory(listing, project):
     rows = listing.get("data")
     if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
         raise ValueError("Codex native discovery returned ambiguous projects")
@@ -842,6 +881,24 @@ def verify_skill_inventory(listing, project, identity, selected, foreign, presen
     skills = row.get("skills")
     if not isinstance(skills, list) or any(not isinstance(skill, dict) for skill in skills):
         raise ValueError("Codex native Skill inventory is malformed")
+    return skills
+
+
+def verify_skill_inventory(listing, project, identity, selected, foreign, present, system=None):
+    skills = _skill_inventory(listing, project)
+    if system is not None:
+        # System and project Skills have different native paths even when
+        # they share a name. Qualify the pinned System entry independently.
+        system_path = system["path"]
+        system_matches = [skill for skill in skills
+                          if _references_skill_path(skill.get("path"), system_path)]
+        expected = json.dumps(system, sort_keys=True, allow_nan=False)
+        originals = [skill for skill in system_matches
+                     if json.dumps(skill, sort_keys=True, allow_nan=False) == expected]
+        # Shadowing may hide the original only while the project Skill exists.
+        if (len(system_matches) != len(originals) or len(originals) > 1
+                or (not present and len(originals) != 1)):
+            raise ValueError("Codex original System Skill inventory changed")
     for name, expected, required in (("foreign-neighbor", foreign, True), (identity, selected, present)):
         matched = [skill for skill in skills
                    if _references_skill_path(skill.get("path"), expected)]
@@ -978,8 +1035,68 @@ class CodexRuntimeAudit:
         with self.config.open("xb") as stream:
             stream.write(self.config_bytes)
         self.foreign_bytes = _regular_bytes(foreign, FILE_LIMIT)
-        self.baseline, self.observations = None, []
+        self.baseline, self.observations, self.system_skill = None, [], None
         self.checkpoint("before-install", False)
+
+    def _system_baseline(self, listing):
+        skills = _skill_inventory(listing, self.project)
+        matched = [skill for skill in skills if skill.get("name") == self.identity
+                   and skill.get("scope") == "system"]
+        path = self.profile / "skills/.system" / self.identity / "SKILL.md"
+        # A registered on-disk System Skill must not disappear from the
+        # native inventory merely by changing its reported scope or metadata.
+        try:
+            path.lstat()
+        except FileNotFoundError:
+            if not matched:
+                return None
+        if (len(matched) != 1 or Path(self.identity).name != self.identity
+                or self.identity in ("", ".", "..")
+                or matched[0].get("enabled") is not True
+                or matched[0].get("pluginId") is not None
+                or not _path_equal(matched[0].get("path"), path)):
+            raise ValueError("Codex System Skill is outside its original native namespace")
+        directories = (self.profile / "skills", self.profile / "skills/.system", path.parent)
+        anchors = {directory: _FILES["identity"](_real_directory(directory))
+                   for directory in directories}
+        before = _FILES["identity"](path.lstat())
+        body = _regular_bytes(path, FILE_LIMIT)
+        baseline = {"entry": dict(matched[0]), "path": path, "identity": before,
+                    "bytes": body, "anchors": anchors}
+        self._guard_system(baseline)
+        return baseline
+
+    def _guard_system(self, baseline):
+        if baseline is None:
+            return
+        for directory, original in baseline["anchors"].items():
+            if _FILES["identity"](_real_directory(directory)) != original:
+                raise ValueError("Codex original System Skill directory changed")
+        path = baseline["path"]
+        if (_FILES["identity"](path.lstat()) != baseline["identity"]
+                or _regular_bytes(path, FILE_LIMIT) != baseline["bytes"]):
+            raise ValueError("Codex original System Skill file changed")
+
+    def _inventory_diagnostic(self, listing, phase):
+        rows = listing.get("data") if isinstance(listing, dict) else None
+        skills = rows[0].get("skills") if (isinstance(rows, list) and len(rows) == 1
+                                           and isinstance(rows[0], dict)) else None
+        matched = [skill for skill in skills if isinstance(skill, dict)
+                   and skill.get("name") == self.identity] if isinstance(skills, list) else []
+        facts = []
+        for skill in matched[:3]:
+            label = "outside-owned-roots"
+            raw = skill.get("path")
+            if isinstance(raw, str) and Path(raw).is_absolute() and ".." not in Path(raw).parts:
+                for root, prefix in ((self.profile, "profile/"), (self.project, "project/")):
+                    if Path(raw).is_relative_to(root):
+                        label = prefix + str(Path(raw).relative_to(root))
+                        break
+            facts.append({"scope": str(skill.get("scope"))[:16], "path": label[:160],
+                          "enabled": skill.get("enabled") is True,
+                          "plugin_absent": skill.get("pluginId") is None})
+        return (f"checkpoint={ascii(phase[:32])}; matching_count={len(matched)}; "
+                f"matching={json.dumps(facts, ensure_ascii=True, separators=(',', ':'))}")
 
     def guard(self):
         for path, previous in self.anchors.items():
@@ -989,6 +1106,7 @@ class CodexRuntimeAudit:
             raise ValueError("Codex native runtime configuration changed")
         if _regular_bytes(self.foreign, FILE_LIMIT) != self.foreign_bytes:
             raise ValueError("Codex foreign Skill bytes changed")
+        self._guard_system(self.system_skill)
 
     def checkpoint(self, phase, present):
         self.guard()
@@ -1002,12 +1120,20 @@ class CodexRuntimeAudit:
         self.guard()
         if present and _regular_bytes(self.selected, FILE_LIMIT) != selected_bytes:
             raise ValueError("Codex selected Skill bytes changed during native discovery")
-        verify_skill_inventory(listing, self.project, self.identity, self.selected, self.foreign, present)
+        try:
+            system = self._system_baseline(listing) if self.baseline is None else self.system_skill
+            verify_skill_inventory(listing, self.project, self.identity, self.selected,
+                                   self.foreign, present, system["entry"] if system else None)
+        except (OSError, ValueError) as error:
+            raise ValueError("Codex native Skill inventory is unqualified; "
+                             + self._inventory_diagnostic(listing, phase)) from error
         state, files = runtime_state(self.runtime, self.temporary, self.baseline)
         git_files, _ = _temporary_git_state(self.profile, phase=phase)
         self.guard()
+        self._guard_system(system)
         if self.baseline is None:
             self.baseline = state
+            self.system_skill = system
         self.observations.append({"phase": phase, "selected_skill_present": present,
                                   "foreign_skill_present": True, "native_exit_code": 0,
                                   "runtime_integrity_verified": True, "runtime_semantics_unchanged": True,
@@ -1028,8 +1154,15 @@ class CodexRuntimeAudit:
         return qualified
 
     def evidence(self):
+        self.guard()
         return {"native_version": "0.153.4", "runtime_root": str(self.runtime.relative_to(self.case)),
-                "runtime_baseline": self.baseline, "observations": self.observations}
+                "runtime_baseline": self.baseline, "observations": self.observations,
+                "system_skill_baseline": ({
+                    "path": str(self.system_skill["path"].relative_to(self.case)),
+                    "bytes": len(self.system_skill["bytes"]),
+                    "sha256": hashlib.sha256(self.system_skill["bytes"]).hexdigest(),
+                    "scope": "system", "unchanged": True,
+                } if self.system_skill is not None else None)}
 
 
 def _windows_native_start(argv):

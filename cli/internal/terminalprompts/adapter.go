@@ -4,7 +4,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/installerui"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
@@ -52,21 +51,25 @@ func selectionRequest(r prompt.TargetSelectionRequest, title string) (installeru
 	}
 	req := installerui.MultiSelectRequest{SelectRequest: installerui.SelectRequest{Title: title}, MinSelected: 1}
 	for _, c := range r.Choices {
-		req.Options = append(req.Options, installerui.Option{ID: string(c.ID), Label: prompt.SafeText(c.Label) + " (" + prompt.SafeText(string(c.ID)) + ")"})
+		id := string(c.ID)
+		req.Options = append(req.Options, installerui.Option{ID: id, Label: prompt.SafeText(c.Label) + " (" + prompt.SafeText(id) + ")"})
+		if c.Note != "" || c.Info != "" {
+			if req.Annotations == nil {
+				req.Annotations = make(map[string]installerui.Annotation)
+			}
+			req.Annotations[id] = installerui.Annotation{Note: prompt.SafeText(c.Note), Info: prompt.SafeText(c.Info)}
+		}
 	}
 	for _, id := range defaults {
 		req.Defaults = append(req.Defaults, string(id))
 	}
-	return req, nil
-}
-
-func writeSkipped(out io.Writer, labels []string, color bool) error {
-	notice := prompt.SkippedClientsNotice(labels)
-	if notice == "" {
-		return nil
+	for _, group := range prompt.GroupSkipped(r.Skipped) {
+		req.Unavailable = append(req.Unavailable, installerui.Unavailable{Names: group.Names, Detail: group.Detail})
 	}
-	heading := (terminaltheme.Theme{Enabled: color}).Text(terminaltheme.Warning, prompt.SkippedClientsHeading)
-	return promptio.WriteText(out, strings.Replace(notice, prompt.SkippedClientsHeading, heading, 1))
+	if len(req.Unavailable) > 0 {
+		req.UnavailableHeading = prompt.SkippedClientsHeading
+	}
+	return req, nil
 }
 
 func targetResult(req prompt.TargetSelectionRequest, result installerui.Selection, err error) (prompt.TargetSelectionResult, error) {

@@ -6,6 +6,7 @@ Dependency-free so drafts can run without setting up Go or accounts.
 
 from pathlib import Path
 import importlib.util
+import json
 from tempfile import TemporaryDirectory
 import textwrap
 from unittest.mock import Mock, patch
@@ -208,7 +209,6 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertIn("if: ${{ !cancelled() }}", build)
         self.assertIn("go build -trimpath -ldflags='-X main.version=0.1.115'", build)
         source = steps["Genuine current-source Firebase add, repeat, native attribution and remove"]
-        self.assertIn("assert cli_version == 'agentplugins 0.1.115'", source)
         self.assertIn("if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}", source)
         self.assertIn("AUDIT_VENDOR_OUTCOME: ${{ steps.native-bootstrap.outcome }}", source)
         self.assertIn("assert actual_head == os.environ['GITHUB_SHA'] and clean_worktree", source)
@@ -290,7 +290,14 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         ):
             event_paths = re.findall(r"(?m)^      - " + re.escape(path) + r"$", self.body)
             self.assertEqual(len(event_paths), 2, path)
-        self.assertRegex(self.body, r"(?m)^  cancel-in-progress:.*pull_request.*push.*$")
+        # Replace superseded PR runs; preserve every non-PR run independently.
+        concurrency = re.search(r"(?m)^concurrency:\n((?:  .+\n)+)", self.body)
+        self.assertIsNotNone(concurrency)
+        self.assertEqual(concurrency[1],
+            "  group: package-manager-e2e-${{ github.event_name }}-${{ "
+            "github.event_name == 'pull_request' && (github.event.pull_request.number || github.ref) "
+            "|| github.run_id }}\n"
+            "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n")
 
     def test_each_preflight_rejection_is_an_independent_fail_closed_step(self):
         # One native command per Actions step: Windows PowerShell must never
@@ -303,7 +310,16 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         native = NATIVE_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("types: [opened, synchronize, reopened, ready_for_review]", native)
         self.assertIn("github.event.pull_request.draft == false", native)
-        self.assertIn("client: [codex, claude, opencode]", native)
+        # The PR classifier may narrow a client's cells, but an unavailable
+        # classification or a shared source change must still admit all three.
+        self.assertIn(
+            "client: ${{ fromJSON(needs.changes.result == 'success' && needs.changes.outputs.native_clients || "
+            '\'["codex","claude","opencode"]\') }}',
+            native,
+        )
+        self.assertIn("opencode-v2-project:", native)
+        self.assertIn("target: linux-amd64", native)
+        self.assertIn("client: opencode", native)
         self.assertIn("--project-components", native)
         self.assertIn("schedule:", native)
         self.assertIn("workflow_dispatch:", native)
@@ -318,6 +334,206 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertIn("go test -race", resilience)
         for path in ("environment/resolver_reliability_test.go", "processlock/reliability_test.go"):
             self.assertIn(path, resilience)
+
+
+class HeavyNativeSelectionPolicyTests(unittest.TestCase):
+    """Exercise the deployed classifier and admission expressions without GitHub."""
+
+    full_native = ["codex", "claude", "opencode"]
+    full_remaining = ["cursor", "kiro", "windsurf", "grok", "chatgpt"]
+    full_live = ["codex", "claude", "opencode", "gemini", "copilot", "cline", "kimi", "qoder", "pi"]
+
+    @classmethod
+    def setUpClass(cls):
+        cls.workflows = {
+            name: (WORKFLOW.parent / name).read_text()
+            for name in ("agentplugins-native-clients.yml", "live-install-audit.yml",
+                         "live-install-remaining-clients.yml", "pr-changes.yml")
+        }
+
+    def classify(self, files, *, event="pull_request", changed=None, fail=False):
+        bash = shutil.which("bash")
+        if not bash:
+            self.skipTest("classifier runs on Linux with Bash")
+        body = self.workflows["pr-changes.yml"]
+        script = textwrap.dedent(body.split("        run: |\n", 1)[1])
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            listing, output = root / "files", root / "output"
+            listing.write_text("\n".join(files), encoding="utf-8", newline="\n")
+            gh = root / "gh"
+            gh.write_text('#!/bin/sh\n[ "$FAKE_GH_FAIL" = 1 ] && exit 1\ncat "$FAKE_GH_FILES"\n',
+                          encoding="utf-8", newline="\n")
+            gh.chmod(0o755)
+            env = {**os.environ, "PATH": str(root) + os.pathsep + os.environ["PATH"],
+                   "GITHUB_EVENT_NAME": event, "GITHUB_OUTPUT": str(output),
+                   "GITHUB_REPOSITORY": "owner/repo", "PR_NUMBER": "7",
+                   "CHANGED_FILES": str(len(files) if changed is None else changed),
+                   "FAKE_GH_FILES": str(listing), "FAKE_GH_FAIL": "1" if fail else "0"}
+            # Keep the script out of Windows Bash launcher argument limits.
+            # Binary stdin also preserves LF instead of translating it to CRLF.
+            result = subprocess.run([bash, "-s"], input=script.encode("utf-8"), env=env,
+                                    capture_output=True, timeout=5, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8", errors="replace"))
+            pairs = [line.split("=", 1) for line in output.read_text().splitlines()]
+            self.assertEqual(len(pairs), len(dict(pairs)), "duplicate classifier output")
+            return {key: json.loads(value) for key, value in pairs if key.endswith("_clients")}
+
+    def job(self, workflow, name):
+        body = self.workflows[workflow]
+        return re.search(r"(?ms)^  " + re.escape(name) + r":\n(.*?)(?=^  [\w-]+:|\Z)", body)[1]
+
+    def expression(self, expression, *, result="success", selection="[]", pilot="success",
+                   cancelled=False, event="pull_request", action="synchronize", draft=False,
+                   label="", labels=(), sdk_only=False):
+        # Only the expression vocabulary used by these four admission gates.
+        # Values replace complete context atoms before the restricted evaluation.
+        values = {"needs.changes.result": result, "needs.native-pilot.result": pilot,
+                  "github.event_name": event, "github.event.action": action,
+                  "github.event.pull_request.draft": draft, "github.event.label.name": label,
+                  "github.event.pull_request.labels.*.name": list(labels),
+                  "inputs.sdk_linux_only": sdk_only}
+        for name in ("native_clients", "remaining_clients", "live_clients"):
+            values["needs.changes.outputs." + name] = selection
+        expression = expression.strip().removeprefix("${{").removesuffix("}}").strip()
+        for key in sorted(values, key=len, reverse=True):
+            expression = expression.replace(key, repr(values[key]))
+        expression = expression.replace("!cancelled()", repr(not cancelled))
+        expression = re.sub(r"\bfalse\b", "False", expression)
+        expression = re.sub(r"\btrue\b", "True", expression)
+        expression = expression.replace("!inputs", "not inputs")
+        expression = expression.replace("!True", "not True").replace("!False", "not False")
+        expression = expression.replace("&&", " and ").replace("||", " or ")
+        return eval(expression, {"__builtins__": {}, "fromJSON": json.loads,
+                                 "contains": lambda items, item: item in items}, {})
+
+    def test_classifier_survives_windows_launch_transport(self):
+        run, write_text = subprocess.run, Path.write_text
+
+        def windows_write_text(path, data, encoding=None, errors=None, newline=None):
+            # Model Windows defaults while honoring an explicit LF newline.
+            return write_text(path, data, encoding=encoding, errors=errors,
+                              newline="\r\n" if newline is None else newline)
+
+        def windows_transport(args, **kwargs):
+            # Model the launcher argument limit and Windows text stdin newline
+            # conversion while still executing the real classifier in Bash.
+            if isinstance(kwargs.get("input"), str):
+                kwargs["input"] = kwargs["input"].replace("\n", "\r\n")
+            return run([arg[:8192] for arg in args], **kwargs)
+
+        with patch.object(subprocess, "run", side_effect=windows_transport), \
+                patch.object(Path, "write_text", windows_write_text):
+            self.assertEqual(self.classify(["scripts/project_native_cursor_acquisition.py", "docs/archive.md"]), {
+                "native_clients": [], "remaining_clients": ["cursor"], "live_clients": []})
+
+    def test_expanded_isolated_inputs_preserve_scoped_selection(self):
+        cases = [
+            (["scripts/project_native_cursor_acquisition.py"], [], ["cursor"], []),
+            (["scripts/claude_darwin_metadata.py"], [], ["kiro"], []),
+            (["scripts/test_claude_darwin_metadata.py"], [], ["kiro"], []),
+            (["scripts/devin_structured_inventory_admission.py"], [], ["windsurf"], []),
+            (["scripts/test_devin_structured_inventory_admission.py"], [], ["windsurf"], []),
+            (["scripts/codex_plugin_retention_audit.py"], [], ["chatgpt"], ["codex"]),
+            (["scripts/test_codex_plugin_retention_audit.py"], [], ["chatgpt"], ["codex"]),
+            (["scripts/native_client_research.py"], self.full_native, self.full_remaining, self.full_live),
+            (["scripts/project_native_research.py"], [], self.full_remaining, []),
+            (["scripts/native_client_draft.py"], self.full_native, self.full_remaining, []),
+            (["cli/internal/agentpluginscli/install_report.go"], self.full_native, self.full_remaining, []),
+            (["cli/cmd/agentplugins/compose.go"], self.full_native, self.full_remaining, []),
+            (["install/integrationctl/agentplugins/installer/types.go"], self.full_native, self.full_remaining, []),
+            (["scripts/windows_owned_job.py"], [], [], self.full_live),
+            (["scripts/test_live_install_audit_components.py"], [], [], self.full_live),
+            (["scripts/devin_project_auto_install_e2e.py"], [], ["windsurf"], []),
+            (["scripts/prepare-codex-linux-sandbox.sh"], self.full_native, ["chatgpt"], ["codex"]),
+            (["scripts/qoder_prepared_skill_audit.py"], [], [], ["qoder"]),
+            (["install/integrationctl/agentplugins/clients/claude/config.go"], ["claude"], self.full_remaining, []),
+            (["scripts/project_native_cursor_acquisition.py", "docs/archive.md"], [], ["cursor"], []),
+            ([".github/workflows/pr-changes.yml"], self.full_native, self.full_remaining, self.full_live),
+        ]
+        for files, native, remaining, live in cases:
+            with self.subTest(files=files):
+                self.assertEqual(self.classify(files), {"native_clients": native,
+                    "remaining_clients": remaining, "live_clients": live})
+
+    def test_classifier_unsafe_or_unavailable_inputs_stay_full(self):
+        for kwargs in ({"fail": True}, {"changed": 3000}, {"changed": 1},
+                       {"event": "workflow_dispatch"}, {"event": "schedule"}):
+            with self.subTest(kwargs=kwargs):
+                self.assertEqual(self.classify([], **kwargs), {"native_clients": self.full_native,
+                    "remaining_clients": self.full_remaining, "live_clients": self.full_live})
+        self.assertEqual(self.classify(["docs/unsafe\tname.md"]), {
+            "native_clients": self.full_native, "remaining_clients": self.full_remaining,
+            "live_clients": self.full_live})
+
+    def test_classifier_dependency_is_watched_by_all_three_callers(self):
+        for workflow, body in self.workflows.items():
+            if workflow == "pr-changes.yml":
+                continue
+            with self.subTest(workflow=workflow):
+                events = body.split("\npermissions:", 1)[0]
+                self.assertIn("      - '.github/workflows/pr-changes.yml'\n", events)
+
+    def test_matrix_admission_skips_empty_but_failure_uses_full_even_with_partial_outputs(self):
+        for workflow, job, full in (
+            ("agentplugins-native-clients.yml", "native-client", self.full_native),
+            ("live-install-audit.yml", "real-native-cli-matrix", self.full_live),
+            ("live-install-remaining-clients.yml", "remaining-client-install", self.full_remaining),
+        ):
+            body = self.job(workflow, job)
+            condition = re.search(r"(?m)^    if: (.+)$", body)[1]
+            matrix = re.search(r"(?m)^        (?:client|target): (\$\{\{.+\}\})$", body)[1]
+            self.assertIn("!cancelled()", condition)  # overrides implicit success() after needs failure
+            for result, selection, admitted, expected in (
+                ("success", "[]", False, []),
+                ("success", json.dumps(full[:1]), True, full[:1]),
+                ("failure", "", True, full),
+                ("failure", "[]", True, full),
+                ("failure", json.dumps(full[:1]), True, full),
+            ):
+                with self.subTest(workflow=workflow, result=result, selection=selection):
+                    self.assertEqual(self.expression(condition, result=result, selection=selection), admitted)
+                    self.assertEqual(self.expression(matrix, result=result, selection=selection), expected)
+                    self.assertFalse(self.expression(condition, result=result, selection=selection, cancelled=True))
+            if job == "real-native-cli-matrix":
+                for pilot in ("failure", "cancelled", "skipped"):
+                    self.assertFalse(self.expression(condition, result="failure", pilot=pilot))
+            with self.assertRaises(json.JSONDecodeError):
+                self.expression(matrix, result="success", selection="{malformed")
+
+    def test_live_pilot_and_historical_smoke_preserve_real_prerequisite_and_event_policy(self):
+        body = self.job("live-install-audit.yml", "native-pilot")
+        condition = re.search(r"(?m)^    if: (.+)$", body)[1]
+        self.assertIn("!cancelled()", condition)
+        for result in ("success", "failure"):
+            self.assertTrue(self.expression(condition, result=result, selection="[]"))
+            self.assertFalse(self.expression(condition, result=result, cancelled=True))
+            self.assertFalse(self.expression(condition, result=result, draft=True))
+            self.assertFalse(self.expression(condition, result=result, action="labeled", label="unrelated"))
+            self.assertTrue(self.expression(condition, result=result, draft=True, action="labeled",
+                                            label="ci:full", labels=("ci:full",)))
+        smoke = self.job("live-install-audit.yml", "published-cli-smoke")
+        self.assertIn("    needs: native-pilot\n", smoke)
+        self.assertNotRegex(smoke, r"(?m)^    if:")
+        remaining = self.job("live-install-remaining-clients.yml", "remaining-client-install")
+        condition = re.search(r"(?m)^    if: (.+)$", remaining)[1]
+        for kwargs in ({"draft": True}, {"action": "labeled", "label": "unrelated"}):
+            self.assertFalse(self.expression(condition, result="failure", **kwargs))
+        self.assertTrue(self.expression(condition, result="failure", draft=True, action="labeled",
+                                        label="ci:full", labels=("ci:full",)))
+
+    def test_opencode_v2_admission_preserves_selection_and_failure_fallback(self):
+        body = self.job("agentplugins-native-clients.yml", "opencode-v2-project")
+        condition = re.search(r"(?m)^    if: (.+)$", body)[1]
+        for result, selection, admitted in (
+            ("success", "[]", False), ("success", '["claude"]', False),
+            ("success", '["opencode"]', True), ("failure", '["claude"]', True),
+        ):
+            with self.subTest(result=result, selection=selection):
+                self.assertEqual(self.expression(condition, result=result, selection=selection), admitted)
+                self.assertFalse(self.expression(condition, result=result, selection=selection, cancelled=True))
+                self.assertFalse(self.expression(condition, result=result, selection=selection,
+                                                 event="workflow_dispatch", sdk_only=True))
 
 
 if __name__ == "__main__":

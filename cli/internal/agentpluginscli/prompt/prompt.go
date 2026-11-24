@@ -13,8 +13,6 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-const SkippedClientsHeading = "Not available for automatic install"
-
 var (
 	ErrPromptCanceled    = errors.New("prompt canceled")
 	ErrPromptUnavailable = errors.New("an interactive terminal is required for this prompt; run the command in a terminal or pass the explicit flags it documents (for example --target <agent>)")
@@ -29,13 +27,20 @@ type Prompter interface {
 type TargetChoice struct {
 	ID    domain.ClientID
 	Label string
+	// Note is optional secondary text shown after the label in parentheses
+	// (for example "prepare only"). Info is an optional short informational
+	// addition. Both are untrusted display text; adapters sanitize them.
+	Note string
+	Info string
 }
 type TargetSelectionRequest struct {
 	// Title overrides the adapter's default heading, for example a retry step.
-	Title         string
-	Choices       []TargetChoice
-	DefaultIDs    []domain.ClientID
-	SkippedLabels []string
+	Title      string
+	Choices    []TargetChoice
+	DefaultIDs []domain.ClientID
+	// Skipped lists detected or known clients that cannot be selected. Adapters
+	// show them as grouped explanations next to the list, never as choices.
+	Skipped []SkippedTarget
 }
 type TargetSelectionResult struct{ IDs []domain.ClientID }
 type ConfirmationRequest struct {
@@ -93,33 +98,6 @@ func SafeText(s string) string {
 		}
 		b.WriteRune(r)
 		n++
-	}
-	return b.String()
-}
-
-// SkippedClientsNotice renders one compact, sanitized block while preserving
-// the installer-owned reason for every unavailable detected client.
-func SkippedClientsNotice(labels []string) string {
-	seen := make(map[string]bool, len(labels))
-	clean := make([]string, 0, len(labels))
-	for _, label := range labels {
-		label = SafeText(strings.TrimSpace(label))
-		if label == "" || seen[label] {
-			continue
-		}
-		seen[label] = true
-		clean = append(clean, label)
-	}
-	if len(clean) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString(SkippedClientsHeading)
-	b.WriteString(":\n")
-	for _, label := range clean {
-		b.WriteString("  - ")
-		b.WriteString(label)
-		b.WriteString("\n")
 	}
 	return b.String()
 }

@@ -210,7 +210,7 @@ def raw_skills_fixture(rows, states):
         if phase != "before":
             dto = {"schema_version": 1, "command": "agentplugins remove" if phase == "remove" else "skills add", "result": "success"}
             if phase != "remove": dto.update(status="succeeded", readiness="ready", items=[{"alias": "benchmark-note", "targetId": "cline", "destinationPath": active, "status": "unchanged" if phase == "repeat" else "succeeded"}])
-            argv = ["/inert/agentplugins", "remove", iid, "--target", "cline", "--scope", "project", "--project-root", project, "--yes", "--no-ui", "--format", "json"] if phase == "remove" else add
+            argv = ["/inert/agentplugins", "remove", iid, "--target", "cline", "--scope", "project", "--project-root", project, "--yes", "--format", "json"] if phase == "remove" else add
             command(phase, argv, outside, dto)
         for scope, cwd in (("a", project), ("b", "/inert/cycle/project-b"), ("user", outside)):
             baseline = {"a": "final-a", "b": "final-b", "user": "removed-user"}[scope]
@@ -225,7 +225,7 @@ def raw_skills_fixture(rows, states):
 
 class CompleteCycleTests(unittest.TestCase):
     def test_raw_project_skills_are_required_with_exact_repeat_and_native_scope(self):
-        for kind in ("absent", "missing-repeat", "prepared", "repeat-status", "repeat-argv", "repeat-state", "repeat-lock", "source-pin", "native-path", "foreign-inventory", "metadata", "resource", "probe", "cleanup", "removal", "public-stderr"):
+        for kind in ("absent", "missing-repeat", "prepared", "repeat-status", "repeat-argv", "repeat-state", "repeat-lock", "source-pin", "native-path", "foreign-inventory", "metadata", "resource", "probe", "cleanup", "removal", "public-stderr", "remove-no-ui"):
             bodies, source = qualified_fixture()
             summary = runtime.strict_json(bodies["runtime-attempt.json"])
             record = summary["raw_skill_cycle"]
@@ -238,6 +238,7 @@ class CompleteCycleTests(unittest.TestCase):
                 else: doc["items"][0]["status"] = "succeeded"
                 row["stdout"] = stream(raw(doc))
             elif kind == "repeat-argv": next(row for row in record["commands"] if row["stage"] == "repeat")["argv"][3] = "foreign-source"
+            elif kind == "remove-no-ui": next(row for row in record["commands"] if row["stage"] == "remove")["argv"].insert(-2, "--no-ui")
             elif kind == "public-stderr": next(row for row in record["commands"] if row["stage"] == "repeat")["stderr"] = None
             elif kind in ("repeat-state", "source-pin", "removal"):
                 phase = "remove" if kind == "removal" else "repeat"

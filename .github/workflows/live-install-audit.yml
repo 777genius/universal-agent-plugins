@@ -4,27 +4,32 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
+      - '.github/workflows/pr-changes.yml'
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/live-install-audit.py'
       - 'scripts/pi_project_skill_audit.py'
       - 'scripts/test_pi_project_skill_audit.py'
+      - 'scripts/test_native_client_research.py'
       - 'scripts/qoder_prepared_skill_audit.py'
       - 'scripts/test_qoder_prepared_skill_audit.py'
       - 'scripts/native_client_research.py'
-      - 'scripts/test_native_client_research.py'
       - 'scripts/published_codex_baseline.py'
       - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
+      - 'scripts/test_live_install_audit_components.py'
       - 'scripts/test_live_install_audit_opencode_negative.py'
       - 'scripts/test_kimi_repeat_log_audit.py'
       - 'scripts/codex_runtime_audit.py'
-      - 'scripts/claude_cache_retirement_audit.py'
-      - 'scripts/gemini_runtime_audit.py'
+      - 'scripts/codex_plugin_retention_audit.py'
       - 'scripts/gemini_windows_custody.py'
       - 'scripts/test_gemini_windows_runtime_audit.py'
-      - 'scripts/test_codex_runtime_audit.py'
       - 'scripts/opencode_bootstrap_audit.py'
       - 'scripts/test_opencode_bootstrap_audit.py'
+      - 'scripts/test_codex_plugin_retention_audit.py'
+      - 'scripts/gemini_runtime_audit.py'
+      - 'scripts/claude_cache_retirement_audit.py'
+      - 'scripts/windows_owned_job.py'
+      - 'scripts/test_codex_runtime_audit.py'
       - 'tests/live-install/fixtures.json'
       - 'install/integrationctl/agentplugins/adapters/securityscan/scanner*.go'
       - '.github/workflows/live-install-audit.yml'
@@ -32,6 +37,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   # pull_request runs check out a synthetic merge commit; retain the source branch HEAD too.
@@ -42,9 +48,15 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' && (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) }}
 
 jobs:
-  native-pilot:
-    name: Real ${{ matrix.target }} / ${{ matrix.kind }} source install (pilot)
+  changes:
     if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
+    uses: ./.github/workflows/pr-changes.yml
+    permissions:
+      pull-requests: read
+  native-pilot:
+    needs: changes
+    name: Real ${{ matrix.target }} / ${{ matrix.kind }} source install (pilot)
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full'))) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -75,21 +87,22 @@ jobs:
           npm install --global @openai/codex@0.153.4
           command -v codex
           codex --version
-      # The Go source defaults to 0.1.0-development. Use a verified
-      # published stable CLI version for signed Directory eligibility, while
-      # building current PR source (not the published release binary).
-      # Keep the separate immutable npm 0.1.95 historical lane unchanged.
+      # The Go source defaults to 0.1.0-development; signed directory policies
+      # require an ordinary release-semver CLI. This is still the PR source
+      # binary, NOT a published release binary; historical 0.1.95 stays separate.
       - name: Refuse ambient native-profile and Git configuration leakage
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
           python3 -m unittest discover -s scripts -p 'test_qoder_prepared_skill_audit.py'
-          python3 -m unittest discover -s scripts -p 'test_native_client_research.py'
           python3 -m unittest discover -s scripts -p 'test_pi_project_skill_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_native_client_research.py'
+          python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py'
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_opencode_negative.py'
           python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
           python3 -m unittest discover -s scripts -p 'test_gemini_windows_runtime_audit.py'
-          python3 -m unittest discover -s scripts -p 'test_codex_runtime_audit.py'
           python3 -m unittest discover -s scripts -p 'test_opencode_bootstrap_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_codex_runtime_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_codex_plugin_retention_audit.py'
       - name: Verify exact empty-stderr LintAI exit diagnostic
         run: go test ./install/integrationctl/agentplugins/adapters/securityscan -run '^TestCommandScannerIncludesNonzeroExitWhenStderrIsEmpty$' -count=1
       - name: Build actual PR CLI with current eligible directory version policy
@@ -169,14 +182,15 @@ jobs:
 
   real-native-cli-matrix:
     name: All 30 ${{ matrix.kind }} / ${{ matrix.target == 'pi' && matrix.kind == 'skill' && 'foreign Prepared + clean native' || matrix.target == 'qoder' && matrix.kind == 'skill' && 'Prepared installation' || 'native' }} ${{ matrix.target }}
-    needs: native-pilot
+    needs: [changes, native-pilot]
+    if: ${{ !cancelled() && needs.native-pilot.result == 'success' && (needs.changes.result != 'success' || needs.changes.outputs.live_clients != '[]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 65
     strategy:
       fail-fast: false
       max-parallel: 6
       matrix:
-        target: [codex, claude, opencode, gemini, copilot, cline, kimi, qoder, pi]
+        target: ${{ fromJSON(needs.changes.result == 'success' && needs.changes.outputs.live_clients || '["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]') }}
         kind: [plugin, skill]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
