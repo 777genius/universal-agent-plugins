@@ -274,9 +274,10 @@ test('logo thickness follows the viewing angle without extra animation loops', a
   }
   for (const [index, first] of offsets[0]!.entries()) {
     const opposite = offsets[1]![index]!;
-    // Projected rear/front displacement, not just CSS strings: a flattened stack fails here.
-    expect(Math.hypot(first.x, first.y)).toBeGreaterThan(1);
-    expect(Math.hypot(opposite.x, opposite.y)).toBeGreaterThan(1);
+    // Perspective can nearly align an edge logo's depth with one viewing ray.
+    // Every stack must still move visibly and reverse with the opposite tilt;
+    // a flattened stack or a fixed screen-space offset fails these checks.
+    expect(Math.hypot(first.x - opposite.x, first.y - opposite.y)).toBeGreaterThan(2);
     expect(first.x * opposite.x + first.y * opposite.y).toBeLessThan(-1);
   }
   await page.emulateMedia({ reducedMotion: 'reduce' });

@@ -21,7 +21,9 @@ permissions:
 jobs:
   firebase-claude:
     runs-on: windows-2025
-    timeout-minutes: 20
+    # Each case: two 1200s adds, 60s removal, three 30s lists, 10s closure.
+    # Manual dispatch runs public + source cases (85m20s), plus setup/report time.
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -118,11 +120,12 @@ jobs:
         env:
           GOTOOLCHAIN: local
         run: |
-          # Match the source catalog's release-semver fixture for Directory policy.
-          # The report binds this source build to its actual checkout and binary.
+          # Use the current 0.1.116 policy fixture; 0.1.95 predates Firebase's
+          # signed minimum 0.1.108. This remains a source build, not a release
+          # artifact: the report binds its actual checkout, tree and binary.
           python -B -m unittest discover -s scripts -p test_firebase_runtime_failure.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go build -trimpath -ldflags='-X main.version=0.1.95' -o "$env:RUNNER_TEMP\agentplugins-source.exe" ./cli/cmd/agentplugins
+          go build -trimpath -ldflags='-X main.version=0.1.116' -o "$env:RUNNER_TEMP\agentplugins-source.exe" ./cli/cmd/agentplugins
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Genuine current-source Firebase add, repeat, native attribution and remove
         if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}
@@ -156,7 +159,7 @@ jobs:
           clean_worktree = subprocess.check_output(['git', 'status', '--porcelain'], text=True, timeout=30) == ''
           assert actual_head == os.environ['GITHUB_SHA'] and clean_worktree
           cli_version = subprocess.check_output([str(cli), 'version'], text=True, timeout=30).strip()
-          assert cli_version == 'agentplugins 0.1.95', 'Source fixture version differs from Directory policy pin'
+          assert cli_version == 'agentplugins 0.1.116', 'Source fixture version differs from Directory policy pin'
           cli_sha256 = hashlib.sha256(cli.read_bytes()).hexdigest()
           report = Path(os.environ['RUNNER_TEMP']) / 'source-firebase-claude.json'
           # Reproduce the original long Windows TEMP profile, unlike the
@@ -179,10 +182,53 @@ jobs:
                   'temp_profile': 'original-windows-default', 'case_root_chars': case_root_chars,
                   'case': row
               }, indent=2) + '\n', encoding='utf-8')
+              # Fixed diagnostic scalars only: no native output, paths,
+              # environment, dependency names or captured file contents.
+              install = row.get('install')
+              install = install if type(install) is dict else {}
+              failure = row.get('runtime_failure_facts')
+              failure = failure if type(failure) is dict else {}
+              allowed_failure_fields = {
+                  'status': ('observed-unqualified', 'refused-unqualified'),
+                  'refusal_phase': ('case-root', 'native-projection', 'staging-binding',
+                                    'source-envelope', 'owned-data', 'locked-npm-runtime',
+                                    'npm-cache', 'held-custody'),
+                  'refusal_class': ('missing', 'deadline', 'invalid-state'),
+              }
+              failure_summary = {
+                  key: failure[key] for key, allowed in allowed_failure_fields.items()
+                  if failure.get(key) in allowed
+              }
+              runtime_facts = failure.get('facts')
+              if (type(runtime_facts) is list and len(runtime_facts) <= 16
+                      and all(type(fact) is dict for fact in runtime_facts)):
+                  failure_summary['reported_runtime_count'] = len(runtime_facts)
+                  failure_summary['runtime_present_count'] = sum(
+                      fact.get('runtime_present') is True for fact in runtime_facts)
+                  for key in ('staging', 'targets'):
+                      groups = [fact.get(key) for fact in runtime_facts]
+                      if all(type(group) is list and len(group) <= 16
+                             and all(type(item) is dict for item in group) for group in groups):
+                          items = [item for group in groups for item in group]
+                          failure_summary[key] = {
+                              'reported_count': len(items),
+                              'node_modules_count': sum(item.get('node_modules') is True for item in items),
+                              'bin_count': sum(item.get('bin') is True for item in items),
+                              'marker_count': sum(type(item.get('marker')) is dict
+                                                  and item['marker'].get('present') is True for item in items),
+                              'entrypoint_count': sum(type(item.get('entrypoint')) is dict
+                                                      and item['entrypoint'].get('present') is True for item in items),
+                          }
+              exit_code = install.get('exit_code')
+              timed_out = install.get('timeout')
               print(json.dumps({'status': row.get('status'),
                                 'repeat_verified': row.get('repeat_verified'),
                                 'removal_verified': row.get('removal_verified'),
-                                'sentinels_preserved': row.get('sentinels_preserved')}))
+                                'sentinels_preserved': row.get('sentinels_preserved'),
+                                'install_exit_code': exit_code if type(exit_code) is int
+                                    and -(1 << 31) <= exit_code < (1 << 32) else None,
+                                'install_timeout': timed_out if type(timed_out) is bool else None,
+                                'runtime_failure_summary': failure_summary}))
               if (row.get('status') != 'passed'
                       or row.get('repeat_verified') is not True
                       or row.get('removal_verified') is not True

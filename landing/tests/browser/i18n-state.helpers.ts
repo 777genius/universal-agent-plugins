@@ -47,12 +47,23 @@ export async function navigate(page: Page, family: string, locale: PublishedLoca
     __vue_app__?: { config: { globalProperties: { $router?: unknown } } };
   })?.__vue_app__?.config.globalProperties.$router));
   // Only access the installed router, never component refs, stores, or async data.
-  await page.evaluate(async (path) => {
+  const path = localizedPath(family, locale) + suffix;
+  // A hard navigation can destroy the frame before router.push() settles.
+  // Start the transition synchronously and await the installed router's actual route.
+  await page.evaluate((target) => {
     const root = document.querySelector('#__nuxt') as HTMLElement & {
       __vue_app__: { config: { globalProperties: { $router: { push: (path: string) => Promise<unknown> } } } };
     };
-    await root.__vue_app__.config.globalProperties.$router.push(path);
-  }, localizedPath(family, locale) + suffix);
+    void root.__vue_app__.config.globalProperties.$router.push(target);
+  }, path);
+  await page.waitForFunction((target) => {
+    const root = document.querySelector('#__nuxt') as HTMLElement & {
+      __vue_app__?: { config: { globalProperties: {
+        $router?: { currentRoute: { value: { fullPath: string } } };
+      } } };
+    };
+    return root?.__vue_app__?.config.globalProperties.$router?.currentRoute.value.fullPath === target;
+  }, path);
 }
 
 export function deferred() {

@@ -178,7 +178,7 @@ export const usePageSeo = (
             { key: 'canonical', rel: 'canonical', href: canonicalUrl.value },
             ...(includeAlternates.value ? routeSeo.value.alternates : []).map((link) => ({
               key: `alternate-${link.hreflang}`,
-              rel: 'alternate',
+              rel: 'alternate' as const,
               ...link,
             })),
           ]
@@ -200,7 +200,7 @@ export const usePageSeo = (
             {
               key: 'seo-jsonld',
               type: 'application/ld+json',
-              children: JSON.stringify({ '@context': 'https://schema.org', '@graph': jsonLd }),
+              textContent: JSON.stringify({ '@context': 'https://schema.org', '@graph': jsonLd }),
             },
           ]
         : [],

@@ -27,6 +27,9 @@ for (const locale of publishedLocales) {
     ) as HeaderCopy;
     const { navigation, docs } = copy.shell;
 
+    // Generated Pages have no icon server; flags must render from the client bundle.
+    await page.route('**/api.iconify.design/**', route => route.abort());
+    await page.route('**/api/_nuxt_icon/**', route => route.abort());
     await page.setViewportSize({ width: 960, height: 850 });
     await page.goto(`.${localizedPath('/', locale)}`);
     await expect(page.locator('html')).toHaveAttribute('lang', locale);
@@ -66,7 +69,10 @@ for (const locale of publishedLocales) {
     await expect(desktopDocs).toHaveText(docs.navLabel);
     await expect(desktopDocs).toHaveAccessibleName(copy.hero.docsCta);
     await expect(desktopDocs).toHaveAttribute('href', new RegExp(`/docs/${locale}/$`));
-    await expect(page.locator('.app-header__desktop-actions .language-switcher__flag-icon')).toBeVisible();
+    const flag = page.locator('.app-header__desktop-actions .language-switcher__flag-icon');
+    await expect(flag).toBeVisible();
+    await expect(flag).toHaveJSProperty('tagName', 'svg');
+    expect(await flag.locator('path').count()).toBeGreaterThan(0);
 
     for (const width of [960, 1024, 1199, 1279, 1280, 1440]) {
       await page.setViewportSize({ width, height: 850 });
