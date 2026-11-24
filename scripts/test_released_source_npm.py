@@ -92,7 +92,7 @@ class AcquisitionBoundaryTests(unittest.TestCase):
                 if argv[-1] == "--version": return b"12.0.2\n"
                 if argv[1].endswith("npm-public-contract.js"): return b""
                 if argv[1].endswith("release-assets.js"): return json.dumps(verified).encode()
-                if argv[2] == "view": return b'{"dist":{"integrity":"test-integrity","shasum":"test-shasum"}}'
+                if argv[2] == "view": return b'[{"dist":{"integrity":"test-integrity","shasum":"test-shasum"}}]'
                 if argv[2] == "pack":
                     filename = npm.PACKAGE + "-" + npm.VERSION + ".tgz"
                     path = Path(argv[argv.index("--pack-destination") + 1]) / filename
@@ -150,6 +150,21 @@ class AcquisitionBoundaryTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exact public release"):
                 npm.provision(None, Path("/unused"), "linux-amd64", {"proof": {"version": "0.1.115"}})
             tools.assert_not_called()
+
+    def test_npm_metadata_rejects_nonexact_record_shapes(self):
+        record = {"dist": {"integrity": "test", "shasum": "test"}}
+        for metadata in ([], [record, record], [None], ["record"], [[record]], [{}],
+                         [{"dist": []}], None, "record"):
+            with self.subTest(metadata=metadata), tempfile.TemporaryDirectory() as temp:
+                audit = SimpleNamespace(ROOT=ROOT)
+                release = {"proof": {"acquisition": "public GitHub release download",
+                                      "tag": npm.TAG, "commit": npm.COMMIT, "version": npm.VERSION}}
+                with mock.patch.object(npm, "tools", return_value=(Path("/node"), Path("/npm-cli.js"))), \
+                     mock.patch.object(npm, "npm_environment", return_value={"PATH": "/runtime"}), \
+                     mock.patch.object(npm, "run", side_effect=[b"12.0.2", json.dumps(metadata).encode()]) as run:
+                    with self.assertRaisesRegex(ValueError, "npm metadata is not one exact package"):
+                        npm.provision(audit, Path(temp), "linux-amd64", release)
+                    self.assertEqual(run.call_count, 2)
 
     def test_wrong_npm_version_is_refused_before_public_acquisition(self):
         with tempfile.TemporaryDirectory() as temp:

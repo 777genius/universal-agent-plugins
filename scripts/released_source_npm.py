@@ -128,6 +128,8 @@ def provision(audit, directory, target, release_context):
         return json.loads(body)
 
     metadata = capture("metadata", [node, npm, "view", PACKAGE + "@" + VERSION, "--json"])
+    if isinstance(metadata, list) and len(metadata) == 1:
+        metadata = metadata[0]
     require(isinstance(metadata, dict) and isinstance(metadata.get("dist"), dict), "npm metadata is not one exact package")
     integrity, shasum = metadata["dist"].get("integrity"), metadata["dist"].get("shasum")
     require(isinstance(integrity, str) and isinstance(shasum, str), "npm integrity unavailable")
