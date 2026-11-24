@@ -301,13 +301,15 @@ func (f *kimiProjectNativeFixture) uap(t *testing.T, label, scope string, mutate
 	if err := nativeValidateInstallerJSON(r.Stdout); err != nil {
 		t.Fatal(err)
 	}
-	handled, err := kimiProjectRepeatAddOutcome(label, scope, mutated, args, value, f.packages[scope])
+	handled, err := kimiProjectRepeatAddOutcome(label, scope, mutated, args, value, r.Stderr, f.packages[scope])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !handled {
-		commandsRequireMutated(t, label, value, mutated)
+	if handled {
+		// The held no-change result also validates its exact resolver-only stderr.
+		return
 	}
+	commandsRequireMutated(t, label, value, mutated)
 	var progress string
 	switch args[0] {
 	case "add":

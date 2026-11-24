@@ -313,6 +313,113 @@ class HistoricalModeTest(unittest.TestCase):
                 self.assertEqual(rejected.exception.code, 2)
                 case.assert_not_called()
 
+    def test_scope_lock_absence_rejects_partial_user_files_and_links(self):
+        live = self.load_live()
+        with tempfile.TemporaryDirectory() as temp:
+            user = Path(temp) / "uap-data"
+            project = Path(temp) / "project"
+            user.mkdir()
+            project.mkdir()
+            (project / "uap.lock").write_text("foreign project lock")
+            self.assertTrue(live.scoped_lock_files_absent(user))
+            for name in ("uap.toml", "uap.lock"):
+                path = user / name
+                path.write_text("partial lock")
+                self.assertFalse(live.scoped_lock_files_absent(user))
+                path.unlink()
+                path.mkdir()
+                self.assertFalse(live.scoped_lock_files_absent(user))
+                path.rmdir()
+            if os.name != "nt":
+                (user / "uap.lock").symlink_to(project / "uap.lock")
+                self.assertFalse(live.scoped_lock_files_absent(user))
+                (user / "uap.lock").unlink()
+            self.assertTrue(live.scoped_lock_files_absent(user))
+
+    def test_expired_plugin_lock_guard_checks_both_isolated_roots(self):
+        live = self.load_live()
+        with tempfile.TemporaryDirectory() as temp:
+            user, project = Path(temp) / "uap-data", Path(temp) / "project"
+            user.mkdir()
+            project.mkdir()
+            self.assertTrue(live.historical_plugin_lock_files_absent(user, project))
+            for root in (user, project):
+                for name in ("uap.toml", "uap.lock"):
+                    with self.subTest(root=root.name, file=name):
+                        path = root / name
+                        path.write_text("unexpected")
+                        self.assertFalse(live.historical_plugin_lock_files_absent(user, project))
+                        path.unlink()
+                        path.mkdir()
+                        self.assertFalse(live.historical_plugin_lock_files_absent(user, project))
+                        path.rmdir()
+                        if os.name != "nt":
+                            path.symlink_to(user if root == project else project,
+                                            target_is_directory=True)
+                            self.assertFalse(live.historical_plugin_lock_files_absent(user, project))
+                            path.unlink()
+            self.assertTrue(live.historical_plugin_lock_files_absent(user, project))
+
+    def test_historical_native_snapshot_detects_deletion_and_list_side_effects(self):
+        live = self.load_live()
+        with tempfile.TemporaryDirectory() as temp:
+            profile = Path(temp) / ".codex"
+            system = profile / "skills/.system/imagegen/LICENSE.txt"
+            system.parent.mkdir(parents=True)
+            system.write_bytes(b"pinned system file")
+            before = live.snapshot([profile])
+            self.assertTrue(before)
+            self.assertEqual(before, live.snapshot([profile]))  # read-only list
+            system.unlink()
+            deleted = live.snapshot([profile])
+            self.assertNotEqual(before, deleted)
+            self.assertTrue(set(before.items()) ^ set(deleted.items()))
+            system.write_bytes(b"pinned system file")
+            self.assertEqual(before, live.snapshot([profile]))
+            unexpected = profile / "plugins/unexpected/plugin.json"
+            unexpected.parent.mkdir(parents=True)
+            unexpected.write_text('{"foreign":true}')
+            self.assertNotEqual(before, live.snapshot([profile]))  # mutated list
+
+    def test_historical_refusal_detects_empty_directories_at_each_child_phase(self):
+        from types import SimpleNamespace
+
+        for mutation in (None, "add", "list", "add-restored-by-list"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temp:
+                live = self.load_live()
+                root = Path(temp).resolve()
+                empty = root / "plugin-00/home/.codex/plugins"
+
+                def child(argv, _env, _cwd, _timeout=105, **_kwargs):
+                    if argv[1] == "add":
+                        if mutation in ("add", "add-restored-by-list"):
+                            empty.mkdir()
+                        result = {"result": "error"}
+                    else:
+                        self.assertEqual(argv[1], "list")
+                        if mutation == "list":
+                            empty.mkdir()
+                        elif mutation == "add-restored-by-list":
+                            empty.rmdir()
+                        result = {"data": {"installations": []}}
+                    return {"exit_code": 1 if argv[1] == "add" else 0,
+                            "stdout_tail": "", "stderr_tail": "signed Directory snapshot has expired",
+                            "timeout": False, "_json": result}
+
+                with (patch.dict(live.AGENT_BINARIES, {}, clear=True),
+                      patch.dict(live.HISTORICAL_CODEX, {"PublishedBaseline":
+                          lambda *_args: SimpleNamespace(after_command=lambda: None, proof={})}),
+                      patch.object(live, "call", side_effect=child) as transport):
+                    result = live.do_case("/inert/npm-launcher", "codex", "plugin", "context7", 0,
+                                          root, {}, historical_baseline=True)
+                self.assertEqual(transport.call_count, 2)
+                self.assertEqual(result["historical_native_unchanged"], {
+                    "after-add": mutation not in ("add", "add-restored-by-list"),
+                    "after-list": mutation not in ("add", "list"),
+                    "final": mutation not in ("add", "list")})
+                self.assertFalse(result["removal_verified"])
+                self.assertNotEqual(result["status"], "passed")
+
     def test_source_version_string_cannot_qualify_historical_mode_or_native_ready(self):
         live = self.load_live()
         with tempfile.TemporaryDirectory() as temporary:
@@ -498,6 +605,158 @@ class HistoricalOrchestrationTest(unittest.TestCase):
                              ["before-install", "installed", "repeat-installed", "removed"])
 
 
+
+class TestExpiredPublishedPluginRefusal(unittest.TestCase):
+    def report(self):
+        expiry = ("agentplugins: load signed Directory: directory snapshot is expired: "
+                  "expires_at=2026-10-30T20:03:50Z now=2026-11-21T16:19:54Z\n")
+        row = {"target": "codex", "kind": "plugin", "index": 0,
+               "source": "atlassian", "status": "install-failed",
+               "install": {"exit_code": 1, "stdout_tail": "",
+                           "stderr_tail": expiry, "timeout": False},
+               "list": {"exit_code": 0, "stderr_tail": "", "timeout": False},
+               "historical_npm_proof": {
+                   "package": "universal-agent-plugins", "version": "0.1.95",
+                   "commit": BASELINE.COMMIT, "binary_sha256": BASELINE.DIGEST,
+                   "binary_size": BASELINE.SIZE, "launcher_sources_verified": True,
+                   "commands_verified": 2},
+               "failed_install_registered": False, "failed_install_residue": False,
+               "native_file_delta": 0, "native_identity_files": [],
+               "native_component_candidates": [], "matched_installation_ids": [],
+               "native_residuals": [], "lock_written": False,
+               "historical_scope_lock_absence": {
+                   "before-add": True, "after-add": True,
+                   "after-list": True, "final": True},
+               "historical_native_unchanged": {
+                   "after-add": True, "after-list": True, "final": True},
+               "listed_identity": False, "sentinels_preserved": True,
+               "post_remove_identity_registered": False,
+               "public_target_states": {
+                   "after-add": {"status": "observed", "selected_installations": 0,
+                                 "selected_bindings": 0, "invalid_rows": 0,
+                                 "states": [], "truncated": False},
+                   "repeat-add": {"status": "unobserved"},
+                   "after-remove": {"status": "unobserved"}}}
+        second = copy.deepcopy(row)
+        second.update(index=1, source="context7")
+        return {"acceptance": BASELINE.EXPIRED_PLUGIN_ACCEPTANCE, "target": "codex",
+                "kind": "plugin", "platform": "linux", "architecture": "x86_64",
+                "cases_attempted": 2, "passed": 0, "verified_negative_coverage": 0,
+                "cli_version": {"status": "reported", "value": "agentplugins 0.1.95",
+                                "exit_code": 0},
+                "client_version": {"status": "reported", "value": "codex-cli 0.153.4",
+                                   "exit_code": 0},
+                "results": [row, second]}
+
+    def test_only_genuine_untouched_expired_baseline_is_a_historical_negative(self):
+        doc = {"plugin_aliases": ["atlassian", "context7"]}
+        candidate = self.report()
+        self.assertTrue(BASELINE.expired_plugin_refusals(candidate, doc))
+        for key, value in (
+                ("status", "passed"), ("failed_install_residue", True),
+                ("failed_install_registered", True), ("native_file_delta", 1),
+                ("sentinels_preserved", False), ("matched_installation_ids", ["foreign"]),
+                ("native_identity_files", ["foreign"]), ("lock_written", True)):
+            mutated = copy.deepcopy(candidate)
+            mutated["results"][0][key] = value
+            self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc), key)
+        for phase in ("before-add", "after-add", "after-list", "final"):
+            mutated = copy.deepcopy(candidate)
+            mutated["results"][0]["historical_scope_lock_absence"][phase] = False
+            self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc), phase)
+        mutated = copy.deepcopy(candidate)
+        mutated["results"][0].pop("historical_scope_lock_absence")
+        self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+        for phase in ("after-add", "after-list", "final"):
+            mutated = copy.deepcopy(candidate)
+            mutated["results"][0]["historical_native_unchanged"][phase] = False
+            self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc), phase)
+        mutated = copy.deepcopy(candidate)
+        mutated["results"][0].pop("historical_native_unchanged")
+        self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+        for bad in ("agentplugins: success\n", "directory snapshot is expired\n",
+                    candidate["results"][0]["install"]["stderr_tail"].replace(
+                        "2026-10-30T20:03:50Z", "2026-11-20T20:03:50Z")):
+            mutated = copy.deepcopy(candidate)
+            mutated["results"][0]["install"]["stderr_tail"] = bad
+            self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+        for key, value in (
+                ("binary_sha256", "0" * 64), ("launcher_sources_verified", False),
+                ("commands_verified", 0), ("version", "0.1.115")):
+            mutated = copy.deepcopy(candidate)
+            mutated["results"][0]["historical_npm_proof"][key] = value
+            self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc), key)
+        mutated = copy.deepcopy(candidate)
+        mutated["cli_version"]["value"] = "agentplugins 0.1.115"
+        self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+        mutated = copy.deepcopy(candidate)
+        mutated["results"].pop()
+        self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+
+    def test_phase_evidence_rejects_truthy_numbers_and_wrong_keys(self):
+        doc = {"plugin_aliases": ["atlassian", "context7"]}
+        candidate = self.report()
+        for field, phases in (
+                ("historical_scope_lock_absence", ("before-add", "after-add", "after-list", "final")),
+                ("historical_native_unchanged", ("after-add", "after-list", "final"))):
+            for phase in phases:
+                for invalid in (1, 1.0, "true", None):
+                    with self.subTest(field=field, phase=phase, invalid=invalid):
+                        mutated = copy.deepcopy(candidate)
+                        mutated["results"][0][field][phase] = invalid
+                        self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc))
+            for mutation in ("extra", "missing"):
+                mutated = copy.deepcopy(candidate)
+                if mutation == "extra":
+                    mutated["results"][0][field]["unrecognized"] = True
+                else:
+                    mutated["results"][0][field].pop(phases[0])
+                self.assertFalse(BASELINE.expired_plugin_refusals(mutated, doc),
+                                 (field, mutation))
+
+    def test_report_rejects_boolean_as_integer_or_float_as_count(self):
+        doc = {"plugin_aliases": ["atlassian", "context7"]}
+        base = self.report()
+        self.assertTrue(BASELINE.expired_plugin_refusals(base, doc))
+        for field, value in (
+                ("cases_attempted", 2.0),
+                ("passed", False),
+                ("verified_negative_coverage", False)):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report[field] = value
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
+        for field in ("cli_version", "client_version"):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report[field]["exit_code"] = False
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
+        for field, value in (
+                ("index", False),
+                ("native_file_delta", False)):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report["results"][0][field] = value
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
+        for field, value in (("install", True), ("list", False)):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report["results"][0][field]["exit_code"] = value
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
+        for field, value in (("launcher_sources_verified", 1), ("binary_size", float(BASELINE.SIZE))):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report["results"][0]["historical_npm_proof"][field] = value
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
+        for field, value in (
+                ("selected_installations", False),
+                ("selected_bindings", False),
+                ("invalid_rows", False),
+                ("truncated", 0)):
+            with self.subTest(field=field):
+                report = copy.deepcopy(base)
+                report["results"][0]["public_target_states"]["after-add"][field] = value
+                self.assertFalse(BASELINE.expired_plugin_refusals(report, doc))
 class ArchivedPluginFeedTest(unittest.TestCase):
     def test_real_plugin_repeat_keeps_skill_path_absent_and_finishes_both_lifecycles(self):
         """Inert processes exercise orchestration; they are not vendor evidence."""

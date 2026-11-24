@@ -512,3 +512,109 @@ def summary(report, fixtures):
         result["historical_lifecycle_observed"] += 1
     result["historical_observation_complete"] = result["historical_lifecycle_observed"] == 2
     return result
+
+# Distinct historical signed-Directory refusal. This is NOT a native PASS.
+# The release asset and the 2026-10-30 snapshot are immutable.
+EXPIRED_PLUGIN_ACCEPTANCE = "published-0.1.95-codex-plugins-expired-directory"
+EXPIRED_SNAPSHOT = "2026-10-30T20:03:50Z"
+EXPIRED_DIAGNOSTIC = re.compile(
+    r"agentplugins: load signed Directory: directory snapshot is expired: "
+    r"expires_at=2026-10-30T20:03:50Z now=(20\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ)\n")
+
+
+def strict_json_value(value, expected):
+    """Exact JSON structure and types; bool cannot impersonate int or float."""
+    if type(value) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return (value.keys() == expected.keys()
+                and all(strict_json_value(value[key], item)
+                        for key, item in expected.items()))
+    if isinstance(expected, list):
+        return len(value) == len(expected) and all(
+            strict_json_value(left, right) for left, right in zip(value, expected))
+    return value == expected
+
+
+def exact_true_phases(value, phases):
+    """Trust only an exact JSON object with literal true at every required phase."""
+    return (type(value) is dict and set(value) == set(phases)
+            and all(value[phase] is True for phase in phases))
+
+
+def expired_plugin_refusals(report, doc):
+    """Attest two untouched cases and the genuine immutable old binary, never native PASS."""
+    if (report.get("acceptance") != EXPIRED_PLUGIN_ACCEPTANCE
+            or report.get("target") != "codex" or report.get("kind") != "plugin"
+            or report.get("platform") != "linux" or report.get("architecture") != "x86_64"
+            or not strict_json_value(report.get("cases_attempted"), 2)
+            or not strict_json_value(report.get("passed"), 0)
+            or not strict_json_value(report.get("verified_negative_coverage"), 0)
+            or not strict_json_value(report.get("cli_version"), {
+                "status": "reported", "value": "agentplugins 0.1.95", "exit_code": 0})
+            or not strict_json_value(report.get("client_version"), {
+                "status": "reported", "value": "codex-cli 0.153.4", "exit_code": 0})
+            or doc.get("plugin_aliases", [])[:2] != ["atlassian", "context7"]):
+        return False
+    rows = report.get("results")
+    if not isinstance(rows, list) or len(rows) != 2:
+        return False
+    pinned = {"package": "universal-agent-plugins", "version": "0.1.95",
+              "commit": COMMIT, "binary_sha256": DIGEST, "binary_size": SIZE,
+              "launcher_sources_verified": True}
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            return False
+        proof, install, listed = (
+            row.get("historical_npm_proof"), row.get("install"), row.get("list"))
+        if (row.get("source") != doc["plugin_aliases"][index]
+                or row.get("target") != "codex" or row.get("kind") != "plugin"
+                or not strict_json_value(row.get("index"), index)
+                or row.get("status") != "install-failed"
+                or not isinstance(proof, dict)
+                or any(not strict_json_value(proof.get(k), v)
+                       for k, v in pinned.items())
+                or type(proof.get("commands_verified")) is not int
+                or proof["commands_verified"] < 2
+                or not isinstance(install, dict)
+                or not strict_json_value(install.get("exit_code"), 1)
+                or install.get("stdout_tail") != "" or install.get("timeout") is not False
+                or not isinstance(listed, dict)
+                or not strict_json_value(listed.get("exit_code"), 0)
+                or listed.get("timeout") is not False or listed.get("stderr_tail") != ""
+                or row.get("failed_install_registered") is not False
+                or row.get("failed_install_residue") is not False
+                or not strict_json_value(row.get("native_file_delta"), 0)
+                or row.get("native_identity_files") != []
+                or row.get("native_component_candidates") != []
+                or row.get("matched_installation_ids") != []
+                or row.get("native_residuals") != []
+                or row.get("lock_written") is not False
+                or not exact_true_phases(row.get("historical_scope_lock_absence"),
+                                         ("before-add", "after-add", "after-list", "final"))
+                or not exact_true_phases(row.get("historical_native_unchanged"),
+                                         ("after-add", "after-list", "final"))
+                or row.get("listed_identity") is not False
+                or row.get("sentinels_preserved") is not True
+                or row.get("post_remove_identity_registered") is not False):
+            return False
+        match = EXPIRED_DIAGNOSTIC.fullmatch(install.get("stderr_tail", ""))
+        if match is None:
+            return False
+        try:
+            observed = datetime.strptime(match.group(1), "%Y-%m-%dT%H:%M:%SZ")
+            expires = datetime.strptime(EXPIRED_SNAPSHOT, "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError:
+            return False
+        if observed <= expires:
+            return False
+        states = row.get("public_target_states")
+        if (not isinstance(states, dict)
+                or not strict_json_value(states.get("after-add"), {
+                    "status": "observed", "selected_installations": 0,
+                    "selected_bindings": 0, "invalid_rows": 0,
+                    "states": [], "truncated": False})
+                or not strict_json_value(states.get("repeat-add"), {"status": "unobserved"})
+                or not strict_json_value(states.get("after-remove"), {"status": "unobserved"})):
+            return False
+    return True

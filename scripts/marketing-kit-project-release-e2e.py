@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual public npm 0.1.104 + signed Marketing Kit Project lifecycle, no mocks."""
+"""Actual public npm 0.1.115 + signed Marketing Kit Project lifecycle, no mocks."""
 import argparse
 import hashlib
 import json
@@ -180,8 +180,8 @@ def require_exact_published_version(result):
     stdout = result.get("stdout_tail")
     if (result.get("exit_code") != 0 or result.get("timeout")
             or not isinstance(stdout, str)
-            or stdout.strip() != "agentplugins 0.1.104"):
-        raise AssertionError("not exact published agentplugins 0.1.104")
+            or stdout.strip() != "agentplugins 0.1.115"):
+        raise AssertionError("not exact published agentplugins 0.1.115")
 
 
 def verify_pinned_launcher(cli, env, project):
@@ -190,10 +190,76 @@ def verify_pinned_launcher(cli, env, project):
         result = invoke([cli, "version"], env, project, 25)
         if result.get("exit_code") == 0 and not result.get("timeout"):
             require_exact_published_version(result)
-            return
+            return {"command": ["version"], "attempt": attempt + 1,
+                    "exit_code": result["exit_code"], "timeout": result.get("timeout"),
+                    "observed_version": result["stdout_tail"].strip(),
+                    "capture": "validated version stdout tail; full streams not retained"}
         if attempt < 2:
             sleep((attempt + 1) * 5)
     require_exact_published_version(result)
+
+
+class SignedSourceIdentityError(AssertionError):
+    """Keep a bounded public-field diagnostic without changing the refusal."""
+
+    def __init__(self, target, distribution, pinned, result, data):
+        super().__init__("signed Directory immutable source identity changed")
+        release = data.get("selected_release")
+        expected = {"selected_distribution": distribution,
+                    "selected_release.id": distribution,
+                    "selected_release.release_status": "active",
+                    **{"selected_release." + key: value for key, value in pinned.items()}}
+        actual = ({"selected_distribution": data["selected_distribution"]}
+                  if "selected_distribution" in data else {})
+        if isinstance(release, dict):
+            actual.update({"selected_release." + key: release[key]
+                           for key in ("id", "release_status", *pinned) if key in release})
+        mismatched = [key for key, value in expected.items()
+                      if key not in actual or actual[key] != value
+                      or (key == "selected_release.release_sequence"
+                          and type(actual[key]) is not int)]
+        self.diagnostic = {
+            "capture": "bounded public info fields; full streams not retained",
+            "command": ["info", distribution, "--target", target,
+                        "--scope", "user", "--format", "json"],
+            "closure_position": list(FIXED_SIGNED_CLOSURE).index(distribution) + 1,
+            "exit_code": result.get("exit_code"), "timeout": result.get("timeout"),
+            "snapshot": {key: diagnostic_field(data, key)
+                         for key in ("snapshot_sequence", "snapshot_digest")},
+            "expected_public_source": expected,
+            "observed_public_source": {key: diagnostic_field(actual, key) for key in expected},
+            "selected_release_type": type(release).__name__,
+            "selected_release_field_names": diagnostic_field_names(release),
+            "mismatched_fields": mismatched,
+        }
+
+
+def diagnostic_field(document, key):
+    """Public source scalars only; omit free-form metadata, stderr and environments."""
+    if key not in document:
+        return {"present": False}
+    value = document[key]
+    field = {"present": True, "type": type(value).__name__}
+    if (value is None or type(value) is bool
+            or (type(value) is int and -(1 << 63) <= value < (1 << 64))
+            or (type(value) is str and len(value) <= 256
+                and all(32 <= ord(char) < 127 for char in value))):
+        field["value"] = value
+    else:
+        field["value_omitted"] = True
+    return field
+
+
+def diagnostic_field_names(document):
+    if not isinstance(document, dict):
+        return {"names": [], "omitted": 0}
+    names = []
+    for key in document:
+        if len(names) == 32:
+            break
+        if isinstance(key, str) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,63}", key):
+            names.append(key)
+    return {"names": names, "omitted": len(document) - len(names)}
 
 
 def inspect_signed_closure(cli, env, project, target, expected_policy=None):
@@ -223,7 +289,7 @@ def inspect_signed_closure(cli, env, project, target, expected_policy=None):
                 or release.get("release_status") != "active"
                 or type(release.get("release_sequence")) is not int
                 or any(release.get(field) != value for field, value in pinned.items())):
-            raise AssertionError("signed Directory immutable source identity changed")
+            raise SignedSourceIdentityError(target, distribution, pinned, result, data)
         if target == "vscode":
             targets = release.get("target_compatibility")
             if (not isinstance(targets, list) or any(not isinstance(item, dict) for item in targets)
@@ -1262,6 +1328,20 @@ def check_removed_native_components(target, home, case_root, stage, project_scop
         raise AssertionError(f"{stage}: native Marketing Kit remnants: {sorted(leftovers)}")
 
 
+def start_codex_sqlite_audit(env, project):
+    """Preinstall native Codex 0.153.4: separate SQLite runtime, unchanged semantics.
+
+    The existing CodexPluginSQLiteAudit binds the config pin, full SQLite
+    schema/tables/integrity and every live WAL byte to the disposable case.
+    It does not exclude any native-profile file or relax removal checks.
+    """
+    native = audit["AGENT_BINARIES"].get("codex")
+    if not native or not Path(native).is_file():
+        raise AssertionError("Codex native SQLite baseline prerequisite unavailable")
+    return audit["CODEX_RUNTIME_AUDIT"]["CodexPluginSQLiteAudit"](
+        native, project.parent, Path(env["HOME"]), project, env)
+
+
 def bind_pinned_launcher_cache(env, cache, sandbox):
     """Share only the SHA-checked released CLI binary, not native client state."""
     if (not cache.is_dir() or cache.is_symlink()
@@ -1418,9 +1498,19 @@ def current_vscode_boundary_kind(policy):
             or policy.get("closure") != FIXED_SIGNED_CLOSURE):
         raise AssertionError("current VS Code boundary requires authenticated positive policy")
     targets = policy.get("root_target_compatibility")
-    if targets == managed:
+    # Signed49 also grants these three clients. Preserve their exact User
+    # packaging without treating them as additional native qualification.
+    additional = {"hermes", "antigravity", "pi"}
+    if (not isinstance(targets, dict)
+            or any(targets.get(client) != grant for client, grant in managed.items())
+            or any(client not in additional
+                   or grant != {"scopes": ["user"], "delivery": "managed"}
+                   for client, grant in targets.items()
+                   if client not in managed and client != "vscode")):
+        raise AssertionError("current VS Code boundary has unqualified signed target shape")
+    if "vscode" not in targets:
         return "signed_grant_refusal"
-    if targets == {**managed, "vscode": {"scopes": ["user"], "delivery": "prepared"}}:
+    if targets["vscode"] == {"scopes": ["user"], "delivery": "prepared"}:
         return "saved_management_capability"
     raise AssertionError("current VS Code boundary has unqualified signed target shape")
 
@@ -1527,8 +1617,9 @@ def main():
     options = parser.parse_args()
     report_path = Path(options.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report = {"cli_version": "0.1.104", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
+    report = {"cli_version": "0.1.115", "target": options.target, "source": "real signed marketing-kit", "steps": [], "status": "failed",
               "qualification_scope": "user_and_project", "two_scope_lifecycle_qualified": False,
+              "preflight_version": None, "source_identity_diagnostic": None,
               "positive_policy": None, "logical_owner_evidence": None,
               "final_policy_observation": {"status": "not_run", "source_profile": "E",
                                            "profile_usage": "never_installed"},
@@ -1557,10 +1648,14 @@ def main():
             protected_b = None
             protected_c_project = None
             protected_c_profile = None
-            verify_pinned_launcher(options.cli, env, project_a)
+            report["preflight_version"] = verify_pinned_launcher(options.cli, env, project_a)
             report["positive_policy"] = observe_production_policy(
                 options.cli, env, project_a, options.target,
                 guards=(lambda: check_foreign(foreign_files, root),))
+            codex_sqlite = {}
+            if options.target == "codex":
+                codex_sqlite[env["HOME"]] = start_codex_sqlite_audit(env, project_a)
+
             def run(e, p, label, *args):
                 try:
                     report["steps"].append(execute(options.cli, e, p, options.target, label, *args))
@@ -1575,6 +1670,13 @@ def main():
                         check_user_project_unchanged(project_c, protected_c_project, label)
                     if protected_c_profile is not None:
                         check_profile_unchanged(env_c, project_c, protected_c_profile, label)
+                    # Every command must preserve the native SQLite baseline;
+                    # its WAL is never silently excluded from native cleanup.
+                    if options.target == "codex":
+                        # The active command must not mutate another disposable
+                        # HOME's large WAL invisibly to its bounded file scanner.
+                        for observer in codex_sqlite.values():
+                            observer.checkpoint(label)
             def copilot_read(e, p, action, native_commands=0):
                 make_guard = audit["copilot_native_roots_guard"]
                 own_guard = make_guard(Path(e["HOME"]), e, p)
@@ -1675,6 +1777,9 @@ def main():
                     lambda: check_foreign(foreign_files, root),
                     lambda: check_profile_unchanged(env, project_a, native_a_before_b, "Project B policy"),
                 ))
+            if options.target == "codex":
+                codex_sqlite[env_b["HOME"]] = start_codex_sqlite_audit(env_b, project_b)
+                check_profile_unchanged(env, project_a, native_a_before_b, "Project B native baseline")
             scoped_b = ("--scope", "project", "--project-root", str(project_b))
             # The genuine published CLI must refuse a corrupted child pin
             # without modifying native or durable state in cold Project B.
@@ -1797,6 +1902,8 @@ def main():
             foreign_files.extend(pin_foreign([(foreign_c, "unmanaged user data\n"),
                                               (project_foreign_c, "unmanaged project data\n"),
                                               *native_foreign_c], root))
+            if options.target == "codex":
+                codex_sqlite[env_c["HOME"]] = start_codex_sqlite_audit(env_c, project_c)
             # Read-only forensic baseline: native Copilot may retain disabled
             # settings after uninstall. Never treat a residue as a PASS here.
             copilot_c_shapes = ({"before": copilot_user_c_settings_shape(env_c, root)}
@@ -1991,6 +2098,14 @@ def main():
                 report["current_vscode_user_boundary"].update(
                     status="refused_as_expected", contract=boundary["contract"],
                     reason=boundary["reason"], policy=boundary["policy"])
+            if options.target == "codex":
+                # Only measured native checkpoints reach this report.
+                report["codex_sqlite_runtime"] = {
+                    label: {"native_version": codex_sqlite[e["HOME"]].native_version,
+                            "runtime_semantics_unchanged": True,
+                            "checkpoints": [row["phase"] for row in
+                                            codex_sqlite[e["HOME"]].observations]}
+                    for label, e in (("A", env), ("B", env_b), ("C", env_c))}
             report["scope_results"]["user"]["status"] = "passed"
         # TemporaryDirectory cleanup is part of qualification; exceptions from
         # its __exit__ must never leave a successful two-scope result behind.
@@ -1999,6 +2114,8 @@ def main():
     except Exception as error:
         report["status"] = "failed"
         report["failure"] = str(error)[:2500]
+        if isinstance(error, SignedSourceIdentityError):
+            report["source_identity_diagnostic"] = error.diagnostic
         traceback.print_exc()
     finally:
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

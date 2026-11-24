@@ -280,9 +280,13 @@ def installation(value,paths,previous,stage,cmd):
     require(type(lock["pid"]) is int and lock["pid"]>0 and lock_raw==json.dumps({"pid":lock["pid"],"acquired_at":lock["acquired_at"]},separators=(",",":")).encode()+b"\n")
     lock_record=frames[root]["mutation.lock"]
     require(lock_record["Mode"]==0o100600 and lock_record["Links"]==1 and lock_record["Size"]==len(lock_raw) and lock_record["SHA256"]==sha(lock_raw))
+    retained_lock=(previous is not None and lock_raw==stream(previous["mutation_lock"])
+                   and same(previous["frames"][root]["mutation.lock"],lock_record))
     if stage=="repeat-remove-a":
-        require(previous is not None and lock_raw==stream(previous["mutation_lock"]) and same(previous["frames"][root]["mutation.lock"],lock_record) and same(frames,previous["frames"]))
-    else:
+        require(retained_lock and same(frames,previous["frames"]))
+    elif stage not in NOOPS or not retained_lock:
+        # Early unchanged reconciliation may preserve the exact prior lock.
+        # Every rewritten lock still belongs to this command's time window.
         require(start<=stamp(lock["acquired_at"])<=end and times(lock_record,start,end))
     if previous is not None:
         require(authority(previous["frames"][root]["mutation.lock"],lock_record))
@@ -581,7 +585,7 @@ def pins(result,paths):
 
 def progress(stage):
     if stage.startswith("add-"):return ("Resolving and validating one Agent Plugin package for every selected target...\nInstalling "+NAME+" for 1 selected clients...\n").encode()
-    if stage=="repeat-add-a":return b"Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+    if stage=="repeat-add-a":return b"Resolving and validating one Agent Plugin package for every selected target...\n"
     if "update" in stage:return b"Resolving and validating one updated Agent Plugin package for every selected target...\n"
     if "repair" in stage:return b"Resolving and validating each unique exact installed package revision once...\n"
     return b""

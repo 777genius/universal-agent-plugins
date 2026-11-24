@@ -300,10 +300,16 @@ class QoderPreparedRouteContracts(unittest.TestCase):
         self.assertEqual((report["passed"], report["prepared_lifecycle_passed"]), (0, 0))
         self.assertEqual(report["installation_prepared_lifecycle_passed"], 0)
         self.assertIs(report["installation_acceptance_passed"], False)
-        fixtures = json.loads(load_audit().FIXTURES.read_text())["skills"]
-        for index, (call, item) in enumerate(zip(calls, fixtures)):
+        self.assertIs(report["installation_lifecycle"]["installation_acceptance_passed"], False)
+        fixture_document = json.loads(load_audit().FIXTURES.read_text())
+        for index, (call, item) in enumerate(zip(calls, fixture_document["skills"])):
             self.assertEqual(call.args[1:5], ("qoder", "skill", item, index))
-            self.assertEqual(call.kwargs, {"qoder_prepared": True})
+            self.assertEqual(call.kwargs, {
+                "qoder_prepared": True,
+                "client_version": {"status": "reported", "value": "1.1.81", "exit_code": 0},
+                "installation_audit": "qoder-prepared-skills-installation",
+                "installation_fixtures": fixture_document,
+            })
 
 
 if __name__ == "__main__":

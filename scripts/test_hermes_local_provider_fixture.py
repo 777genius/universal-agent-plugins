@@ -55,6 +55,50 @@ def native_content(value):
 
 
 class ProviderContracts(unittest.TestCase):
+    def test_fixture_yaml_is_lf_under_windows_text_defaults(self):
+        helpers = runpy.run_path(str(ROOT / "scripts/e2e/hermes-native-lifecycle.py"),
+                                 run_name="inert_hermes_fixture")
+        actual_open = Path.open
+
+        def windows_open(path, mode="r", buffering=-1, encoding=None, errors=None, newline=None):
+            # Exercise the real writer and filesystem, translating only the
+            # platform-default text writes as CPython does on Windows.
+            if "b" not in mode and any(flag in mode for flag in "wax") and newline is None:
+                newline = "\r\n"
+            return actual_open(path, mode, buffering, encoding, errors, newline)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile, evidence = root / "profile", root / "evidence"
+            evidence.mkdir()
+            env = {"HERMES_HOME": str(profile), "HERMES_NATIVE_EVIDENCE": str(evidence),
+                   "HERMES_BIN": "inert-hermes", "UAP_BIN": "inert-uap",
+                   "HERMES_NATIVE_MCP_URL": "http://127.0.0.1:9/mcp"}
+
+            def capture(command, name):
+                expected = {"native-version.txt": ["inert-hermes", "--version"],
+                            "native-config-path.txt": ["inert-hermes", "config", "path"]}
+                self.assertEqual(command, expected[name])
+                output = evidence / name
+                output.write_bytes(b"inert fixture only\n" if name == "native-version.txt"
+                                   else str(profile / "config.yaml").encode("utf-8") + b"\n")
+                return output
+
+            with patch.dict(os.environ, env, clear=True):
+                suite = helpers["Lifecycle"](root)
+                with patch.object(Path, "open", windows_open), \
+                        patch.object(helpers["subprocess"], "run") as git, \
+                        patch.object(suite, "capture", side_effect=capture):
+                    suite.prepare()
+                self.assertEqual(git.call_count, 2)
+            self.assertEqual(suite.native_home, profile.resolve())
+            self.assertEqual(suite.config.read_bytes(),
+                             b"model: offline-native-smoke\nmcp_servers:\n"
+                             b"  foreign:\n    command: echo\n    args: [foreign]\n")
+            foreign = suite.skill("foreign").read_bytes()
+            self.assertIn(b"\r\n", foreign)
+            self.assertEqual((root / "foreign-skill.md").read_bytes(), foreign)
+
     def test_actual_http_json_and_stream_round_trip(self):
         for stream in (False, True):
             with self.subTest(stream=stream), ScriptedHermesProvider(NONCE, "user-add") as provider:

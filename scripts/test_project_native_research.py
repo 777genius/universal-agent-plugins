@@ -146,6 +146,70 @@ class ProjectResearchTests(unittest.TestCase):
                 self.assertTrue(all(value is False for value in body["qualification"].values()))
             self.assertIs(summary["collection_complete"], False)
 
+    def test_publication_exposes_only_closed_normal_or_fallback_zip(self):
+        writer = research.artifacts.write_zip
+        for fallback in (False, True):
+            with self.subTest(fallback=fallback), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                final = root / "upload/research.zip"
+                summary = {"commands": [], "collection_complete": True, "qualification": {name: False for name in research.QUALIFICATION_CASES}}
+                if fallback:
+                    summary["observations"] = "x" * (research.STREAM + 1)
+                def observed_write(path, bodies):
+                    self.assertFalse(final.exists())
+                    writer(path, bodies)
+                    # Even a finished writer has not committed publication yet.
+                    self.assertFalse(final.exists())
+                with patch.object(research.artifacts, "write_zip", side_effect=observed_write):
+                    research.publish(summary, None, root)
+                with zipfile.ZipFile(final) as archive:
+                    self.assertIsNone(archive.testzip())
+                    receipt = json.loads(archive.read("research.json"))
+                self.assertIs(receipt["collection_complete"], not fallback)
+                self.assertTrue(all(value is False for value in receipt["qualification"].values()))
+                self.assertEqual(list(final.parent.iterdir()), [final])
+                self.assertEqual(final.stat().st_nlink, 1)
+                self.assertEqual({path.name for path in root.iterdir()}, {"upload"})
+                # Project Runtime consumes this same final file by renaming it.
+                frontend = final.with_name("frontend.zip")
+                final.rename(frontend)
+                with zipfile.ZipFile(frontend) as archive:
+                    self.assertEqual(json.loads(archive.read("research.json")), receipt)
+
+    def test_failed_fallback_writer_leaves_no_uploadable_partial_zip(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            final = root / "upload/research.zip"
+            summary = {"commands": [], "collection_complete": True}
+            attempts = []
+            def broken_write(path, _bodies):
+                attempts.append(path)
+                path.write_bytes(b"PK\x03\x04partial archive from an interrupted write")
+                raise OSError("inert closed-writer failure")
+            with patch.object(research.artifacts, "write_zip", side_effect=broken_write):
+                with self.assertRaises(OSError):
+                    research.publish(summary, None, root)
+            self.assertEqual(len(attempts), 2)
+            self.assertFalse(final.exists())
+            self.assertEqual(list((root / "upload").iterdir()), [])
+            self.assertTrue(all(not path.exists() for path in attempts))
+            self.assertEqual({path.name for path in root.iterdir()}, {"upload"})
+            self.assertIs(summary["collection_complete"], False)
+
+    def test_atomic_publication_never_replaces_an_existing_upload_file(self):
+        writer = research.artifacts.write_zip
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            final = root / "upload/research.zip"
+            def concurrent_file(path, bodies):
+                writer(path, bodies)
+                final.write_bytes(b"existing independently owned destination")
+            with patch.object(research.artifacts, "write_zip", side_effect=concurrent_file):
+                with self.assertRaises(FileExistsError):
+                    research.publish({"commands": [], "collection_complete": False}, None, root)
+            self.assertEqual(final.read_bytes(), b"existing independently owned destination")
+            self.assertEqual({path.name for path in root.iterdir()}, {"upload"})
+
     def test_selected_node_receipt_retains_exact_execution_and_full_inventory_digest(self):
         node = {"name": research.NODE["entrypoint"], "kind": "file", "bytes": 4, "sha256": hashlib.sha256(b"node").hexdigest()}
         headers = [{"name": "node-v24.21.0-linux-x64/include/" + str(i) + ".h", "kind": "file", "bytes": 32,

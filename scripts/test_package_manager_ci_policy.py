@@ -25,6 +25,48 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
     def setUpClass(cls):
         cls.body = WORKFLOW.read_text(encoding="utf-8")
 
+    def test_kimi_skill_pin_matches_strict_repeat_log_observer(self):
+        workflow = WORKFLOW.with_name("live-install-audit.yml").read_text(encoding="utf-8")
+        branch = workflow.split("            kimi)", 1)[1].split(";;", 1)[0]
+        pins = re.findall(r"npm install --global @moonshot-ai/kimi-code@([^\s;]+)", branch)
+        self.assertIn('if [[ "$KIND" == "skill" ]]; then', branch)
+        self.assertEqual(pins, ["2.5.2", "2.4.1"])
+        source = (WORKFLOW.parents[2] / "scripts/live-install-audit.py").read_text(encoding="utf-8")
+        # Evaluate only the real pure predicate, without importing the live
+        # harness or running any of its module-level setup.
+        import ast
+        tree = ast.parse(source)
+        predicate = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                         and node.name == "kimi_log_evidence_eligible")
+        self.assertEqual([arg.arg for arg in predicate.args.args], ["target", "kind", "platform", "version"])
+        self.assertIsInstance(predicate.body[-1], ast.Return)
+        expression = compile(ast.Expression(predicate.body[-1].value), "kimi_log_evidence_eligible", "eval")
+        builtins = {"isinstance": isinstance, "dict": dict, "type": type, "int": int}
+        def eligible(target, kind, platform, version):
+            return eval(expression, {"__builtins__": builtins},
+                        {"target": target, "kind": kind, "platform": platform, "version": version})
+
+        assignment = next(node for node in ast.walk(tree) if isinstance(node, ast.Assign)
+                          and any(isinstance(target, ast.Name) and target.id == "kimi_log_case"
+                                  for target in node.targets))
+        self.assertEqual(ast.dump(assignment.value), ast.dump(ast.parse(
+            "kimi_log_evidence_eligible(target, kind, sys.platform, client_version)", mode="eval").body))
+        version = {"status": "reported", "value": pins[0], "exit_code": 0}
+        for value, expected in ((pins[0], True), ("2.3.2", True), (pins[1], False),
+                                ("2.3.1", False), ("2.5.3", False), (pins[0] + "\n", False), ("", False)):
+            with self.subTest(version=value):
+                self.assertIs(eligible("kimi", "skill", "linux", {**version, "value": value}), expected)
+        for target, kind, platform, changed in (
+                ("copilot", "skill", "linux", version), ("kimi", "plugin", "linux", version),
+                ("kimi", "skill", "darwin", version), ("kimi", "skill", "win32", version),
+                ("kimi", "skill", "linux", {**version, "status": "unreported"}),
+                ("kimi", "skill", "linux", {**version, "exit_code": 1}),
+                ("kimi", "skill", "linux", {**version, "exit_code": False}),
+                ("kimi", "skill", "linux", {**version, "exit_code": 0.0}),
+                ("kimi", "skill", "linux", None)):
+            with self.subTest(target=target, kind=kind, platform=platform, version=changed):
+                self.assertIs(eligible(target, kind, platform, changed), False)
+
     def test_ready_pr_and_main_are_always_full(self):
         self.assertRegex(self.body, r"(?m)^  pull_request:\s*$")
         self.assertIn("types: [opened, synchronize, reopened, ready_for_review]", self.body)
@@ -206,7 +248,7 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertNotIn("universal-agent-plugins", native)
         build = steps["Build exact current-source CLI for Windows"]
         self.assertIn("if: ${{ !cancelled() }}", build)
-        self.assertIn("go build -trimpath -ldflags='-X main.version=0.1.95'", build)
+        self.assertIn("go build -trimpath -ldflags='-X main.version=0.1.115'", build)
         source = steps["Genuine current-source Firebase add, repeat, native attribution and remove"]
         self.assertIn("if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}", source)
         self.assertIn("AUDIT_VENDOR_OUTCOME: ${{ steps.native-bootstrap.outcome }}", source)
@@ -218,6 +260,18 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         artifact = steps["Preserve current-source Firebase evidence on failure"]
         self.assertIn("if: always()", artifact)
         self.assertIn("source-firebase-claude.json", artifact)
+
+    def test_source_live_audits_use_eligible_cli_identity(self):
+        # Both source-built matrices must meet the signed Directory policy;
+        # immutable old published npm checks are intentionally separate.
+        for workflow in ("live-install-audit.yml", "live-install-remaining-clients.yml"):
+            body = (WORKFLOW.parent / workflow).read_text(encoding="utf-8")
+            builds = re.findall(
+                r"go build -trimpath -ldflags='-X main\.version=([^']+)' -o ",
+                body)
+            with self.subTest(workflow=workflow):
+                self.assertTrue(builds, "no source CLI build checked")
+                self.assertEqual(set(builds), {"0.1.115"})
 
     def test_firebase_legacy_control_requires_manual_execution_and_native_proof(self):
         body = (WORKFLOW.parent / "agentplugins-windows-firebase-capture-probe.yml").read_text()
