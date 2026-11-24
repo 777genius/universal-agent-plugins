@@ -2,6 +2,7 @@ package installer
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -19,8 +20,11 @@ func (e *Engine) knownTargetIndex(operation Operation, facts []TargetFacts) (map
 		if !validRoot(fact.ConfigRoot) {
 			return nil, fmt.Errorf("%w: ConfigRoot must be an explicit absolute clean path for %s", ErrTargetFactsUnavailable, fact.ClientID)
 		}
-		if (fact.Executable != "" && !validRoot(fact.Executable)) || (operation != OpRemove && requiresExecutable(e.cfg.Registry, domain.ClientID(fact.ClientID), e.scope()) && fact.Executable == "") {
+		if fact.Executable != "" && !validRoot(fact.Executable) {
 			return nil, fmt.Errorf("%w: Executable must be an explicit absolute clean path for %s", ErrTargetFactsUnavailable, fact.ClientID)
+		}
+		if operation != OpRemove && requiresExecutable(e.cfg.Registry, domain.ClientID(fact.ClientID), e.scope()) && fact.Executable == "" {
+			return nil, missingExecutableError(ErrTargetFactsUnavailable, domain.ClientID(fact.ClientID))
 		}
 		if _, exists := indexed[fact.ClientID]; exists {
 			return nil, fmt.Errorf("%w: duplicate facts for %s", ErrTargetFactsUnavailable, fact.ClientID)
@@ -44,7 +48,7 @@ func (e *Engine) detectedClients(req Request) (map[domain.ClientID]domain.Detect
 		for _, target := range req.Targets {
 			client, err := e.detectedClient(Request{
 				Operation: req.Operation, ClientID: target.ClientID,
-				ClientConfigRoot: target.ClientConfigRoot,
+				ClientConfigRoot: target.ClientConfigRoot, ClientSurfaces: target.ClientSurfaces,
 				ClientExecutable: firstNonEmpty(target.ClientExecutable, req.ClientExecutable),
 			})
 			if err != nil {
@@ -62,7 +66,7 @@ func (e *Engine) detectedClients(req Request) (map[domain.ClientID]domain.Detect
 	for _, fact := range known {
 		client, err := e.detectedClient(Request{
 			Operation: req.Operation, ClientID: fact.ClientID,
-			ClientConfigRoot: fact.ConfigRoot, ClientExecutable: fact.Executable,
+			ClientConfigRoot: fact.ConfigRoot, ClientExecutable: fact.Executable, ClientSurfaces: fact.Surfaces,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrTargetFactsUnavailable, err)
@@ -76,7 +80,7 @@ func (e *Engine) detectedClients(req Request) (map[domain.ClientID]domain.Detect
 
 func addDetectedClient(detected map[domain.ClientID]domain.DetectedClient, client domain.DetectedClient) error {
 	if current, exists := detected[client.ClientID]; exists {
-		if current.ConfigRoot != client.ConfigRoot || current.ExecutablePath != client.ExecutablePath {
+		if current.ConfigRoot != client.ConfigRoot || current.ExecutablePath != client.ExecutablePath || !slices.Equal(current.Surfaces, client.Surfaces) {
 			return fmt.Errorf("%w: conflicting paths for %s", ErrTargetFactsUnavailable, client.ClientID)
 		}
 		return nil

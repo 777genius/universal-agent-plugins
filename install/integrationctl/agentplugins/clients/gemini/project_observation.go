@@ -88,7 +88,7 @@ func runGeminiInventory(ctx context.Context, env clients.Env, request domain.Act
 	if err != nil {
 		return legacyports.CommandResult{}, fmt.Errorf("gemini native inventory authority is unavailable")
 	}
-	for _, key := range []string{"PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "GEMINI_RESTRICTED_MODE", "GEMINI_CLI_TRUST_WORKSPACE"} {
+	for _, key := range []string{"PATH", "HOME", "USERPROFILE", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR", "GEMINI_RESTRICTED_MODE", "GEMINI_CLI_TRUST_WORKSPACE", "LANG", "LC_ALL", "TZ", "GEMINI_CLI_SYSTEM_SETTINGS_PATH", "GEMINI_CLI_SYSTEM_DEFAULTS_PATH"} {
 		if value, ok := os.LookupEnv(key); ok {
 			environment = append(environment, key+"="+value)
 		}

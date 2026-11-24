@@ -18,7 +18,7 @@ class CursorPublisherTransportTests(unittest.TestCase):
                      "transport": transport.TRANSPORT}
 
     def probe(self, body=b"inert", *, version=b"curl 8.5.0 (inert)\n", mutate=None,
-              result=None, output=None):
+              result=None, output=None, url=transport.URL, client='cursor'):
         def run(argv, cwd, env, directory, label, **limits):
             self.assertEqual(env, {"PATH": "/usr/bin:/bin", "HOME": str(cwd), "LANG": "C", "LC_ALL": "C"})
             self.assertEqual(cwd, directory)
@@ -26,10 +26,10 @@ class CursorPublisherTransportTests(unittest.TestCase):
             self.assertEqual(limits["limit"], 16384)
             self.assertIs(limits["memory_only"], True)
             self.assertLessEqual(limits["timeout"], 90)
-            if label == "cursor-curl-version":
+            if label == client + "-curl-version":
                 self.assertEqual(argv, ["/usr/bin/curl", "-q", "--version"])
                 return {"error": None, "exit": 0}, version, b""
-            self.assertEqual(label, "cursor-curl-download")
+            self.assertEqual(label, client + "-curl-download")
             target = Path(argv[argv.index("--output") + 1])
             self.assertEqual(target.parent, cwd)
             self.assertEqual(target.stat().st_mode & 0o777, 0o600)
@@ -38,11 +38,11 @@ class CursorPublisherTransportTests(unittest.TestCase):
             self.assertEqual(argv[argv.index("--proto-redir") + 1], "=https")
             self.assertEqual(argv[argv.index("--max-redirs") + 1], "0")
             self.assertEqual(argv[argv.index("--max-filesize") + 1], str(self.spec["max_bytes"]))
-            self.assertEqual(argv[-1], transport.URL)
+            self.assertEqual(argv[-1], url)
             target.write_bytes(body)
             if mutate is not None:
                 mutate(target)
-            return result or {"error": None, "exit": 0}, output or b"200\n" + transport.URL.encode() + b"\n", b""
+            return result or {"error": None, "exit": 0}, output or b"200\n" + url.encode() + b"\n", b""
         return run
 
     def test_supervised_exact_transport_has_closed_environment_and_removes_private_file(self):
@@ -82,6 +82,41 @@ class CursorPublisherTransportTests(unittest.TestCase):
             with self.subTest(mutate=mutate), patch.object(transport, "run_probe", side_effect=self.probe(mutate=mutate)):
                 with self.assertRaises(ValueError):
                     transport.download(self.spec, research.Budget())
+
+    def test_devin_exact_publisher_attempt_reuses_closed_transport_and_cleans_up(self):
+        self.spec = {"url": transport.DEVIN_URL, "format": "tar.gz", "max_bytes": 4096}
+        roots, labels = [], []
+        original = self.probe(url=transport.DEVIN_URL, client="devin")
+        def record(*args, **kwargs):
+            roots.append(args[1]); labels.append(args[4])
+            return original(*args, **kwargs)
+        with (patch.dict(os.environ, {"HTTPS_PROXY": "forbidden", "CURL_HOME": "forbidden",
+                                      "DEVIN_API_KEY": "forbidden"}),
+              patch.object(transport, "run_probe", side_effect=record)):
+            self.assertEqual(transport.download_devin(self.spec, research.Budget()),
+                             (b"inert", transport.DEVIN_URL))
+        self.assertEqual(labels, ["devin-curl-version", "devin-curl-download"])
+        self.assertTrue(all(not root.exists() for root in roots))
+
+    def test_devin_unregistered_specs_and_failed_attempts_never_yield_archive(self):
+        self.spec = {"url": transport.DEVIN_URL, "format": "tar.gz", "max_bytes": 4096}
+        with patch.object(transport, "run_probe", side_effect=AssertionError("child")):
+            for changed in ({"url": transport.URL}, {"url": transport.DEVIN_URL + "?token=x"},
+                            {"transport": "cursor-publisher-curl"}, {"format": "zip"},
+                            {"max_bytes": True}, {"max_bytes": 0}, {"max_bytes": (96 << 20) + 1}):
+                with self.subTest(changed=changed), self.assertRaises(ValueError):
+                    transport.download_devin({**self.spec, **changed}, research.Budget())
+        for variant in ({"version": b"curl 8.3.0 (inert)\n"},
+                        {"result": {"error": None, "exit": 22},
+                         "output": b"403\n" + transport.DEVIN_URL.encode() + b"\n"},
+                        {"result": {"error": "deadline", "exit": -9}},
+                        {"output": b"302\n" + transport.DEVIN_URL.encode() + b"\n"},
+                        {"output": b"200\nhttps://other.invalid/archive\n"}, {"body": b""}):
+            with self.subTest(variant=variant), patch.object(
+                    transport, "run_probe", side_effect=self.probe(
+                        url=transport.DEVIN_URL, client="devin", **variant)):
+                with self.assertRaises(ValueError):
+                    transport.download_devin(self.spec, research.Budget())
 
     def test_existing_size_digest_and_inventory_gates_still_apply(self):
         output = io.BytesIO()

@@ -88,7 +88,7 @@ func (e *Engine) groupAddInputs(req Request, envelopes []domain.PackageEnvelope,
 	for i, target := range req.Targets {
 		client, err := e.detectedClient(Request{
 			Operation: req.Operation, ClientID: target.ClientID,
-			ClientConfigRoot: target.ClientConfigRoot, ClientExecutable: firstNonEmpty(target.ClientExecutable, req.ClientExecutable),
+			ClientConfigRoot: target.ClientConfigRoot, ClientExecutable: firstNonEmpty(target.ClientExecutable, req.ClientExecutable), ClientSurfaces: target.ClientSurfaces,
 		})
 		if err != nil {
 			return nil, nil, err

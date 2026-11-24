@@ -48,12 +48,12 @@ func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, ac
 	}
 	targets, err = savedAddTargets(cmd, app, opts, source, targets)
 	if err != nil {
-		return true, err
+		return true, explainForeignBinding(app, err)
 	}
 	if (activation || auth) && len(targets) != 1 {
 		return true, errors.New("explicit lifecycle attestation requires exactly one target")
 	}
-	return true, runSavedAdd(cmd, app, opts, source, targets, matches, activation, auth)
+	return true, explainForeignBinding(app, runSavedAdd(cmd, app, opts, source, targets, matches, activation, auth))
 }
 
 func cloneSavedRequirements(value environment.Requirements) environment.Requirements {

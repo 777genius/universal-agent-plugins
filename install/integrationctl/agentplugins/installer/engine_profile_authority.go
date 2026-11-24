@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/dirswap"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -14,6 +15,7 @@ func profileClients(detected map[domain.ClientID]domain.DetectedClient) []domain
 	out := make([]domain.DetectedClient, 0, len(detected))
 	for _, c := range detected {
 		c.ProfileAuthority = domain.CloneProfileAuthority(c.ProfileAuthority)
+		c.Surfaces = slices.Clone(c.Surfaces)
 		out = append(out, c)
 	}
 	return out
@@ -105,6 +107,7 @@ func (e *Engine) prevalidatePhysical(ctx context.Context) error {
 func physicalClient(req Request, c domain.DetectedClient) domain.DetectedClient {
 	if frozen, ok := req.physical[c.ClientID]; ok {
 		frozen.ProfileAuthority = domain.CloneProfileAuthority(frozen.ProfileAuthority)
+		frozen.Surfaces = slices.Clone(frozen.Surfaces)
 		return frozen
 	}
 	return c

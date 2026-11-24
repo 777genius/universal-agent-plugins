@@ -137,7 +137,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 		session.result.Phase = GroupPhasePreparationFailed
 		return session.result, err
 	}
-	defer session.cleanupStaged()
+	defer func() { _ = session.cleanupStaged() }()
 	if err := session.revalidateHosts(); err != nil {
 		return session.result, err
 	}

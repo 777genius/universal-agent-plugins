@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/agentplugins-windows-firebase-capture-probe.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/firebase_runtime_failure.py'
       - 'scripts/test_firebase_runtime_failure.py'
@@ -37,6 +38,8 @@ jobs:
         shell: pwsh
         run: |
           python -m unittest scripts.test_live_install_audit_env.CrossPlatformPublishedProofRegressions.test_scoped_file_capture_reads_native_json_without_pipe_wait scripts.test_live_install_audit_env.WindowsOwnedFileCaptureContracts -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest scripts.test_windows_firebase_probe -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install genuine pinned Claude 2.1.263
         id: native-bootstrap
@@ -122,7 +125,7 @@ jobs:
           # The report binds this source build to its actual checkout and binary.
           python -B -m unittest discover -s scripts -p test_firebase_runtime_failure.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          go build -trimpath -ldflags='-X main.version=0.1.95' -o "$env:RUNNER_TEMP\agentplugins-source.exe" ./cli/cmd/agentplugins
+          go build -trimpath -ldflags='-X main.version=0.1.115' -o "$env:RUNNER_TEMP\agentplugins-source.exe" ./cli/cmd/agentplugins
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Genuine current-source Firebase add, repeat, native attribution and remove
         if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}
@@ -156,7 +159,7 @@ jobs:
           clean_worktree = subprocess.check_output(['git', 'status', '--porcelain'], text=True, timeout=30) == ''
           assert actual_head == os.environ['GITHUB_SHA'] and clean_worktree
           cli_version = subprocess.check_output([str(cli), 'version'], text=True, timeout=30).strip()
-          assert cli_version == 'agentplugins 0.1.95', 'Source fixture version differs from Directory policy pin'
+          assert cli_version == 'agentplugins 0.1.115', 'Source fixture version differs from Directory policy pin'
           cli_sha256 = hashlib.sha256(cli.read_bytes()).hexdigest()
           report = Path(os.environ['RUNNER_TEMP']) / 'source-firebase-claude.json'
           # Reproduce the original long Windows TEMP profile, unlike the

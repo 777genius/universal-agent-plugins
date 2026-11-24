@@ -90,6 +90,17 @@ func requiresExecutable(registry *clients.Registry, id domain.ClientID, scopes .
 	return ok && consumer.UsesOpenCodeHostProfile()
 }
 
+// missingExecutableError tells the person what to fix when a client was found
+// only by its configuration folder or app, but this lifecycle needs its
+// command-line program and none was found on PATH.
+func missingExecutableError(sentinel error, id domain.ClientID) error {
+	name := string(id)
+	if definition, ok := domain.ClientDefinitionFor(id); ok && definition.DisplayName != "" {
+		name = definition.DisplayName
+	}
+	return fmt.Errorf("%w: %s needs its command-line program, which was not found on PATH; install it or add it to PATH, then retry", sentinel, name)
+}
+
 // userExecutableOptional admits a User lane that only prepares files without a
 // launcher. Project scope and every other lane keep their executable authority.
 func userExecutableOptional(registry *clients.Registry, id domain.ClientID, scope domain.InstallScope) bool {

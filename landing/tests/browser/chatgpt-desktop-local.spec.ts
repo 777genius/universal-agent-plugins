@@ -23,7 +23,7 @@ function desktopFixture(withCodex: boolean) {
   return index;
 }
 
-const desktopCommand = 'npx -y universal-agent-plugins add i18n-state-00 --target chatgpt';
+const desktopCommand = 'npx -y universal-agent-plugins@latest add i18n-state-00 --target chatgpt';
 
 for (const width of [1440, 390]) {
   test('ChatGPT Desktop is a distinct selectable target with one copyable command at ' + width + 'px', async ({ page }) => {
@@ -108,7 +108,7 @@ for (const width of [1440, 390]) {
     const errors = await offline(page);
     await projections(page, signedMixedSurfaceFixture());
     await navigate(page, '/', 'en', '?q=i18n-state-00');
-    const hero = page.locator('.hero__demo');
+    const hero = page.locator('.hero-quick-start');
     await hero.locator('.app-multiselect__trigger').click();
     await page.getByRole('checkbox', { name: /^ChatGPT Desktop/ }).click();
     await page.keyboard.press('Escape');
@@ -129,7 +129,7 @@ for (const width of [1440, 390]) {
     await web.click();
     const snippet = page.getByRole('dialog').locator('.install-dialog__footer .command-snippet');
     const code = snippet.locator('code');
-    await expect(code).toHaveText(/--target (chatgpt,chatgptweb|chatgptweb,chatgpt) --no-save$/);
+    await expect(code).toHaveText(/--target "(chatgpt,chatgptweb|chatgptweb,chatgpt)" --no-save$/);
     const command = (await code.textContent())?.trim() ?? '';
     expect(command.match(/\bchatgpt\b/g)).toHaveLength(1);
     expect(command.match(/chatgptweb/g)).toHaveLength(1);
@@ -145,7 +145,7 @@ for (const width of [1440, 390]) {
     await expect(panel.locator('.command-snippet')).toHaveCount(4);
     for (const action of ['update', 'repair', 'remove'])
       await expect(panel.locator(`.command-snippet--${action} code`))
-        .toHaveText(new RegExp(`${action} i18n-state-00 --target (chatgpt,chatgptweb|chatgptweb,chatgpt)$`));
+        .toHaveText(new RegExp(`${action} i18n-state-00 --target "(chatgpt,chatgptweb|chatgptweb,chatgpt)"$`));
     expect(errors).toEqual([]);
   });
 }

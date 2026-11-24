@@ -502,7 +502,7 @@
       "ActivationMode": "manual",
       "AppSupport": "unsupported",
       "ClientID": "kiro",
-      "ExtensionSupport": "unsupported",
+      "ExtensionSupport": "native",
       "MCPTransports": {
         "sse": "native",
         "stdio": "native",

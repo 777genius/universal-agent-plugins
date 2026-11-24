@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestProjectChatGPTCLIRefusesAllTargetedIntentsBeforeEffects(t *testing.T) {
@@ -52,6 +57,15 @@ func TestPublicChatGPTDesktopProjectAliasRefusesBeforeEffects(t *testing.T) {
 	app, user, project, _ := projectCompositionFixture(t)
 	spy := &projectChatGPTBoundaries{}
 	app = projectChatGPTApp(app, spy)
+	scopeCalls := 0
+	var selectedScope domain.InstallScope
+	var selectedRoot string
+	scopeErr := errors.New("user scope factory control reached")
+	app.ForScope = func(scope domain.InstallScope, root string) (agentpluginscli.App, error) {
+		scopeCalls++
+		selectedScope, selectedRoot = scope, root
+		return agentpluginscli.App{}, scopeErr
+	}
 	source := filepath.Join(t.TempDir(), "package")
 	projectChatGPTWrite(t, filepath.Join(source, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"chatgpt-desktop-scope-proof"}`)
 	before := securityFixtureTree(t, project)
@@ -64,14 +78,38 @@ func TestPublicChatGPTDesktopProjectAliasRefusesBeforeEffects(t *testing.T) {
 		{"skills", "add", "https://invalid.example/no-acquisition", "--skill", "docs", "--target", "chatgpt", "--yes"},
 	} {
 		out, err := projectChatGPTExecute(app, project, args...)
-		if err == nil || !strings.Contains(err.Error(), "chatgpt (Desktop) supports only --scope user") || strings.Contains(out, "success") {
+		var usage agentpluginscli.CLIUsageError
+		if !errors.As(err, &usage) || usage.Code != "INVALID_SCOPE" || !strings.Contains(usage.Message, "chatgpt (Desktop) supports only --scope user") || strings.Contains(out, "success") {
 			t.Fatalf("Desktop project alias must refuse before effects %v: %s %v", args, out, err)
 		}
+	}
+	if scopeCalls != 0 {
+		t.Fatalf("unsupported Desktop Project request reached scope factory %d times", scopeCalls)
 	}
 	if !reflect.DeepEqual(before, securityFixtureTree(t, project)) {
 		t.Fatal("Desktop project alias changed project files")
 	}
 	projectChatGPTAssertNoEffects(t, spy, user, project)
+
+	// User-to-User selection reuses the existing runtime without ForScope.
+	// Start this control in Project so accepted User scope must reach the spy.
+	app.Scope, app.ProjectRoot = domain.ScopeProject, project
+	var output bytes.Buffer
+	app.Input, app.Output, app.ErrorOutput, app.Terminal = strings.NewReader(""), &output, &output, false
+	command := agentpluginscli.NewRoot(app)
+	command.SetOut(&output)
+	command.SetErr(&output)
+	command.SetArgs([]string{"skills", "add", "https://invalid.example/no-acquisition", "--skill", "docs", "--target", "chatgpt", "--scope", "user", "--format", "json", "--yes"})
+	if err := command.Execute(); !errors.Is(err, scopeErr) {
+		t.Fatalf("supported User scope must reach the factory control: %s %v", output.String(), err)
+	}
+	if scopeCalls != 1 || selectedScope != domain.ScopeUser || selectedRoot != "" {
+		t.Fatalf("User scope factory control: calls=%d scope=%q root=%q", scopeCalls, selectedScope, selectedRoot)
+	}
+	projectChatGPTAssertNoEffects(t, spy, user, project)
+	if !reflect.DeepEqual(before, securityFixtureTree(t, project)) {
+		t.Fatal("User factory control changed project files")
+	}
 }
 
 func TestProjectChatGPTSavedTargetRefusesBeforeLockAndAcquisition(t *testing.T) {

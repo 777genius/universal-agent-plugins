@@ -432,7 +432,7 @@ func TestInteractiveDirectoryAddOffersOnlyOneCompleteSignedTargetSet(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "Not available for automatic install:\n  - OpenAI Codex: the catalog has no compatible release") {
+	if !strings.Contains(stdout, "Not available for automatic install:\n  OpenAI Codex: the catalog has no compatible release of this package; check one with --target codex") {
 		t.Fatalf("package-aware Directory output = %q", stdout)
 	}
 	if rollout.acquirer.verifiedCalls != 1 {
@@ -474,7 +474,7 @@ func TestInteractiveDirectoryAddOffersKiroGuidedPreparation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(stdout, "kiro (prepare only; manual verification)") {
+	if !strings.Contains(stdout, "kiro (kiro) (prepare only) - verify manually") {
 		t.Fatalf("activation-aware Directory output = %q", stdout)
 	}
 	if !strings.Contains(stdout, "Detected supported clients (all selected by default)") {

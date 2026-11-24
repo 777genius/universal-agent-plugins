@@ -97,6 +97,8 @@ const (
 	Error
 	Label
 	Muted
+	// Info is a short informational addition, for example a hint after a choice.
+	Info
 )
 
 type Theme struct{ Enabled bool }
@@ -110,5 +112,5 @@ func (t Theme) Text(role Role, text string) string {
 
 // Color shares the semantic palette with the existing Huh style adapter.
 func Color(role Role) color.Color {
-	return ansi.BasicColor([]uint8{2, 3, 1, 6, 8}[role])
+	return ansi.BasicColor([]uint8{2, 3, 1, 6, 8, 4}[role])
 }

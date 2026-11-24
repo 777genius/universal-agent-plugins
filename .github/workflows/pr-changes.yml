@@ -16,6 +16,15 @@ on:
       authoring:
         description: Something beyond documentation and web content changed, or a path is unsafe on Windows.
         value: ${{ jobs.classify.outputs.authoring }}
+      native_clients:
+        description: Selected native runtime clients (full on shared inputs).
+        value: ${{ jobs.classify.outputs.native_clients }}
+      remaining_clients:
+        description: Selected remaining-live clients (full on shared inputs).
+        value: ${{ jobs.classify.outputs.remaining_clients }}
+      live_clients:
+        description: Selected live-audit clients (full on shared inputs).
+        value: ${{ jobs.classify.outputs.live_clients }}
 
 jobs:
   classify:
@@ -32,6 +41,9 @@ jobs:
       lint: ${{ steps.classify.outputs.lint }}
       management_sdk: ${{ steps.classify.outputs.management_sdk }}
       authoring: ${{ steps.classify.outputs.authoring }}
+      native_clients: ${{ steps.classify.outputs.native_clients }}
+      remaining_clients: ${{ steps.classify.outputs.remaining_clients }}
+      live_clients: ${{ steps.classify.outputs.live_clients }}
     steps:
       - name: Classify changed paths
         id: classify
@@ -41,11 +53,21 @@ jobs:
           CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
         run: |
           set -euo pipefail
+          full_native='["codex","claude","opencode"]'
+          full_remaining='["cursor","kiro","windsurf","grok","chatgpt"]'
+          full_live='["codex","claude","opencode","gemini","copilot","cline","kimi","qoder","pi"]'
+          emit_targets() {
+            printf 'native_clients=%s\nremaining_clients=%s\nlive_clients=%s\n' "$1" "$2" "$3" >> "$GITHUB_OUTPUT"
+          }
           run_everything() {
             echo "::warning::$1; running every gated job."
             printf 'lint=true\nmanagement_sdk=true\nauthoring=true\n' >> "$GITHUB_OUTPUT"
+            emit_targets "$full_native" "$full_remaining" "$full_live"
             exit 0
           }
+          if [[ "$GITHUB_EVENT_NAME" != pull_request ]]; then
+            run_everything "Non-PR event: full native qualification"
+          fi
           # The pull request files API lists at most 3000 files.
           (( CHANGED_FILES < 3000 )) || run_everything "The diff exceeds the files API limit"
           # Renames count on both sides so a move out of an input path still
@@ -60,6 +82,7 @@ jobs:
           if [[ -z "$files" ]]; then
             (( CHANGED_FILES == 0 )) || run_everything "The files API returned no paths for a non-empty diff"
             printf 'lint=false\nmanagement_sdk=false\nauthoring=false\n' | tee -a "$GITHUB_OUTPUT"
+            emit_targets '[]' '[]' '[]'
             exit 0
           fi
           ! grep -q '[[:cntrl:]]' <<<"$files" || run_everything "A changed path contains a control character"
@@ -90,3 +113,54 @@ jobs:
             authoring=true
           fi
           printf 'lint=%s\nmanagement_sdk=%s\nauthoring=%s\n' "$lint" "$management_sdk" "$authoring" | tee -a "$GITHUB_OUTPUT"
+          # Strictly client-scoped paths may shrink heavy E2E; shared/unknown
+          # inputs fail open. Files include both sides of each rename.
+          native_full=false native_codex=false native_claude=false native_opencode=false
+          remaining_full=false remaining_cursor=false remaining_kiro=false remaining_windsurf=false remaining_chatgpt=false
+          live_full=false live_codex=false live_claude=false live_opencode=false
+          live_gemini=false live_copilot=false live_cline=false live_kimi=false live_qoder=false live_pi=false
+          while IFS= read -r path; do
+            case "$path" in
+              repotests/agentplugins_codex_claude_*) native_codex=true; native_claude=true ;;
+              install/integrationctl/agentplugins/clients/codex/*|repotests/agentplugins_codex_*) native_codex=true ;;
+              install/integrationctl/agentplugins/clients/claude/*|repotests/agentplugins_claude_*) native_claude=true ;;
+              install/integrationctl/agentplugins/clients/opencode/*|repotests/agentplugins_opencode_*) native_opencode=true ;;
+              install/integrationctl/agentplugins/clients/antigravity/*|install/integrationctl/agentplugins/clients/chatgpt/*|install/integrationctl/agentplugins/clients/cline/*|install/integrationctl/agentplugins/clients/copilot/*|install/integrationctl/agentplugins/clients/cursor/*|install/integrationctl/agentplugins/clients/gemini/*|install/integrationctl/agentplugins/clients/grok/*|install/integrationctl/agentplugins/clients/hermes/*|install/integrationctl/agentplugins/clients/kimi/*|install/integrationctl/agentplugins/clients/kiro/*|install/integrationctl/agentplugins/clients/pi/*|install/integrationctl/agentplugins/clients/qoder/*|install/integrationctl/agentplugins/clients/vscode/*|install/integrationctl/agentplugins/clients/windsurf/*) : ;;
+              repotests/agentplugins_antigravity_*|repotests/agentplugins_chatgpt_*|repotests/agentplugins_cline_*|repotests/agentplugins_copilot_*|repotests/agentplugins_cursor_*|repotests/agentplugins_gemini_*|repotests/agentplugins_grok_*|repotests/agentplugins_hermes_*|repotests/agentplugins_kimi_*|repotests/agentplugins_kiro_*|repotests/agentplugins_pi_*|repotests/agentplugins_qoder_*|repotests/agentplugins_vscode_*|repotests/agentplugins_windsurf_*|repotests/agentplugins_devin_*) : ;;
+              cli/*|install/integrationctl/agentplugins/*|sdks/typescript/*|repotests/agentplugins_*native*|repotests/agentplugins_*runtime*|repotests/testdata/agentplugins_native_probe/*|repotests/testdata/agentplugins_commands_fixture/*|scripts/prepare-codex-linux-sandbox.sh|scripts/run-native-client-matrix.py|scripts/terminal-ui/native_browser.py|scripts/terminal-ui/native_skills.py|scripts/terminal-ui/native_plugin.py|scripts/terminal-ui/harness.py|scripts/terminal-ui/pty_owner.py|ui/skills-picker/*|contracts/skills-picker/*|scripts/native_client*.py|scripts/test_native_client*.py|scripts/verify-agentplugins-draft.py|scripts/test_agentplugins_draft.py|scripts/verify-released-native-evidence.py|scripts/test_released_native_evidence.py|npm/agentplugins/*|.github/workflows/agentplugins-native-clients.yml|.github/workflows/agentplugins-released-native-clients.yml|.github/workflows/pr-changes.yml) native_full=true ;;
+            esac
+            case "$path" in
+              scripts/prepare-codex-linux-sandbox.sh|scripts/run-native-client-matrix.py|scripts/codex_plugin_retention_audit.py|scripts/test_codex_plugin_retention_audit.py) remaining_chatgpt=true ;;
+              scripts/devin_project_auto_install_e2e.py|scripts/test_devin_project_auto_install_e2e.py|scripts/devin_structured_inventory_admission.py|scripts/test_devin_structured_inventory_admission.py) remaining_windsurf=true ;;
+              scripts/project_native_cursor_acquisition.py) remaining_cursor=true ;;
+              scripts/claude_darwin_metadata.py|scripts/test_claude_darwin_metadata.py) remaining_kiro=true ;;
+              .github/workflows/live-install-remaining-clients.yml|.github/workflows/pr-changes.yml|scripts/live-install-audit.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|tests/live-install/fixtures.json|scripts/native_client_research.py|scripts/project_native_research.py|scripts/native_client_draft.py|cli/cmd/agentplugins/*|cli/internal/agentpluginscli/*|install/integrationctl/agentplugins/*) remaining_full=true ;;
+            esac
+            case "$path" in
+              scripts/prepare-codex-linux-sandbox.sh|scripts/published_codex_baseline.py|scripts/test_published_codex_baseline.py|scripts/codex_runtime_audit.py|scripts/test_codex_runtime_audit.py|scripts/codex_plugin_retention_audit.py|scripts/test_codex_plugin_retention_audit.py) live_codex=true ;;
+              scripts/claude_cache_retirement_audit.py) live_claude=true ;;
+              scripts/opencode_bootstrap_audit.py|scripts/test_opencode_bootstrap_audit.py|scripts/test_live_install_audit_opencode_negative.py) live_opencode=true ;;
+              scripts/gemini_runtime_audit.py|scripts/gemini_windows_custody.py|scripts/test_gemini_windows_runtime_audit.py) live_gemini=true ;;
+              scripts/qoder_prepared_skill_audit.py|scripts/test_qoder_prepared_skill_audit.py) live_qoder=true ;;
+              scripts/pi_project_skill_audit.py|scripts/test_pi_project_skill_audit.py) live_pi=true ;;
+              scripts/live-install-audit.py|scripts/native_client_research.py|scripts/test_native_client_research.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|tests/live-install/fixtures.json|install/integrationctl/agentplugins/adapters/securityscan/scanner*.go|.github/workflows/live-install-audit.yml|.github/workflows/pr-changes.yml|scripts/windows_owned_job.py|scripts/test_live_install_audit_components.py) live_full=true ;;
+            esac
+          done <<< "$files"
+          selected_targets() {
+            local selected='' flag target
+            for flag in "$@"; do
+              if [[ "${!flag}" == true ]]; then
+                target="${flag#*_}"
+                [[ -z "$selected" ]] || selected+=','
+                selected+="\"$target\""
+              fi
+            done
+            printf '[%s]' "$selected"
+          }
+          native_clients="$(selected_targets native_codex native_claude native_opencode)"
+          remaining_clients="$(selected_targets remaining_cursor remaining_kiro remaining_windsurf remaining_chatgpt)"
+          live_clients="$(selected_targets live_codex live_claude live_opencode live_gemini live_copilot live_cline live_kimi live_qoder live_pi)"
+          [[ "$native_full" == false ]] || native_clients="$full_native"
+          [[ "$remaining_full" == false ]] || remaining_clients="$full_remaining"
+          [[ "$live_full" == false ]] || live_clients="$full_live"
+          emit_targets "$native_clients" "$remaining_clients" "$live_clients"

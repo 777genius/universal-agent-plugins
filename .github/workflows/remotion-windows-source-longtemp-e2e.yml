@@ -2,10 +2,13 @@ name: Remotion Windows source long TEMP E2E
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'install/integrationctl/agentplugins/adapters/sourceacquisition/**'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
       - 'scripts/codex_runtime_audit.py'
+      - 'scripts/windows_owned_job.py'
       - 'scripts/test_codex_runtime_audit.py'
       - 'scripts/remotion_windows_long_temp_e2e.py'
       - '.github/workflows/remotion-windows-source-longtemp-e2e.yml'
@@ -21,6 +24,7 @@ permissions:
 
 jobs:
   remotion-long-temp:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
     runs-on: windows-2025
     timeout-minutes: 35
     steps:

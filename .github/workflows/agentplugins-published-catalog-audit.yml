@@ -62,7 +62,9 @@ jobs:
       # The only test inputs from this repository are the existing immutable
       # 30-plugin/30-Skill fixture and its isolated lifecycle verification.
       - name: Check native-component attribution and expected negative proofs
-        run: python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
+          python3 -m unittest discover -s scripts -p 'test_codex_plugin_retention_audit.py' -v
 
       - name: Prepare the native Codex Linux sandbox
         if: ${{ matrix.client == 'codex' }}
