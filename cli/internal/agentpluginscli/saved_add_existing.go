@@ -23,6 +23,12 @@ func inspectSavedAddRoot(ctx context.Context, app App, opts *options, source str
 	if err != nil {
 		return err
 	}
+	// A direct source key cannot reveal its manifest-derived alias. Existing
+	// declarations may claim that alias, so let acquisition and resolution run
+	// before reporting ownership of the requested source.
+	if len(snapshot.Requirements.Dependencies) > 0 {
+		return nil
+	}
 	key := savedDirectSourceKey(source)
 	if match := exactGitPattern.FindStringSubmatch(source); match != nil {
 		key = "github:" + strings.ToLower(match[1]) + ":" + match[3]
