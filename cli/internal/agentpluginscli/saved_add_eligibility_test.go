@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -53,23 +52,28 @@ func TestSavedAddAutomaticTargetsRespectPackageHostPreflight(t *testing.T) {
 			cmd.SetContext(t.Context())
 			cmd.SetOut(&output)
 			cmd.SetErr(&output)
-			prompted := false
+			var offered prompt.TargetSelectionRequest
 			app.PromptFactory = func(io.Reader, io.Writer, io.Writer, bool, bool) (prompt.Prompter, io.Writer, error) {
 				return fakePrompter{selectFn: func(request prompt.TargetSelectionRequest) (prompt.TargetSelectionResult, error) {
-					prompted = true
+					offered = request
 					return prompt.TargetSelectionResult{IDs: request.DefaultIDs}, nil
 				}}, &output, nil
 			}
 			targets, err := savedAddTargets(cmd, app, &options{format: "human", scope: "user"}, source, nil)
+			// A package whose MCP connection cannot be checked on this host is still
+			// offered for Kiro, as file-only preparation; Skills-only needs no such mark.
 			want := []domain.ClientID{domain.ClientCursor, domain.ClientKiro}
-			if mcp {
-				want = []domain.ClientID{domain.ClientCursor}
-			}
 			if err != nil || !reflect.DeepEqual(targets, want) {
 				t.Fatalf("targets=%v want=%v err=%v", targets, want, err)
 			}
-			if prompted == mcp {
-				t.Fatalf("prompted=%v mcp=%v", prompted, mcp)
+			var kiroChoice prompt.TargetChoice
+			for _, choice := range offered.Choices {
+				if choice.ID == domain.ClientKiro {
+					kiroChoice = choice
+				}
+			}
+			if prepareOnly := kiroChoice.Note == preparedOnlyNote; prepareOnly != mcp || len(offered.Skipped) != 0 {
+				t.Fatalf("mcp=%v: Kiro choice %+v, skipped %+v", mcp, kiroChoice, offered.Skipped)
 			}
 			if previewRoot == "" {
 				t.Fatal("target admission did not use a disposable preview")
@@ -81,9 +85,6 @@ func TestSavedAddAutomaticTargetsRespectPackageHostPreflight(t *testing.T) {
 				if _, err := os.Stat(profile); !os.IsNotExist(err) {
 					t.Fatalf("profile changed before confirmation: %s %v", profile, err)
 				}
-			}
-			if mcp && !strings.Contains(output.String(), "Nothing was installed in Kiro") {
-				t.Fatalf("missing preflight guidance: %s", output.String())
 			}
 		})
 	}

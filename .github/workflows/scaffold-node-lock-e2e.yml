@@ -2,6 +2,7 @@ name: Scaffold Node lock E2E
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'cli/internal/authoring/scaffold/templates/package.json'
       - 'cli/internal/authoring/scaffold/templates/package-lock.json'
@@ -29,6 +30,7 @@ permissions:
 
 jobs:
   generated-node-stdio:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

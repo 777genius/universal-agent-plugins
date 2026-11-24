@@ -1,4 +1,4 @@
-//go:build !linux && !(darwin && arm64) && !(windows && (amd64 || arm64))
+//go:build !linux && !(darwin && (arm64 || amd64)) && !(windows && (amd64 || arm64))
 
 package packageview
 

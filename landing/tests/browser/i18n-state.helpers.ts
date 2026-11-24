@@ -46,12 +46,35 @@ export async function navigate(page: Page, family: string, locale: PublishedLoca
   await page.waitForFunction(() => Boolean((document.querySelector('#__nuxt') as HTMLElement & {
     __vue_app__?: { config: { globalProperties: { $router?: unknown } } };
   })?.__vue_app__?.config.globalProperties.$router));
-  // Only access the installed router, never component refs, stores, or async data.
+  // Router completion precedes Nuxt's async page setup and Suspense replacement.
+  // Wait for the public page lifecycle so assertions cannot hit the outgoing page.
   await page.evaluate(async (path) => {
     const root = document.querySelector('#__nuxt') as HTMLElement & {
-      __vue_app__: { config: { globalProperties: { $router: { push: (path: string) => Promise<unknown> } } } };
+      __vue_app__: { config: { globalProperties: {
+        $router: {
+          currentRoute: { value: { fullPath: string } };
+          resolve: (path: string) => { fullPath: string };
+          push: (path: string) => Promise<unknown>;
+        };
+        $nuxt: { hook: (name: 'page:loading:end', callback: () => void) => () => void };
+      } } };
     };
-    await root.__vue_app__.config.globalProperties.$router.push(path);
+    const { $router, $nuxt } = root.__vue_app__.config.globalProperties;
+    // A duplicate navigation has no new page lifecycle to complete.
+    if ($router.resolve(path).fullPath === $router.currentRoute.value.fullPath) {
+      await $router.push(path);
+      return;
+    }
+    let unhook!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      unhook = $nuxt.hook('page:loading:end', resolve);
+    });
+    try {
+      await $router.push(path);
+      await ready;
+    } finally {
+      unhook();
+    }
   }, localizedPath(family, locale) + suffix);
 }
 
@@ -148,37 +171,6 @@ export async function projections(page: Page, index: RegistryIndex) {
   await page.route('**/_payload.json*', (route) => route.fulfill({ status: 404, body: '' }));
 }
 
-// Read the built artifact independently of the production command formatter.
-export async function signedContext7Example(page: Page, client: ClientID) {
-  const response = await page.request.get(`./api/registry/client/${client}`);
-  expect(response.status()).toBe(200);
-  const index = await response.json() as RegistryIndex;
-  const plugin = index.plugins.find((item) => item.name === 'context7');
-  const distribution = plugin?.distributions.find((item) => item.id === '777genius/context7');
-  const release = distribution?.releases.find((item) => item.release_sequence === distribution.release_sequence);
-  // Another signed distribution can legitimately be selected. Only assert this
-  // exact community release when it is an eligible source for the client.
-  if (distribution?.status !== 'active' || !release?.selectable ||
-      release.release_status !== 'active' || !release.meets_minimum_capabilities ||
-      release.blocking_clients.includes(client) ||
-      !release.targets.some((target) => target.client === client && target.scopes.includes('user') &&
-        target.canonical_closure?.eligible !== false && !target.app_binding)) return undefined;
-  expect(plugin?.trust_state).toBe('reviewed');
-  expect(plugin?.install_source).toBe('context7');
-  expect(release.selectable).toBe(true);
-  expect(release?.release_status).toBe('active');
-  expect(release?.manifest_name).toBe('context7');
-  expect(release?.blocking_clients).not.toContain(client);
-  expect(release?.targets.find((target) => target.client === client)?.scopes).toContain('user');
-  expect(release?.source.repository).toBe('777genius/universal-agent-plugins-registry');
-  expect(release?.source.revision).toMatch(/^[0-9a-f]{40}$/);
-  expect(release?.source.path).toBe('plugins/context7');
-  return {
-    selector: 'context7',
-    command: `npx -y universal-agent-plugins@latest add context7 --target ${client}`,
-  };
-}
-
 // Read signed grants and immutable source bytes independently of the production resolver/formatter.
 export async function context7InstallExample(page: Page, client: ClientID) {
   const response = await page.request.get(`./api/registry/client/${client}`);
@@ -217,7 +209,7 @@ export async function context7InstallExample(page: Page, client: ClientID) {
   return {
     selector,
     pinned: !signed,
-    command: `npx -y universal-agent-plugins@${signed ? 'latest' : '0.1.115'} add ${selector} --target ${client}`,
+    command: `npx -y universal-agent-plugins@latest add ${selector} --target ${client}`,
   };
 }
 

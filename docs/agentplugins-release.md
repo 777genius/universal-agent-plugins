@@ -88,12 +88,8 @@ and follows the normal review and CI path.
    bootstraps the npm launcher from the exact local asset only after matching
    the embedded filename, size, and SHA-256; no GitHub token reaches the
    launcher or released binary. It then proves a warm-cache invocation with
-   the local proof source removed. The standard authoring journey must
-   succeed on every target except `darwin-amd64`: its packageview source
-   adapter is unavailable there, so that proof asserts a fail-closed
-   `platform_unavailable` result (no files written) instead of success.
-   Until the matrix aggregates successfully, no public GitHub Release may
-   exist.
+   the local proof source removed. Until the matrix aggregates successfully,
+   no public GitHub Release may exist.
 6. Confirm the reusable Hermes and Antigravity native workflows succeed. They
    start after `stage-draft`, in parallel with `platform-proof`. Each uses the
    same-run complete nine-asset artifact from `stage-draft`, with the exact frozen checkout and `checksums.txt` SHA-256.

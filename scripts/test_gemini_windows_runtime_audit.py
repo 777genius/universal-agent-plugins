@@ -5,8 +5,11 @@ Required filesystem/API failures on Windows are failures, not successful skips.
 """
 
 import ctypes
+from contextlib import contextmanager
+import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 from runpy import run_path
 import struct
@@ -310,13 +313,10 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
         with self.fixture() as case:
             new = self.record(case, 1)
             original, read = new.read_bytes(), os.read
-            interval = (case["phase_started"], case["clock"].now())
-            final = case["audit"].snapshot([case["profile"]])
             changed = []
             def swap(fd, count):
                 block = read(fd, count)
-                selected = case["observer"].windows.leaves.get(str(new))
-                if not changed and selected is not None and fd == selected[0]:
+                if not changed:
                     new.rename(new.with_name("held-old-session"))
                     new.write_bytes(original)
                     changed.append(True)
@@ -367,8 +367,6 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
     def test_descriptor_transfer_failure_closes_only_its_untransferred_handle(self):
         with self.fixture() as case:
             new = self.record(case, 1)
-            interval = (case["phase_started"], case["clock"].now())
-            final = case["audit"].snapshot([case["profile"]])
             native, opened = case["observer"].windows, []
             original = native.kernel.OpenFileById
             def capture(*args):
@@ -452,6 +450,7 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                 matched = [{'installation_id': 'owned-id', 'name': 'owned-test',
                             'clients': [{'client_id': 'gemini'}]}]
                 operations, held, native_calls, public_lists = [], [], [], []
+                baseline_stdout = "full Windows baseline body\n" * 200
                 parent_changed, injected_parent_facts = [False], []
                 real_observer = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit']
                 clock = _contracts.GeminiFixtureClock()
@@ -477,10 +476,11 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                         close()
                     native.close = capture_close
                     return observer
-                def fake_call(argv, env, cwd, timeout=105):
+                def fake_call(argv, env, cwd, timeout=105, *, capture_full=False):
                     operation = ('native-list' if argv[0] == gemini else
                                  argv[2] if argv[1] == 'skills' else argv[1])
                     operations.append(operation)
+                    self.assertIs(capture_full, operation == 'native-list')
                     if operation == 'native-list':
                         self.assertEqual(argv, [gemini, 'skills', 'list', '--all'])
                         self.assertEqual(cwd, project)
@@ -514,7 +514,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                     if operation == 'add':
                         response.update(readiness='ready', next_actions=[])
                     return {'exit_code': 0, 'stdout_tail': '', 'stderr_tail': '', 'timeout': False,
-                            '_json': response}
+                            '_json': response,
+                            **({'stdout_full': baseline_stdout, 'stderr_full': ''} if capture_full else {})}
                 with (patch.dict(audit.AGENT_BINARIES, {'gemini': gemini}, clear=True),
                       patch.dict(audit.GEMINI_RUNTIME_AUDIT, {'GeminiRepeatAudit': observe}),
                       patch.dict(real_observer.__init__.__globals__, {'_now': clock.now}),
@@ -533,6 +534,14 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                 self.assertEqual(baseline['operation'], 'native-skills-list-baseline')
                 self.assertEqual(baseline['observation']['exit_code'], 0)
                 self.assertFalse(baseline['observation']['timeout'])
+                self.assertNotIn('stdout_full', baseline['observation'])
+                self.assertNotIn('stderr_full', baseline['observation'])
+                self.assertEqual(baseline['command'], {
+                    'argv': [gemini, 'skills', 'list', '--all'], 'cwd': str(project),
+                    'exit_code': 0, 'timeout': False,
+                    'stdout_bytes': len(baseline_stdout.encode('utf-8')),
+                    'stdout_sha256': hashlib.sha256(baseline_stdout.encode('utf-8')).hexdigest(),
+                    'stderr_bytes': 0, 'stderr_sha256': hashlib.sha256(b'').hexdigest()})
                 self.assertFalse(baseline['selected_skill_discovery_claimed'])
                 proof = row['gemini_runtime_proof']
                 self.assertEqual(proof['baseline']['records'], 3)
@@ -553,6 +562,213 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
                 self.assertEqual(row['status'], 'repeat-add-unqualified' if changed_parent else 'passed')
                 self.assertEqual(len(held), 1)
                 self.assert_closed(*held[0])
+
+
+@unittest.skipUnless(sys.platform in ("linux", "darwin"), "POSIX registry lease FD custody")
+class GeminiRegistryLeaseContracts(unittest.TestCase):
+    """Actual private directories and journals; no native CLI or model runs."""
+
+    @contextmanager
+    def fixture(self, preexisting=False):
+        audit = load_audit()
+        observer_type = audit.GEMINI_RUNTIME_AUDIT['GeminiRepeatAudit']
+        clock = _contracts.GeminiFixtureClock()
+        with TemporaryDirectory() as temporary, patch.dict(observer_type.__init__.__globals__, {'_now': clock.now}):
+            root = Path(temporary).resolve()
+            project, home = root / 'Project', root / 'home'
+            profile = home / '.gemini'
+            chats = profile / 'tmp/project/chats'
+            project.mkdir()
+            chats.mkdir(parents=True)
+            (profile / 'projects.json').write_text(json.dumps({'projects': {str(project): 'project'}}))
+            (chats.parent / '.project_root').write_text(str(project))
+            (profile / 'foreign.txt').write_bytes(b'foreign configuration is immutable\n')
+            lease = profile / 'projects.json.lock'
+            if preexisting:
+                lease.mkdir(mode=0o755)
+            before = audit.snapshot([profile], include_directories=True)
+            observer = observer_type(home, project, before,
+                {'status': 'reported', 'exit_code': 0, 'value': '0.66.0'},
+                profile_snapshot=audit.scoped_snapshot, expected_binary='/unused/gemini')
+            case = dict(root=root, home=home, project=project, profile=profile, chats=chats,
+                        lease=lease, audit=audit, observer=observer, clock=clock)
+            try:
+                yield case
+            finally:
+                observer.close()
+
+    def snapshot(self, c):
+        return c['audit'].snapshot([c['profile']], include_directories=True)
+
+    def record(self, c, index):
+        return _contracts.GeminiEmptySessionRuntimeContracts.record(self, c, index, startup=True)
+
+    def baseline(self, c, mutation=None):
+        self.assertIsNone(c['observer'].reason)
+        start = c['clock'].now()
+        self.record(c, 100)
+        c['lease'].mkdir(mode=0o755)
+        c['lease'].chmod(0o755)
+        if mutation:
+            mutation(c)
+        body = b'Discovered Agent Skills:\n'
+        command = {'argv': ['/unused/gemini', 'skills', 'list', '--all'], 'cwd': str(c['project']),
+                   'exit_code': 0, 'timeout': False, 'stdout_bytes': len(body),
+                   'stdout_sha256': hashlib.sha256(body).hexdigest(), 'stderr_bytes': 0,
+                   'stderr_sha256': hashlib.sha256(b'').hexdigest()}
+        c['command'] = command
+        c['observer'].baseline(self.snapshot(c), interval=(start, c['clock'].now()), command=command)
+
+    def phase(self, c, index, mutation=None):
+        start = c['clock'].now()
+        if mutation:
+            mutation(c)
+        self.record(c, index)
+        observed = self.snapshot(c)
+        c['observer'].checkpoint(('after-public-repeat-add', 'after-public-repeat-list')[index - 1],
+                                observed, interval=(start, c['clock'].now()))
+        return observed
+
+    def test_actual_empty_lease_retained_then_removed_by_next_public_phase(self):
+        for remove_in in (1, 2):
+            with self.subTest(remove_in=remove_in), self.fixture() as c:
+                self.baseline(c)
+                self.assertIsNone(c['observer'].reason)
+                held = c['observer'].lease_fd
+                original = os.fstat(held)
+                self.assertTrue(c['lease'].is_dir())
+                for index in (1, 2):
+                    final = self.phase(c, index, (lambda c: c['lease'].rmdir()) if index == remove_in else None)
+                self.assertTrue(c['observer'].finish(final), c['observer'].reason)
+                proof = c['observer'].evidence()
+                lease = proof['registry_lease']
+                self.assertEqual(lease['baseline']['inode'], original.st_ino)
+                self.assertEqual([x['namespace_present'] for x in lease['transitions']],
+                                 [True, remove_in != 1, False])
+                self.assertTrue(lease['final_absence_verified'])
+                self.assertFalse(lease['audit_mutated_lease'])
+                self.assertEqual(lease['native_baseline_command'], c['command'])
+                self.assertFalse(proof['producer_attribution'])
+                self.assertFalse(proof['writer_closure'])
+                self.assertEqual([x['records'] for x in proof['files']], [3, 3])
+                self.assertEqual((c['profile'] / 'foreign.txt').read_bytes(), b'foreign configuration is immutable\n')
+                c['observer'].close()
+                with self.assertRaises(OSError):
+                    os.fstat(held)
+
+    def test_preexisting_foreign_lease_is_never_admitted(self):
+        with self.fixture(preexisting=True) as c:
+            self.assertIn('already present', c['observer'].reason)
+            self.assertFalse(c['observer'].finish(self.snapshot(c)))
+            self.assertTrue(c['lease'].is_dir())
+
+    def test_baseline_nonempty_link_mode_and_unknown_command_refuse(self):
+        def link(c):
+            c['lease'].rmdir()
+            c['lease'].symlink_to(c['chats'], target_is_directory=True)
+        def hardlink(c):
+            c['lease'].rmdir()
+            source = c['root'] / 'foreign-lock-file'
+            source.write_bytes(b'foreign hardlinked lease file')
+            os.link(source, c['lease'])
+        for name, mutation in (
+                ('nonempty', lambda c: (c['lease'] / 'foreign').write_bytes(b'owned by someone else')),
+                ('link', link), ('hardlink', hardlink), ('mode', lambda c: c['lease'].chmod(0o700))):
+            with self.subTest(name=name), self.fixture() as c:
+                self.baseline(c, mutation)
+                self.assertIsNotNone(c['observer'].reason)
+                self.assertFalse(c['observer'].finish(self.snapshot(c)))
+                self.assertTrue(os.path.lexists(c['lease']))
+                if name == 'hardlink':
+                    self.assertEqual((c['root'] / 'foreign-lock-file').read_bytes(), b'foreign hardlinked lease file')
+        for name in ('missing', 'wrong-binary', 'wrong-cwd', 'exit', 'timeout', 'unbounded', 'bad-hash'):
+            with self.subTest(name=name), self.fixture() as c:
+                start = c['clock'].now()
+                self.record(c, 100)
+                c['lease'].mkdir(mode=0o755)
+                cmd = {'argv': ['/unused/gemini', 'skills', 'list', '--all'], 'cwd': str(c['project']),
+                       'exit_code': 0, 'timeout': False, 'stdout_bytes': 0, 'stdout_sha256': hashlib.sha256(b'').hexdigest(),
+                       'stderr_bytes': 0, 'stderr_sha256': hashlib.sha256(b'').hexdigest()}
+                if name == 'wrong-binary': cmd['argv'][0] = '/foreign/gemini'
+                if name == 'wrong-cwd': cmd['cwd'] = str(c['root'])
+                if name == 'exit': cmd['exit_code'] = 1
+                if name == 'timeout': cmd['timeout'] = True
+                if name == 'unbounded': cmd['stdout_bytes'] = (1 << 20) + 1
+                if name == 'bad-hash': cmd['stdout_sha256'] = 'bad'
+                c['observer'].baseline(self.snapshot(c), interval=(start, c['clock'].now()),
+                                      command=None if name == 'missing' else cmd)
+                self.assertIsNotNone(c['observer'].reason)
+
+    def test_owner_facts_and_metadata_swap_during_read_refuse(self):
+        # A portable OS-facts disagreement avoids requiring chown privileges.
+        with self.fixture() as c:
+            real = os.fstat
+            def changed_owner(fd):
+                value = real(fd)
+                if os.path.lexists(c['lease']) and value.st_ino == c['lease'].lstat().st_ino:
+                    fields = {key: getattr(value, key) for key in dir(value) if key.startswith('st_')}
+                    fields['st_uid'] += 1
+                    return SimpleNamespace(**fields)
+                return value
+            with patch.object(os, 'fstat', side_effect=changed_owner):
+                self.baseline(c)
+            self.assertIsNotNone(c['observer'].reason)
+        with self.fixture() as c:
+            self.baseline(c)
+            real, mutated = os.listdir, []
+            def change_during_read(fd):
+                names = real(fd)
+                if fd == c['observer'].lease_fd and not mutated:
+                    c['lease'].chmod(0o700)
+                    mutated.append(True)
+                return names
+            with patch.object(os, 'listdir', side_effect=change_during_read):
+                final = self.phase(c, 1)
+            self.assertEqual(mutated, [True])
+            self.assertFalse(c['observer'].finish(final))
+
+    def test_lease_replacement_rename_metadata_recreation_and_foreign_delta_refuse(self):
+        def replace(c):
+            c['lease'].rmdir()
+            c['lease'].mkdir(mode=0o755)
+        def rename(c):
+            c['lease'].rename(c['root'] / 'foreign-held-lease')
+        def recreate(c):
+            c['lease'].mkdir(mode=0o755)
+        def replace_project(c):
+            c['project'].rename(c['root'] / 'held-project')
+            c['project'].mkdir()
+        for name, mutation in (
+                ('replacement', replace), ('rename', rename),
+                ('metadata', lambda c: c['lease'].chmod(0o700)),
+                ('timestamps', lambda c: os.utime(c['lease'], ns=(1, 1))),
+                ('nonempty', lambda c: (c['lease'] / 'foreign').write_bytes(b'foreign')),
+                ('ancestor', replace_project),
+                ('foreign', lambda c: (c['profile'] / 'foreign.txt').write_bytes(b'changed'))):
+            with self.subTest(name=name), self.fixture() as c:
+                self.baseline(c)
+                self.phase(c, 1, mutation)
+                self.assertIsNotNone(c['observer'].reason)
+                self.assertFalse(c['observer'].finish(self.snapshot(c)))
+        with self.fixture() as c:
+            self.baseline(c)
+            self.phase(c, 1, lambda c: c['lease'].rmdir())
+            self.assertIsNone(c['observer'].reason)
+            self.phase(c, 2, recreate)
+            self.assertIsNotNone(c['observer'].reason)
+        with self.fixture() as c:
+            self.baseline(c)
+            self.phase(c, 1, lambda c: c['lease'].rmdir())
+            self.assertIsNone(c['observer'].reason)
+            self.phase(c, 2, lambda c: os.utime(c['observer'].lease_fd, ns=(1, 1)))
+            self.assertIsNotNone(c['observer'].reason)
+        with self.fixture() as c:
+            self.baseline(c)
+            self.phase(c, 1)
+            final = self.phase(c, 2)
+            self.assertFalse(c['observer'].finish(final))
+            self.assertIn('survives', c['observer'].reason)
+            self.assertTrue(c['lease'].is_dir())
 
 
 if __name__ == "__main__":

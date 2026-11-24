@@ -950,6 +950,44 @@ test('v3 distinguishes selected roots from known complete plugin inventory', asy
   expect(errors).toEqual([]);
 });
 
+test('locale navigation waits for the replacement catalog before report interaction', async ({ page }) => {
+  const { errors } = await setup(page);
+  const requested = deferred();
+  const catalog = deferred();
+  await page.route('**/api/registry/catalog', async (route) => {
+    requested.release();
+    await catalog.promise;
+    await route.fallback();
+  });
+  let finished = false;
+  const navigation = navigate(page, '/plugins/', 'ru', '?q=i18n-state-00').then(() => {
+    finished = true;
+  });
+  try {
+    await requested.promise;
+    // The outgoing page can already show Russian text while the replacement
+    // awaits its catalog. Matching wording alone cannot identify the final page.
+    await expect(page.locator('.plugin-card[data-install-source="i18n-state-00"] .skillspector > summary')).toContainText(
+      'Проверка скиллов · Проверено 13/13 · 10 не полностью',
+    );
+    expect(finished).toBe(false);
+  } finally {
+    catalog.release();
+    await navigation;
+  }
+  const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
+  await card.locator('.skillspector > summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(card.locator('.skillspector__dialog')).toBeVisible();
+  await expect(card.locator('.skillspector__advice')).toContainText('Скиллов проверено: 13 из 13');
+  await expect(card.locator('.skillspector__advice')).toContainText(
+    'SkillSpector не проверяет другие компоненты плагина.',
+  );
+  await page.keyboard.press('Escape');
+  await expect(card.locator('.skillspector > summary')).toBeFocused();
+  expect(errors).toEqual([]);
+});
+
 for (const width of [1280, 390]) {
   test(`v3 Russian wording identifies the listing review, scan scope and known Skill coverage (${width})`, async ({
     page,

@@ -429,7 +429,7 @@ def raw_skills(record, rows, decode, stream):
         if phase in ("add", "repeat", "remove"):
             require(command["cwd"] == projects["user"])
             expected = ["skills", "add", source, "--skill", "benchmark-note", "--target", "cline", "--scope", "project", "--project-root", projects["a"], "--yes", "--no-ui", "--format", "json"]
-            if phase == "remove": expected = ["remove", installed[0]["installation_id"], "--target", "cline", "--scope", "project", "--project-root", projects["a"], "--yes", "--no-ui", "--format", "json"]
+            if phase == "remove": expected = ["remove", installed[0]["installation_id"], "--target", "cline", "--scope", "project", "--project-root", projects["a"], "--yes", "--format", "json"]
             require(argv[1:] == expected)
             if phase == "add": add_argv = argv
             if phase == "repeat": require(argv == add_argv)

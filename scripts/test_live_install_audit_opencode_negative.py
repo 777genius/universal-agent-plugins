@@ -6,6 +6,8 @@ from test_live_install_audit_env import load_audit
 
 
 class OpenCodePartialCoverageTest(unittest.TestCase):
+    # Branch-relevant observations from exact-source run 44896512089, artifact
+    # 14706544745 (outer SHA256 ea74904a9f8f76afc17d7c14411d82d1f879b1f61b03924d5579874bf054a302).
     # Observed NONPASS rows from run 44911211196, job 136989175529, artifact
     # 14727154686 (ZIP SHA256 9cef82819a6d425a6bfe142bd165cc9dca945d83ee3f83d50e82dad19cda22b4).
     # That run failed coverage with native PASS=0; classification stays non-native.

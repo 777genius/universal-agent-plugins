@@ -374,6 +374,13 @@ def pi_raw_skills_case(pi, release, driver, installer, parent, destination, scop
 
 
 
+def write_components_evidence(destination, state):
+    """The scripted provider qualifies native MCP calls, never real inference."""
+    if state.get("real_model_qualified") is not False:
+        raise RuntimeError("scripted Pi provider cannot qualify a real model")
+    (destination/"pi-project-components-evidence.json").write_text(json.dumps(state,indent=2,sort_keys=True)+"\n")
+
+
 def main():
     if len(sys.argv) != 3 or sys.argv[1] not in PINS:
         raise SystemExit("usage: pi_project_components_native_e2e.py TARGET OUTPUT")
@@ -656,7 +663,6 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
                 state["stages"].append(label+"_Pi_global_skill_stdio_HTTP_call_update_repair_remove")
                 skill("first")
 
-            state["real_model_qualified"] = True
             state["mcp_tools_call_qualified"] = True
             skill("second")
             op(project_a,"update")
@@ -674,13 +680,31 @@ for await (const line of readline.createInterface({input:process.stdin,crlfDelay
             remaining = json.loads((project_a/".pi/mcp.json").read_text()).get("mcpServers", {})
             if not isinstance(remaining, dict) or "foreign" not in remaining:
                 raise RuntimeError("foreign project MCP was removed")
-            if "pi-managed" in remaining:
+            if any(name in remaining for name in ("pi-managed","pi-http")):
                 raise RuntimeError("owned Pi project MCP survived removal")
+            # Reopen Project A with its original profile to prove native absence.
+            observed_after_remove=checked_rpc(pi,project_a,env,True,"project-removed")
+            if any(not isinstance(item,dict) or not isinstance(item.get("name"),str)
+                   or not item["name"] for item in observed_after_remove):
+                raise RuntimeError("Pi project Skill inventory is malformed after removal")
+            if any(item["name"]=="skill:pi-managed" for item in observed_after_remove):
+                raise RuntimeError("Pi project Skill is still discoverable after removal")
+            mcp_after_remove=json.loads(run([str(pi),"mcp","list","--json"],
+                                          project_a,env=env,timeout=55))
+            if not isinstance(mcp_after_remove,dict) or not isinstance(mcp_after_remove.get("servers"),list):
+                raise RuntimeError("Pi project MCP inventory is malformed after removal")
+            entries=mcp_after_remove["servers"]
+            if any(not isinstance(entry,dict) or not isinstance(entry.get("name"),str)
+                   or not entry["name"] for entry in entries):
+                raise RuntimeError("Pi project MCP server inventory is malformed after removal")
+            if any(entry["name"] in ("pi-managed","pi-http")
+                   for entry in entries):
+                raise RuntimeError("Pi project MCP is still discoverable after removal")
             state["stages"].append("A_update_remove_B_and_foreign_preserved")
             state["public_raw_skills"] = {scope: pi_raw_skills_case(pi, release, driver, installer, root, destination, scope)
                                           for scope in ("project", "user")}
             state["status"]="passed"
     finally:
-        (destination/"pi-project-components-evidence.json").write_text(json.dumps(state,indent=2,sort_keys=True)+"\n")
+        write_components_evidence(destination, state)
 
 if __name__=="__main__": main()

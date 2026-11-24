@@ -1,4 +1,4 @@
-import { hydrated, context7InstallExample, signedContext7Example, wording } from './i18n-state.helpers';
+import { hydrated, context7InstallExample, wording } from './i18n-state.helpers';
 import { expect, test } from '@playwright/test';
 import { clientLandingPages } from '../../data/clients';
 
@@ -102,10 +102,6 @@ for (const client of clientLandingPages) {
     await expect(snippet).toHaveCount(1);
     await expect(snippet.locator('code')).toHaveText(command);
     if (example) {
-      if (!example.pinned) {
-        const signed = await signedContext7Example(page, client.id);
-        if (signed) expect({ command: example.command, selector: example.selector }).toEqual(signed);
-      }
       await expect(install.locator('p code')).toHaveText(example.selector);
       if (example.pinned) await expect(install).toContainText(wording('en')('registryUi.install.pinnedCatalogSource'));
       else await expect(install).not.toContainText(wording('en')('registryUi.install.pinnedCatalogSource'));

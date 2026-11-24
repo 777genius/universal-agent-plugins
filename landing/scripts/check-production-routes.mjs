@@ -112,10 +112,10 @@ export async function expectedAgentCommand(root, id) {
   if (availability?.kind === 'pinned_git') {
     const { repository, revision, path: subpath } = availability.selection.source;
     assert(sha(revision), 'catalog command requires an immutable revision');
-    assert(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(source.PINNED_CATALOG_CLI_VERSION),
-      'catalog command requires a pinned public CLI');
+    assert.equal(source.CATALOG_CLI_VERSION, 'latest',
+      'catalog command must follow the stable npm CLI tag');
     const selector = `github:${repository}@${revision}${subpath ? `//${subpath}` : ''}`;
-    return `npx -y universal-agent-plugins@${source.PINNED_CATALOG_CLI_VERSION} add ${selector} --target ${id}`;
+    return `npx -y universal-agent-plugins@${source.CATALOG_CLI_VERSION} add ${selector} --target ${id}`;
   }
   assert.equal(availability?.kind, 'signed', 'agent example lacks an eligible install route');
   return pluginCommands(example.plugin, [id]).add;

@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/agentplugins-windows-firebase-capture-probe.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/firebase_runtime_failure.py'
       - 'scripts/test_firebase_runtime_failure.py'
@@ -21,8 +22,7 @@ permissions:
 jobs:
   firebase-claude:
     runs-on: windows-2025
-    # Dispatch may run both published and source lifecycles, each with a repeat.
-    timeout-minutes: 70
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -38,6 +38,8 @@ jobs:
         shell: pwsh
         run: |
           python -m unittest scripts.test_live_install_audit_env.CrossPlatformPublishedProofRegressions.test_scoped_file_capture_reads_native_json_without_pipe_wait scripts.test_live_install_audit_env.WindowsOwnedFileCaptureContracts -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -m unittest scripts.test_windows_firebase_probe -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install genuine pinned Claude 2.1.263
         id: native-bootstrap

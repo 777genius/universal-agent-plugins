@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -21,7 +22,7 @@ func (app App) compatibleDetectedTargets(ctx context.Context, source string, det
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		skipped = append(skipped, skippedTargets(subtractDetectedClients(detected, compatible), "the catalog has no compatible release for this combination of clients and system; check this client separately with --target")...)
+		skipped = append(skipped, skippedTargets(subtractDetectedClients(detected, compatible), prompt.SkipNoRelease, "")...)
 		candidates = compatible
 		if len(candidates) == 0 {
 			return nil, skipped, nil, nil
@@ -38,7 +39,7 @@ func (app App) compatibleDiscoveryDetectedTargets(ctx context.Context, source st
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	skipped := skippedTargets(subtractDetectedClients(detected, compatible), "not listed as compatible in the signed Discovery record; inspect this client separately with --target")
+	skipped := skippedTargets(subtractDetectedClients(detected, compatible), prompt.SkipNoRelease, "not listed as compatible in the signed Discovery record; check one with --target "+prompt.TargetPlaceholder)
 	return compatible, skipped, nil, nil
 }
 
