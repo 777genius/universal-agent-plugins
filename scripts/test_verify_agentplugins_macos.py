@@ -16,7 +16,7 @@ class VerifySignedMacOSTests(unittest.TestCase):
             binaries.mkdir()
             fakes = root / "fakes"
             fakes.mkdir()
-            for name, body in {"uname": "echo arm64", "xattr": "exit 0", "spctl": "exit 0", "sleep": "exit 0"}.items():
+            for name, body in {"uname": "echo arm64", "xattr": "exit 0", "spctl": "echo assessments enabled", "sleep": "exit 0"}.items():
                 path = fakes / name
                 path.write_text("#!/bin/sh\n" + body + "\n")
                 path.chmod(0o755)
@@ -33,6 +33,16 @@ class VerifySignedMacOSTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue(marker.exists())
             marker.unlink()
+            status = fakes / "spctl"
+            status.write_text("#!/bin/sh\\necho assessments disabled\\n")
+            self.assertNotEqual(subprocess.run(cmd, env=env, capture_output=True).returncode, 0,
+                                "disabled Gatekeeper must refuse")
+            self.assertFalse(marker.exists(), "disabled Gatekeeper must not execute ARM")
+            status.write_text("#!/bin/sh\\necho assessments enabled\\nexit 1\\n")
+            self.assertNotEqual(subprocess.run(cmd, env=env, capture_output=True).returncode, 0,
+                                "failed Gatekeeper query must refuse")
+            self.assertFalse(marker.exists(), "failed Gatekeeper query must not execute ARM")
+            status.write_text("#!/bin/sh\\necho assessments enabled\\n")
             arm.write_text('#!/bin/sh\necho "agentplugins 1.2.3"\nexit 1\n')
             env["SIGNED_DARWIN_ARM64_SHA256"] = hashlib.sha256(arm.read_bytes()).hexdigest()
             self.assertNotEqual(subprocess.run(cmd, env=env, capture_output=True).returncode, 0,

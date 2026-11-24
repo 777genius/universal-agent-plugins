@@ -23,7 +23,8 @@ cp "$directory/agentplugins_${version}_darwin_arm64" "$work/agentplugins"
 chmod 0755 "$work/agentplugins"
 xattr -w com.apple.quarantine "0081;$(printf '%x' "$(date +%s)");agentplugins-signing;" "$work/agentplugins"
 xattr -p com.apple.quarantine "$work/agentplugins" > /dev/null
-spctl --status || true
+gatekeeper_status="$(spctl --status 2>&1)" || { echo 'Gatekeeper status query failed' >&2; exit 1; }
+[[ "$gatekeeper_status" == "assessments enabled" ]] || { echo 'Gatekeeper assessments are disabled' >&2; exit 1; }
 for attempt in 1 2 3 4 5; do
   if observed="$(env -i HOME="$work/home" PATH=/usr/bin:/bin "$work/agentplugins" version 2>&1)" &&
     [[ "$observed" == "agentplugins $version" ]]; then
