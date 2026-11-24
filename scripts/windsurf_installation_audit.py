@@ -384,6 +384,14 @@ class WindsurfInstallationAudit:
                 and not any(key.startswith(("link:", "root-link:")) for key in image)
                 and not any(value in ("unreadable", "symlink", "non-regular")
                             for value in image.values()))
+        if self.native_runtime is not None and self.native_runtime.native_cache_events:
+            # This is strictly the independently qualified pinned Devin CLI
+            # cache. No public UAP operation may write it: runtime.guard()
+            # anchors the full HOME including every cached file and digest.
+            image = {key: value for key, value in image.items()
+                if not (key == "directory:2:cli" or key.startswith("directory:2:cli/")
+                        or key == "metadata:2:cli" or key.startswith("metadata:2:cli/")
+                        or key == "devin/cli" or key.startswith("devin/cli/"))}
         encoded(image, 4 << 20)
         self.guard()
         return image

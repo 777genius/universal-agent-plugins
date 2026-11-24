@@ -431,6 +431,11 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 row["status"] = "passed"
                 row["windsurf_global_native_proof"] = {"native_discovery_verified": True}
                 self.finish(observer, row)
+        cached_native, _ = self.native_lifecycle(transport_mode="vendor-cache-small")
+        self.assertEqual(cached_native["status"], "passed")
+        self.assertTrue(cached_native["windsurf_global_native_proof"]["cache_exception_granted"])
+        self.assertEqual(cached_native["windsurf_installation_audit"]["native_post_remove_state"], "pristine")
+
         failed_native, _ = self.native_lifecycle(transport_mode="native-missing")
         self.assertEqual(failed_native["status"], "prepared-lifecycle-passed")
         self.assertNotIn("preserved_native_proof", failed_native["windsurf_installation_audit"])
