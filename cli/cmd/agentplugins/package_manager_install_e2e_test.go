@@ -23,6 +23,9 @@ func TestPackageManagerInstallE2E(t *testing.T) {
 		"drift-recorded-pin-repair":            pmInstallDriftRecordedPinRepair,
 		"preview-and-decline":                  pmInstallPreviewAndDecline,
 		"rich-cold-restore-isolation":          pmInstallRichColdRestoreIsolation,
+		"unmanaged-source-refusal":             pmInstallUnmanagedSourceRefusal,
+		"foreign-environment-refusal":          pmInstallForeignEnvironmentRefusal,
+		"dependency-ownership-refusal":         pmInstallDependencyOwnershipRefusal,
 	}
 	var ids []string
 	if err := json.Unmarshal(pmInstallCaseInventory, &ids); err != nil {

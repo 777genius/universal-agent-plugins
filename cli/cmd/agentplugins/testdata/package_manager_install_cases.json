@@ -8,5 +8,8 @@
   "malformed-native-config",
   "drift-recorded-pin-repair",
   "preview-and-decline",
-  "rich-cold-restore-isolation"
+  "rich-cold-restore-isolation",
+  "unmanaged-source-refusal",
+  "foreign-environment-refusal",
+  "dependency-ownership-refusal"
 ]

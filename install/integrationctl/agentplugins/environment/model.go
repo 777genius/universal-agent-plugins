@@ -165,6 +165,7 @@ type Lock struct {
 
 type BindingObservation struct {
 	Alias, ClientID, InstallationID, BindingID                 string
+	OwnerEnvironmentID                                         string
 	SourceKey, PackageDigest, ProfileAuthorityDigest, Revision string
 	Managed                                                    bool
 	Receipt                                                    *domain.EnvironmentReceipt

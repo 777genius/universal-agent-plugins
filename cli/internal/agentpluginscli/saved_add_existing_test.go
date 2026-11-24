@@ -15,11 +15,11 @@ import (
 )
 
 func TestSavedAddExistingStateIsExplainedBeforeSelection(t *testing.T) {
-	for _, scenario := range []string{"git-unmanaged", "directory-unmanaged", "managed", "different-source-same-name"} {
+	for _, scenario := range []string{"git-unmanaged", "directory-unmanaged", "directory-managed", "managed", "different-source-same-name"} {
 		t.Run(scenario, func(t *testing.T) {
 			var fixture cliFixture
 			var source, target string
-			if scenario == "directory-unmanaged" {
+			if strings.HasPrefix(scenario, "directory-") {
 				rollout := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCursor, domain.ClientGemini}, nil)
 				clients, err := rollout.cli.app.Detector.Detect(t.Context())
 				if err != nil {
@@ -33,7 +33,7 @@ func TestSavedAddExistingStateIsExplainedBeforeSelection(t *testing.T) {
 				fixture, source, target = newSavedJourney(t, repo).cli, "github:owner/repo@"+commit, "codex"
 			}
 			args := []string{"add", source, "--target", target, "--yes", "--format", "json"}
-			if scenario != "managed" {
+			if scenario != "managed" && scenario != "directory-managed" {
 				args = append(args, "--no-save")
 			}
 			if out, stderr, err := fixture.execute(false, args...); err != nil {
@@ -56,12 +56,12 @@ func TestSavedAddExistingStateIsExplainedBeforeSelection(t *testing.T) {
 				}}, io.Discard, nil
 			}
 			_, stderr, err := fixture.execute(true, "add", source)
-			if scenario == "managed" || scenario == "different-source-same-name" {
+			if scenario == "managed" || scenario == "directory-managed" || scenario == "different-source-same-name" {
 				if !selected || !errors.Is(err, stopped) {
 					t.Fatalf("valid selection blocked: selected=%v err=%v", selected, err)
 				}
 				for _, choice := range menu.Choices {
-					wantManaged := scenario == "managed" && string(choice.ID) == target
+					wantManaged := (scenario == "managed" || scenario == "directory-managed") && string(choice.ID) == target
 					if strings.Contains(choice.Note, "already in your list") != wantManaged || strings.Contains(choice.Info, "kept even if unchecked") != wantManaged {
 						t.Fatalf("inaccurate saved-state annotation: %+v", choice)
 					}
@@ -71,7 +71,7 @@ func TestSavedAddExistingStateIsExplainedBeforeSelection(t *testing.T) {
 				if selected || !errors.As(err, &foreign) || len(foreign.Bindings) != 1 || foreign.Bindings[0].ClientID != target {
 					t.Fatalf("ownership refusal arrived after selection or lost identity: selected=%v err=%v", selected, err)
 				}
-				if !strings.Contains(stderr, "Checking plugin compatibility") || !strings.Contains(err.Error(), "already installed outside your dependency list") {
+				if (scenario != "git-unmanaged" && !strings.Contains(stderr, "Checking plugin compatibility")) || !strings.Contains(err.Error(), "existing package ownership") {
 					t.Fatalf("missing progress or explanation: %v\n%s", err, stderr)
 				}
 			}

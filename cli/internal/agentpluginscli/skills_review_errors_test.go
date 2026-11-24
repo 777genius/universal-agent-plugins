@@ -85,6 +85,39 @@ func TestSkillsReviewManagedSkillChanged(t *testing.T) {
 	}
 }
 
+func TestSkillsReviewRetainedRevisionGuidance(t *testing.T) {
+	for _, tc := range []struct {
+		name, code, guidance string
+		cause                error
+		retained             bool
+	}{
+		{"retained empty", "UPDATE_REQUIRED", "no installed targets", retainedRevisionTestCause(), true},
+		{"active revision", "UPDATE_REQUIRED", "agentplugins update", installer.ErrUpdateRequired, false},
+		{"recovery first", "RECOVERY_REQUIRED", "agentplugins deps status", errors.Join(installer.ErrRecoveryRequired, retainedRevisionTestCause()), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cause := &dependencyPreflightError{Alias: "demo", ClientID: "gemini", Cause: tc.cause}
+			refusal := (&skillsCatalogSession{}).reviewRefusal(cause)
+			if refusal.Code != tc.code || refusal.Retryable || !strings.Contains(refusal.Message, tc.guidance) || !strings.Contains(refusal.Message, `Skill "demo" for Gemini`) {
+				t.Fatalf("review lost the safe binding-specific refusal: %+v", refusal)
+			}
+			if strings.Contains(refusal.Message, "private-retained-secret") {
+				t.Fatalf("private cause leaked through the public review: %+v", refusal)
+			}
+			if tc.retained {
+				for _, want := range []string{"not supported", "recorded revision is kept"} {
+					if !strings.Contains(refusal.Message, want) {
+						t.Fatalf("review lost retained-state fact %q: %+v", want, refusal)
+					}
+				}
+				assertNoRetainedRevisionRetry(t, refusal.Message)
+			} else if strings.Contains(refusal.Message, "empty installation") {
+				t.Fatalf("retained guidance overrode the actual refusal: %+v", refusal)
+			}
+		})
+	}
+}
+
 // The public HTTPS and terminal paths reuse the same refusal adapter. A
 // provider error must never reach structured output with its private details.
 func TestSkillsPreparationRefusalJSONAndCancellation(t *testing.T) {

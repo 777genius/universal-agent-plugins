@@ -92,7 +92,11 @@ func reportByAgent(items []agentItem) []agentReport {
 
 func (report *agentReport) addProblem(failure installFailure, item string) {
 	for index := range report.Problems {
-		if report.Problems[index].Failure.Kind == failure.Kind {
+		previous := report.Problems[index].Failure
+		if previous.Kind == failure.Kind && previous.Summary == failure.Summary && previous.Next == failure.Next && previous.Retryable == failure.Retryable {
+			if failure.stopsNamespaceRetry {
+				report.Problems[index].Failure.stopsNamespaceRetry = true
+			}
 			report.Problems[index].Items = append(report.Problems[index].Items, item)
 			return
 		}
@@ -115,8 +119,8 @@ func retryableAgents(reports []agentReport) []agentReport {
 	var retryable []agentReport
 	for _, report := range reports {
 		for _, problem := range report.Problems {
-			if problem.Failure.Kind == failureProcessCleanup {
-				return nil // The whole run must wait for process cleanup.
+			if problem.Failure.stopsNamespaceRetry || problem.Failure.Kind == failureProcessCleanup || problem.Failure.Kind == failureRecovery {
+				return nil // The namespace must be safe before any agent retries.
 			}
 		}
 		if report.Retryable() {
@@ -175,6 +179,9 @@ func itemsSuffix(items []string) string {
 func retryTargetHint(reports []agentReport) string {
 	ids := make([]string, 0, len(reports))
 	for _, report := range retryableAgents(reports) {
+		if !domain.IsSupportedClient(report.ClientID) {
+			return ""
+		}
 		ids = append(ids, publicCLITargetName(report.ClientID))
 	}
 	if len(ids) == 0 {
@@ -189,8 +196,11 @@ func retryHintFor(cmd *cobra.Command, reports []agentReport) string {
 	if len(retryableAgents(reports)) == 0 {
 		return ""
 	}
-	if cmd.Name() == "add" {
+	if cmd.Name() == "add" || cmd.Name() == "install" && len(cmd.Flags().Args()) == 1 {
 		return retryTargetHint(reports)
+	}
+	if cmd.Name() == "sync" || cmd.Name() == "install" {
+		return "Run the same command again to converge the complete saved environment; agents already current are left unchanged."
 	}
 	return "To retry the agents that failed, run the same command again."
 }

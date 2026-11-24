@@ -116,7 +116,7 @@ func TestSavedKiroDoesNotOfferFreshPreparationForExistingAutomaticInstallation(t
 	if err != nil {
 		t.Fatal(err)
 	}
-	compatible, skipped, _, err := compatibleSavedAddTargets(t.Context(), f.app, source, clients)
+	compatible, skipped, _, err := compatibleSavedAddTargets(t.Context(), f.app, &options{}, source, clients)
 	if err != nil || len(compatible) != 0 || len(skipped) != 1 {
 		t.Fatalf("existing automatic installation offered as fresh preparation: compatible=%v skipped=%v err=%v", compatible, skipped, err)
 	}
@@ -128,7 +128,7 @@ func preparedOnlyClient(t *testing.T, app App, source string) domain.DetectedCli
 	if err != nil || len(clients) != 1 {
 		t.Fatalf("%v %v", clients, err)
 	}
-	compatible, skipped, _, err := compatibleSavedAddTargets(t.Context(), app, source, clients)
+	compatible, skipped, _, err := compatibleSavedAddTargets(t.Context(), app, &options{}, source, clients)
 	if err != nil || len(compatible) != 1 || len(skipped) != 0 {
 		t.Fatalf("compatible=%v skipped=%v err=%v", compatible, skipped, err)
 	}
@@ -142,7 +142,7 @@ func TestSavedKiroDoesNotOfferPreparationWhenPreparationPreflightFails(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	compatible, skipped, _, err := compatibleSavedAddTargets(t.Context(), f.app, source, clients)
+	compatible, skipped, _, err := compatibleSavedAddTargets(t.Context(), f.app, &options{}, source, clients)
 	if err != nil || len(compatible) != 0 || len(skipped) != 1 {
 		t.Fatalf("failed preparation was offered: compatible=%v skipped=%v err=%v", compatible, skipped, err)
 	}

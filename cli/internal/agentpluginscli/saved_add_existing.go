@@ -2,25 +2,78 @@ package agentpluginscli
 
 import (
 	"context"
-	"fmt"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
-// Inspect through the installer so source identity, receipts and recovery use
-// the same read-only observations as the authoritative saved operation.
-func inspectSavedAddSelection(ctx context.Context, app App, source string, loaded *loadedPackage) (map[domain.ClientID]prompt.TargetChoice, error) {
-	if app.Installer == nil || explicitLocalPath(source) || localArchiveInput(source) {
+func inspectSavedAddRoot(ctx context.Context, app App, opts *options, source string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if app.Installer == nil {
+		return nil
+	}
+	// Preserve recovery and manifest/lock refusals before ownership advice. This
+	// snapshot reads intent only; source declarations are verified by saved add.
+	snapshot, err := snapshotEnvironmentContext(ctx, app, false)
+	if err != nil {
+		return err
+	}
+	key := savedDirectSourceKey(source)
+	if match := exactGitPattern.FindStringSubmatch(source); match != nil {
+		key = "github:" + strings.ToLower(match[1]) + ":" + match[3]
+	}
+	if canPreviewSavedAddOwnership(snapshot, opts.alias, "", key) {
+		return checkSavedAddOwnership(ctx, app, key, opts.alias)
+	}
+	// Unsaved selectors need actual acquired distribution identity. Product-level
+	// retained state cannot prove which distribution this operation will select.
+	return nil
+}
+
+// Existing alias and saved-selector decisions belong to the normal resolver.
+// Defer their ownership diagnosis rather than masking a more specific refusal.
+func canPreviewSavedAddOwnership(snapshot environmentSnapshot, alias, derivedAlias, key string) bool {
+	if alias != "" || key == "" {
+		return false
+	}
+	if previous, exists := snapshot.Requirements.Dependencies[derivedAlias]; derivedAlias != "" && exists && mustSourceKey(previous) != key {
+		return false
+	}
+	for _, pin := range snapshot.Lock.Packages {
+		if pin.SourceKey == key {
+			return false
+		}
+	}
+	return true
+}
+
+// Annotations use the actual acquired source, while alias and saved-selector
+// refusals remain with the authoritative resolver. Product identity alone is
+// insufficient to diagnose ownership of an unselected Directory distribution.
+func inspectSavedAddSelection(ctx context.Context, app App, opts *options, source string, loaded *loadedPackage) (map[domain.ClientID]prompt.TargetChoice, error) {
+	if app.Installer == nil || loaded == nil || explicitLocalPath(source) || localArchiveInput(source) {
 		return nil, nil
 	}
-	if loaded == nil {
-		return nil, inspectSavedDirectoryOwnership(ctx, app, source)
+	key := savedDirectSourceKey(source)
+	if loaded.directorySelection != nil {
+		key = "directory:" + loaded.directorySelection.DistributionID
 	}
-	key, err := savedSelectionSourceKey(source, *loaded)
+	if key == "" {
+		return nil, nil
+	}
+	alias := dependencyManifestAlias(loaded.envelope.Manifest.Name)
+	snapshot, err := snapshotEnvironmentContext(ctx, app, false)
 	if err != nil {
 		return nil, err
+	}
+	if canPreviewSavedAddOwnership(snapshot, opts.alias, alias, key) {
+		if err := checkSavedAddOwnership(ctx, app, key, alias); err != nil {
+			return nil, err
+		}
 	}
 	view, err := app.Installer.Inspect(ctx)
 	if err != nil {
@@ -30,10 +83,6 @@ func inspectSavedAddSelection(ctx context.Context, app App, source string, loade
 	if err != nil {
 		return nil, err
 	}
-	pkg := environment.LockedPackage{Alias: dependencyManifestAlias(loaded.envelope.Manifest.Name), SourceKey: key}
-	if err := environment.CheckSourceOwnership(pkg, observed); err != nil {
-		return nil, err
-	}
 	annotations := map[domain.ClientID]prompt.TargetChoice{}
 	for _, binding := range observed {
 		if binding.Managed && binding.SourceKey == key {
@@ -41,19 +90,4 @@ func inspectSavedAddSelection(ctx context.Context, app App, source string, loade
 		}
 	}
 	return annotations, nil
-}
-
-func savedSelectionSourceKey(source string, loaded loadedPackage) (string, error) {
-	requirement := environment.Requirement{Alias: "candidate"}
-	if selection := loaded.directorySelection; selection != nil {
-		requirement.Registry = &environment.RegistrySource{Distribution: selection.DistributionID,
-			Selector: environment.Selector{Kind: environment.SelectorRelease, Value: fmt.Sprint(selection.ReleaseSequence)}}
-	} else if key := savedDirectSourceKey(source); key != "" {
-		return key, nil
-	} else {
-		identity := loaded.envelope.Source
-		requirement.Git = &environment.GitSource{Repository: identity.Repository, Path: identity.PackageSubpath,
-			Selector: environment.Selector{Kind: environment.SelectorCommit, Value: identity.ResolvedRevision}}
-	}
-	return requirement.SourceKey()
 }

@@ -13,7 +13,7 @@ import (
 // Automatic selection uses disposable package acquisition and shared host
 // admission. The authoritative saved operation resolves and revalidates its pin
 // after selection; no native executable runs while presenting choices.
-func compatibleSavedAddTargets(ctx context.Context, app App, source string, detected []domain.DetectedClient) ([]domain.DetectedClient, []targetSkip, map[domain.ClientID]prompt.TargetChoice, error) {
+func compatibleSavedAddTargets(ctx context.Context, app App, opts *options, source string, detected []domain.DetectedClient) ([]domain.DetectedClient, []targetSkip, map[domain.ClientID]prompt.TargetChoice, error) {
 	app.dependencySnapshots = nil
 	preview, cleanup, err := dependencyPreviewApp(app, &options{dryRun: true})
 	if err != nil {
@@ -27,7 +27,7 @@ func compatibleSavedAddTargets(ctx context.Context, app App, source string, dete
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	annotations, err := inspectSavedAddSelection(ctx, app, source, loaded)
+	annotations, err := inspectSavedAddSelection(ctx, app, opts, source, loaded)
 	if err != nil {
 		return nil, nil, nil, err
 	}

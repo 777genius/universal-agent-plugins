@@ -91,6 +91,9 @@ func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, locke
 	}
 	actions, err := dependencyActions(state, request.requirements, request.lock, app.environmentID())
 	if err != nil {
+		if cmd.Name() == "sync" {
+			return earlyForeignBinding(app, err)
+		}
 		return err
 	}
 	if err := validateDependencyRemovals(opts, actions); err != nil {
@@ -220,7 +223,7 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 	applied, applyErr := applyPreparedDependencies(cmd.Context(), app, &request, adapter, checked)
 	stop()
 	app.finishInstall(opts, cmd.CommandPath(), outcomeAgentItems(applied.Outcomes))
-	if renderErr := renderDependencyAppliedResults(cmd, opts, prepared, applied, applyErr); renderErr != nil && applyErr == nil {
+	if renderErr := renderDependencyAppliedResults(cmd, app, opts, request, applied, applyErr); renderErr != nil && applyErr == nil {
 		return renderErr
 	}
 	if applyErr != nil {

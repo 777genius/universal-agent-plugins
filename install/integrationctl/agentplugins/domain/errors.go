@@ -1,6 +1,13 @@
 package domain
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+// ErrRetainedRevisionChange gives an existing revision refusal the observed
+// empty-Directory context. It grants no replacement or migration authority.
+var ErrRetainedRevisionChange = errors.New("this Directory installation has no installed targets; replacing its recorded release through add is not supported, and update requires an installed target")
 
 type LoadError struct {
 	Diagnostic Diagnostic

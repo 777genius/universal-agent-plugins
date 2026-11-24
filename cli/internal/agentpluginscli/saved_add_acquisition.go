@@ -105,7 +105,7 @@ func savedAddTargets(cmd *cobra.Command, app App, opts *options, source string, 
 		if len(eligible) > 0 {
 			var incompatible []targetSkip
 			stop = startCommandActivity(cmd, app, opts, "Checking plugin compatibility")
-			eligible, incompatible, annotations, err = compatibleSavedAddTargets(cmd.Context(), stopPluginActivityOnWrite(app, stop), source, eligible)
+			eligible, incompatible, annotations, err = compatibleSavedAddTargets(cmd.Context(), stopPluginActivityOnWrite(app, stop), opts, source, eligible)
 			stop()
 			if err != nil {
 				return nil, err

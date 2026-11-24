@@ -78,11 +78,15 @@ test('unsettled owned streams retain the shutdown bound after actual process exi
     if (this.pid === host.pid) signals.push(signal);
     return originalKill.call(this, signal);
   });
-  const started = Date.now();
-  const closing = host.close().then(() => undefined, (error: unknown) => error);
+  let closing: Promise<unknown> | undefined;
   try {
+    // Establish real exit before close: a live child may legitimately need
+    // SIGTERM when its graceful shutdown exceeds the ordinary 100 ms budget.
+    process.kill(host.pid, 'SIGTERM');
     await held.emitted;
-    assert.equal(host.hasExited, true);
+    assert.equal(host.hasExited, true, 'the exact owned process must have exited before close');
+    const started = Date.now();
+    closing = host.close().then(() => undefined, (error: unknown) => error);
     const failure = await closing;
     assert.ok(failure instanceof ManagementError);
     assert.equal(failure.code, 'SHUTDOWN_TIMEOUT');
@@ -92,7 +96,7 @@ test('unsettled owned streams retain the shutdown bound after actual process exi
     await assert.rejects(host.close(), (error: unknown) => error === failure);
   } finally {
     held.release();
-    await closing;
+    await (closing ?? host.close());
   }
 });
 
