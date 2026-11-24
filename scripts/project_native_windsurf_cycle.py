@@ -158,7 +158,10 @@ def times(value,start,end):
 
 def verified_mutation_lock_time(stage, raw, recorded, previous, root, start, end):
     """Reuse only an unchanged prior lock in an actual no-op public phase."""
-    body = load(raw)
+    try:
+        body = load(raw)
+    except ValueError:
+        return False
     fresh = start <= stamp(body["acquired_at"]) <= end and times(recorded, start, end)
     if fresh:
         return True
