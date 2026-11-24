@@ -259,8 +259,8 @@ def provider(expected=None):
 
 
 class NativeJourney(existing.Journey):
-    def enable_fixture(self):
-        super().enable_fixture()
+    def trust_fixture(self):
+        super().trust_fixture()
         self.check()
         trust = self.home / ".grok/trusted_folders.toml"
         first = "[folders." + json.dumps(str(self.a)) + "]\ntrusted = true\n"
@@ -274,15 +274,20 @@ class NativeJourney(existing.Journey):
     def configure_provider(self, url):
         self.check()
         config = self.home / ".grok/config.toml"
-        if not hasattr(self, "provider_base_config"):
-            self.provider_base_config = config.read_text()
-        original = self.provider_base_config
+        original = existing.read_owned(config, self.root).decode()
+        previous_tail = getattr(self, "provider_config_tail", "")
+        if previous_tail:
+            require(original.endswith(previous_tail), "test-owned provider suffix changed")
+            original = original[:-len(previous_tail)]
         controls = "telemetry = false\ntitle_refresh = false\n"
-        if "[features]\n" in original:
+        if previous_tail:
+            require(controls in original, "test-owned provider controls changed")
+        elif "[features]\n" in original:
             original = original.replace("[features]\n", "[features]\n" + controls, 1)
         else:
             original += "\n[features]\n" + controls
-        # Existing test-owned trust/enablement is retained exactly. No real profile.
+        # Preserve current owned enablement and later foreign fixture edits.
+        # Only the previous exact test-authored provider suffix is replaced.
         added = ("\n[models]\ndefault = " + json.dumps(MODEL)
                  + "\nsession_summary = " + json.dumps(MODEL)
                  + "\nprompt_suggestion = " + json.dumps(MODEL)
@@ -291,6 +296,7 @@ class NativeJourney(existing.Journey):
                  + json.dumps(url) + "\napi_backend = \"chat_completions\"\n"
                  "api_key = \"uap-inert-local-driver\"\ncontext_window = 64000\n")
         existing.write(config, original + added)
+        self.provider_config_tail = added
         if config in self.protected:
             self.protected[config] = existing.digest(config)
         # An inert token is only a protocol field for this owned localhost endpoint.
@@ -431,6 +437,7 @@ def main():
                 "passed": False, "commands": [], "stages": [], "vendor_authentication_used": False,
                 "actual_model_used": False, "scripted_local_provider": True,
                 "grok_native_tools_call_qualified": False,
+                "unmanaged_project_owned_enablement_qualified": False,
                 "installer_sha256": existing.digest(args.installer), "probe_sha256": existing.digest(args.probe)}
     try:
         from project_native_research import Budget, acquire, materialize, verify_files
@@ -459,7 +466,8 @@ def main():
                 and not git("status", "--porcelain", "--untracked-files=normal"), "source changed")
         require(existing.digest(args.installer) == evidence["installer_sha256"]
                 and existing.digest(args.probe) == evidence["probe_sha256"], "compiled executable changed")
-        evidence.update(passed=True, grok_native_tools_call_qualified=True)
+        evidence.update(passed=True, grok_native_tools_call_qualified=True,
+                        unmanaged_project_owned_enablement_qualified=True)
     except Exception as error:
         evidence["error"] = type(error).__name__ + ": " + str(error)
         raise

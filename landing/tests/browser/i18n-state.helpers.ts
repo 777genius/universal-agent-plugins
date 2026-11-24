@@ -46,12 +46,35 @@ export async function navigate(page: Page, family: string, locale: PublishedLoca
   await page.waitForFunction(() => Boolean((document.querySelector('#__nuxt') as HTMLElement & {
     __vue_app__?: { config: { globalProperties: { $router?: unknown } } };
   })?.__vue_app__?.config.globalProperties.$router));
-  // Only access the installed router, never component refs, stores, or async data.
+  // Router completion precedes Nuxt's async page setup and Suspense replacement.
+  // Wait for the public page lifecycle so assertions cannot hit the outgoing page.
   await page.evaluate(async (path) => {
     const root = document.querySelector('#__nuxt') as HTMLElement & {
-      __vue_app__: { config: { globalProperties: { $router: { push: (path: string) => Promise<unknown> } } } };
+      __vue_app__: { config: { globalProperties: {
+        $router: {
+          currentRoute: { value: { fullPath: string } };
+          resolve: (path: string) => { fullPath: string };
+          push: (path: string) => Promise<unknown>;
+        };
+        $nuxt: { hook: (name: 'page:loading:end', callback: () => void) => () => void };
+      } } };
     };
-    await root.__vue_app__.config.globalProperties.$router.push(path);
+    const { $router, $nuxt } = root.__vue_app__.config.globalProperties;
+    // A duplicate navigation has no new page lifecycle to complete.
+    if ($router.resolve(path).fullPath === $router.currentRoute.value.fullPath) {
+      await $router.push(path);
+      return;
+    }
+    let unhook!: () => void;
+    const ready = new Promise<void>((resolve) => {
+      unhook = $nuxt.hook('page:loading:end', resolve);
+    });
+    try {
+      await $router.push(path);
+      await ready;
+    } finally {
+      unhook();
+    }
   }, localizedPath(family, locale) + suffix);
 }
 
@@ -186,7 +209,7 @@ export async function context7InstallExample(page: Page, client: ClientID) {
   return {
     selector,
     pinned: !signed,
-    command: `npx -y universal-agent-plugins@${signed ? 'latest' : '0.1.116'} add ${selector} --target ${client}`,
+    command: `npx -y universal-agent-plugins@latest add ${selector} --target ${client}`,
   };
 }
 

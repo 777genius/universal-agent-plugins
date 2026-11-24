@@ -35,7 +35,7 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	f.preparePackage(t)
 	foreign := copilotRawForeign(t, f)
 	before := copilotRawInventories(t, f, "before", nil)
-	events := copilotRawRead(t, f.base.Events)
+	copilotRawProbeAbsent(t, f.base.Events)
 	argv := []string{f.installer, "skills", "add", nativeRawProjectSkillsSource, "--skill", copilotRawSkill, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--no-ui", "--format", "json"}
 	first := f.command(t, "raw-add", f.outside, f.env(), argv, 45*time.Second)
 	copilotRawReady(t, first.Stdout, false)
@@ -56,7 +56,7 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	if !reflect.DeepEqual(before, copilotRawInventories(t, f, "repeat", &binding)) {
 		t.Fatal("repeat changed foreign catalogs")
 	}
-	removed := f.command(t, "raw-remove", f.outside, f.env(), []string{f.installer, "remove", installed.InstallationID, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--no-ui", "--format", "json"}, 45*time.Second)
+	removed := f.command(t, "raw-remove", f.outside, f.env(), []string{f.installer, "remove", installed.InstallationID, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--format", "json"}, 45*time.Second)
 	value, err := projectNativeRuntimeJSON(removed.Stdout)
 	doc, ok := value.(map[string]any)
 	if err != nil || !ok || doc["schema_version"] != json.Number("1") || doc["command"] != "agentplugins remove" || doc["result"] != "success" {
@@ -81,9 +81,7 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	if _, err := os.Lstat(binding.TargetLocator); !os.IsNotExist(err) {
 		t.Fatal("raw removed package remains", err)
 	}
-	if !bytes.Equal(events, copilotRawRead(t, f.base.Events)) {
-		t.Fatal("ordinary catalog invoked MCP probe")
-	}
+	copilotRawProbeAbsent(t, f.base.Events)
 	f.check(t)
 }
 
@@ -106,6 +104,15 @@ func copilotRawLogEvidence(t *testing.T, f *copilotProjectAttempt) {
 			continue
 		}
 		t.Logf("raw Copilot %s (%d bytes): %q", name, len(body), body)
+	}
+}
+
+// Ordinary Skills listing must never create an MCP probe event file. This
+// path is not preseeded by this no-provider test; do not synthesize one.
+func copilotRawProbeAbsent(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatal("raw Skills unexpectedly invoked MCP or could not verify absence", err)
 	}
 }
 

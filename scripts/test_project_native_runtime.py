@@ -171,18 +171,18 @@ class RuntimeTests(unittest.TestCase):
         workflow = (Path(__file__).resolve().parent.parent /
                     ".github/workflows/project-native-runtime.yml").read_text()
         contracts, native = workflow.split("\n  native:\n", 1)
-        prepare = "      - name: Prepare pinned Go for selected Copilot and Gemini inert process contracts\n"
-        execute = "      - name: Verify selected Copilot and Gemini inert process contracts before native execution\n"
+        prepare = "      - name: Prepare pinned Go for selected Copilot, Gemini and Kiro inert process contracts\n"
+        execute = "      - name: Verify selected Copilot, Gemini and Kiro inert process contracts before native execution\n"
         selection, toolchain = contracts.split(prepare, 1)
         toolchain, gate = toolchain.split(execute, 1)
-        condition = "        if: ${{ contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'gemini') }}\n"
+        condition = "        if: ${{ contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'copilot') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'gemini') || contains(fromJSON(steps.selection.outputs.matrix).include.*.client, 'kiro') }}\n"
         self.assertIn("        id: selection\n", selection)
         self.assertTrue(toolchain.startswith(condition))
         self.assertTrue(gate.startswith(condition))
         self.assertIn("actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e", toolchain)
         self.assertIn("          go-version: '1.26.10'\n          cache: false\n", toolchain)
         self.assertEqual(gate.removeprefix(condition).strip(),
-                         "run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime|TestGeminiPublicCompletionRequiresBothExactFreshInventoryPhases$|TestGeminiPublicCompletionPhasesMatchOperations$|TestGeminiRepeatedPublicCompletionRequiresFourExactFreshInventoryPhases$)'")
+                         "run: go test -json -p=1 -count=1 -timeout=120s ./repotests -run '^(TestCopilot|TestProjectNativeRuntime|TestKiroCycle|TestGeminiPublicCompletionRequiresBothExactFreshInventoryPhases$|TestGeminiPublicCompletionPhasesMatchOperations$|TestGeminiRepeatedPublicCompletionRequiresFourExactFreshInventoryPhases$)'")
         self.assertIn("    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n", contracts)
         self.assertNotIn("AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED", contracts)
         self.assertIn("    needs: contracts\n", native)
@@ -1675,6 +1675,252 @@ def load_tests(loader, tests, pattern):
         tests.addTests(loader.loadTestsFromName("test_project_native_gemini_complete.GeminiCompleteTests"))
         tests.addTests(loader.loadTestsFromName("test_project_native_gemini_cycle.GeminiCycleTests"))
     return tests
+
+
+class DelegatedServiceTests(unittest.TestCase):
+    def environment(self, root):
+        from grok_project_protocol_service import child_environment
+        with patch.dict(os.environ, {"GITHUB_RUN_ID": "123", "GITHUB_RUN_ATTEMPT": "1", "GITHUB_EVENT_NAME": "pull_request"}):
+            return child_environment(root, "a" * 40)
+
+    def test_two_literal_grok_vectors_and_complete_cline_vector(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.object(runtime.time, "monotonic_ns", return_value=110_000_000_000):
+            root = Path(temporary).resolve()
+            output, runtime_root = root / "output", root / "runtime"
+            inputs = (runtime.GROK_CHILD_PYTHON, root / "tools/agentplugins", root / "tools/probe")
+            for case, script in runtime.GROK_SCRIPTS.items():
+                unit = "uap-" + case + "-" + "b" * 32 + ".service"
+                env = self.environment(output)
+                with patch.object(runtime.time, "monotonic_ns", return_value=110_000_000_000):
+                    argv = runtime.grok_service_argv(case, inputs, env, output, unit, 1001, 1002, 100_000_000_000,
+                                                     runtime_root=runtime_root)
+                self.assertEqual(argv[-9:], [str(inputs[0]), "-B", str(runtime.SOURCE / "scripts" / script),
+                    "--installer", str(inputs[1]), "--probe", str(inputs[2]), "--output", str(output / "child")])
+                self.assertIn("--uid=1001", argv)
+                self.assertIn("--gid=1002", argv)
+                self.assertIn("--property=RuntimeMaxSec=890s", argv)
+                readonly = [runtime.SOURCE, *inputs[1:]]
+                if case == "grok-protocol":
+                    readonly.append(inputs[1].with_name("grok-inventory-test"))
+                self.assertIn("--property=RootDirectory=" + str(runtime_root), argv)
+                self.assertIn("--property=MountAPIVFS=yes", argv)
+                self.assertIn("--property=MountFlags=private", argv)
+                self.assertIn("--property=BindReadOnlyPaths=" + " ".join(map(str, readonly)), argv)
+                self.assertIn("--property=BindPaths=" + str(output) + " /sys/fs/cgroup", argv)
+                self.assertEqual(argv[argv.index("/usr/bin/env") + 1], "-i")
+                self.assertNotIn("GITHUB_OUTPUT", " ".join(argv))
+                for change in ({"LD_PRELOAD": "foreign"}, {"HOME": str(root / "foreign")}, {"PATH": "/foreign"},
+                               {"EXPECTED_COMMIT": "foreign"}, {"GITHUB_RUN_ID": "0"}, {"GITHUB_EVENT_NAME": "foreign"}):
+                    with self.subTest(case=case, change=change), self.assertRaises(ValueError):
+                        runtime.grok_service_argv(case, inputs, {**env, **change}, output, unit, 1001, 1002, 100_000_000_000,
+                                                  runtime_root=runtime_root)
+                for selected, uid, origin in (("arbitrary", 1001, 1), (case, 0, 1), (case, 1001, True), (case, 1001, -1)):
+                    with self.assertRaises(ValueError):
+                        runtime.grok_service_argv(selected, inputs, env, output, unit, uid, 1002, origin,
+                                                  runtime_root=runtime_root)
+                with self.assertRaises(ValueError):
+                    runtime.cline_unit_state(b"LoadState=not-found\nActiveState=inactive\nControlGroup=\n", unit)
+            env = {key: "fixture" for key in runtime.CLINE_ENV}
+            env.update(PATH="/usr/bin:/bin", AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT="1")
+            unit = "uap-cline-project-" + "c" * 32 + ".service"
+            selected = {**env, "AGENTPLUGINS_PROJECT_NATIVE_STARTED_NS": "17", "AGENTPLUGINS_CLINE_SYSTEMD_UNIT": unit,
+                "AGENTPLUGINS_CLINE_ORIGINAL_UID": "1001", "AGENTPLUGINS_CLINE_ORIGINAL_GID": "1002"}
+            expected = ["/usr/bin/sudo", "-n", "/usr/bin/systemd-run", "--unit=" + unit, "--wait", "--pipe", "--collect", "--quiet",
+                "--service-type=exec", "--expand-environment=no", "--uid=1001", "--gid=1002", "--property=Delegate=yes",
+                "--property=NoNewPrivileges=yes", "--property=KillMode=control-group", "--property=RuntimeMaxSec=180s",
+                "--property=TimeoutStopSec=30s", "--working-directory=" + str(root), "/usr/bin/env", "-i",
+                *(key + "=" + selected[key] for key in sorted(selected)), str(root / "test"),
+                "-test.run=^TestAgentpluginsClineNativeProjectCompleteCycle$", "-test.count=1", "-test.v", "-test.timeout=180s"]
+            self.assertEqual(runtime.cline_service_argv(root / "test", env, root, unit, 1001, 1002, 17), expected)
+
+    def test_clean_runtime_refuses_host_interpreter_alias_overlap_and_property_injection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            clean, output = root / "runtime", root / "output"
+            clean.mkdir()
+            alias = root / "alias"
+            alias.symlink_to(clean, target_is_directory=True)
+            inputs = (runtime.GROK_CHILD_PYTHON, root / "tools/agentplugins", root / "tools/probe")
+            for selected, destination, runtime_root in (
+                    ((Path("/usr/bin/python3"), *inputs[1:]), output, clean),
+                    (inputs, output, alias), (inputs, output, None),
+                    (inputs, clean / "inside", clean), (inputs, output, runtime.SOURCE),
+                    (inputs, output, root / "runtime:foreign"),
+                    (inputs, root / "output --property=Foreign", clean),
+                    ((runtime.GROK_CHILD_PYTHON, output, inputs[2]), output, clean)):
+                with self.subTest(selected=selected, destination=destination, runtime_root=runtime_root), self.assertRaises(ValueError):
+                    runtime.grok_runtime_properties("grok-noauth", selected, destination, runtime_root)
+
+    def test_readonly_controller_has_fixed_root_boundary_original_ids_and_witness_mount(self):
+        root = Path('/tmp/uap-grok-acp-input-' + 'a' * 32)
+        clean = Path('/tmp/fixed-clean-runtime')
+        unit = 'uap-grok-readonly-controller-' + 'b' * 32 + '.service'
+        env = dict(PATH='/usr/bin:/bin', LANG='C.UTF-8', GITHUB_ACTIONS='true',
+                   RUNNER_ENVIRONMENT='github-hosted', AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED='1',
+                   EXPECTED_COMMIT='c' * 40)
+        with patch.object(runtime.time, 'monotonic_ns', return_value=110_000_000_000):
+            argv = runtime.grok_readonly_controller_argv(root, env, unit, 1001, 1002, 100_000_000_000,
+                                                        runtime_root=clean)
+            self.assertEqual(argv[-3:], [str(root / 'helper'), '--input-root', str(root)])
+            self.assertIn('--uid=0', argv)
+            self.assertIn('--gid=0', argv)
+            self.assertIn('SUDO_UID=1001', argv)
+            self.assertIn('SUDO_GID=1002', argv)
+            self.assertIn('--property=NoNewPrivileges=yes', argv)
+            self.assertIn('--property=RuntimeMaxSec=15s', argv)
+            self.assertIn('--property=TimeoutStopSec=5s', argv)
+            self.assertIn('--property=RootDirectory=' + str(clean), argv)
+            self.assertIn('--property=MountFlags=private', argv)
+            self.assertIn('--property=BindReadOnlyPaths=' + str(root), argv)
+            self.assertIn('--property=BindPaths=' + str(root / 'readonly-witness') + ' /sys/fs/cgroup', argv)
+            self.assertEqual(argv[argv.index('/usr/bin/env') + 1], '-i')
+            for changed in ({**env, 'SUDO_UID':'0'}, {**env, 'LD_PRELOAD':'foreign'},
+                            {**env, 'EXPECTED_COMMIT':'foreign'}, {**env, 'PATH':'/foreign'}):
+                with self.subTest(changed=changed), self.assertRaises(ValueError):
+                    runtime.grok_readonly_controller_argv(root, changed, unit, 1001, 1002, 100_000_000_000,
+                                                         runtime_root=clean)
+            for selected, uid, origin, runtime_root in (
+                    (root / 'other', 1001, 100_000_000_000, clean), (root, 0, 100_000_000_000, clean),
+                    (root, 1001, True, clean), (root, 1001, 80_000_000_000, clean),
+                    (root, 1001, 120_000_000_000, clean), (root, 1001, 100_000_000_000, root),
+                    (root, 1001, 100_000_000_000, Path('/tmp/root:foreign'))):
+                with self.subTest(selected=selected, uid=uid, origin=origin, runtime_root=runtime_root), self.assertRaises(ValueError):
+                    runtime.grok_readonly_controller_argv(selected, env, unit, uid, 1002, origin, runtime_root=runtime_root)
+
+    def test_closed_manager_receipts_reject_foreign_missing_duplicate_and_cross_case_units(self):
+        for case in runtime.GROK_SCRIPTS:
+            unit = "uap-" + case + "-" + "a" * 32 + ".service"
+            body = b"LoadState=not-found\nActiveState=inactive\nControlGroup=\n"
+            self.assertEqual(runtime._service_unit_state(body, unit, case)["LoadState"], "not-found")
+            for bad in (body + b"MainPID=1\n", body + b"ActiveState=inactive\n", body.replace(b"inactive", b"active"),
+                        body.replace(b"ControlGroup=\n", b"ControlGroup=/system.slice/foreign.service\n"),
+                        b"LoadState=not-found\nActiveState=inactive\n"):
+                with self.assertRaises(ValueError):
+                    runtime._service_unit_state(bad, unit, case)
+            with self.assertRaises(ValueError):
+                runtime._service_unit_state(body, unit, "cline")
+
+    def kernel(self, root, scenario, case="grok-noauth"):
+        from contextlib import ExitStack
+        clock = [100.0]
+        state = {"started": False, "stopped": False, "killed": False}
+        calls = []
+        controller = case == runtime.GROK_READONLY_CONTROLLER
+        final = 130.0 if controller else 1000.0
+        budget = types.SimpleNamespace(deadline=final, check=lambda: final - clock[0])
+        ctx = types.SimpleNamespace(summary={}, identities={}, budget=budget)
+        def command(label, argv, cwd, env, timeout):
+            calls.append((label, argv, timeout))
+            if label == "runtime-test":
+                state["started"] = True
+                if scenario == "transport":
+                    raise ValueError("inert capture refusal")
+                if scenario == "expired":
+                    clock[0] = final
+                if scenario == "late-success":
+                    clock[0] = 126.0
+                return {"exit": 1 if scenario == "negative" else 0, "error": None}, b"inert child", b""
+            if label.endswith("-systemd-version"):
+                return {"exit": 0}, b"systemd " + (b"256" if scenario == "version" else b"255") + b"\n", b""
+            if label.endswith("-service-stop"):
+                state["stopped"] = True
+                return {"exit": 0}, b"", b""
+            if label.endswith("-service-kill"):
+                state["killed"] = True
+                return {"exit": 0}, b"", b""
+            absent = not state["started"]
+            if absent and scenario != "collision":
+                return {"exit": 0}, b"LoadState=not-found\nActiveState=inactive\nControlGroup=\n", b""
+            if scenario == "malformed" and not absent:
+                return {"exit": 0}, b"LoadState=loaded\nActiveState=inactive\nControlGroup=/foreign\n", b""
+            active = scenario == "residual" or scenario == "forced" and not state["stopped"] or absent
+            body = "LoadState=loaded\nActiveState=" + ("active" if active else "inactive") + "\nControlGroup=/system.slice/" + argv[-1] + "\n"
+            return {"exit": 0}, body.encode(), b""
+        ctx.command = command
+        info = types.SimpleNamespace(st_dev=1, st_ino=2, st_mode=stat.S_IFREG | 0o755, st_nlink=1,
+                                     st_size=5, st_mtime_ns=3, st_ctime_ns=4)
+        original_stat = Path.lstat
+        system = {Path("/usr/bin") / name for name in ("sudo", "systemd-run", "systemctl", "env")}
+        def empty(_unit, owner, _case):
+            self.assertEqual(owner, 0 if controller else 1001)
+            return not state["started"] or scenario != "residual" and (scenario != "forced" or state["stopped"])
+        class Lifetime:
+            def __init__(self, seconds):
+                self.deadline = clock[0] + seconds
+            def __enter__(self):
+                return self
+            def __exit__(self, *_args):
+                pass
+            def check(self):
+                return self.deadline - clock[0]
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(runtime, "cline_host"))
+            stack.enter_context(patch.object(runtime, "ordinary_bytes", return_value=b"inert"))
+            stack.enter_context(patch.object(Path, "lstat", lambda path: info if path in system else original_stat(path)))
+            stack.enter_context(patch.object(runtime.os, "getuid", return_value=1001))
+            stack.enter_context(patch.object(runtime.os, "getgid", return_value=1002))
+            stack.enter_context(patch.object(runtime, "_service_cgroup_empty", side_effect=empty))
+            stack.enter_context(patch.object(runtime.shared, "verify_files"))
+            stack.enter_context(patch.object(runtime.shared, "Budget", Lifetime))
+            stack.enter_context(patch.object(runtime.time, "monotonic", side_effect=lambda: clock[0]))
+            stack.enter_context(patch.object(runtime.time, "monotonic_ns", side_effect=lambda: int(clock[0] * 1e9)))
+            stack.enter_context(patch.object(runtime.time, "sleep", side_effect=lambda seconds: clock.__setitem__(0, clock[0] + seconds)))
+            output, runtime_root = root / "output", root / "runtime"
+            inputs = (runtime.GROK_CHILD_PYTHON, root / "tools/agentplugins", root / "tools/probe")
+            env = self.environment(output)
+            if case == "cline":
+                env = {key: "fixture" for key in runtime.CLINE_ENV}
+                env.update(PATH="/usr/bin:/bin", AGENTPLUGINS_CLINE_PROJECT_RUNTIME_ATTEMPT="1")
+            invoke = (lambda: runtime.cline_service(ctx, root / "test", env, root)) if case == "cline" else (
+                lambda: runtime.grok_service(ctx, case, inputs, env, output, 100_000_000_000, runtime_root=runtime_root))
+            if controller:
+                input_root = Path('/tmp/uap-grok-acp-input-' + 'd' * 32)
+                env = dict(PATH='/usr/bin:/bin', LANG='C.UTF-8', GITHUB_ACTIONS='true',
+                    RUNNER_ENVIRONMENT='github-hosted', AGENTPLUGINS_NATIVE_DISPOSABLE_HOSTED='1', EXPECTED_COMMIT='a' * 40)
+                invoke = lambda: runtime.grok_readonly_controller_service(ctx, input_root, env, 100_000_000_000,
+                    runtime_root=runtime_root, capture=lambda argv, selected: command('runtime-test', argv, input_root,
+                                                                                     selected, final - clock[0]))
+            if scenario in ("success", "negative", "late-success"):
+                result = invoke()
+                self.assertEqual(result[0]["exit"], int(scenario == "negative"))
+                if case != "cline":
+                    self.assertIs(ctx.budget, budget)
+                self.assertTrue(ctx.summary["delegated_service"]["closed"])
+                self.assertEqual(next(timeout for label, _, timeout in calls if label == "runtime-test"),
+                                 30 if controller else 165 if case == "cline" else 885)
+            else:
+                with self.assertRaises(ValueError):
+                    invoke()
+            return ctx.summary, calls
+
+    def test_readonly_controller_reuses_settlement_and_refuses_residual_or_expired_service(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            for scenario in ('success', 'negative', 'late-success', 'transport', 'expired', 'version',
+                             'collision', 'malformed', 'forced', 'residual'):
+                with self.subTest(scenario=scenario):
+                    summary, _ = self.kernel(Path(temporary).resolve(), scenario, runtime.GROK_READONLY_CONTROLLER)
+                    if 'delegated_service' in summary:
+                        self.assertEqual(summary['delegated_service']['uid'], 0)
+                        self.assertEqual(summary['delegated_service']['gid'], 0)
+            ctx = types.SimpleNamespace(budget=types.SimpleNamespace(deadline=131.0))
+            with patch.object(runtime, '_delegated_service') as dispatch, self.assertRaises(ValueError):
+                runtime.grok_readonly_controller_service(ctx, Path('/tmp/foreign'), {}, 100_000_000_000,
+                                                        runtime_root=Path('/tmp/runtime'), capture=lambda *_:None)
+            dispatch.assert_not_called()
+
+    def test_actual_finite_kernel_keeps_clean_negative_and_refuses_cleanup_transport_collision_deadline(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            self.kernel(Path(temporary).resolve(), "success", "cline")
+            for scenario in ("success", "negative", "transport", "forced", "residual", "malformed", "expired", "collision", "version"):
+                with self.subTest(scenario=scenario):
+                    summary, calls = self.kernel(Path(temporary).resolve(), scenario)
+                    if scenario in ("collision", "version"):
+                        self.assertNotIn("runtime-test", [row[0] for row in calls])
+                    if scenario == "forced":
+                        self.assertTrue(summary["delegated_service"]["forced_stop"])
+                    if scenario == "residual":
+                        self.assertTrue(summary["delegated_service"]["forced_kill"])
+                        self.assertFalse(summary["delegated_service"]["closed"])
 
 
 if __name__ == "__main__":

@@ -161,3 +161,49 @@ func TestScopedManagedMCPSelectionRejectsLinkedSelectedFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestAntigravityManagedMCPSelectionUsesNativeDocument(t *testing.T) {
+	for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
+		t.Run(string(scope), func(t *testing.T) {
+			for _, tc := range []struct {
+				name, body string
+				want       []string
+				refused    bool
+			}{
+				{"native", `{"mcpServers":{"z":{},"a":{}}}`, []string{"a", "z"}, false},
+				{"missing", "", []string{}, false},
+				{"empty", `{"mcpServers":{}}`, []string{}, false},
+				{"syntax", `{`, nil, true},
+				{"member", `{"servers":{}}`, nil, true},
+				{"null", `{"mcpServers":null}`, nil, true},
+				{"array", `{"mcpServers":[]}`, nil, true},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					files := map[string]string{"mcp.json": `{"mcpServers":{"portable-only":{}}}`}
+					if tc.body != "" {
+						files["mcp_config.json"] = tc.body
+					}
+					stager, root, digest := scopedSelectionArtifact(t, files)
+					names, err := stager.ManagedMCPNamesForScope(t.Context(), domain.ClientAntigravity, scope, root, digest)
+					if tc.refused {
+						if err == nil {
+							t.Fatal("malformed native selection fell back to portable mcp.json", names)
+						}
+						return
+					}
+					if err != nil || !reflect.DeepEqual(names, tc.want) {
+						t.Fatalf("native selection=%v want=%v err=%v", names, tc.want, err)
+					}
+					if tc.name == "native" {
+						if err := os.WriteFile(filepath.Join(root, "mcp_config.json"), []byte(`{"mcpServers":{"changed":{}}}`), 0600); err != nil {
+							t.Fatal(err)
+						}
+						if _, err := stager.ManagedMCPNamesForScope(t.Context(), domain.ClientAntigravity, scope, root, digest); err == nil {
+							t.Fatal("native selection trusted a changed artifact")
+						}
+					}
+				})
+			}
+		})
+	}
+}

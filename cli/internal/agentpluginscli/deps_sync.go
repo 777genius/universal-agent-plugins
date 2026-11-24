@@ -418,21 +418,6 @@ func repairOwnedDependenciesOnce(cmd *cobra.Command, app App, opts *options, sel
 	return true, applyDependencyRepairs(cmd, app, opts, actions, detected)
 }
 
-func resolveDependencyBindingIdentity(view installer.Inspection, action *environment.PreparedBinding) error {
-	for _, receipt := range view.EnvironmentReceipts {
-		if receipt.EnvironmentID == action.Authority.EnvironmentID && receipt.Alias == action.Alias {
-			if action.InstallationID == "" {
-				action.InstallationID = receipt.InstallationID
-				action.Authority.InstallationID = receipt.InstallationID
-			}
-			if receipt.ClientID == action.ClientID && action.Action == environment.ActionInstall {
-				return installer.ErrPlanChanged
-			}
-		}
-	}
-	return nil
-}
-
 func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Inspection, installationID string, request *installer.Request) error {
 	for _, installation := range view.Installations {
 		if installation.InstallationID != installationID {
@@ -446,7 +431,7 @@ func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Ins
 			if !ok {
 				return fmt.Errorf("installed sibling %s is not detected", binding.ClientID)
 			}
-			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, Executable: backendExecutable(sibling, adapter.detected, adapter.app.scope())})
+			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, Executable: backendExecutable(sibling, adapter.detected, adapter.app.scope()), Surfaces: slices.Clone(sibling.Surfaces)})
 		}
 	}
 	return nil

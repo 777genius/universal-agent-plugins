@@ -15,6 +15,11 @@ Changes after `v1.2.4` land here.
 
 ### Added
 
+- Interactive saved installation shows unavailable agents below the choices,
+  explains preparation-only Kiro installs, and reports discovery progress.
+  Existing unsaved installations identify their agents without promising that
+  disconnecting them migrates ownership into the dependency list.
+
 - Unreleased source commands `agentplugins deps export` and `deps import`
   transfer the exact validated `uap.toml` / `uap.lock` pair through the current
   folder (or an optional directory), with a preview and confirmation for every

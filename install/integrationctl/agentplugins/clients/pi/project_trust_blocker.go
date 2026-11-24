@@ -109,12 +109,22 @@ func piTrustConfigBlocker(config string, owned map[string]map[string]string) (st
 			if !ok {
 				return fmt.Sprintf(".pi/%s/%s is not managed by UAP", surface, name.Name()), nil
 			}
-			if digest, err := piTrustTreeDigest(filepath.Join(directory, name.Name())); err != nil || digest != recorded {
-				return fmt.Sprintf(".pi/%s/%s changed after UAP recorded its content", surface, name.Name()), nil //nolint:nilerr // A refusal is an explanation.
+			if blocker := piTrustRecordedTreeBlocker(directory, surface, name.Name(), recorded); blocker != "" {
+				return blocker, nil
 			}
 		}
 	}
 	return "", nil
+}
+
+// piTrustRecordedTreeBlocker translates unreadable or changed owned content
+// into the same trust refusal without exposing the underlying read error.
+func piTrustRecordedTreeBlocker(directory, surface, name, recorded string) string {
+	digest, err := piTrustTreeDigest(filepath.Join(directory, name))
+	if err != nil || digest != recorded {
+		return fmt.Sprintf(".pi/%s/%s changed after UAP recorded its content", surface, name)
+	}
+	return ""
 }
 
 func piTrustMCPBlocker(path string, owned map[string]string) string {

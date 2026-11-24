@@ -56,8 +56,10 @@ func TestProjectMetadataMatchesAdmittedComponentContracts(t *testing.T) {
 			t.Fatalf("%s project MCP support = %s, expected %s", client, got, support)
 		}
 	}
+	// The selected Hermes Project source remains Prepared, not Active.
 	if byClient["hermes"].Project.MCPTransports["stdio"] != "prepared" ||
 		byClient["hermes"].Project.MCPTransports["streamable-http"] != "prepared" ||
+		byClient["hermes"].Project.MCPTransports["sse"] != "unsupported" ||
 		byClient["antigravity"].Project.MCPTransports["stdio"] != "native" ||
 		byClient["antigravity"].Project.MCPTransports["streamable-http"] != "native" {
 		t.Fatal("Hermes/Antigravity Project metadata diverged from scoped native contracts")

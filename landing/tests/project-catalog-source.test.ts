@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { PINNED_CATALOG_CLI_VERSION, pinnedCatalogCommands, pinnedCatalogRepairLimitation, pinnedCatalogSelection, scopedComponentSupported, projectCatalogAutomaticSelection, projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
+import { CATALOG_CLI_VERSION, pinnedCatalogCommands, pinnedCatalogRepairLimitation, pinnedCatalogSelection, scopedComponentSupported, projectCatalogAutomaticSelection, projectCatalogCommands, projectCatalogSelection } from '../utils/projectCatalogSource.ts';
 import type { RegistryPlugin } from '../types/registry.ts';
 
 function reviewed(): RegistryPlugin {
@@ -127,10 +127,10 @@ test('Pi project uses an explicit immutable Git source instead of inventing a si
   const source = 'github:777genius/universal-agent-plugins@2ddbb99dd190c1792b79904f9875e6322bccd243//plugins/gitlab';
   assert.equal(pinnedCatalogSelection(plugin, 'pi', 'project')?.selector, source);
   const commands = pinnedCatalogCommands(plugin, 'pi', 'project');
-  assert.equal(commands.add, `npx -y universal-agent-plugins@0.1.116 add ${source} --target pi --scope project`);
-  assert.equal(commands.update, 'npx -y universal-agent-plugins@0.1.116 update gitlab --target pi --scope project');
-  assert.equal(commands.repair, 'npx -y universal-agent-plugins@0.1.116 repair gitlab --target pi --scope project');
-  assert.equal(commands.remove, 'npx -y universal-agent-plugins@0.1.116 remove gitlab --target pi --scope project');
+  assert.equal(commands.add, `npx -y universal-agent-plugins@latest add ${source} --target pi --scope project`);
+  assert.equal(commands.update, 'npx -y universal-agent-plugins@latest update gitlab --target pi --scope project');
+  assert.equal(commands.repair, 'npx -y universal-agent-plugins@latest repair gitlab --target pi --scope project');
+  assert.equal(commands.remove, 'npx -y universal-agent-plugins@latest remove gitlab --target pi --scope project');
   assert.deepEqual(plugin.distributions, previous, 'The signed target list must not be rewritten');
 });
 
@@ -251,17 +251,17 @@ test('Pi pinned source identity follows the selected older release, not newer Ch
   assert.deepEqual(selected?.components, ['mcp']);
   assert.equal(pinnedCatalogSelection(plugin, 'pi', 'project')?.selector, selected?.selector);
   assert.equal(pinnedCatalogCommands(plugin, 'pi', 'project').add,
-    `npx -y universal-agent-plugins@0.1.116 add ${selected?.selector} --target pi --scope project`);
+    `npx -y universal-agent-plugins@latest add ${selected?.selector} --target pi --scope project`);
 });
 
-test('all source commands pin the released npm facade and preserve explicit saved maintenance', () => {
+test('all source commands track npm latest while pinning Git source and preserving saved maintenance', () => {
   const plugin = reviewed();
   for (const client of ['hermes', 'antigravity', 'pi'] as const) {
     for (const scope of ['user', 'project'] as const) {
       const selected = pinnedCatalogSelection(plugin, client, scope)!;
       const commands = pinnedCatalogCommands(plugin, client, scope);
       const suffix = ` --target ${client}${scope === 'project' ? ' --scope project' : ''}`;
-      const invocation = 'npx -y universal-agent-plugins@0.1.116';
+      const invocation = 'npx -y universal-agent-plugins@latest';
       assert.equal(commands.add, `${invocation} add ${selected.selector}${suffix}`);
       for (const action of ['update', 'repair', 'remove'] as const)
         assert.equal(commands[action], `${invocation} ${action} gitlab${suffix}`);
@@ -278,7 +278,7 @@ test('release 0.1.110 restores explicit Antigravity MCP repair in both scopes', 
     assert.ok(selection);
     assert.equal(pinnedCatalogRepairLimitation(selection), undefined);
     assert.equal(pinnedCatalogCommands(plugin, 'antigravity', scope).repair,
-      `npx -y universal-agent-plugins@0.1.116 repair gitlab --target antigravity${scope === 'project' ? ' --scope project' : ''}`);
+      `npx -y universal-agent-plugins@latest repair gitlab --target antigravity${scope === 'project' ? ' --scope project' : ''}`);
   }
 });
 
@@ -290,16 +290,16 @@ test('saved maintenance uses the selected source manifest identity, not the cata
   const selection = pinnedCatalogSelection(plugin, 'hermes', 'user')!;
   assert.equal(selection.manifestName, 'source-package');
   const commands = pinnedCatalogCommands(plugin, 'hermes', 'user');
-  assert.equal(commands.add, `npx -y universal-agent-plugins@0.1.116 add ${selection.selector} --target hermes`);
+  assert.equal(commands.add, `npx -y universal-agent-plugins@latest add ${selection.selector} --target hermes`);
   for (const action of ['update', 'repair', 'remove'] as const)
-    assert.equal(commands[action], `npx -y universal-agent-plugins@0.1.116 ${action} source-package --target hermes`);
+    assert.equal(commands[action], `npx -y universal-agent-plugins@latest ${action} source-package --target hermes`);
 });
 
 test('Hermes Project source uses prepared MCP capability; the CLI qualifies the host bundle and session', () => {
   const plugin = reviewed();
   assert.equal(scopedComponentSupported('hermes', 'mcp', 'project'), true);
   assert.ok(pinnedCatalogSelection(plugin, 'hermes', 'project'));
-  assert.match(pinnedCatalogCommands(plugin, 'hermes', 'project').add, /@0\.1\.116 add github:.* --target hermes --scope project$/);
+  assert.match(pinnedCatalogCommands(plugin, 'hermes', 'project').add, /@latest add github:.* --target hermes --scope project$/);
   plugin.distributions[0]!.releases[0]!.components = ['skills'];
   assert.ok(pinnedCatalogSelection(plugin, 'hermes', 'project'));
   for (const scope of ['user', 'project'] as const)
