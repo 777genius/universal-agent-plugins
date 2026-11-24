@@ -145,6 +145,49 @@ class WindsurfCycleContracts(unittest.TestCase):
         value["mutation_lock"]=wire(raw)
         with self.assertRaises(ValueError):self.admit()
 
+    def retain_previous_lock(self, stage):
+        index=next(i for i,row in enumerate(self.proofs) if row["stage"]==stage)
+        selected=cycle.scope(stage)
+        previous=next(row["value"] for row in reversed(self.proofs[:index])
+                      if row["stage"] in cycle.PUBLIC and cycle.scope(row["stage"])==selected)
+        value=self.proofs[index]["value"]
+        project=self.result["component_layout"][selected]
+        root=project+"/.uap"
+        value["mutation_lock"]=copy.deepcopy(previous["mutation_lock"])
+        lock=copy.deepcopy(previous["frames"][root]["mutation.lock"])
+        value["frames"][root]["mutation.lock"]=lock
+        value["frames"][project][".uap/mutation.lock"]=copy.deepcopy(lock)
+        return value,root,project
+
+    def test_unchanged_reconciliation_can_retain_exact_prior_lock(self):
+        baseline=copy.deepcopy(self.proofs)
+        for stage in ("repeat-add-a","unchanged-update-a"):
+            with self.subTest(stage=stage):
+                self.proofs=copy.deepcopy(baseline)
+                self.retain_previous_lock(stage)
+                self.assertEqual(self.admit(),self.result)
+        self.proofs=baseline
+
+    def test_retained_lock_requires_same_bytes_metadata_and_noop_stage(self):
+        baseline=copy.deepcopy(self.proofs)
+        for mutation in ("body","metadata","mutating-stage"):
+            with self.subTest(mutation=mutation):
+                self.proofs=copy.deepcopy(baseline)
+                value,root,project=self.retain_previous_lock(
+                    "intact-repair-a" if mutation=="mutating-stage" else "repeat-add-a")
+                lock=value["frames"][root]["mutation.lock"]
+                if mutation=="body":
+                    body=cycle.load(cycle.stream(value["mutation_lock"]))
+                    body["pid"]+=1
+                    raw=json.dumps(body,separators=(",",":")).encode()+b"\n"
+                    value["mutation_lock"]=wire(raw)
+                    lock.update(Size=len(raw),SHA256=cycle.sha(raw))
+                elif mutation=="metadata":
+                    lock["Changed"][1]+=1
+                value["frames"][project][".uap/mutation.lock"]=copy.deepcopy(lock)
+                with self.assertRaises(ValueError):self.admit()
+        self.proofs=baseline
+
     def test_native_skill_revision_and_removal_are_same_frame_facts(self):
         original=copy.deepcopy(self.proofs)
         paths=self.result["component_layout"]
