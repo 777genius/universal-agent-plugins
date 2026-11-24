@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func newUpdateCommand(app App, opts *options) *cobra.Command {
@@ -128,7 +130,7 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 				return err
 			}
 			if opts.yes && strings.TrimSpace(opts.target) == "" && !opts.purgeData {
-				return CLIUsageError{Code: "TARGET_REQUIRED", Message: "remove --yes requires explicit --target"}
+				return removeTargetRequired(app, opts, args[0])
 			}
 			if handled, err := confirmInterruptedClientChanges(cmd, app, opts, args[0], "remove"); handled || err != nil {
 				return err
@@ -163,6 +165,26 @@ func newRemoveCommand(app App, opts *options) *cobra.Command {
 	command.Flags().BoolVar(&opts.purgeData, "purge-data", false, "permanently delete ownership-verified plugin data after removal")
 	command.Flags().BoolVar(&opts.yes, "yes", false, "accept the preflighted removal plan (never implies --purge-data)")
 	return command
+}
+
+// removeTargetRequired keeps --yes from choosing targets, as add --yes does,
+// but names the installed targets and the command that removes all of them.
+func removeTargetRequired(app App, opts *options, selector string) error {
+	usage := CLIUsageError{Code: "TARGET_REQUIRED", Message: "remove --yes requires explicit --target"}
+	if app.StateStore == nil {
+		return usage
+	}
+	targets, err := defaultBoundTargets(app, selector, opts.scope, false)
+	if err != nil {
+		return usage
+	}
+	list := strings.ReplaceAll(joinTargets(targets), ", ", ",")
+	command := "agentplugins remove " + quoteResumeArgument(selector) + " --target " + list + " --yes"
+	if app.scope() == domain.ScopeProject {
+		command += " --scope project --project-root " + quoteResumeArgument(app.ProjectRoot)
+	}
+	usage.Message += fmt.Sprintf("; installed targets: %s. To remove all of them, run: %s", joinTargets(targets), command)
+	return usage
 }
 
 // dispatchSelectedRemoval preserves single-target and legacy-all behavior

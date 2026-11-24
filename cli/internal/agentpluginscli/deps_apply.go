@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -218,9 +219,8 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 	}
 	applied, applyErr := applyPreparedDependencies(cmd.Context(), app, &request, adapter, checked)
 	stop()
-	results := applied.Results()
 	app.finishInstall(opts, cmd.CommandPath(), outcomeAgentItems(applied.Outcomes))
-	if renderErr := renderDependencyResults(cmd, opts, prepared, results, applyErr); renderErr != nil && applyErr == nil {
+	if renderErr := renderDependencyAppliedResults(cmd, opts, prepared, applied, applyErr); renderErr != nil && applyErr == nil {
 		return renderErr
 	}
 	if applyErr != nil {
@@ -236,6 +236,7 @@ func detectDependencyClients(ctx context.Context, app App) (map[domain.ClientID]
 	}
 	detected := map[domain.ClientID]domain.DetectedClient{}
 	for _, client := range clients {
+		client.Surfaces = slices.Clone(client.Surfaces)
 		detected[client.ClientID] = client
 	}
 	return detected, nil

@@ -40,7 +40,7 @@ projection refresh is not supported.
 
 `Engine.SupportsClient` and `Discover` preserve explicit SDK registry membership,
 including existing VS Code APIs. Saved dependency admission uses the separate
-`ClientSupported` policy: eleven qualified local adapters, with hostless ChatGPT
+`ClientSupported` policy: every qualified local adapter, with hostless ChatGPT
 preparation and owner-deferred VS Code excluded from that workflow. Existing SDK
 and imperative capabilities remain available. Registration alone never claims
 automatic activation or support for every component. `ClientMetadata.Capabilities` reports

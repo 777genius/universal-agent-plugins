@@ -67,8 +67,8 @@ test('mixed ChatGPT Web and Codex/Desktop commands use the imperative no-save pa
   const plugin = data();
   const oldCommand = pluginCommands(plugin, ['codex', 'chatgptweb']).add;
   const splitCommand = pluginCommands(plugin, ['chatgpt', 'chatgptweb']).add;
-  assert.match(oldCommand, /--target codex,chatgptweb --no-save$/);
-  assert.match(splitCommand, /--target chatgpt,chatgptweb --no-save$/);
+  assert.match(oldCommand, /--target "codex,chatgptweb" --no-save$/);
+  assert.match(splitCommand, /--target "chatgpt,chatgptweb" --no-save$/);
   assert.doesNotMatch(pluginCommands(plugin, ['codex']).add, /--no-save/);
 });
 
@@ -315,10 +315,10 @@ test('mixed explicit choices use one eligible source and survive navigation', as
   state.updateTargets(chosen);
   assert.deepEqual(state.targets.value, chosen);
   const command = state.pinnedSourceCommands.value;
-  assert.match(command?.add ?? '', /^npx -y universal-agent-plugins@0\.1\.110 add github:/);
-  assert.match(command?.add ?? '', /--target cursor,codex,hermes,antigravity,pi$/);
+  assert.match(command?.add ?? '', /^npx -y universal-agent-plugins@latest add github:/);
+  assert.match(command?.add ?? '', /--target "cursor,codex,hermes,antigravity,pi"$/);
   assert.doesNotMatch(command?.add ?? '', /--no-save|chatgpt|\n/);
-  assert.match(command?.repair ?? '', /--target cursor,codex,hermes,antigravity,pi$/);
+  assert.match(command?.repair ?? '', /--target "cursor,codex,hermes,antigravity,pi"$/);
   await nextTick();
   state.stop();
   state = mount(plugin);
@@ -327,7 +327,7 @@ test('mixed explicit choices use one eligible source and survive navigation', as
   assert.deepEqual(state.pinnedSourceCommands.value, command);
   state.updateAutoDetect(true);
   assert.equal(unref(state.pinnedSourceCommands), undefined);
-  assert.equal(pluginCommands(plugin).add, 'npx -y universal-agent-plugins add gitlab');
+  assert.equal(pluginCommands(plugin).add, 'npx -y universal-agent-plugins@latest add gitlab');
   state.stop();
 });
 

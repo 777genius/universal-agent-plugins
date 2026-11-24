@@ -248,7 +248,7 @@ func TestSkillRootRequiresRawAcquisitionCapability(t *testing.T) {
 	app, pin, source := dependencyStagingFixture(t)
 	ctx := context.Background()
 	requirement := environment.Requirement{Alias: "pdf", Git: &environment.GitSource{Kind: environment.SkillKind, Skill: "pdf", Repository: "acme/pdf", Selector: environment.Selector{Kind: environment.SelectorCommit, Value: pin.Source.Git.Commit}}}
-	if _, err := (dependencyResolver{app: app}).resolveSkill(ctx, requirement, []string{"codex"}, nil, pin.Source.Git.Commit, "", ""); err == nil || !strings.Contains(err.Error(), "raw Skill acquisition unavailable") {
+	if _, err := (dependencyResolver{app: app}).resolveSkill(ctx, requirement, []string{"codex"}, nil, pin.Source.Git.Commit, "", "", nil); err == nil || !strings.Contains(err.Error(), "raw Skill acquisition unavailable") {
 		t.Fatalf("root resolution used plugin acquisition: %v", err)
 	}
 	pin.Source.Git.Kind = environment.SkillKind

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
@@ -12,18 +13,65 @@ import (
 // Automatic selection uses disposable package acquisition and shared host
 // admission. The authoritative saved operation resolves and revalidates its pin
 // after selection; no native executable runs while presenting choices.
-func compatibleSavedAddTargets(ctx context.Context, app App, source string, detected []domain.DetectedClient) ([]domain.DetectedClient, []targetSkip, error) {
+func compatibleSavedAddTargets(ctx context.Context, app App, source string, detected []domain.DetectedClient) ([]domain.DetectedClient, []targetSkip, map[domain.ClientID]prompt.TargetChoice, error) {
 	app.dependencySnapshots = nil
 	preview, cleanup, err := dependencyPreviewApp(app, &options{dryRun: true})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	defer cleanup()
 	compatible, skipped, loaded, err := compatibleTargetsDeferringHostQualification(ctx, preview, source, detected)
 	if loaded != nil && loaded.cleanup != nil {
 		defer func() { _ = loaded.cleanup() }()
 	}
-	return compatible, skipped, err
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	annotations, err := inspectSavedAddSelection(ctx, app, source, loaded)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	compatible, skipped, err = offerSavedHostedPreparation(ctx, preview, loaded, detected, compatible, skipped)
+	return compatible, skipped, annotations, err
+}
+
+// offerSavedHostedPreparation keeps a client whose automatic host check failed
+// in the choices when the saved installation itself falls back to file-only
+// preparation. That fallback exists only for a fresh User-scope install on a
+// client that allows hosted preparation (installer.previewHostedPackage), so no
+// other scope or client is offered. Selection still runs the same preflight and
+// confirmation before anything is written.
+func offerSavedHostedPreparation(ctx context.Context, app App, loaded *loadedPackage, detected, compatible []domain.DetectedClient, skipped []targetSkip) ([]domain.DetectedClient, []targetSkip, error) {
+	if app.scope() != domain.ScopeUser || loaded == nil {
+		return compatible, skipped, nil
+	}
+	intents, fresh, err := savedHostedPreparationIntents(app, *loaded)
+	if err != nil {
+		return nil, nil, err
+	}
+	session := newLoadedTargetSession(ctx, app, *loaded, detected)
+	if session == nil {
+		return compatible, skipped, nil
+	}
+	session.intents = []map[domain.ClientID]domain.InstallIntent{intents}
+	session.disableHostedPrepareFallback = !fresh
+	session.savedHostedPrepare = true
+	byID := detectedClientMap(detected)
+	kept := skipped[:0]
+	for _, skip := range skipped {
+		client, ok := byID[skip.Client]
+		if !ok || skip.Kind != prompt.SkipManual || !allowsHostedPrepare(skip.Client) {
+			kept = append(kept, skip)
+			continue
+		}
+		classified, _, accepted := session.classify(client)
+		if !accepted {
+			kept = append(kept, skip)
+			continue
+		}
+		compatible = append(compatible, classified)
+	}
+	return compatible, kept, nil
 }
 
 // compatibleTargetsDeferringHostQualification offers detected clients whose

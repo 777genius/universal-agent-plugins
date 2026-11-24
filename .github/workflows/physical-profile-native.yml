@@ -2,6 +2,7 @@ name: Physical profile native
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'install/integrationctl/adapters/directoryidentity/**'
       - 'install/integrationctl/adapters/dirswap/**'
@@ -22,6 +23,7 @@ permissions:
 
 jobs:
   native:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
     name: Physical profile / ${{ matrix.os }}
     runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
     timeout-minutes: 10

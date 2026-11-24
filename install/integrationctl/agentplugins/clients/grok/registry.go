@@ -66,6 +66,8 @@ func parseList(body []byte) ([]pluginEntry, error) {
 
 // Keep exact native field spelling and types. Optional identity fields may be
 // absent in older listings, but null or differently cased values are not proof.
+// The one exception is version: Grok 1.0.70 lists a package that declares no
+// version (every raw Skill wrapper) as "version": null, the same as absent.
 func parseEntry(value any) (pluginEntry, error) {
 	object, ok := value.(map[string]any)
 	if !ok {
@@ -78,6 +80,9 @@ func parseEntry(value any) (pluginEntry, error) {
 				continue
 			}
 			text, valid := value.(string)
+			if key == "version" && value == nil {
+				valid = true
+			}
 			if key != field || !valid {
 				return pluginEntry{}, errUnknownList
 			}

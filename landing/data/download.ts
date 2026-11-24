@@ -14,8 +14,8 @@ export const downloadTechnical = {
     {
       id: 'npm',
       href: 'https://www.npmjs.com/package/universal-agent-plugins',
-      command: 'npx -y universal-agent-plugins version',
-      invocation: 'npx -y universal-agent-plugins',
+      command: 'npx -y universal-agent-plugins@latest version',
+      invocation: 'npx -y universal-agent-plugins@latest',
     },
     {
       id: 'script',
@@ -35,20 +35,20 @@ export const downloadTechnical = {
   quickstartSteps: [
     {
       id: 'install-cli',
-      command: 'npx -y universal-agent-plugins version',
+      command: 'npx -y universal-agent-plugins@latest version',
     },
     {
       id: 'try-plugin',
-      command: 'universal-agent-plugins add context7 --target codex,cursor',
+      command: 'universal-agent-plugins add context7 --target "codex,cursor"',
     },
     {
       id: 'build-plugin',
       command:
-        'universal-agent-plugins update context7 --target codex,cursor\nuniversal-agent-plugins repair context7 --target codex,cursor',
+        'universal-agent-plugins update context7 --target "codex,cursor"\nuniversal-agent-plugins repair context7 --target "codex,cursor"',
     },
     {
       id: 'validate',
-      command: 'universal-agent-plugins remove context7 --target codex,cursor',
+      command: 'universal-agent-plugins remove context7 --target "codex,cursor"',
     },
   ],
 };

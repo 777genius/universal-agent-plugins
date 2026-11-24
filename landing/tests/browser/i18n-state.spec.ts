@@ -46,13 +46,13 @@ for (const locale of ['ru', 'uk'] as const) {
     await targets(page, panel, selectedNames);
     await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor,claude,gemini,opencode');
     await expect(panel.locator('.install-panel__notice').filter({ hasText: 'uap.toml' })).toHaveText(
-      wording('en')('registryUi.install.dependencySaving.saved'),
+      wording('en')('registryUi.install.dependencySaving.saved', { command: 'npx -y universal-agent-plugins@latest deps status' }),
     );
     await navigate(page, '/plugins/i18n-state-00/', locale);
     await expect(panel.getByRole('heading', { name: wording(locale)('registryUi.install.useWithYourAgent'), exact: true })).toBeVisible();
     await exactCommands(page, panel, 'i18n-state-00', 'codex,cursor,claude,gemini,opencode');
     await expect(panel.locator('.install-panel__notice').filter({ hasText: 'uap.toml' })).toHaveText(
-      wording(locale)('registryUi.install.dependencySaving.saved'),
+      wording(locale)('registryUi.install.dependencySaving.saved', { command: 'npx -y universal-agent-plugins@latest deps status' }),
     );
     for (const name of selectedNames) await expect(page.getByRole('checkbox', { name: new RegExp(`^${name}\\s`) })).toBeChecked();
     await automatic(page, panel, locale);
@@ -121,7 +121,7 @@ for (const locale of locales) {
     await auto.click();
     await expect(page.getByRole('dialog').locator('.plugin-card__auth')).toHaveCount(0);
     await page.getByRole('dialog').locator('.install-dialog__footer .command-snippet').getByRole('button').click();
-    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('npx -y universal-agent-plugins add i18n-state-00');
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('npx -y universal-agent-plugins@latest add i18n-state-00');
     expect(errors).toEqual([]);
   });
 }
@@ -182,7 +182,7 @@ test('manual download channel beats delayed detection and locale remount', async
     await expect(npm).toHaveAttribute('aria-selected', 'true');
     const commands = await page.locator('.download-section__command code').allTextContents();
     expect(commands.length).toBeGreaterThan(0);
-    expect(commands.join('\n')).toContain('npx -y universal-agent-plugins add');
+    expect(commands.join('\n')).toContain('npx -y universal-agent-plugins@latest add');
     gate.release();
     // Detection must complete, but it must not overwrite the explicit npm choice.
     const linuxRecommendation = page.locator('.download-section__install-tab').filter({ hasText: downloadChannelTitle('en', 'script') });

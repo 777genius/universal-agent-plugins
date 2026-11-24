@@ -23,6 +23,9 @@ func (*Adapter) ProjectActiveNative(_ context.Context, root string, envelope dom
 			return nil, err
 		}
 	}
+	if err := verifyKiroActiveApprovals(root, envelope, plan); err != nil {
+		return nil, err
+	}
 	return BuildNativeObjects(root, envelope, plan)
 }
 
@@ -41,6 +44,13 @@ func (*Adapter) Project(_ context.Context, in clients.ProjectionInput) ([]domain
 		PluginRoot: in.Plan.ActivePath,
 		DataPath:   in.PluginDataPath,
 	}); err != nil {
+		return nil, err
+	}
+	approvals, err := selectedKiroApprovals(in.Envelope, in.Plan)
+	if err != nil {
+		return nil, err
+	}
+	if err := applyKiroApprovals(in.StagingPath, approvals); err != nil {
 		return nil, err
 	}
 	if in.Plan.Scope == domain.ScopeProject {

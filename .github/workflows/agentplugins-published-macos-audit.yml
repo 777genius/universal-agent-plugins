@@ -75,6 +75,23 @@ jobs:
             scripts.test_live_install_audit_env.IsolatedClientEnvironmentTest.test_codex_marketplace_containment_follows_physical_directory_identity -v
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
 
+      - name: Check Gemini repeat descriptor custody on genuine macOS
+        if: ${{ matrix.target == 'gemini' && matrix.kind == 'skill' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest \
+            scripts.test_live_install_audit_env.GeminiEmptySessionRuntimeContracts -v
+
+      - name: Check Claude retirement custody on genuine macOS
+        if: ${{ matrix.target == 'claude' && matrix.kind == 'skill' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest \
+            scripts.test_claude_darwin_metadata \
+            scripts.test_live_install_audit_env.ClaudeCacheRetirementAuditContracts -v
+
       # Docker Hub is selected in every deep published plugin matrix. Its
       # actual MCP manifest requires a Docker CLI on PATH. Qualify that real
       # prerequisite for all plugin targets, never by a synthetic stub.
