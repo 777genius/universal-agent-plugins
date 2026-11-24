@@ -111,8 +111,8 @@ func TestSavedAddUnloadedDirectoryPreservesOwnershipDiagnostic(t *testing.T) {
 // package. An empty preview key would silently drop ownership annotations.
 func TestSavedAddSelectionCanonicalSourceKeyAfterAcquisition(t *testing.T) {
 	identity := domain.SourceIdentity{
-		Repository: "acme/example",
-		PackageSubpath: "tools",
+		Repository:       "acme/example",
+		PackageSubpath:   "tools",
 		ResolvedRevision: strings.Repeat("a", 40),
 	}
 	loaded := loadedPackage{envelope: domain.PackageEnvelope{Source: identity}}
@@ -122,8 +122,8 @@ func TestSavedAddSelectionCanonicalSourceKeyAfterAcquisition(t *testing.T) {
 	}
 	requirement := environment.Requirement{Alias: "candidate", Git: &environment.GitSource{
 		Repository: identity.Repository,
-		Path: identity.PackageSubpath,
-		Selector: environment.Selector{Kind: environment.SelectorCommit, Value: identity.ResolvedRevision},
+		Path:       identity.PackageSubpath,
+		Selector:   environment.Selector{Kind: environment.SelectorCommit, Value: identity.ResolvedRevision},
 	}}
 	want, err := requirement.SourceKey()
 	if err != nil {
