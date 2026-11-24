@@ -116,7 +116,7 @@ jobs:
           # Strictly client-scoped paths may shrink heavy E2E; shared/unknown
           # inputs fail open. Files include both sides of each rename.
           native_full=false native_codex=false native_claude=false native_opencode=false
-          remaining_full=false remaining_windsurf=false remaining_chatgpt=false
+          remaining_full=false remaining_cursor=false remaining_kiro=false remaining_windsurf=false remaining_chatgpt=false
           live_full=false live_codex=false live_claude=false live_opencode=false
           live_gemini=false live_copilot=false live_cline=false live_kimi=false live_qoder=false live_pi=false
           while IFS= read -r path; do
@@ -130,18 +130,20 @@ jobs:
               cli/*|install/integrationctl/agentplugins/*|sdks/typescript/*|repotests/agentplugins_*native*|repotests/agentplugins_*runtime*|repotests/testdata/agentplugins_native_probe/*|repotests/testdata/agentplugins_commands_fixture/*|scripts/prepare-codex-linux-sandbox.sh|scripts/run-native-client-matrix.py|scripts/terminal-ui/native_browser.py|scripts/terminal-ui/native_skills.py|scripts/terminal-ui/native_plugin.py|scripts/terminal-ui/harness.py|scripts/terminal-ui/pty_owner.py|ui/skills-picker/*|contracts/skills-picker/*|scripts/native_client*.py|scripts/test_native_client*.py|scripts/verify-agentplugins-draft.py|scripts/test_agentplugins_draft.py|scripts/verify-released-native-evidence.py|scripts/test_released_native_evidence.py|npm/agentplugins/*|.github/workflows/agentplugins-native-clients.yml|.github/workflows/agentplugins-released-native-clients.yml|.github/workflows/pr-changes.yml) native_full=true ;;
             esac
             case "$path" in
-              scripts/prepare-codex-linux-sandbox.sh|scripts/run-native-client-matrix.py) remaining_chatgpt=true ;;
-              scripts/devin_project_auto_install_e2e.py|scripts/test_devin_project_auto_install_e2e.py) remaining_windsurf=true ;;
-              .github/workflows/live-install-remaining-clients.yml|.github/workflows/pr-changes.yml|scripts/live-install-audit.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|tests/live-install/fixtures.json) remaining_full=true ;;
+              scripts/prepare-codex-linux-sandbox.sh|scripts/run-native-client-matrix.py|scripts/codex_plugin_retention_audit.py|scripts/test_codex_plugin_retention_audit.py) remaining_chatgpt=true ;;
+              scripts/devin_project_auto_install_e2e.py|scripts/test_devin_project_auto_install_e2e.py|scripts/devin_structured_inventory_admission.py|scripts/test_devin_structured_inventory_admission.py) remaining_windsurf=true ;;
+              scripts/project_native_cursor_acquisition.py) remaining_cursor=true ;;
+              scripts/claude_darwin_metadata.py|scripts/test_claude_darwin_metadata.py) remaining_kiro=true ;;
+              .github/workflows/live-install-remaining-clients.yml|.github/workflows/pr-changes.yml|scripts/live-install-audit.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|tests/live-install/fixtures.json|scripts/native_client_research.py|scripts/project_native_research.py|scripts/native_client_draft.py|cli/cmd/agentplugins/*|cli/internal/agentpluginscli/*|install/integrationctl/agentplugins/*) remaining_full=true ;;
             esac
             case "$path" in
-              scripts/prepare-codex-linux-sandbox.sh|scripts/published_codex_baseline.py|scripts/test_published_codex_baseline.py|scripts/codex_runtime_audit.py|scripts/test_codex_runtime_audit.py) live_codex=true ;;
+              scripts/prepare-codex-linux-sandbox.sh|scripts/published_codex_baseline.py|scripts/test_published_codex_baseline.py|scripts/codex_runtime_audit.py|scripts/test_codex_runtime_audit.py|scripts/codex_plugin_retention_audit.py|scripts/test_codex_plugin_retention_audit.py) live_codex=true ;;
               scripts/claude_cache_retirement_audit.py) live_claude=true ;;
               scripts/opencode_bootstrap_audit.py|scripts/test_opencode_bootstrap_audit.py|scripts/test_live_install_audit_opencode_negative.py) live_opencode=true ;;
               scripts/gemini_runtime_audit.py|scripts/gemini_windows_custody.py|scripts/test_gemini_windows_runtime_audit.py) live_gemini=true ;;
               scripts/qoder_prepared_skill_audit.py|scripts/test_qoder_prepared_skill_audit.py) live_qoder=true ;;
               scripts/pi_project_skill_audit.py|scripts/test_pi_project_skill_audit.py) live_pi=true ;;
-              scripts/live-install-audit.py|scripts/native_client_research.py|scripts/test_native_client_research.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|tests/live-install/fixtures.json|install/integrationctl/agentplugins/adapters/securityscan/scanner*.go|.github/workflows/live-install-audit.yml|.github/workflows/pr-changes.yml) live_full=true ;;
+              scripts/live-install-audit.py|scripts/native_client_research.py|scripts/test_native_client_research.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|tests/live-install/fixtures.json|install/integrationctl/agentplugins/adapters/securityscan/scanner*.go|.github/workflows/live-install-audit.yml|.github/workflows/pr-changes.yml|scripts/windows_owned_job.py|scripts/test_live_install_audit_components.py) live_full=true ;;
             esac
           done <<< "$files"
           selected_targets() {
@@ -156,7 +158,7 @@ jobs:
             printf '[%s]' "$selected"
           }
           native_clients="$(selected_targets native_codex native_claude native_opencode)"
-          remaining_clients="$(selected_targets remaining_windsurf remaining_chatgpt)"
+          remaining_clients="$(selected_targets remaining_cursor remaining_kiro remaining_windsurf remaining_chatgpt)"
           live_clients="$(selected_targets live_codex live_claude live_opencode live_gemini live_copilot live_cline live_kimi live_qoder live_pi)"
           [[ "$native_full" == false ]] || native_clients="$full_native"
           [[ "$remaining_full" == false ]] || remaining_clients="$full_remaining"

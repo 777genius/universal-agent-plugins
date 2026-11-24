@@ -1,0 +1,157 @@
+name: Kiro authenticated E2E dispatch once
+
+on:
+  push:
+    branches:
+      - feat/native-install-automation-six-clients-20261112
+    paths:
+      - '.github/workflows/kiro-auth-once.yml'
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: kiro-auth-once-native-install-20261112
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: >-
+      ${{ github.repository == '777genius/universal-agent-plugins' &&
+          github.ref == 'refs/heads/feat/native-install-automation-six-clients-20261112' &&
+          github.event_name == 'push' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Dispatch the existing guarded Kiro workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -I - <<'PYTHON'
+          import json
+          import os
+          import re
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          REPO = '777genius/universal-agent-plugins'
+          BRANCH = 'feat/native-install-automation-six-clients-20261112'
+          WORKFLOW = 'project-native-runtime.yml'
+          TARGET_PATH = '.github/workflows/' + WORKFLOW
+          TARGET_BLOB = 'e1ae3aa24407e2fbc1f1b7d047840c8c5b07d47f'
+          API = 'https://api.github.com/repos/' + REPO
+          LIMIT = 131072
+          DEADLINE = time.monotonic() + 90
+
+          def require(ok, message):
+              if not ok:
+                  raise SystemExit(message)
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+          opener = urllib.request.build_opener(NoRedirect())
+
+          def request(path, payload=None):
+              remaining = DEADLINE - time.monotonic()
+              require(remaining > 0, 'Kiro dispatch deadline exceeded')
+              body = None if payload is None else json.dumps(payload).encode('ascii')
+              req = urllib.request.Request(API + path, data=body, headers={
+                  'Accept': 'application/vnd.github+json',
+                  'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                  'X-GitHub-Api-Version': '2026-03-10',
+                  'Content-Type': 'application/json',
+              }, method='GET' if payload is None else 'POST')
+              try:
+                  with opener.open(req, timeout=min(10, remaining)) as response:
+                      require(response.status == 200, 'Kiro dispatch API status refused')
+                      raw = response.read(LIMIT + 1)
+              except urllib.error.HTTPError as error:
+                  error.close()
+                  raise SystemExit('Kiro dispatch API access or request refused') from None
+              require(len(raw) <= LIMIT, 'Kiro dispatch API response bound exceeded')
+              require(time.monotonic() < DEADLINE, 'Kiro dispatch deadline exceeded')
+              value = json.loads(raw)
+              require(type(value) is dict, 'Kiro dispatch API object required')
+              return value
+
+          def current_head(expected):
+              ref = request('/git/ref/heads/' + BRANCH)
+              require(ref.get('ref') == 'refs/heads/' + BRANCH
+                      and type(ref.get('object')) is dict
+                      and ref['object'].get('type') == 'commit'
+                      and ref['object'].get('sha') == expected,
+                      'Kiro dispatch target branch changed')
+
+          def run_identity(run, expected, workflow_id, run_id=None):
+              identity = run.get('id')
+              require(type(identity) is int and 0 < identity < 1 << 63
+                      and (run_id is None or identity == run_id)
+                      and run.get('workflow_id') == workflow_id
+                      and run.get('event') == 'workflow_dispatch'
+                      and run.get('head_branch') == BRANCH
+                      and run.get('head_sha') == expected,
+                      'Kiro dispatched run identity refused')
+              return identity
+
+          def record(identity):
+              # This acknowledges dispatch only, never native acceptance.
+              print(json.dumps({'run_id': identity,
+                    'run_url': 'https://github.com/' + REPO + '/actions/runs/' + str(identity)},
+                    sort_keys=True, separators=(',', ':')))
+
+          def main():
+              expected = os.environ.get('GITHUB_SHA', '')
+              require(os.environ.get('GITHUB_REPOSITORY') == REPO
+                      and os.environ.get('GITHUB_REF') == 'refs/heads/' + BRANCH
+                      and os.environ.get('GITHUB_EVENT_NAME') == 'push'
+                      and os.environ.get('GITHUB_RUN_ATTEMPT') == '1'
+                      and re.fullmatch('[0-9a-f]{40}', expected) is not None,
+                      'Kiro dispatch source context refused')
+              current_head(expected)
+              source = request('/contents/' + TARGET_PATH + '?ref=' + expected)
+              require(source.get('type') == 'file' and source.get('path') == TARGET_PATH
+                      and source.get('sha') == TARGET_BLOB,
+                      'Kiro dispatch target workflow source changed')
+              workflow = request('/actions/workflows/' + WORKFLOW)
+              workflow_id = workflow.get('id')
+              require(type(workflow_id) is int and workflow_id > 0
+                      and workflow.get('path') == TARGET_PATH
+                      and workflow.get('state') == 'active',
+                      'Kiro target workflow is not the expected active workflow')
+              query = urllib.parse.urlencode({'head_sha': expected, 'event': 'workflow_dispatch',
+                       'branch': BRANCH, 'per_page': 2, 'exclude_pull_requests': 'true'})
+              existing = request('/actions/workflows/' + WORKFLOW + '/runs?' + query)
+              rows, count = existing.get('workflow_runs'), existing.get('total_count')
+              require(type(rows) is list and type(count) is int and count == len(rows)
+                      and 0 <= count <= 1, 'Kiro existing dispatch inventory refused')
+              if rows:
+                  require(type(rows[0]) is dict, 'Kiro existing dispatch row refused')
+                  identity = run_identity(rows[0], expected, workflow_id)
+                  current_head(expected)
+                  record(identity)
+                  return
+              current_head(expected)
+              # One POST, no retry: an uncertain response never authorizes another request.
+              receipt = request('/actions/workflows/' + WORKFLOW + '/dispatches',
+                        {'ref': BRANCH, 'inputs': {'kiro_auth_research': True}})
+              identity = receipt.get('workflow_run_id')
+              require(type(identity) is int and 0 < identity < 1 << 63
+                      and receipt.get('run_url') == API + '/actions/runs/' + str(identity)
+                      and receipt.get('html_url') == 'https://github.com/' + REPO + '/actions/runs/' + str(identity),
+                      'Kiro dispatch acknowledgement refused')
+              record(identity)
+              run_identity(request('/actions/runs/' + str(identity)), expected, workflow_id, identity)
+              current_head(expected)
+
+          try:
+              main()
+          except SystemExit:
+              raise
+          except Exception:
+              raise SystemExit('Kiro dispatch orchestration failed; no automatic retry') from None
+          PYTHON

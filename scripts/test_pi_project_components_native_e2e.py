@@ -1,5 +1,6 @@
 """Inert Pi raw-Skills fixture contracts; never starts a native or Go child."""
 import copy
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -24,6 +25,33 @@ class PiRawSkillsContracts(unittest.TestCase):
                    "response": {"type": "response", "command": "get_commands", "success": True,
                                 "data": {"commands": [row]}}}
         return receipt, skill, base
+
+    @mock.patch.object(fixture.subprocess, "run", side_effect=AssertionError("inert contract started subprocess"))
+    def test_scripted_provider_keeps_native_call_proof_without_model_claim(self, _run):
+        state = {"status": "passed", "sha": "inert", "target": "inert",
+                 "stages": ["scripted_native_mcp_call"],
+                 "real_model_qualified": False, "mcp_tools_call_qualified": True}
+        before = copy.deepcopy(state)
+        with tempfile.TemporaryDirectory() as root:
+            destination = Path(root)
+            fixture.write_components_evidence(destination, state)
+            receipt = json.loads((destination / "pi-project-components-evidence.json").read_text())
+        self.assertIs(receipt["real_model_qualified"], False)
+        self.assertIs(receipt["mcp_tools_call_qualified"], True)
+        self.assertEqual(receipt, before)
+        self.assertEqual(state, before)
+
+    def test_receipt_refuses_scripted_provider_real_model_overclaim(self):
+        with tempfile.TemporaryDirectory() as root:
+            destination = Path(root)
+            receipt = destination / "pi-project-components-evidence.json"
+            for value in (True, None, 0, 1, "false", [], {}):
+                with self.subTest(value=value), self.assertRaises(RuntimeError):
+                    fixture.write_components_evidence(destination, {"real_model_qualified": value})
+                self.assertFalse(receipt.exists())
+            with self.assertRaises(RuntimeError):
+                fixture.write_components_evidence(destination, {})
+            self.assertFalse(receipt.exists())
 
     @mock.patch.object(fixture.subprocess, "run", side_effect=AssertionError("inert contract started subprocess"))
     def test_ready_requires_actual_public_raw_success(self, _run):

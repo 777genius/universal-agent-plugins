@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     branches: [main, 'feat/project-*', feat/source-transports-e2e]
     paths:
+      - '.github/workflows/pr-changes.yml'
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'repotests/agentplugins_*native*'
       - 'repotests/agentplugins_*runtime*'
@@ -68,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        client: ${{ fromJSON(needs.changes.outputs.native_clients || '["codex","claude","opencode"]') }}
+        client: ${{ fromJSON(needs.changes.result == 'success' && needs.changes.outputs.native_clients || '["codex","claude","opencode"]') }}
         platform:
           - target: darwin-arm64
             runner: macos-15
@@ -242,7 +243,7 @@ jobs:
   # so start with the exact project A/B native discovery and lifecycle fixture.
   opencode-v2-project:
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON(needs.changes.outputs.native_clients || '["codex","claude","opencode"]'), 'opencode')) && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && (github.event_name != 'workflow_dispatch' || !inputs.sdk_linux_only) }}
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || contains(fromJSON(needs.changes.result == 'success' && needs.changes.outputs.native_clients || '["codex","claude","opencode"]'), 'opencode')) && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && (github.event_name != 'workflow_dispatch' || !inputs.sdk_linux_only) }}
     name: opencode V2 project runtime (${{ matrix.target }})
     strategy:
       fail-fast: false

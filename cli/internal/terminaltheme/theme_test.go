@@ -26,7 +26,7 @@ func TestPolicy(t *testing.T) {
 	}
 }
 func TestRoles(t *testing.T) {
-	for role, code := range map[Role]string{Success: "32", Warning: "33", Error: "31", Label: "36", Muted: "90"} {
+	for role, code := range map[Role]string{Success: "32", Warning: "33", Error: "31", Label: "36", Muted: "90", Info: "34"} {
 		if got := (Theme{Enabled: true}).Text(role, "fixture"); got != "\x1b["+code+"mfixture\x1b[m" {
 			t.Fatalf("role %d: %q", role, got)
 		}

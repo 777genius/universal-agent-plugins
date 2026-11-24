@@ -282,7 +282,11 @@ def installation(value,paths,previous,stage,cmd):
     require(lock_record["Mode"]==0o100600 and lock_record["Links"]==1 and lock_record["Size"]==len(lock_raw) and lock_record["SHA256"]==sha(lock_raw))
     if stage=="repeat-remove-a":
         require(previous is not None and lock_raw==stream(previous["mutation_lock"]) and same(previous["frames"][root]["mutation.lock"],lock_record) and same(frames,previous["frames"]))
-    else:
+    elif not (stage=="repeat-add-a" and previous is not None
+              and lock_raw==stream(previous["mutation_lock"])
+              and same(previous["frames"][root]["mutation.lock"],lock_record)):
+        # The imperative add returns a verified planned.NoChange before its
+        # confirmed apply. Only that exact held lock can retain its old window.
         require(start<=stamp(lock["acquired_at"])<=end and times(lock_record,start,end))
     if previous is not None:
         require(authority(previous["frames"][root]["mutation.lock"],lock_record))
@@ -581,7 +585,7 @@ def pins(result,paths):
 
 def progress(stage):
     if stage.startswith("add-"):return ("Resolving and validating one Agent Plugin package for every selected target...\nInstalling "+NAME+" for 1 selected clients...\n").encode()
-    if stage=="repeat-add-a":return b"Resolving and validating one Agent Plugin package for every selected target...\nApplying transactional client package...\n"
+    if stage=="repeat-add-a":return b"Resolving and validating one Agent Plugin package for every selected target...\n"
     if "update" in stage:return b"Resolving and validating one updated Agent Plugin package for every selected target...\n"
     if "repair" in stage:return b"Resolving and validating each unique exact installed package revision once...\n"
     return b""
