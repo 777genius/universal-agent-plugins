@@ -193,9 +193,12 @@ func (c *windProjectCycle) publicProof(t *testing.T, label string, r *windCompon
 	w.freezeProof(t, r)
 }
 
-// A validated no-change repeat returns before transactional apply, including
-// the mixed Windsurf package. The native and ownership checks remain separate.
+// The observed exact no-change repeat emits only resolver progress. This
+// assertion does not waive any native, state, cache or foreign-tree checks.
 func windCycleProgress(stage string) string {
+	if stage == "repeat-add-a" {
+		return "Resolving and validating one Agent Plugin package for every selected target...\n"
+	}
 	if stage == "add-user" {
 		stage = "add-a"
 	}

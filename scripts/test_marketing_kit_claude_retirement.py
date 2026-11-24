@@ -761,6 +761,17 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 self.assertEqual(subject.fds, [])
                 self.assertTrue(all(owner["cache"].is_dir() for owner in f["owners"]))
 
+    def test_main_attaches_bounded_A_and_B_diagnostics_only_to_failure_report(self):
+        from test_live_install_audit_env import IsolatedClientEnvironmentTest
+        fixture = IsolatedClientEnvironmentTest()
+        code, report, _ = fixture._exercise_marketing_kit_scope_report("claude", project_remove_error="remove B")
+        self.assertEqual(code, 1)
+        self.assertIn("injected Project removal failure", report["failure"])
+        self.assertEqual(set(report["claude_project_checkpoint_diagnostics"]),
+                         {"project_a_after_repair", "project_b_before_remove"})
+        code, report, _ = fixture._exercise_marketing_kit_scope_report("claude")
+        self.assertEqual(code, 0, report.get("failure"))
+        self.assertNotIn("claude_project_checkpoint_diagnostics", report)
 
 if __name__ == "__main__":
     unittest.main()

@@ -180,3 +180,89 @@ func assertReceiptEvents(t *testing.T, root string, written, read map[string]any
 		t.Fatalf("original call events differ or refused request caused an effect: %+v", calls)
 	}
 }
+
+func TestHermesParentEventIsOptIn(t *testing.T) {
+	probe := buildReceiptProbe(t)
+	for _, test := range []struct {
+		name, value string
+		configured  bool
+		included    bool
+	}{
+		{name: "legacy"},
+		{name: "empty", configured: true},
+		{name: "disabled", value: "0", configured: true},
+		{name: "malformed", value: "true", configured: true},
+		{name: "padded", value: " 1", configured: true},
+		{name: "hermes-public", value: "1", configured: true, included: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			env := []string{"UAP_TEST_ROOT=" + root, "UAP_TEST_EVENTS=" + filepath.Join(root, "events.jsonl"),
+				"UAP_TEST_NONCE=owned", "UAP_TEST_REVISION=receipt", "PLUGIN_ROOT=" + root, "PLUGIN_DATA=" + filepath.Join(root, "data")}
+			if test.configured {
+				env = append(env, "UAP_TEST_HERMES_PUBLIC_PARENT="+test.value)
+			}
+			called := runReceiptProbe(t, probe, root, env, "write", "owned", false)
+			assertReceiptFacts(t, called, "write", false)
+			assertHermesParentEvents(t, root, called, test.included)
+		})
+	}
+}
+
+func assertHermesParentEvents(t *testing.T, root string, called map[string]any, included bool) {
+	t.Helper()
+	body, err := os.ReadFile(filepath.Join(root, "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := bytes.Split(bytes.TrimSuffix(body, []byte("\n")), []byte("\n"))
+	if len(lines) != 3 {
+		t.Fatalf("expected the unchanged three event methods, got %d", len(lines))
+	}
+	for index, method := range []string{"initialize", "tools/list", "tools/call"} {
+		var event map[string]any
+		if err := json.Unmarshal(lines[index], &event); err != nil {
+			t.Fatal(err)
+		}
+		if len(event) != 6 || event["method"] != method || event["nonce"] != "owned" ||
+			event["pid"] != called["pid"] || event["session"] != called["session"] {
+			t.Fatalf("original closed event identity differs: %+v", event)
+		}
+		var expected any
+		if method == "tools/call" {
+			expected = called
+		} else if included {
+			expected = map[string]any{"kind": "hermes-public-parent-v1", "parent_pid": float64(os.Getpid())}
+		}
+		if !reflect.DeepEqual(event["facts"], expected) {
+			t.Fatalf("event facts differ for %s (opt-in %v): %+v", method, included, event["facts"])
+		}
+	}
+}
+
+func TestHermesWindowsLineageModeIsSeparateFromLegacyFacts(t *testing.T) {
+	original := hermesWindowsParent
+	t.Cleanup(func() { hermesWindowsParent = original })
+	calls := 0
+	hermesWindowsParent = func() (any, error) {
+		calls++
+		return "owned-lineage", nil
+	}
+	t.Setenv("UAP_TEST_HERMES_PUBLIC_PARENT", "windows-lineage-v1")
+	for _, method := range []string{"initialize", "tools/list"} {
+		value, err := probeEventFacts(method, nil)
+		if err != nil || value != "owned-lineage" {
+			t.Fatalf("exact Windows mode did not observe its own process: %v %v", value, err)
+		}
+	}
+	f := &facts{Nonce: "owned"}
+	value, err := probeEventFacts("tools/call", f)
+	if err != nil || value != f || calls != 2 {
+		t.Fatalf("Windows mode changed existing tool facts: %v %v calls=%d", value, err, calls)
+	}
+	t.Setenv("UAP_TEST_HERMES_PUBLIC_PARENT", "1")
+	value, err = probeEventFacts("initialize", nil)
+	if err != nil || !reflect.DeepEqual(value, map[string]any{"kind": "hermes-public-parent-v1", "parent_pid": os.Getppid()}) || calls != 2 {
+		t.Fatalf("legacy parent receipt changed: %v %v calls=%d", value, err, calls)
+	}
+}

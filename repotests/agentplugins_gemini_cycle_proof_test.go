@@ -80,7 +80,7 @@ func (c *geminiProjectCycle) proofWithAssessment(t *testing.T, r *geminiCycleRec
 	if r.Removed {
 		c.removedProof(t, r, state)
 	} else {
-		c.bindingProof(t, r, i)
+		c.bindingProof(t, r, i, raw)
 		want := len(previousBinding.Receipts)
 		if stage == "add-user" || stage == "add-a" || stage == "add-b" || stage == "intact-repair-a" || stage == "update-a" || stage == "missing-repair-a" {
 			want++
@@ -162,10 +162,11 @@ func (c *geminiProjectCycle) proofWithAssessment(t *testing.T, r *geminiCycleRec
 	c.append(t, "cycle-proof.jsonl", stage, map[string]any{"scope": r.Scope, "revision": r.Revision, "removed": r.Removed, "source_digest": r.Digest, "state": c.stream(t, raw), "binding": r.Binding})
 	c.check(t)
 }
-func (c *geminiProjectCycle) bindingProof(t *testing.T, r *geminiCycleRecipe, i domain.Installation) {
+func (c *geminiProjectCycle) bindingProof(t *testing.T, r *geminiCycleRecipe, i domain.Installation, raw []byte) {
 	t.Helper()
 	b, err := geminiCycleBindingIdentity(r, i)
 	if err != nil {
+		c.bindingRefusalEvidence(r, raw)
 		t.Fatal(err)
 	}
 	physical, active, id := b.PhysicalArtifact, b.TargetLocator, b.ClientBindingID
@@ -215,10 +216,36 @@ func geminiCycleBindingIdentity(r *geminiCycleRecipe, i domain.Installation) (do
 	}
 	revision := &domain.ClientPackageRevision{Version: "1.0.0", TreeDigest: r.Digest, ManifestDigest: "sha256:" + geminiCycleSHA(r.Authored["plugin.json"])}
 	if !ok || b.InstallIntent != domain.InstallIntentAutomatic || !b.SelectedDelivery.IsZero() || b.ProfileAuthority != nil || b.ProfileNamespace != "" || b.LocalEntryObservation != nil || b.PendingNativeIntent != nil || b.NativeActivationAttempt != "" || b.ClientBindingID != id || b.ClientID != "gemini" || b.Scope != r.scopeName() || b.NativeProfileRoot != profile || b.TargetLocator != active || b.PhysicalArtifact != physical || b.Materialization != domain.MaterializationMaterialized || b.Activation != domain.ActivationActive || b.Verification != domain.VerificationInstalled || b.Authentication != authentication || b.Policy != domain.PolicyAllowed || !reflect.DeepEqual(b.AffectedSurfaces, []string{"gemini"}) || !reflect.DeepEqual(b.PackageRevision, revision) {
-		return b, fmt.Errorf("Gemini exact binding/materialization/revision authority")
+		return b, fmt.Errorf("Gemini exact binding/materialization/revision authority (activation_match=%t authentication_match=%t)", b.Activation == domain.ActivationActive, b.Authentication == authentication)
 	}
 	return b, nil
 }
+
+// A failed binding check used to discard the selected state before archiving.
+// These bounded reads are diagnostics only: no proof, baseline or completion
+// flag is advanced, and an unavailable/private body never replaces the refusal.
+func (c *geminiProjectCycle) bindingRefusalEvidence(r *geminiCycleRecipe, raw []byte) {
+	diagnostic := map[string]any{"observation_only": true, "stage": c.stage, "scope": r.Scope, "state": c.bindingRefusalBytes(raw, nil)}
+	trust := filepath.Join(c.f.base.Home, ".gemini", "trustedFolders.json")
+	diagnostic["trust_original_sha256"] = c.f.protected[trust]
+	diagnostic["probe_accepted_sha256"] = geminiCycleSHA(c.eventsAccepted)
+	for name, path := range map[string]string{"trust": trust, "probe_events": c.f.base.Events} {
+		body, err := []byte(nil), c.f.ctx.Err()
+		if err == nil {
+			body, err = projectNativeRuntimeRead(path, 64<<10)
+		}
+		diagnostic[name] = c.bindingRefusalBytes(body, err)
+	}
+	c.f.evidence["cycle_binding_refusal"] = diagnostic
+}
+
+func (c *geminiProjectCycle) bindingRefusalBytes(raw []byte, err error) map[string]any {
+	if err != nil || len(raw) > 64<<10 || c.f.secret != "" && bytes.Contains(raw, []byte(c.f.secret)) || geminiCyclePrivateCredential(raw) {
+		return map[string]any{"captured": false}
+	}
+	return map[string]any{"captured": true, "stream": geminiCycleBytes{len(raw), geminiCycleSHA(raw), bytes.Clone(raw)}}
+}
+
 func geminiCycleReceipts(b, previous domain.ClientBinding, payload string) error {
 	if len(b.Receipts) == 0 || len(b.Receipts) > 16 || len(b.Receipts) < len(previous.Receipts) {
 		return fmt.Errorf("Gemini exact committed receipt prefix")

@@ -157,18 +157,16 @@ def times(value,start,end):
 
 
 def verified_mutation_lock_time(stage, raw, recorded, previous, root, start, end):
-    """Reuse only an unchanged prior lock in an actual no-op public phase."""
+    """Permit the exact retained no-op lock only on verified repeat-add."""
     try:
         body = load(raw)
     except ValueError:
         return False
-    fresh = start <= stamp(body["acquired_at"]) <= end and times(recorded, start, end)
-    if fresh:
+    if start <= stamp(body["acquired_at"]) <= end and times(recorded, start, end):
         return True
-    if stage not in {"repeat-add-a", "unchanged-update-a", "intact-repair-a"} or previous is None:
-        return False
-    return (raw == stream(previous["mutation_lock"])
-            and same(recorded, previous["frames"][root]["mutation.lock"]))
+    return (stage == "repeat-add-a" and previous is not None
+            and raw == stream(previous["mutation_lock"])
+            and same(previous["frames"][root]["mutation.lock"], recorded))
 
 
 def selected_parent_times(old,now,start,end):
@@ -297,9 +295,8 @@ def installation(value,paths,previous,stage,cmd):
     require(lock_record["Mode"]==0o100600 and lock_record["Links"]==1 and lock_record["Size"]==len(lock_raw) and lock_record["SHA256"]==sha(lock_raw))
     if stage=="repeat-remove-a":
         require(previous is not None and lock_raw==stream(previous["mutation_lock"]) and same(previous["frames"][root]["mutation.lock"],lock_record) and same(frames,previous["frames"]))
-    else:
-        if not verified_mutation_lock_time(stage, lock_raw, lock_record, previous, root, start, end):
-            raise ValueError("Windsurf mutation.lock timing outside selected public phase: " + stage)
+    elif not verified_mutation_lock_time(stage, lock_raw, lock_record, previous, root, start, end):
+        raise ValueError("Windsurf mutation.lock timing outside selected public phase: " + stage)
     if previous is not None:
         require(authority(previous["frames"][root]["mutation.lock"],lock_record))
     payload(current,paths)

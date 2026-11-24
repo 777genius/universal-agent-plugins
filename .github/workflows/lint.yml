@@ -78,6 +78,30 @@ jobs:
           only-new-issues: false
           args: --enable-only=revive,funlen,gocyclo,gocognit,dupl,depguard
 
+      - name: Windows changed lines for process containment
+        if: ${{ matrix.module == 'install/integrationctl' || matrix.module == 'install/integrationctl/agentplugins' }}
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        env:
+          GOOS: windows
+          GOARCH: amd64
+        with:
+          version: v2.13.2
+          working-directory: ${{ matrix.module }}
+          only-new-issues: false
+          args: --new-from-merge-base=${{ inputs.lint-base }} ${{ matrix.module == 'install/integrationctl' && './adapters/process' || './managedstdio' }}
+
+      - name: Windows full-file size and architecture for process containment
+        if: ${{ matrix.module == 'install/integrationctl' || matrix.module == 'install/integrationctl/agentplugins' }}
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        env:
+          GOOS: windows
+          GOARCH: amd64
+        with:
+          version: v2.13.2
+          working-directory: ${{ matrix.module }}
+          only-new-issues: false
+          args: --enable-only=revive,funlen,gocyclo,gocognit,dupl,depguard ${{ matrix.module == 'install/integrationctl' && './adapters/process' || './managedstdio' }}
+
       - name: Legacy baseline is shrink-only
         if: matrix.name == 'root'
         env:

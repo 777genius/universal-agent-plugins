@@ -7,18 +7,21 @@ on:
       - 'landing/**'
       - 'scripts/marketing-kit-project-release-e2e.py'
       - 'scripts/marketing-kit-published-launcher-abort.js'
-      - 'scripts/prepare-codex-linux-sandbox.sh'
-      - 'scripts/test_marketing_kit_codex_sqlite.py'
       - 'scripts/marketing_kit_claude_retirement.py'
       - 'scripts/marketing_kit_claude_discovery.py'
-      - 'scripts/test_marketing_kit_claude_retirement.py'
       - 'scripts/test_marketing_kit_claude_discovery.py'
-      - 'scripts/claude_cache_retirement_audit.py'
-      - 'scripts/native_client_research.py'
-      - 'scripts/native_client_project_artifacts.py'
+      - 'scripts/test_marketing_kit_codex_sqlite.py'
+      - 'scripts/marketing_kit_codex_profile.py'
+      - 'scripts/test_marketing_kit_claude_retirement.py'
+      - 'scripts/test_marketing_kit_codex_profile.py'
+      - 'scripts/test_marketing_kit_policy_boundary.py'
       - 'scripts/codex_runtime_audit.py'
+      - 'scripts/claude_cache_retirement_audit.py'
+      - 'scripts/native_client_project_artifacts.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/prepare-codex-linux-sandbox.sh'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   push:
     branches: [main]
@@ -26,18 +29,21 @@ on:
       - 'landing/**'
       - 'scripts/marketing-kit-project-release-e2e.py'
       - 'scripts/marketing-kit-published-launcher-abort.js'
-      - 'scripts/prepare-codex-linux-sandbox.sh'
-      - 'scripts/test_marketing_kit_codex_sqlite.py'
       - 'scripts/marketing_kit_claude_retirement.py'
       - 'scripts/marketing_kit_claude_discovery.py'
-      - 'scripts/test_marketing_kit_claude_retirement.py'
       - 'scripts/test_marketing_kit_claude_discovery.py'
-      - 'scripts/claude_cache_retirement_audit.py'
-      - 'scripts/native_client_research.py'
-      - 'scripts/native_client_project_artifacts.py'
+      - 'scripts/test_marketing_kit_codex_sqlite.py'
+      - 'scripts/marketing_kit_codex_profile.py'
+      - 'scripts/test_marketing_kit_claude_retirement.py'
+      - 'scripts/test_marketing_kit_codex_profile.py'
+      - 'scripts/test_marketing_kit_policy_boundary.py'
       - 'scripts/codex_runtime_audit.py'
+      - 'scripts/claude_cache_retirement_audit.py'
+      - 'scripts/native_client_project_artifacts.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
+      - 'scripts/prepare-codex-linux-sandbox.sh'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   workflow_dispatch:
 
@@ -76,8 +82,9 @@ jobs:
         with:
           node-version: '24'
           package-manager-cache: false
-      - name: Install Codex Linux sandbox prerequisites
+      - name: Install native Codex sandbox prerequisite
         if: ${{ matrix.target == 'codex' }}
+        shell: bash
         run: bash scripts/prepare-codex-linux-sandbox.sh
       - name: Install real released UAP and native client
         env:
@@ -194,9 +201,8 @@ jobs:
         if: matrix.target == 'codex'
         run: |
           set -euo pipefail
-          # Separate historical npm 0.1.104 proof, with only its HTTPS request stalled.
-          # This does not qualify the 0.1.116 lifecycle launcher.
-          # A mock transport here proves cleanup, not a native-client tools/call.
+          # Historical npm 0.1.104 launcher, separate from the 0.1.116 lifecycle.
+          # Mock transport proves cleanup only, never native tools/call.
           npm install --prefix "$RUNNER_TEMP/uap-legacy" --no-audit --no-fund universal-agent-plugins@0.1.104
           UAP_GLOBAL_NPM_ROOT="$RUNNER_TEMP/uap-legacy/node_modules" timeout 20s node scripts/marketing-kit-published-launcher-abort.js
       - name: Verify published ChatGPT target safety fences
@@ -233,10 +239,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/marketing-kit-project"
           set -o pipefail
           python3 -m unittest scripts/test_live_install_audit_env.py -k marketing_kit_ 2>&1 | tee "$RUNNER_TEMP/marketing-kit-project/regressions.log"
-          python3 -m unittest scripts/test_marketing_kit_codex_sqlite.py
+          python3 -m unittest scripts/test_marketing_kit_codex_sqlite.py 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           if [[ "$TARGET" == claude ]]; then
-            python3 -m unittest discover -s scripts -p 'test_marketing_kit_claude_*.py'
+            python3 -m unittest discover -s scripts -p 'test_marketing_kit_claude_*.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           fi
+          python3 -m unittest discover -s scripts -p 'test_marketing_kit_codex_profile.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
+          python3 -m unittest discover -s scripts -p 'test_marketing_kit_policy_boundary.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)" --cli-version 0.1.116             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
       - name: Preserve factual outcomes including failures
         if: always()

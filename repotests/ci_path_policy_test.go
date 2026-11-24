@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -276,13 +277,13 @@ func TestCIPathPolicy_HeavyNativeMatrixSelection(t *testing.T) {
 		event, changed, fail    string
 		native, remaining, live string
 	}{
-		{"codex scoped", []string{"install/integrationctl/agentplugins/clients/codex/config.go", "docs/index.md"}, "", "", "", "[\"codex\"]", "[]", "[]"},
+		{"codex scoped", []string{"install/integrationctl/agentplugins/clients/codex/config.go", "docs/index.md"}, "", "", "", "[\"codex\"]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[]"},
 		{"claude scope", []string{"repotests/agentplugins_claude_native_e2e_test.go"}, "", "", "", "[\"claude\"]", "[]", "[]"},
-		{"opencode scope", []string{"install/integrationctl/agentplugins/clients/opencode/native.go"}, "", "", "", "[\"opencode\"]", "[]", "[]"},
+		{"opencode scope", []string{"install/integrationctl/agentplugins/clients/opencode/native.go"}, "", "", "", "[\"opencode\"]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[]"},
 		{"combined native", []string{"repotests/agentplugins_codex_claude_browser_native_test.go"}, "", "", "", "[\"codex\",\"claude\"]", "[]", "[]"},
-		{"other client", []string{"install/integrationctl/agentplugins/clients/pi/project.go"}, "", "", "", "[]", "[]", "[]"},
-		{"shared installer", []string{"install/integrationctl/agentplugins/installer/engine.go"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[]", "[]"},
-		{"shared CLI", []string{"cli/internal/agentpluginscli/compose.go"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[]", "[]"},
+		{"other client", []string{"install/integrationctl/agentplugins/clients/pi/project.go"}, "", "", "", "[]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[]"},
+		{"shared installer", []string{"install/integrationctl/agentplugins/installer/engine.go"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[]"},
+		{"shared CLI", []string{"cli/internal/agentpluginscli/compose.go"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[]"},
 		{"native workflow", []string{".github/workflows/agentplugins-native-clients.yml"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[]", "[]"},
 		{"sandbox", []string{"scripts/prepare-codex-linux-sandbox.sh"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[\"chatgpt\"]", "[\"codex\"]"},
 		{"native downloader", []string{"scripts/run-native-client-matrix.py"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[\"chatgpt\"]", "[]"},
@@ -292,11 +293,20 @@ func TestCIPathPolicy_HeavyNativeMatrixSelection(t *testing.T) {
 		{"live shared", []string{"scripts/live-install-audit.py"}, "", "", "", "[]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[\"codex\",\"claude\",\"opencode\",\"gemini\",\"copilot\",\"cline\",\"kimi\",\"qoder\",\"pi\"]"},
 		{"remaining workflow", []string{".github/workflows/live-install-remaining-clients.yml"}, "", "", "", "[]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[]"},
 		{"live workflow", []string{".github/workflows/live-install-audit.yml"}, "", "", "", "[]", "[]", "[\"codex\",\"claude\",\"opencode\",\"gemini\",\"copilot\",\"cline\",\"kimi\",\"qoder\",\"pi\"]"},
+		{"retention", []string{"scripts/codex_plugin_retention_audit.py"}, "", "", "", "[]", "[\"chatgpt\"]", "[\"codex\"]"},
+		{"retention test", []string{"scripts/test_codex_plugin_retention_audit.py"}, "", "", "", "[]", "[\"chatgpt\"]", "[\"codex\"]"},
+		{"Cursor acquisition", []string{"scripts/project_native_cursor_acquisition.py"}, "", "", "", "[]", "[\"cursor\"]", "[]"},
+		{"Kiro Darwin metadata", []string{"scripts/claude_darwin_metadata.py", "scripts/test_claude_darwin_metadata.py"}, "", "", "", "[]", "[\"kiro\"]", "[]"},
+		{"Devin structured admission", []string{"scripts/devin_structured_inventory_admission.py", "scripts/test_devin_structured_inventory_admission.py"}, "", "", "", "[]", "[\"windsurf\"]", "[]"},
+		{"shared remaining observer", []string{"scripts/project_native_research.py"}, "", "", "", "[]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[]"},
+		{"shared live custody", []string{"scripts/windows_owned_job.py"}, "", "", "", "[]", "[]", "[\"codex\",\"claude\",\"opencode\",\"gemini\",\"copilot\",\"cline\",\"kimi\",\"qoder\",\"pi\"]"},
+		{"shared live components", []string{"scripts/test_live_install_audit_components.py"}, "", "", "", "[]", "[]", "[\"codex\",\"claude\",\"opencode\",\"gemini\",\"copilot\",\"cline\",\"kimi\",\"qoder\",\"pi\"]"},
+		{"rename from Cursor acquisition", []string{"docs/archive.py", "scripts/project_native_cursor_acquisition.py"}, "", "", "", "[]", "[\"cursor\"]", "[]"},
 		{"live qoder", []string{"scripts/qoder_prepared_skill_audit.py"}, "", "", "", "[]", "[]", "[\"qoder\"]"},
 		{"live pi qoder", []string{"scripts/pi_project_skill_audit.py", "scripts/test_qoder_prepared_skill_audit.py"}, "", "", "", "[]", "[]", "[\"qoder\",\"pi\"]"},
 		{"fixture", []string{"tests/live-install/fixtures.json"}, "", "", "", "[]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[\"codex\",\"claude\",\"opencode\",\"gemini\",\"copilot\",\"cline\",\"kimi\",\"qoder\",\"pi\"]"},
 		{"classifier modified", []string{".github/workflows/pr-changes.yml"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[\"codex\",\"claude\",\"opencode\",\"gemini\",\"copilot\",\"cline\",\"kimi\",\"qoder\",\"pi\"]"},
-		{"rename into shared", []string{"install/integrationctl/agentplugins/clients/claude/x.go", "install/integrationctl/agentplugins/clients/shared/x.go"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[]", "[]"},
+		{"rename into shared", []string{"install/integrationctl/agentplugins/clients/claude/x.go", "install/integrationctl/agentplugins/clients/shared/x.go"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[]"},
 		{"API unavailable", []string{"README.md"}, "", "", "1", "[\"codex\",\"claude\",\"opencode\"]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[\"codex\",\"claude\",\"opencode\",\"gemini\",\"copilot\",\"cline\",\"kimi\",\"qoder\",\"pi\"]"},
 		{"3000 files", []string{"README.md"}, "", "3000", "", "[\"codex\",\"claude\",\"opencode\"]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[\"codex\",\"claude\",\"opencode\",\"gemini\",\"copilot\",\"cline\",\"kimi\",\"qoder\",\"pi\"]"},
 		{"missing nonzero diff", []string{}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[\"codex\",\"claude\",\"opencode\",\"gemini\",\"copilot\",\"cline\",\"kimi\",\"qoder\",\"pi\"]"},
@@ -317,11 +327,16 @@ func TestCIPathPolicy_HeavyNativeMatrixSelection(t *testing.T) {
 func TestCIPathPolicy_HeavyMatrixWiring(t *testing.T) {
 	root := RepoRoot(t)
 	for _, tc := range []struct{ workflow, selector string }{
-		{"agentplugins-native-clients.yml", "fromJSON(needs.changes.outputs.native_clients"},
-		{"live-install-remaining-clients.yml", "fromJSON(needs.changes.outputs.remaining_clients"},
-		{"live-install-audit.yml", "fromJSON(needs.changes.outputs.live_clients"},
+		{"agentplugins-native-clients.yml", "fromJSON(needs.changes.result == 'success' && needs.changes.outputs.native_clients"},
+		{"live-install-remaining-clients.yml", "fromJSON(needs.changes.result == 'success' && needs.changes.outputs.remaining_clients"},
+		{"live-install-audit.yml", "fromJSON(needs.changes.result == 'success' && needs.changes.outputs.live_clients"},
 	} {
 		source := readRepoFile(t, root, ".github", "workflows", tc.workflow)
+		settings := triggerSettings(t, root, tc.workflow, "pull_request")
+		paths, ok := settings["paths"].([]any)
+		if !ok || !slices.Contains(paths, any(".github/workflows/pr-changes.yml")) {
+			t.Fatalf("%s must watch its classifier dependency", tc.workflow)
+		}
 		if !strings.Contains(source, "uses: ./.github/workflows/pr-changes.yml") || !strings.Contains(source, tc.selector) {
 			t.Fatalf("%s must use the shared native selector", tc.workflow)
 		}

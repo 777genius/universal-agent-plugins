@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"io/fs"
 	"net"
@@ -89,17 +90,36 @@ func environmentFailureKind(err error) failureKind {
 	// permission case: an unexecutable binary is not a write problem.
 	case errors.Is(err, exec.ErrNotFound), errors.As(err, &execErr):
 		return failureAgentMissing
-	case errors.Is(err, fs.ErrPermission):
-		return failurePermission
-	case errors.As(err, &opErr) && !tlsAlert(opErr, err), errors.As(err, &dnsErr):
-		// Only connection-level causes. TLS, URL syntax and other errors that
-		// merely implement net.Error stay generic, and a timeout is a timeout.
+	case errors.As(err, &opErr), errors.As(err, &dnsErr):
+		// Network-shaped failures are not automatically connectivity defects:
+		// socket permission and wrapped certificate/TLS errors stay generic.
 		if timeoutCause(err) {
 			return failureTimeout
 		}
+		if errors.Is(err, fs.ErrPermission) || certificateValidationFailure(err) {
+			return failureUnknown
+		}
+		if opErr != nil && tlsAlert(opErr, err) {
+			return failureUnknown
+		}
 		return failureNetwork
+	case errors.Is(err, fs.ErrPermission):
+		return failurePermission
 	}
 	return failureUnknown
+}
+
+// Certificate validation errors may occur inside net.OpError. They are not
+// evidence that the network is unreachable, even when a dial failed.
+func certificateValidationFailure(err error) bool {
+	var (
+		unknownAuthority x509.UnknownAuthorityError
+		invalid          x509.CertificateInvalidError
+		hostname         x509.HostnameError
+		roots            x509.SystemRootsError
+	)
+	return errors.As(err, &unknownAuthority) || errors.As(err, &invalid) ||
+		errors.As(err, &hostname) || errors.As(err, &roots)
 }
 
 // tlsAlert reports a TLS failure that surfaces as a net.OpError: an alert sent

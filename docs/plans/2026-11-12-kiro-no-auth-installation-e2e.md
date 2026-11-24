@@ -50,6 +50,21 @@ no #878 file, production refusal or runtime qualification oracle is changed.
 
 ## Files
 
+The no-auth collector rejoins the original source commit, tree and clean status
+after all 18 native observations, using three fixed Git commands through the
+existing bounded capture mechanism. It never replaces the original provenance
+with a later baseline. Materialized runtime file hashes are retained in the
+summary and rechecked around that final readback. The original 360-second budget,
+native argv, private-profile isolation and all qualification flags are unchanged.
+There are 27 total captured commands and 55 evidence members, below the existing
+60-command/128-member/32-MiB limits. A final mismatch leaves collection incomplete;
+the separate finite native-capture fact does not override that failure.
+
+The local run-level contract covers unchanged provenance and changed commit,
+tree, dirty status, command error and a boolean exit impostor. All 24 inert
+no-auth contracts passed locally. This does not establish hosted execution of
+the amended collector, User saved preparation or Kiro native loading.
+
 - scripts/project_native_kiro_no_auth.py: finite new runner reusing existing helpers.
 - scripts/test_project_native_kiro_no_auth.py: inert negative/guard contracts.
 - .github/workflows/kiro-no-auth-installation.yml: three-OS UAP lifecycle plus
@@ -123,3 +138,234 @@ runner lines,250 targeted-test lines and172 workflow lines; complexity remains
   it does not establish a2.34 no-auth route.
 - Original2.34 help/auth boundary: PR686 run43212876687, artifact13944208217.
 
+
+## Prospective selective status observation (2026-11-13)
+
+Root authorized this three-path collector/test/plan addition after source review.
+Keep the original fourteen probes and their twelve exact measured authentication
+refusals unchanged. Existing pinned `project_native_collectors/kiro.py` already
+registers `mcp status --help` with the `--name` token; that is the prior source
+basis for measuring this route, rather than applying newer CLI docs to 2.34.
+
+After those original observations, capture the actual pinned status help under
+its own private profile and original total budget. Require exit0, null error,
+empty stderr, <=4096 help bytes, the exact child-command Usage spelling and an
+advertised `--name <VALUE>` option before issuing any status request. This is a
+finite syntax gate, not a claim that the unreviewed full help has been admitted.
+Then request status for the independently authored disabled A, B and global User
+fixture names from their selected A/B/separate User cwd. The User request names
+HOME's original User fixture while preserving the separate cwd's foreign fixture.
+Every request retains the same closed environment, fresh private KIRO_HOME/XDG,
+immutable runtime companions, original HOME/User/B/fixture guards and 20s probe
+limit. The original360s total deadline is not extended.
+
+Only the existing exact exit1/error-null/empty-stdout/64-byte authentication
+refusal is accepted as the prospective negative observation. Unexpected success,
+changed stderr, timeout or unknown help stops further status requests and retains
+original evidence for review. All native discovery/status/MCP/model/auth and
+product qualifications remain false. Fifteen expected denials and eighteen
+finite probes describe the proposed complete negative capture, not historical
+native evidence. Genuine final-source help/status originals and independent
+source/stream/hash/preservation review are still required before acceptance.
+No native executable, authentication, ACP, model, policy, pin, workflow, production
+adapter or public capability changed. Local22 inert tests pass through both
+discovery and direct execution; none is a native observation.
+
+## Saved User preparation and cold agreement coverage
+
+The composed public fixture exposed a concrete difference between fresh saved
+User `add` / `deps import --install` and imperative `add --no-save`. With a
+Run-only rejecting runner, the latter selected the existing Prepare intent;
+the saved paths rejected automatic MCP preflight because the facade did not
+carry that preparation decision. The ZIP diagnostic reproduced both refusals
+with zero native calls and unchanged original User configuration. A Project
+export or a warm imperative install does not prove fresh saved User support.
+
+The private facade now retries one complete dry preview only for a fresh,
+supported Automatic User install whose registered activation preflight fails
+again for the same client, plan and backend. Existing scoped traits must permit
+Prepare without personal mapping; Project, unsupported plans, completion
+attestations, updates and recorded installations/preferences do not qualify.
+Cancellation and an available automatic preflight retain their prior behavior.
+The original sealed source, installation ID and recorded state remain fixed;
+only the failed preview's unconfirmed plan captures are discarded. The complete
+prepared preview reruns the existing source, ownership and component guards.
+Apply passes its agreed intent even if duplex becomes available later.
+
+An early same-IID absence check is only an early refusal. The authoritative
+check is in the existing non-capture confirmation planner, which core Add
+invokes while holding the ordinary mutation lock. A cooperating writer that
+publishes a retained same-IID installation before that lock is acquired causes
+ErrPlanChanged before inner planning. The regression uses real install/remove
+receipts and the actual lock, preserving exact retained state bytes, native
+files and data. No new Request field, state schema, flag or lock is introduced.
+
+The existing three-OS Git/ZIP fixture adds a separate fresh User world after
+its unchanged Project journey: saved add, exact repeat, changed update, an
+owned-Skill quarantine and repair, User agreement export, fresh User locked
+import/install and remove. Exact source/binding identity, current revision,
+original complete data receipts and a held retained-data marker are joined.
+All original User policy and A/B same-name foreign MCP/Skill sentinels stay
+protected. Preparation owns exact native file receipts; the historical User
+trait still leaves NativeProfileRoot empty. Existing Kiro receipt verification
+joins those files to the original User configuration root without claiming a
+native registration observation.
+
+The rejecting runner counts every process attempt; all public steps must retain
+Prepare, package-valid verification and unattested outcomes with zero calls.
+These are public file-lifecycle contracts, not native Kiro startup, discovery,
+login, MCP initialization or model-use evidence. The original eighteen no-auth
+native probes and their budgets are unchanged. Local composed ZIP execution
+passes; final-source three-OS Git/ZIP CI and the separately retained native
+negative originals remain required for acceptance.
+
+## Complete retained authority across the composed lifecycle (2026-11-14)
+
+The existing public Git/ZIP User and Project A/B fixture now compares the full
+installation and source binding, the full client binding except its updated
+timestamp and appended committed receipts, and the original receipt prefix.
+An authored source update permits only its actual revision, tree and package
+digest changes. Project managed digests also join the actual native objects
+through the existing Kiro verifier; the source transport and package revision
+remain independently joined. Exact repeats cannot adopt a changed source,
+installation, binding namespace, data owner or earlier receipt history.
+
+Both scopes now hold the original data directory, owner receipt and retained
+marker through every warm command. The Project fixture includes one never-run
+stdio component with PLUGIN_DATA so that it exercises real data allocation in
+addition to its existing HTTP component. The complete owner JSON must equal
+the recorded data receipt. User remains Prepare/package-valid; Project remains
+Prepared/installation-verified. The rejecting runner requires zero process
+attempts after each command.
+
+Alongside the existing missing-Skill case, each warm journey quarantines the
+exact owned managed package and repairs it through the public command. The
+fixture first verifies the original receipt and managed digest, then holds the
+stationary parent, original leaf and destination parent across the rename.
+Opening the leaf through its retained parent uses the existing Windows sharing
+semantics; a top-level os.Open or os.OpenRoot on the movable leaf would prevent
+the rename on Windows. Both parent identities and the original moved leaf stay
+checked, and no foreign directory or authority is adopted.
+
+Cold locked install keeps the complete source/package identity, creates a new
+installation and disjoint data receipt, then repeats and removes while retaining
+the new original data directory. Remove preserves full source/package/data
+records and the existing exact User Prepare reinstall preference while clearing
+the removed binding and environment receipts. Seven continuity controls cover
+unchanged authority, an appended receipt, and five detached-authority cases.
+
+Independent source review accepted the final two-file fixture. On Linux with
+Go 1.26.11, its final public ZIP User/Project journey and all seven continuity
+controls passed in 13.551 seconds. The complete log SHA-256 is
+70eb3eab42e7d75153132be601f5d296057769ad889bf980d854fb66de9c1a6e.
+An earlier draft correctly exposed a missing expected User reinstall preference;
+the oracle now checks that exact existing production value. These local results
+do not establish Windows/macOS execution or native discovery. Final-source
+three-OS Git/ZIP runs and the separate eighteen no-auth native originals remain
+required; their commands, pins, budgets and qualification flags are unchanged.
+
+
+## Authenticated native lifecycle candidate (2026-11-15)
+
+The existing manual Kiro attempt only requested a model response without tools
+and deliberately failed afterwards. Its API-key guard therefore did not yet
+make it a lifecycle/MCP qualification gate. The separate no-auth installation
+lane and its Prepared boundary remain unchanged.
+
+This candidate reuses the pinned 2.34.0 acquisition, existing disposable native
+fixture, source/installer/scanner identity checks, bounded command supervisor,
+ordinary descendant cleanup, fixed probe, private-key redaction, and closed
+artifact collector. It changes only the selected Kiro runtime entry plus new
+Kiro-specific helpers/reader/contracts. The shared CLI attempt, probe, all
+other clients, and the public Kiro activation state remain unchanged.
+
+The manual `workflow_dispatch` / `kiro_auth_research` selection and the existing
+dedicated `KIRO_API_KEY` expression are preserved. Missing credentials fail
+before the lifecycle starts; no secret value is inspected by preparation or
+contract tests. The unchanged probe writes only its explicit nonce, revision,
+cwd, argv, root/DATA, marker, PID/session fields. It never enumerates inherited
+environment values. Existing `kiroAttemptAuth` redaction still handles all
+retained stdout, stderr and JSON bytes. The parent first rejects every raw,
+JSON-escaped and base64 private form in the bounded inner ZIP before admitting
+or publishing runtime members. Its existing frontend publisher separately
+redacts registered forms, rejoins stream hashes, and rejects any remaining
+private form before ZIP creation; failure publishes only closed safe fields.
+
+### Fixed native sequence and evidence
+
+The new entry first performs the existing genuine Git A/B, pinned version and
+public Project install A. It then records this exact one-shot sequence:
+
+1. Read genuine chat and agent-validation help; require the selected 2.34 syntax.
+2. Publicly install B and prove separate receipt-selected package and DATA.
+3. Author the two disposable workspace agent profiles and require successful
+   authenticated validation of each exact path.
+4. Start fresh authenticated chats A and B. Each must initialize/list/call only
+   the selected `@uap-kiro-attempt/inspect_runtime` probe and write its own
+   fresh nonce-bound DATA marker.
+5. Remove only A's exact owned Skill projection, publicly repair A, and start a
+   fresh A chat that reads the unchanged original marker.
+6. Publicly remove A, complete a genuine authenticated A chat with no probe
+   events, then start a fresh B chat that still reads B's original marker.
+7. Publicly remove B and complete the matching no-event authenticated B chat.
+
+An unavailable tool is not inferred from model prose. Both negative commands
+must exit zero within their original command context and settle all supervised
+descendants. Authentication, startup, timeout, capture or forced-cleanup
+failure remains a failed native test. The positive B command after removal of
+A is required; omitting it cannot qualify the negative control.
+
+The custom agent has exactly one `tools` and `allowedTools` selector,
+empty resources, object-valued empty hooks, empty inline MCP servers and tool
+aliases. There is no all-tools trust and no vendor patch. The closed chat argv
+uses `--v2 --no-interactive --agent … --trust-tools @…/inspect_runtime`;
+the actual pinned help must declare those flags. The candidate deliberately
+does not assume that the current V3-only `includeMcpJson` documentation
+proves a 2.34 field. Workspace inheritance and exact probe visibility must
+succeed in the genuine validation/chat observations. Original User and
+unmounted ancestor MCP catalogs remain absent.
+
+The official 2026-04-13 [headless-mode announcement](https://kiro.dev/blog/introducing-headless-mode/)
+distinguishes the agent's complete available tool list from its pre-approved
+subset and documents the dedicated API-key route. The
+[2.x reference](https://kiro.dev/docs/cli/2x-reference/) is syntax context,
+not native execution evidence. The exact singleton agent, actual validation,
+and nonce-bound call events remain required; a trust flag by itself is not
+treated as a denial of other built-ins.
+
+The existing parent context starts once and remains 150 seconds; final
+collection retains the existing 180-second bound. Each added command is capped
+at 30 seconds by that original context, with the existing 5-second descendant
+exit grace. There is no retry or deadline renewal. Existing 80-member,
+1 MiB/member and 16 MiB aggregate artifact limits remain. A successful closed
+capture has 18 command triples, two exact agent documents, five raw state/config
+proofs and the probe history (59 members).
+
+Original A/B root identity/mode/owner, source files, selected native runtime,
+receipt state, config, agent, DATA marker and event history are joined before
+and after their fixed operations. Only the exact public operation may update
+its selected state/config/Skill projection. Repair retains installation,
+source, package, DATA, binding and receipt history; removal retains DATA and
+removes only the selected binding/package/Skill/MCP entry. The other project
+stays pinned. Read and negative phases cannot rewrite the marker or old event
+history. Probe PID/session creation, event timestamps, nonce, cwd, argv,
+selected package and DATA must join the actual bounded command. Ledger/PID
+facts do not grant cleanup or kill authority.
+
+### Readiness and remaining execution gate
+
+The existing ordinary Linux contracts step already compiles all repotests
+without the secret. Its selector additionally runs the four new inert
+`TestKiroCycle` controls; the Python contracts step runs seven pure reader
+tests. The reader independently validates exact command order/argv/source,
+typed state/config/body hashes, all four fresh positive sessions, both settled
+negative commands and the post-removal positive B control. Unknown members,
+partial triples, extra events, changed roles, mixed nonces, stale sessions,
+broad trust and pre-start/auth/cleanup failures cannot become successful proof.
+
+This is an unexecuted source candidate until normal CI compiles/contracts it
+and the existing guarded manual lane receives an authorized dedicated key.
+No local Go, gofmt, Python or native result is asserted by this note. Prepared
+public binding status and the existing no-auth coverage are preserved; only
+a complete genuine authenticated run may set this research capture's native
+lifecycle/MCP flags.
