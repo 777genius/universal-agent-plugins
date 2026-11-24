@@ -10097,7 +10097,7 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
             for target in ("codex", "claude", "opencode", "gemini",
                            "copilot", "cline", "kimi", "qoder", "pi"):
                 for repeat in (False, True):
-                    expected = 660 if target == "claude" and not repeat else 180
+                    expected = 900 if target == "claude" and not repeat else 180
                     self.assertEqual(audit.install_case_timeout(
                         target, "plugin", "firebase", repeat=repeat), expected)
                     self.assertEqual(audit.install_case_timeout(
