@@ -106,3 +106,30 @@ func TestSavedAddUnloadedDirectoryPreservesOwnershipDiagnostic(t *testing.T) {
 		t.Fatalf("explicit alias handled too early: %v", err)
 	}
 }
+
+// Non-direct Git sources obtain the immutable source identity from the loaded
+// package. An empty preview key would silently drop ownership annotations.
+func TestSavedAddSelectionCanonicalSourceKeyAfterAcquisition(t *testing.T) {
+	identity := domain.SourceIdentity{
+		Repository: "acme/example",
+		PackageSubpath: "tools",
+		ResolvedRevision: strings.Repeat("a", 40),
+	}
+	loaded := loadedPackage{envelope: domain.PackageEnvelope{Source: identity}}
+	got, err := savedSelectionSourceKey("source-not-directly-parseable", loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requirement := environment.Requirement{Alias: "candidate", Git: &environment.GitSource{
+		Repository: identity.Repository,
+		Path: identity.PackageSubpath,
+		Selector: environment.Selector{Kind: environment.SelectorCommit, Value: identity.ResolvedRevision},
+	}}
+	want, err := requirement.SourceKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == "" || got != want {
+		t.Fatalf("loaded source identity lost: got %q, want %q", got, want)
+	}
+}

@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
@@ -67,12 +68,11 @@ func inspectSavedAddSelection(ctx context.Context, app App, opts *options, sourc
 		}
 		return nil, earlyForeignBinding(app, inspectSavedDirectoryOwnership(ctx, app, source))
 	}
-	key := savedDirectSourceKey(source)
-	if loaded.directorySelection != nil {
-		key = "directory:" + loaded.directorySelection.DistributionID
-	}
-	if key == "" {
-		return nil, nil
+	// Resolve the same canonical SourceKey as the saved dependency resolver.
+	// A non-direct source can receive its immutable identity only after acquisition.
+	key, err := savedSelectionSourceKey(source, *loaded)
+	if err != nil {
+		return nil, err
 	}
 	alias := dependencyManifestAlias(loaded.envelope.Manifest.Name)
 	snapshot, err := snapshotEnvironmentContext(ctx, app, false)
@@ -99,4 +99,19 @@ func inspectSavedAddSelection(ctx context.Context, app App, opts *options, sourc
 		}
 	}
 	return annotations, nil
+}
+
+func savedSelectionSourceKey(source string, loaded loadedPackage) (string, error) {
+	requirement := environment.Requirement{Alias: "candidate"}
+	if selection := loaded.directorySelection; selection != nil {
+		requirement.Registry = &environment.RegistrySource{Distribution: selection.DistributionID,
+			Selector: environment.Selector{Kind: environment.SelectorRelease, Value: fmt.Sprint(selection.ReleaseSequence)}}
+	} else if key := savedDirectSourceKey(source); key != "" {
+		return key, nil
+	} else {
+		identity := loaded.envelope.Source
+		requirement.Git = &environment.GitSource{Repository: identity.Repository, Path: identity.PackageSubpath,
+			Selector: environment.Selector{Kind: environment.SelectorCommit, Value: identity.ResolvedRevision}}
+	}
+	return requirement.SourceKey()
 }
