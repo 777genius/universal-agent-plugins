@@ -180,6 +180,16 @@ class PiContext7SignedFallbackContracts(unittest.TestCase):
 
 class IsolatedClientEnvironmentTest(unittest.TestCase):
 
+    def test_copilot_canonical_remove_public_envelope(self):
+        audit = load_audit()
+        receipt = {"schema_version": 1, "command": "agentplugins remove", "result": "success"}
+        self.assertTrue(audit.copilot_skill_success_response(receipt, "agentplugins remove"))
+        for mutated in ({"schema_version": 1, "command": "remove", "result": "success"},
+                        {"schema_version": True, "command": "agentplugins remove", "result": "success"},
+                        {"schema_version": 1, "command": "agentplugins remove", "result": "failure"}):
+            with self.subTest(mutated=mutated):
+                self.assertFalse(audit.copilot_skill_success_response(mutated, "agentplugins remove"))
+
     def test_copilot_skill_repeat_only_owns_empty_new_process_logs(self):
         audit = load_audit()
         with TemporaryDirectory() as temporary:

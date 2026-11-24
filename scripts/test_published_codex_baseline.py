@@ -859,7 +859,8 @@ class ArchivedPluginFeedTest(unittest.TestCase):
                     def checkpoint(runtime, phase):
                         events.append(("runtime", phase))
                     def evidence(runtime):
-                        return {"observations": runtime.observations}
+                        return {"native_version": "0.153.4", "runtime_semantics_unchanged": True,
+                                "observations": runtime.observations}
 
                 def archive(observer, selected, selected_pin):
                     self.assertEqual(selected, source)

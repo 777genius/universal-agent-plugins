@@ -4020,7 +4020,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         cleanup and cleanup["exit_code"] == 0 and post_list and post_list["exit_code"] == 0
         and post_list_schema_valid and old_ids.isdisjoint(remaining_ids)
         and (not copilot_raw_add_case or (post_list_empty
-             and copilot_skill_success_response(cleanup_json, "remove")))
+             and copilot_skill_success_response(cleanup_json, "agentplugins remove")))
         # This fresh case owns the whole signed kit closure. An original or
         # reminted child record must not survive even when native state is empty.
         and (kind != "plugin" or item != "marketing-kit" or post_list_empty)
