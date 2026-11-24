@@ -308,8 +308,16 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         ):
             event_paths = re.findall(r"(?m)^      - " + re.escape(path) + r"$", self.body)
             self.assertEqual(len(event_paths), 2, path)
-        # Only an obsolete PR check may be cancelled; main push checks must
-        # never be cancelled by this workflow's concurrency expression.
+        # Only obsolete PR checks may be cancelled; main pushes use a
+        # distinct run-specific group and are never superseded.
+        self.assertIn(
+            "concurrency:\n"
+            "  group: package-manager-e2e-${{ github.event_name }}-"
+            "${{ github.event_name == 'pull_request' && "
+            "(github.event.pull_request.number || github.ref) || github.run_id }}\n"
+            "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n",
+            self.body,
+        )
         cancel_lines = re.findall(r"(?m)^  cancel-in-progress:.*$", self.body)
         self.assertEqual(cancel_lines, [
             "  cancel-in-progress: " + "$" + "{{ github.event_name == 'pull_request' }}"
