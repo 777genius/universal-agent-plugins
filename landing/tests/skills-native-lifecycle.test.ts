@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { isGitHubSkillSource } from '../scripts/skills-source-host.ts';
 
 // Exercise the actual evidence runner with a disposable process adapter, never
 // npm, network, native clients or the user's HOME. These are harness tests only.
@@ -86,3 +87,20 @@ for (const mode of ['success', 'reported-ready', 'wrong-source', 'stale-requirem
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 }
+
+test('GitHub Skill source classification validates exact HTTPS host, not substrings', () => {
+  for (const source of [
+    'https://github.com/anthropics/skills',
+    'https://raw.githubusercontent.com/anthropics/skills/main/SKILL.md',
+  ]) assert.equal(isGitHubSkillSource(source), true, source);
+  for (const source of [
+    'https://github.com.evil.example/anthropics/skills',
+    'https://evil.example/github.com/anthropics/skills',
+    'https://raw.githubusercontent.com.evil.example/anthropics/skills',
+    'https://example.com/?next=https://github.com/anthropics/skills',
+    'https://uizze.com',
+    'http://github.com/anthropics/skills',
+    'https://user:pass@github.com/anthropics/skills',
+    'not a URL',
+  ]) assert.equal(isGitHubSkillSource(source), false, source);
+});

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { SkillListing } from '../types/skillsCatalog.ts';
 import { skillInstallCommand } from '../utils/skillsCatalog.ts';
+import { isGitHubSkillSource } from './skills-source-host.ts';
 
 // Actual public HTTPS/GitHub acquisition through the built production CLI.
 // Every installation uses a disposable project and home, not runner profiles.
@@ -225,7 +226,7 @@ try {
         let expectedSourceKey: string;
         let expectedRevision: string | undefined;
         const sha256 = /^sha256:[a-f0-9]{64}$/;
-        if (fixture.source.includes('github.com') || fixture.source.includes('githubusercontent.com')) {
+        if (isGitHubSkillSource(fixture.source)) {
           const git = pin.source?.git;
           assert.equal(git?.repository, 'anthropics/skills');
           assert.equal(git.kind, 'skill');
