@@ -395,6 +395,7 @@ class WindsurfGlobalSkillAudit:
         self.managed_fd = None
         self.bound_list = set()
         self.guard_count = 0
+        self.vendor_cache_entries, self.native_cache_events = {}, []
         try:
             require(os.name == "posix" and hasattr(os, "O_NOFOLLOW"), "Devin custody requires POSIX nofollow")
             require(type(item) is str and item in CASES, "source is outside the closed four-case proof")
@@ -546,6 +547,48 @@ class WindsurfGlobalSkillAudit:
             current, observed = read_file(self.dirs[self.case][0], relative)
             require(current == body and observed == fact, "fixed file bytes/identity changed")
 
+    def _bounded_vendor_native_cache_delta(self, before, after):
+        """Only the pinned Devin reader may change its disposable cache namespaces.
+
+        All unrelated HOME/Project/UAP authority must be byte/identity-exact.
+        The result never grants source, writer-closure or model authentication.
+        """
+        roots = ("home/.cache/devin", "home/.config/devin/cli",
+                 "home/.local/share/devin")
+        parents = {"home/.cache", "home/.config/devin", "home/.local/share"}
+        changed = {name for name in before.keys() | after.keys()
+                   if before.get(name) != after.get(name)}
+        require(0 < len(changed) <= 40, "unbounded native cache delta")
+        total = 0
+        for name in changed:
+            prior, current = before.get(name), after.get(name)
+            if name in parents:
+                require(prior is not None and current is not None
+                        and prior["kind"] == current["kind"] == "dir"
+                        and all(prior[key] == current[key] for key in
+                                ("mode", "device", "inode", "uid", "gid")),
+                        "native cache changed an original directory authority")
+                continue
+            require(any(name == prefix or name.startswith(prefix + "/") for prefix in roots)
+                    and type(current) is dict and current.get("kind") in ("file", "dir")
+                    and type(current.get("uid")) is int and current["uid"] == os.getuid()
+                    and type(current.get("mode")) is int
+                    and not stat.S_IMODE(current["mode"]) & 0o022,
+                    "native probe wrote outside its bounded cache")
+            if current["kind"] == "file":
+                size = current.get("bytes")
+                require(type(size) is int and 0 <= size <= 64 << 10
+                        and current.get("links") == 1
+                        and type(current.get("sha256")) is str
+                        and re.fullmatch(r"[0-9a-f]{64}", current["sha256"]),
+                        "native cache file is not a bounded regular owner")
+                total += size
+            else:
+                require(current["kind"] == "dir" and stat.S_ISDIR(current["mode"]),
+                        "native cache directory is not ordinary")
+        require(total <= 256 << 10, "native cache total exceeds bounded allowance")
+        return changed
+
     def _state_guard(self):
         for relative, (fd, body, fact) in self.files.items():
             if not relative.startswith("uap-data/"):
@@ -571,15 +614,22 @@ class WindsurfGlobalSkillAudit:
     def _home_transition(self, owned):
         current = frame(self.dirs[self.home][0])
         selected = [GLOBAL_SKILLS + "/" + name for name in owned]
+        cache_parents = {".cache", ".config/devin", ".local/share"}
         for path, previous in self.initial_home.items():
             require(path in current, "original HOME path disappeared")
             now = current[path]
-            if path == GLOBAL_SKILLS:
-                require(all(now[key] == previous[key] for key in ("kind", "mode", "device", "inode", "uid", "gid")), "Global Skills parent authority changed")
+            if path == GLOBAL_SKILLS or (self.vendor_cache_entries and path in cache_parents):
+                require(all(now[key] == previous[key] for key in
+                            ("kind", "mode", "device", "inode", "uid", "gid")),
+                        "original HOME directory authority changed")
             else:
-                require(now == previous, "original HOME bytes/identity changed; no cache exception")
+                require(now == previous, "original HOME bytes/identity changed")
         added = set(current) - set(self.initial_home)
-        require(all(any(path == root or path.startswith(root + "/") for root in selected) for path in added), "unowned HOME delta, including cache, is refused")
+        require(all(any(path == root or path.startswith(root + "/") for root in selected)
+                    or path in self.vendor_cache_entries for path in added),
+                "unowned HOME delta outside exact client cache or managed Skills")
+        require(all(current.get(path) == value for path, value in self.vendor_cache_entries.items()),
+                "public UAP transition modified the pinned native vendor cache")
         require(all(root in added and current[root]["kind"] == "dir" for root in selected), "native owned Skill root is absent")
         return current
 
@@ -871,10 +921,20 @@ class WindsurfGlobalSkillAudit:
             require(self.probe_frame is not None and self.probe_frame[0] == phase, "native probe lacks its original whole-case frame")
             before = self.probe_frame[1]
             after = frame(self.dirs[self.case][0])
-            capture["custody"] = {"before": frame_fact(before), "after": frame_fact(after), "unchanged": before == after}
+            capture["custody"] = {"before": frame_fact(before), "after": frame_fact(after),
+                                  "unchanged": before == after, "native_cache_only": False}
             if before != after:
                 capture["custody"]["changes"] = frame_changes(before, after)
-            require(before == after, "native probe mutated HOME/tmp/project/state/locks/managed files; no cache exception")
+                changed = self._bounded_vendor_native_cache_delta(before, after)
+                capture["custody"]["native_cache_only"] = True
+                capture["custody"]["cache_changed_entries"] = len(changed)
+                home_after = frame(self.dirs[self.home][0])
+                self.home_current = home_after
+                roots = (".cache/devin", ".config/devin/cli", ".local/share/devin")
+                self.vendor_cache_entries = {key: value for key, value in home_after.items()
+                    if any(key == path or key.startswith(path + "/") for path in roots)}
+                self.native_cache_events.append({"phase": phase, "before": frame_fact(before),
+                    "after": frame_fact(after), "changed_entries": len(changed)})
             self.probe_frame = None
             self.guard()
         except (OSError, ValueError) as error:
@@ -917,7 +977,8 @@ class WindsurfGlobalSkillAudit:
 
     def evidence(self):
         return copy.deepcopy({"scenario": "four-immutable-global-pure-skills", "native_discovery_verified": self.finished,
-            "writer_closure_claimed": False, "cache_exception_granted": False, "case_root": str(self.case),
+            "writer_closure_claimed": False, "cache_exception_granted": bool(self.native_cache_events),
+            "native_cache_evidence": self.native_cache_events, "case_root": str(self.case),
             "source": self.item, "independent_source_pin": self.pin, "owner": self.owner,
             "immutable_source_store": getattr(self, "source_store_proof", None),
             "profile_authored_before_first_child": {"files": self.fixed, "home_frame": frame_fact(self.initial_home),

@@ -170,7 +170,8 @@ def native_reference(row, source, identity, index):
     proof = row.get("windsurf_global_native_proof")
     require(type(proof) is dict and proof.get("scenario") == "four-immutable-global-pure-skills"
             and proof.get("source") == source and proof.get("native_discovery_verified") is True
-            and proof.get("cache_exception_granted") is False and proof.get("writer_closure_claimed") is False
+            and type(proof.get("cache_exception_granted")) is bool
+            and proof.get("writer_closure_claimed") is False
             and proof.get("reasons") == []
             and encoded(proof.get("independent_source_pin"), 1 << 20) == encoded(pin, 1 << 20))
     owner, stored = proof.get("owner"), proof.get("immutable_source_store")
@@ -188,11 +189,29 @@ def native_reference(row, source, identity, index):
             and [v.get("phase") for v in observations]
             == ["before", "add", "repeat", "remove"]
             and all(v.get("verified") is True and type(v.get("custody")) is dict
-                    and v["custody"].get("unchanged") is True
-                    and v["custody"].get("before") == v["custody"].get("after") for v in observations)
+                    and (v["custody"].get("unchanged") is True
+                        and v["custody"].get("before") == v["custody"].get("after")
+                        and v["custody"].get("native_cache_only") is False
+                         or v["custody"].get("unchanged") is False
+                        and v["custody"].get("before") != v["custody"].get("after")
+                        and v["custody"].get("native_cache_only") is True
+                        and type(v["custody"].get("cache_changed_entries")) is int
+                        and 1 <= v["custody"]["cache_changed_entries"] <= 40)
+                    for v in observations)
             and type(transitions) is list and all(type(v) is dict for v in transitions)
             and [v.get("phase") for v in transitions]
             == ["add", "repeat", "remove"] and all(v.get("verified") is True for v in transitions))
+    cache_observations = [v for v in observations if v["custody"].get("native_cache_only") is True]
+    cache_events = proof.get("native_cache_evidence")
+    require(type(cache_events) is list and len(cache_events) == len(cache_observations)
+            and proof["cache_exception_granted"] is bool(cache_events)
+            and all(type(event) is dict and set(event) == {
+                "phase", "before", "after", "changed_entries"} and
+                event["phase"] == observed["phase"] and
+                event["before"] == observed["custody"]["before"] and
+                event["after"] == observed["custody"]["after"] and
+                event["changed_entries"] == observed["custody"]["cache_changed_entries"]
+                for event, observed in zip(cache_events, cache_observations)))
     return {"source": source, "installation_id": owner["uuid"], "sha256": digest(proof)}
 
 

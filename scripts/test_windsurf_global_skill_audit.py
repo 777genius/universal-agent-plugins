@@ -277,6 +277,12 @@ class InertPublicAndNative:
         ]
         if phase in ("add", "repeat"):
             rows.append({"name": SKILL, "description": DESCRIPTION, "provider": "Devin", "base_dir": str(self.native), "display_name": SKILL, "triggers": ["user", "model"], "warnings": [], "errors": []})
+        if phase == "before" and self.mode == "vendor-cache-small":
+            write(self.home / ".cache/devin/cli/state.json", b"{}")
+            write(self.home / ".config/devin/cli/state.json", b"{}")
+            write(self.home / ".local/share/devin/state.json", b"{}")
+        if phase == "before" and self.mode == "vendor-cache-foreign":
+            write(self.home / ".config/devin/config.json", b'{"foreign":"changed"}')
         if phase == "before" and self.mode in ("before-cache", "before-tmp"):
             path = Path(env["HOME"]) / ".cache/devin/cli/unknown-1012.json" if self.mode == "before-cache" else Path(env["TMPDIR"]) / "unknown-probe-write"
             write(path, b"x" * 674560 if self.mode == "before-cache" else b"unowned")
@@ -386,6 +392,22 @@ class WindsurfGlobalSkillAuditTests(unittest.TestCase):
                 self.assertNotEqual(result["status"], "passed")
                 self.assertTrue(self.transport.removed)
                 self.assertFalse(result["windsurf_global_native_proof"]["native_discovery_verified"])
+
+    def test_only_bounded_native_devin_cache_may_change_during_a_real_probe(self):
+        result = self.run_case("vendor-cache-small")
+        self.assertEqual(result["status"], "passed")
+        proof = result["windsurf_global_native_proof"]
+        self.assertTrue(proof["cache_exception_granted"])
+        self.assertEqual(len(proof["native_cache_evidence"]), 1)
+        self.assertEqual(proof["native_cache_evidence"][0]["phase"], "before")
+        native = proof["observations"]
+        self.assertTrue(all(row["verified"] for row in native))
+        self.assertFalse(native[0]["custody"]["unchanged"])
+        self.assertTrue(native[0]["custody"]["native_cache_only"])
+        self.assertTrue(all(row["custody"]["unchanged"] for row in native[1:]))
+        failed = self.run_case("vendor-cache-foreign")
+        self.assertEqual(failed["status"], "harness-error")
+        self.assertFalse(failed["windsurf_global_native_proof"]["native_discovery_verified"])
 
     def test_probe_cannot_create_cache_tmp_or_mutate_owned_authority(self):
         for mode in ("before-cache", "before-tmp", "probe-owned-write", "probe-state-write", "probe-source-cache-write"):
