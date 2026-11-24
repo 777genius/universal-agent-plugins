@@ -91,7 +91,13 @@ func clonePrepareRequest(req Request) Request {
 	copied.ExecutableFiles = slices.Clone(req.ExecutableFiles)
 	copied.ClientSurfaces = slices.Clone(req.ClientSurfaces)
 	copied.Targets = append([]ClientTarget(nil), req.Targets...)
+	for j := range copied.Targets {
+		copied.Targets[j].ClientSurfaces = slices.Clone(copied.Targets[j].ClientSurfaces)
+	}
 	copied.KnownTargets = append([]TargetFacts(nil), req.KnownTargets...)
+	for j := range copied.KnownTargets {
+		copied.KnownTargets[j].Surfaces = slices.Clone(copied.KnownTargets[j].Surfaces)
+	}
 	if req.Assessment != nil {
 		assessment := *req.Assessment
 		copied.Assessment = &assessment

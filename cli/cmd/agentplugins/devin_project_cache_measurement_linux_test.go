@@ -91,8 +91,14 @@ func windDirectCacheApp(t *testing.T, app agentpluginscli.App, home string, scan
 		t.Fatal("default file cache absent")
 	}
 	acquirer, ok := app.SourceAcquirer.(lazySourceAcquirer)
-	if !ok || acquirer.dataRoot != filepath.Join(home, "uap") || acquirer.acquirer.TempRoot != acquirer.dataRoot {
-		t.Fatal("default lazy acquirer absent")
+	userCache := filepath.Join(home, "uap")
+	wantScratch := userCache
+	if app.ManagedRoot != filepath.Join(userCache, "managed") {
+		// Project-scoped Git staging must never mutate the held User cache.
+		wantScratch = ""
+	}
+	if !ok || acquirer.dataRoot != userCache || acquirer.acquirer.TempRoot != wantScratch {
+		t.Fatal("User/Project source acquisition scratch authority differs")
 	}
 	evaluator.Scanner = scanner
 	app.SecurityEvaluator = evaluator
@@ -179,6 +185,9 @@ func (probe *windDirectCacheProbe) observe(t *testing.T, stage string, raw []byt
 		old, present := probe.before[name]
 		if present && old == fact {
 			continue
+		}
+		if name == "." && stage == "repeat-add-a" {
+			t.Fatal("Project repeat-add changed held User cache root metadata")
 		}
 		if name == "." || name == "security/assessments" && !existed {
 			left, right := old, fact

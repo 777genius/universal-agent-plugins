@@ -244,9 +244,16 @@ class CursorCycleContracts(unittest.TestCase):
 
     def test_full_inert_public_state_approval_probe_join(self):
         captured = synthetic_cycle()
+        repeat = next(row["value"] for row in captured[0] if row["stage"] == "repeat-add-a")
+        # Independently encode cursorCycleProgress's no-change producer bytes.
+        expected = b"Resolving and validating one Agent Plugin package for every selected target...\n"
+        self.assertEqual(cycle.stream(repeat["stderr"]), expected)
         with patch.object(cycle, "pins") as pins:
             cycle.complete(*captured)
             pins.assert_called_once()
+        repeat["stderr"] = wire(expected + b"Applying transactional client package...\n")
+        with patch.object(cycle, "pins"), self.assertRaises(ValueError):
+            cycle.complete(*captured)
 
     def test_full_serialized_archive_admission_includes_approval_containers(self):
         commands, proofs, probes, result = synthetic_cycle()

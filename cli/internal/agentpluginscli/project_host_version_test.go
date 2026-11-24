@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"errors"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -55,7 +56,7 @@ func TestProjectDependencyKnownFactsRetainOnlyUnselectedSiblings(t *testing.T) {
 	if err := adapter.populateDependencyTargets(view, "selected", &request); err != nil {
 		t.Fatal(err)
 	}
-	if len(request.KnownTargets) != 1 || request.KnownTargets[0] != (installer.TargetFacts{ClientID: "gemini", BindingID: "sibling-binding", ConfigRoot: sibling.ConfigRoot, Executable: sibling.ExecutablePath}) {
+	if len(request.KnownTargets) != 1 || !reflect.DeepEqual(request.KnownTargets[0], installer.TargetFacts{ClientID: "gemini", BindingID: "sibling-binding", ConfigRoot: sibling.ConfigRoot, Executable: sibling.ExecutablePath}) {
 		t.Fatalf("selected/sibling facts mixed: %+v", request.KnownTargets)
 	}
 	if request.ClientVersion != "3000.11.205" || request.ClientConfigRoot != "" {

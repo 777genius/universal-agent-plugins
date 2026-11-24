@@ -290,6 +290,15 @@ func TestTerminalViewportResizePTY(t *testing.T) {
 			for i := range options {
 				options[i] = Option{ID: fmt.Sprintf("agent%d", i), Label: fmt.Sprintf("Agent%02d 世界世界世界世界 long label", i)}
 			}
+			started := time.Now()
+			writeKeys := func(label, keys string) {
+				before := time.Now()
+				n, err := io.WriteString(master, keys)
+				t.Logf("viewport %s: elapsed=%s write=%s bytes=%d/%d err=%v", label, time.Since(started), time.Since(before), n, len(keys), err)
+				if err != nil || n != len(keys) {
+					t.Errorf("viewport %s input write: %d/%d bytes: %v", label, n, len(keys), err)
+				}
+			}
 			phase := 0
 			screen := newTerminalScreen(30, 100)
 			offset := 0
@@ -301,7 +310,7 @@ func TestTerminalViewportResizePTY(t *testing.T) {
 				case 0:
 					if strings.Contains(view, "Agent00") {
 						phase = 1
-						_, _ = io.WriteString(master, " "+strings.Repeat("\x1b[B", 63))
+						writeKeys("navigate", " "+strings.Repeat("\x1b[B", 63))
 					}
 				case 1:
 					if strings.Contains(view, "Agent63") {
@@ -316,12 +325,15 @@ func TestTerminalViewportResizePTY(t *testing.T) {
 						// Prompt files are intentionally not the process controlling TTY. Tea's
 						// joined SIGWINCH listener queries this exact output descriptor.
 						screen.resize(int(size.Row), int(size.Col))
-						_ = unix.Kill(os.Getpid(), unix.SIGWINCH)
+						if err := unix.Kill(os.Getpid(), unix.SIGWINCH); err != nil {
+							t.Error(err)
+						}
+						t.Logf("viewport resize: elapsed=%s rows=%d cols=%d", time.Since(started), size.Row, size.Col)
 					}
 				case 2:
 					if !tiny && strings.Contains(view, "Agent63") && strings.Contains(view, "submit") {
 						phase = 3
-						_, _ = io.WriteString(master, " \r")
+						writeKeys("submit", " \r")
 					}
 				}
 			})
@@ -329,6 +341,7 @@ func TestTerminalViewportResizePTY(t *testing.T) {
 			defer cancel()
 			got, err := p.SelectMany(ctx, MultiSelectRequest{SelectRequest: SelectRequest{Title: "Viewport fixture", Options: options}})
 			out := finish()
+			t.Logf("viewport return: elapsed=%s phase=%d err=%v", time.Since(started), phase, err)
 			if tiny {
 				if err == nil || got.Accepted || errors.Is(err, context.DeadlineExceeded) {
 					t.Fatalf("tiny %+v %v phase=%d screen=%q output=%q", got, err, phase, screen.text(), out)

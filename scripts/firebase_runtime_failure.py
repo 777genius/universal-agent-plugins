@@ -117,6 +117,19 @@ def collect(case):
             raise ValueError("staging-env")
         backend = Path(env["PLUGIN_DATA"])
         if not backend.is_absolute() or backend.parent != data:
+            # Classify only an owned root's spelling, not the untrusted
+            # vendor path. This cannot change the fail-closed verdict.
+            try:
+                directory(data)
+                physical_parent = str(data.resolve(strict=True))
+            except (OSError, ValueError):
+                physical_parent = None
+            refused["staging_parent_probe"] = {
+                "absolute": backend.is_absolute(),
+                "lexical_parent": backend.parent == data,
+                "physical_parent": physical_parent is not None
+                                   and str(backend.parent) == physical_parent,
+            }
             raise ValueError("staging-data-parent")
         if not re.fullmatch(r"firebase-[a-f0-9]{12}", backend.name):
             raise ValueError("staging-data-identity")
@@ -204,12 +217,42 @@ def collect(case):
                 receipt = owner.get("data_receipt_id")
                 allowed = {"data_receipt_id", "physical_backend_id", "scope", "locator",
                            "ownership_digest", "state", "created_at", "updated_at"}
-                if (not set(owner) <= allowed or not isinstance(receipt, str)
-                        or not re.fullmatch(r"data_[a-f0-9]{24}", receipt)
-                        or owner.get("state") != "owned" or owner.get("locator") != str(backend)
-                        or owner.get("scope") != "user" or owner.get("physical_backend_id") != backend.name
-                        or owner.get("ownership_digest") != "sha256:" + hashlib.sha256(
-                            ("agentplugins-plugin-data-v1\0" + receipt + "\0" + str(backend)).encode()).hexdigest()):
+                receipt_bounded = isinstance(receipt, str) and bool(
+                    re.fullmatch(r"data_[a-f0-9]{24}", receipt))
+                lexical_locator = str(backend)
+                lexical_digest = ("sha256:" + hashlib.sha256(
+                    ("agentplugins-plugin-data-v1\0" + receipt + "\0"
+                     + lexical_locator).encode()).hexdigest()) if receipt_bounded else None
+                if (not set(owner) <= allowed or not receipt_bounded
+                        or owner.get("state") != "owned"
+                        or owner.get("locator") != lexical_locator
+                        or owner.get("scope") != "user"
+                        or owner.get("physical_backend_id") != backend.name
+                        or owner.get("ownership_digest") != lexical_digest):
+                    # The directory and all its ancestors have already been
+                    # checked without following reparse points. Resolved spelling
+                    # is diagnostic only and never admits or rewrites ownership.
+                    try:
+                        physical_locator = str(backend.resolve(strict=True))
+                    except (OSError, ValueError):
+                        physical_locator = None
+                    physical_digest = ("sha256:" + hashlib.sha256(
+                        ("agentplugins-plugin-data-v1\0" + receipt + "\0"
+                         + physical_locator).encode()).hexdigest()
+                        if receipt_bounded and physical_locator is not None else None)
+                    refused["owned_data_probe"] = {
+                        "receipt_bounded": receipt_bounded,
+                        "owner_fields_bounded": set(owner) <= allowed,
+                        "state_owned": owner.get("state") == "owned",
+                        "scope_user": owner.get("scope") == "user",
+                        "backend_identity": owner.get("physical_backend_id") == backend.name,
+                        "locator_lexical": owner.get("locator") == lexical_locator,
+                        "locator_physical": (physical_locator is not None
+                                             and owner.get("locator") == physical_locator),
+                        "digest_lexical": owner.get("ownership_digest") == lexical_digest,
+                        "digest_physical": (physical_digest is not None
+                                            and owner.get("ownership_digest") == physical_digest),
+                    }
                     raise ValueError("data authority")
                 refusal_phase = "locked-npm-runtime"
                 runtime = backend / "npm-runtime"
