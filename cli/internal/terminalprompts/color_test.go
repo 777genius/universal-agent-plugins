@@ -28,13 +28,17 @@ func TestSyntheticColorSelectionDemo(t *testing.T) {
 	format := "human"
 	policy := terminaltheme.Policy{Mode: "always", Explicit: true}
 	p := PlainPrompter{Input: strings.NewReader("1\n"), Output: terminaltheme.Wrap(&out, &policy, &format)}
-	request := prompt.TargetSelectionRequest{Choices: []prompt.TargetChoice{{ID: "cursor", Label: "Synthetic Cursor"}, {ID: "codex", Label: "Synthetic Codex"}}, DefaultIDs: []domain.ClientID{"cursor", "codex"}, SkippedLabels: []string{"Synthetic unsupported client"}}
+	request := prompt.TargetSelectionRequest{Choices: []prompt.TargetChoice{{ID: "cursor", Label: "Synthetic Cursor"}, {ID: "codex", Label: "Synthetic Codex"}}, DefaultIDs: []domain.ClientID{"cursor", "codex"}, Skipped: []prompt.SkippedTarget{{ID: "other", Label: "Synthetic unsupported client", Kind: prompt.SkipNotDetected}}}
 	selected, err := p.SelectTargets(context.Background(), request)
 	if err != nil || len(selected.IDs) != 1 || selected.IDs[0] != "cursor" {
 		t.Fatal(selected, err)
 	}
-	if !strings.Contains(out.String(), "\x1b[33mNot available for automatic install") || !strings.Contains(out.String(), "\x1b[36mChoose") {
+	if !strings.Contains(out.String(), "\x1b[33mNot available for automatic install:") || !strings.Contains(out.String(), "\x1b[36mChoose") {
 		t.Fatal("missing semantic selection colors")
+	}
+	// The explanation is shown below the list, not above it.
+	if strings.Index(out.String(), "Not available for automatic install") < strings.Index(out.String(), "Synthetic Codex") {
+		t.Fatalf("explanations printed before the list: %q", out.String())
 	}
 	t.Log("Synthetic selection; input is the in-memory line 1, not a live terminal session.\n" + out.String())
 }

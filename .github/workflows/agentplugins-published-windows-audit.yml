@@ -86,6 +86,20 @@ jobs:
           python -m unittest discover -s scripts -p 'test_live_install_audit_components.py' -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Require genuine Windows Gemini initial-record custody
+        if: matrix.target == 'gemini' && matrix.kind == 'skill'
+        shell: pwsh
+        run: |
+          python -m unittest scripts.test_gemini_windows_runtime_audit -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Require actual Windows Claude cache retirement custody before vendor execution
+        if: ${{ matrix.target == 'claude' && matrix.kind == 'skill' }}
+        shell: pwsh
+        run: |
+          python -m unittest scripts.test_live_install_audit_env.ClaudeWindowsStreamParserContracts scripts.test_live_install_audit_env.ClaudeWindowsCacheRetirementContracts -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       # No vendor login or paid API is used. These are exact published npm bytes,
       # with the same frozen client versions as the qualified Linux audit.
       - name: Bootstrap published npm CLI and genuine pinned native client

@@ -56,13 +56,13 @@ func TestAdapterSuccessContract(t *testing.T) {
 							t.Fatal("confirmation request mutated")
 						}
 					} else {
-						req := prompt.TargetSelectionRequest{Choices: []prompt.TargetChoice{{ID: "cursor", Label: "Cursor"}, {ID: "claude", Label: "Claude"}, {ID: "codex", Label: "Codex"}}, DefaultIDs: append([]domain.ClientID(nil), tc.defaults...), SkippedLabels: []string{"kiro: this CLI cannot automatically check MCP connections; retry --target kiro\x1b\u202e"}}
-						before := prompt.TargetSelectionRequest{Choices: append([]prompt.TargetChoice(nil), req.Choices...), DefaultIDs: append([]domain.ClientID(nil), req.DefaultIDs...), SkippedLabels: append([]string(nil), req.SkippedLabels...)}
+						req := prompt.TargetSelectionRequest{Choices: []prompt.TargetChoice{{ID: "cursor", Label: "Cursor"}, {ID: "claude", Label: "Claude"}, {ID: "codex", Label: "Codex"}}, DefaultIDs: append([]domain.ClientID(nil), tc.defaults...), Skipped: []prompt.SkippedTarget{{ID: "kiro", Label: "Kiro\x1b\u202e", Kind: prompt.SkipManual, Reason: "this CLI cannot check MCP connections automatically"}}}
+						before := prompt.TargetSelectionRequest{Choices: append([]prompt.TargetChoice(nil), req.Choices...), DefaultIDs: append([]domain.ClientID(nil), req.DefaultIDs...), Skipped: append([]prompt.SkippedTarget(nil), req.Skipped...)}
 						got, err := p.SelectTargets(ctx, req)
 						if err != nil || !reflect.DeepEqual(got.IDs, tc.want) {
 							t.Fatalf("selection = %+v, %v; want %v", got, err, tc.want)
 						}
-						if !strings.Contains(output.String(), "Not available for automatic install:\n  - kiro: this CLI cannot automatically check MCP connections; retry --target kiro") || strings.Contains(output.String(), "\u202e") {
+						if !strings.Contains(output.String(), "Not available for automatic install:\n  Kiro: this CLI cannot check MCP connections automatically") || strings.Contains(output.String(), "\u202e") {
 							t.Fatalf("missing or unsafe skipped guidance: %q", output.String())
 						}
 						if !reflect.DeepEqual(req, before) {

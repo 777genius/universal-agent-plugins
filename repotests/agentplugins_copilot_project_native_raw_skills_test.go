@@ -35,10 +35,7 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	f.preparePackage(t)
 	foreign := copilotRawForeign(t, f)
 	before := copilotRawInventories(t, f, "before", nil)
-	eventsExist, events, err := copilotRawEventSnapshot(f.base.Events)
-	if err != nil {
-		t.Fatal("raw initial MCP event snapshot refused", err)
-	}
+	copilotRawProbeAbsent(t, f.base.Events)
 	argv := []string{f.installer, "skills", "add", nativeRawProjectSkillsSource, "--skill", copilotRawSkill, "--target", "copilot", "--scope", "project", "--project-root", f.base.Project, "--yes", "--no-ui", "--format", "json"}
 	first := f.command(t, "raw-add", f.outside, f.env(), argv, 45*time.Second)
 	copilotRawReady(t, first.Stdout, false)
@@ -84,70 +81,8 @@ func testCopilotNativeRawProjectSkills(t *testing.T) {
 	if _, err := os.Lstat(binding.TargetLocator); !os.IsNotExist(err) {
 		t.Fatal("raw removed package remains", err)
 	}
-	afterEventsExist, afterEvents, err := copilotRawEventSnapshot(f.base.Events)
-	if err != nil || eventsExist != afterEventsExist || !bytes.Equal(events, afterEvents) {
-		t.Fatal("ordinary catalog mutated MCP probe events", err)
-	}
+	copilotRawProbeAbsent(t, f.base.Events)
 	f.check(t)
-}
-
-// copilotRawEventSnapshot distinguishes absent output from an empty native event
-// file. This no-provider journey must preserve event presence and bytes.
-// The shared bounded owner/regular-file read rejects unsafe existing leaves.
-func copilotRawEventSnapshot(path string) (bool, []byte, error) {
-	if err := projectNativeRuntimeParents(path); err != nil {
-		return false, nil, err
-	}
-	_, err := os.Lstat(path)
-	if os.IsNotExist(err) {
-		if parentErr := projectNativeRuntimeParents(path); parentErr != nil {
-			return false, nil, parentErr
-		}
-		return false, nil, nil
-	}
-	if err != nil {
-		return false, nil, err
-	}
-	body, err := projectNativeRuntimeRead(path, 1<<20)
-	if err != nil {
-		return false, nil, err
-	}
-	return true, body, nil
-}
-
-func TestCopilotRawEventSnapshotPreservesAbsenceAndRefusesAliases(t *testing.T) {
-	root := t.TempDir()
-	path := filepath.Join(root, "events.jsonl")
-	if _, _, err := copilotRawEventSnapshot(filepath.Join(root, "missing-parent", "events.jsonl")); err == nil {
-		t.Fatal("missing event parent must not resemble an absent leaf")
-	}
-	exists, body, err := copilotRawEventSnapshot(path)
-	if err != nil || exists || len(body) != 0 {
-		t.Fatal("uncreated event file must remain absent", err)
-	}
-	if err := os.WriteFile(path, nil, 0600); err != nil {
-		t.Fatal(err)
-	}
-	exists, body, err = copilotRawEventSnapshot(path)
-	if err != nil || !exists || len(body) != 0 {
-		t.Fatal("present empty event file must not resemble absence", err)
-	}
-	if err := os.WriteFile(path, []byte("event\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	exists, body, err = copilotRawEventSnapshot(path)
-	if err != nil || !exists || string(body) != "event\n" {
-		t.Fatal("existing event bytes must remain observable", err)
-	}
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(filepath.Join(root, "foreign-events"), path); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := copilotRawEventSnapshot(path); err == nil {
-		t.Fatal("event snapshot must refuse symlinked leaf")
-	}
 }
 
 func copilotRawLogEvidence(t *testing.T, f *copilotProjectAttempt) {
@@ -169,6 +104,15 @@ func copilotRawLogEvidence(t *testing.T, f *copilotProjectAttempt) {
 			continue
 		}
 		t.Logf("raw Copilot %s (%d bytes): %q", name, len(body), body)
+	}
+}
+
+// Ordinary Skills listing must never create an MCP probe event file. This
+// path is not preseeded by this no-provider test; do not synthesize one.
+func copilotRawProbeAbsent(t *testing.T, path string) {
+	t.Helper()
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatal("raw Skills unexpectedly invoked MCP or could not verify absence", err)
 	}
 }
 
