@@ -102,7 +102,8 @@ jobs:
               directory = Path(temp).resolve()
               context = audit.prepare_policy_context(directory, directory / "public-policy", "linux-amd64")
               frozen = Path(context["frozen"])
-              environment = dict(os.environ, GOWORK=str(frozen / "go.work"))
+              environment = dict(os.environ, GOWORK=str(frozen / "go.work"),
+                                 UAP_FROZEN_PRODUCER_ROOT=str(frozen))
               subprocess.run(["go", "test", str(root / "scripts/released-source-policy.go"),
                               str(root / "scripts/released-source-policy_test.go")],
                              cwd=frozen / "cli", env=environment, check=True, timeout=300)

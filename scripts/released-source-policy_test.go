@@ -1,6 +1,6 @@
 //go:build ignore
 
-// Run named files from the frozen producer's cli directory, with its go.work.
+// Test source-backed policy against the exact frozen producer, independent of go test's cwd.
 package main
 
 import (
@@ -15,12 +15,25 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
+func frozenProducerRoot(t *testing.T) string {
+	t.Helper()
+	root := os.Getenv("UAP_FROZEN_PRODUCER_ROOT")
+	if root == "" {
+		t.Fatal("frozen producer root is required")
+	}
+	if err := requireProducer(root); err != nil {
+		t.Fatalf("frozen producer checkout is invalid: %v", err)
+	}
+	return root
+}
+
 func TestRuntimeCacheAuthenticationAndIdentity(t *testing.T) {
+	base := filepath.Join(frozenProducerRoot(t), "cli", "cmd", "agentplugins", "directory_bootstrap_inputs")
 	// Real signed producer bootstrap bytes, never a test key admitted to
 	// production trust. This test must run in exact producer checkout/cli.
-	snapshot, err := os.ReadFile("cmd/agentplugins/directory_bootstrap_inputs/snapshot.json")
+	snapshot, err := os.ReadFile(filepath.Join(base, "snapshot.json"))
 	if err != nil { t.Fatal(err) }
-	envelope, err := os.ReadFile("cmd/agentplugins/directory_bootstrap_inputs/envelope.json")
+	envelope, err := os.ReadFile(filepath.Join(base, "envelope.json"))
 	if err != nil { t.Fatal(err) }
 	trust, err := producerTrust()
 	if err != nil { t.Fatal(err) }
@@ -77,8 +90,7 @@ func TestProducerPolicyNeverPromotesV1GrantToSignedProjectGrant(t *testing.T) {
 func TestProducerBootstrapFloorAndEquivocation(t *testing.T) {
 	trust, err := producerTrust()
 	if err != nil { t.Fatal(err) }
-	root, err := filepath.Abs("..")
-	if err != nil { t.Fatal(err) }
+	root := frozenProducerRoot(t)
 	embedded, err := producerBootstrap(root, trust)
 	if err != nil { t.Fatal(err) }
 	if err := checkFloor(embedded, embedded); err != nil { t.Fatal(err) }
