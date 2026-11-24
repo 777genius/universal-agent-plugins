@@ -124,14 +124,7 @@ func completeDevinSkills(ctx context.Context, env clients.Env, request domain.Ac
 	if ctx.Err() != nil {
 		return outcome, ctx.Err()
 	}
-	afterSkills, afterDigest, err := devinOwnedSkills(ctx, env, request, selected.layout)
-	if err != nil || digest != afterDigest || !reflect.DeepEqual(skills, afterSkills) {
-		return outcome, fmt.Errorf("owned devin Skill bytes changed during native observation")
-	}
-	if err := verifyDevinSkillPolicy(env, request.Plan, selected.cwd, global, before); err != nil {
-		return outcome, err
-	}
-	if err := ctx.Err(); err != nil {
+	if err := devinSkillObservationStillOwned(ctx, env, request, selected, global, before, skills, digest); err != nil {
 		return outcome, err
 	}
 	if !devinSkillProbeMatches(result, probeErr, skills) {
@@ -146,12 +139,22 @@ func completeDevinSkills(ctx context.Context, env clients.Env, request domain.Ac
 	return outcome, nil
 }
 
-func verifyDevinSkillPolicy(env clients.Env, plan domain.DeliveryPlan, cwd, global string, before map[string]shared.NativeFileSnapshot) error {
-	after, eligible, err := devinSkillPolicyFiles(env, plan.NativeRegistryRoot, global)
-	if err != nil || !eligible || !devinSkillContextKnown(env, plan.Scope, cwd) || !devinSkillPolicyStable(before, after, global) {
+// devinSkillObservationStillOwned rechecks exactly the sealed package, policy
+// and selected native context after the real client call, before promoting Ready.
+func devinSkillObservationStillOwned(
+	ctx context.Context, env clients.Env, request domain.ActivationRequest,
+	selected devinSkillContext, global string, before map[string]shared.NativeFileSnapshot,
+	skills map[string]devinSkillMetadata, digest string,
+) error {
+	afterSkills, afterDigest, err := devinOwnedSkills(ctx, env, request, selected.layout)
+	if err != nil || digest != afterDigest || !reflect.DeepEqual(skills, afterSkills) {
+		return fmt.Errorf("owned devin Skill bytes changed during native observation")
+	}
+	after, eligible, err := devinSkillPolicyFiles(env, request.Plan.NativeRegistryRoot, global)
+	if err != nil || !eligible || !devinSkillContextKnown(env, request.Plan.Scope, selected.cwd) || !devinSkillPolicyStable(before, after, global) {
 		return fmt.Errorf("devin Skill discovery policy changed during native observation")
 	}
-	return nil
+	return ctx.Err()
 }
 
 func devinSkillProbeMatches(result ports.CommandResult, probeErr error, skills map[string]devinSkillMetadata) bool {

@@ -37,9 +37,9 @@ for (const width of [1440, 390]) {
     const source = plugin.distributions[0]!.releases[0]!.source;
     const manifestName = plugin.distributions[0]!.releases[0]!.manifest_name!;
     const selector = `github:${source.repository}@${source.revision}//${source.path}`;
-    const cli = 'npx -y universal-agent-plugins@0.1.115';
+    const cli = 'npx -y universal-agent-plugins@latest';
     const notice = wording('en')('registryUi.install.pinnedCatalogSource');
-    const repairNotice = wording('en')('registryUi.install.antigravityRepairUnavailable', { version: '0.1.115' });
+    const repairNotice = wording('en')('registryUi.install.antigravityRepairUnavailable', { version: 'latest' });
     for (const [agent, client] of [['Hermes Agent', 'hermes'], ['Google Antigravity', 'antigravity'], ['Pi', 'pi']]) {
       await hero.locator('.app-multiselect__trigger').click();
       await page.locator('.app-multiselect__auto').click();
@@ -239,7 +239,7 @@ test('Pi agent page describes extensions, Skills and MCP in user and project sco
   await expect(main).toContainText('user or project scope');
   await expect(main).toContainText('Packages with install or setup options for Pi: 1');
   await expect(main).toContainText('The CLI checks components, dependencies and the selected scope first');
-  await expect(main.locator('.command-snippet--add code')).toContainText('universal-agent-plugins@0.1.115 add github:');
+  await expect(main.locator('.command-snippet--add code')).toContainText('universal-agent-plugins@latest add github:');
   await expect(main).not.toContainText('Portable skills and MCP projection are outside');
   expect(errors).toEqual([]);
 });
@@ -355,7 +355,7 @@ test('a mounted plugin installer withdraws source commands on Directory expiry',
   const panel = page.locator('.install-panel');
   await targets(page, panel, ['Google Antigravity']);
   await expect(panel.locator('.command-snippet--add code'))
-    .toContainText('universal-agent-plugins@0.1.115 add github:');
+    .toContainText('universal-agent-plugins@latest add github:');
   await expect(panel.locator('.command-snippet--repair')).toHaveCount(1);
 
   // Commands must expire on an already-open detail page, without navigation.
@@ -381,16 +381,16 @@ for (const path of ['/', '/plugins/'] as const) {
     await openCardInstall(page, card);
     await targets(page, card, ['Google Antigravity']);
     await expect(page.getByRole('dialog').locator('.command-snippet--add code'))
-      .toContainText('universal-agent-plugins@0.1.115 add github:');
+      .toContainText('universal-agent-plugins@latest add github:');
     await expect(page.getByRole('dialog').locator('.command-snippet--repair')).toHaveCount(0);
     if (path === '/') {
       const hero = page.locator('.hero-shell');
       await targets(page, hero, ['Google Antigravity']);
       await expect(hero.locator('.command-snippet--add code'))
-        .toContainText('universal-agent-plugins@0.1.115 add github:');
+        .toContainText('universal-agent-plugins@latest add github:');
       await openCardInstall(page, card);
       await expect(page.getByRole('dialog').locator('.command-snippet--add code'))
-        .toContainText('universal-agent-plugins@0.1.115 add github:');
+        .toContainText('universal-agent-plugins@latest add github:');
     }
 
     await page.clock.fastForward(11 * 60_000);
@@ -411,9 +411,9 @@ test('an open Antigravity agent page withdraws pinned add on Directory expiry wi
   await navigate(page, '/agents/antigravity', 'en');
 
   const install = page.locator('.agent-page__install');
-  const repairNotice = wording('en')('registryUi.install.antigravityRepairUnavailable', { version: '0.1.115' });
+  const repairNotice = wording('en')('registryUi.install.antigravityRepairUnavailable', { version: 'latest' });
   await expect(install.locator('.command-snippet--add code'))
-    .toContainText('universal-agent-plugins@0.1.115 add github:');
+    .toContainText('universal-agent-plugins@latest add github:');
   await expect(install).not.toContainText(repairNotice);
 
   // Without clock maintenance, a mounted page retains the stale add command.

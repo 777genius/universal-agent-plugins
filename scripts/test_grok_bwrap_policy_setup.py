@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
+import devin_bwrap_policy_setup as devin_policy
 import grok_bwrap_policy_setup as policy
 
 
@@ -121,7 +122,7 @@ class KernelABIContracts(unittest.TestCase):
                 values["st_size"] = 0
                 return SimpleNamespace(**values)
             return info
-        for module in (policy,):
+        for module in (policy, devin_policy):
             with self.subTest(module=module.__name__), tempfile.TemporaryDirectory() as temporary:
                 root = self.fixture(Path(temporary))
                 with mock.patch.object(module, "KERNEL_FEATURE_DIRECTORY", root), \
@@ -142,7 +143,7 @@ class KernelABIContracts(unittest.TestCase):
     def test_missing_mediation_and_unsafe_feature_objects_refuse_before_export(self):
         changes = ("missing", "sqpoll", "override_creds", "userns", "stack", "post_nnp",
                    "symlink", "hardlink", "writable", "overbound")
-        for module in (policy,):
+        for module in (policy, devin_policy):
             for change in changes:
                 with self.subTest(module=module.__name__, change=change), tempfile.TemporaryDirectory() as temporary:
                     root = self.fixture(Path(temporary))
@@ -178,7 +179,7 @@ class KernelABIContracts(unittest.TestCase):
                     self.assert_closed(opened)
 
     def test_same_bytes_replacements_and_same_metadata_byte_drift_keep_original_authority(self):
-        for module in (policy,):
+        for module in (policy, devin_policy):
             for change in ("file", "directory", "bytes"):
                 with self.subTest(module=module.__name__, change=change), tempfile.TemporaryDirectory() as temporary:
                     root = self.fixture(Path(temporary))
@@ -211,42 +212,43 @@ class KernelABIContracts(unittest.TestCase):
                     self.assert_closed([row[0] for row in held.values()])
 
     def test_last_feature_read_revalidates_earlier_original_identities(self):
-        for change in ("early-feature", "feature-root"):
-            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
-                parent = Path(temporary)
-                root = self.fixture(parent)
-                with mock.patch.object(policy, "KERNEL_FEATURE_DIRECTORY", root):
-                    deadline = policy.time.monotonic() + 10
-                    held = policy.open_kernel_features(deadline)
-                    try:
-                        final_fd = held["domain/post_nnp_subset"][0]
-                        original_read = policy.read_kernel_feature
-                        triggered = [False]
+        for module in (policy, devin_policy):
+            for change in ("early-feature", "feature-root"):
+                with self.subTest(module=module.__name__, change=change), tempfile.TemporaryDirectory() as temporary:
+                    parent = Path(temporary)
+                    root = self.fixture(parent)
+                    with mock.patch.object(module, "KERNEL_FEATURE_DIRECTORY", root):
+                        deadline = module.time.monotonic() + 10
+                        held = module.open_kernel_features(deadline)
+                        try:
+                            final_fd = held["domain/post_nnp_subset"][0]
+                            original_read = module.read_kernel_feature
+                            triggered = [False]
 
-                        def replace_after_final_read(fd, value):
-                            body = original_read(fd, value)
-                            if fd == final_fd and not triggered[0]:
-                                triggered[0] = True
-                                if change == "early-feature":
-                                    leaf = root / "io_uring/mask"
-                                    leaf.rename(parent / "retained-mask")
-                                    leaf.write_bytes(b"sqpoll override_creds\n")
-                                    leaf.chmod(0o444)
-                                else:
-                                    root.rename(parent / "retained-features")
-                                    self.fixture(parent)
-                            return body
+                            def replace_after_final_read(fd, value):
+                                body = original_read(fd, value)
+                                if fd == final_fd and not triggered[0]:
+                                    triggered[0] = True
+                                    if change == "early-feature":
+                                        leaf = root / "io_uring/mask"
+                                        leaf.rename(parent / "retained-mask")
+                                        leaf.write_bytes(b"sqpoll override_creds\n")
+                                        leaf.chmod(0o444)
+                                    else:
+                                        root.rename(parent / "retained-features")
+                                        self.fixture(parent)
+                                return body
 
-                        with mock.patch.object(policy, "read_kernel_feature", side_effect=replace_after_final_read):
-                            with self.assertRaisesRegex(ValueError, "^original policy kernel feature changed$"):
-                                policy.verify_kernel_features(held, deadline)
-                        self.assertTrue(triggered[0])
-                    finally:
-                        policy.close_kernel_features(held)
-                self.assert_closed([row[0] for row in held.values()])
+                            with mock.patch.object(module, "read_kernel_feature", side_effect=replace_after_final_read):
+                                with self.assertRaisesRegex(ValueError, "^original policy kernel feature changed$"):
+                                    module.verify_kernel_features(held, deadline)
+                            self.assertTrue(triggered[0])
+                        finally:
+                            module.close_kernel_features(held)
+                    self.assert_closed([row[0] for row in held.values()])
 
     def test_full_actual_abi_and_original_deadline_survive_export(self):
-        for module in (policy,):
+        for module in (policy, devin_policy):
             for change in ("same", "other-feature", "oversize", "binary", "late-export", "late-eof"):
                 with self.subTest(module=module.__name__, change=change), tempfile.TemporaryDirectory() as temporary:
                     root = self.fixture(Path(temporary))

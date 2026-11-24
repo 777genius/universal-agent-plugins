@@ -2,6 +2,7 @@ package installer
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -53,7 +54,7 @@ func (e *Engine) detectedClients(req Request) (map[domain.ClientID]domain.Detect
 		for _, target := range req.Targets {
 			client, err := e.detectedClient(Request{
 				Operation: req.Operation, ClientID: target.ClientID,
-				ClientConfigRoot: target.ClientConfigRoot,
+				ClientConfigRoot: target.ClientConfigRoot, ClientSurfaces: target.ClientSurfaces,
 				ClientExecutable: firstNonEmpty(target.ClientExecutable, req.ClientExecutable),
 			})
 			if err != nil {
@@ -84,13 +85,13 @@ func (fact TargetFacts) clientRequest(operation Operation) Request {
 	return Request{
 		Operation: operation, ClientID: fact.ClientID,
 		ClientConfigRoot: fact.ConfigRoot, ClientNativeConfigRoot: fact.NativeConfigRoot,
-		ClientExecutable: fact.Executable, ClientVersion: fact.Version,
+		ClientExecutable: fact.Executable, ClientVersion: fact.Version, ClientSurfaces: fact.Surfaces,
 	}
 }
 
 func addDetectedClient(detected map[domain.ClientID]domain.DetectedClient, client domain.DetectedClient) error {
 	if current, exists := detected[client.ClientID]; exists {
-		if current.ConfigRoot != client.ConfigRoot || current.NativeConfigRoot != client.NativeConfigRoot || current.ExecutablePath != client.ExecutablePath || current.Version != client.Version {
+		if current.ConfigRoot != client.ConfigRoot || current.NativeConfigRoot != client.NativeConfigRoot || current.ExecutablePath != client.ExecutablePath || current.Version != client.Version || !slices.Equal(current.Surfaces, client.Surfaces) {
 			return fmt.Errorf("%w: conflicting paths for %s", ErrTargetFactsUnavailable, client.ClientID)
 		}
 		return nil

@@ -33,7 +33,8 @@ const (
 
 // Request is copied by Prepare. Subsequent caller edits do not change the handle.
 type Request struct {
-	// ConfirmPluginEnable is transient single-Project repair consent.
+	// ConfirmPluginEnable applies only to one explicit Project repair. It is
+	// captured by Prepare and cannot be granted by diagnostic JSON or Apply.
 	ConfirmPluginEnable bool `json:"-"`
 	Scope               domain.InstallScope
 	ProjectRoot         string `json:"-"`
@@ -109,6 +110,7 @@ func (req Request) acquiredCompatibility() domain.CompatibilityHints {
 // Group removal retains the published Claude/Codex boundary.
 type ClientTarget struct {
 	ClientID, ClientConfigRoot, ClientExecutable string
+	ClientSurfaces                               []domain.ClientSurface `json:"-"`
 	PackageRoot                                  string
 	ExternalUninstalled                          bool
 }
@@ -121,6 +123,7 @@ type TargetFacts struct {
 	BindingID     string
 	ConfigRoot    string
 	Executable    string
+	Surfaces      []domain.ClientSurface `json:"-"`
 	// NativeConfigRoot and Version retain independently observed native User
 	// authority for an unselected sibling. Neither is read from owned state.
 	NativeConfigRoot string `json:"-"`

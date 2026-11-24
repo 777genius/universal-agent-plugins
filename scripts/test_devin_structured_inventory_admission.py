@@ -1,0 +1,1357 @@
+"""Inert contracts: no native client, network acquisition or hosted spoofing."""
+import copy
+import hashlib
+import json
+import os
+from pathlib import Path
+import tempfile
+from types import SimpleNamespace
+import unittest
+from unittest.mock import Mock, patch
+
+import devin_structured_inventory_admission as case
+
+
+class DevinAdmissionContracts(unittest.TestCase):
+    def test_unique_bounded_native_json(self):
+        self.assertEqual(case.strict_json(b'[{"name":"owned","enabled":false}]'), [{"name": "owned", "enabled": False}])
+        for body in (b'{"a":1,"a":2}', b'{} {}', b'{"a":NaN}', b'{"x":1e9999}', b'{"x":-1e9999}', b'null', b'x' * ((1 << 20) + 1), b'[' * 18 + b'0' + b']' * 18):
+            with self.subTest(body=body[:40]), self.assertRaises(ValueError):
+                case.strict_json(body)
+
+    def test_archive_requires_reviewed_binary_not_old_pin_or_executable_companion(self):
+        files = [{"name": "bin/devin", "kind": "file", "bytes": 213734376, "executable": True, "sha256": case.BINARY}]
+        files += [{"name": "companion-" + str(i), "kind": "file", "bytes": 0, "executable": False} for i in range(233)]
+        files[1]["bytes"] = 214280841 - files[0]["bytes"]
+        files += [{"name": "dir-" + str(i), "kind": "directory", "bytes": 0, "executable": True} for i in range(16)]
+        receipt = {"pin_verified": True, "sha256": case.ARCHIVE, "bytes": 72925933, "members": files}
+        case.admitted_archive(receipt)
+        for change in ("old-pin", "wrong-binary", "special", "executable", "duplicate-count"):
+            bad = copy.deepcopy(receipt)
+            if change == "old-pin": bad["sha256"] = "0" * 64
+            elif change == "wrong-binary": bad["members"][0]["sha256"] = "0" * 64
+            elif change == "special": bad["members"][1]["kind"] = "link"
+            elif change == "executable": bad["members"][1]["executable"] = True
+            else: bad["members"].pop()
+            with self.subTest(change=change), self.assertRaises(ValueError): case.admitted_archive(bad)
+
+    def test_publisher_acquisition_keeps_size_pin_then_inventory_order(self):
+        import project_native_cursor_acquisition as transport
+        body, budget, ordered = b"inert archive", object(), []
+        members, contents = [{"kind": "file", "name": "inert"}], {"inert": b"bytes"}
+        def verify(value, pin):
+            self.assertEqual(value, body)
+            self.assertEqual(pin, "sha256:" + case.ARCHIVE)
+            ordered.append("pin")
+        def inventory(value, spec, actual_budget):
+            self.assertEqual(ordered, ["pin"])
+            self.assertEqual((value, spec, actual_budget), (body, case.SPEC, budget))
+            ordered.append("inventory")
+            return members, contents
+        with (patch.dict(case.SPEC, {"expected_bytes": len(body)}),
+              patch.object(transport, "download_devin", return_value=(body, case.SPEC["url"])) as download,
+              patch.object(case.shared.native, "verify_digest", side_effect=verify),
+              patch.object(case.shared, "inventory_archive", side_effect=inventory),
+              patch.object(case.shared, "materialize", side_effect=AssertionError("materialization"))):
+            receipt, actual_contents = case.acquire_publisher_archive(budget)
+        download.assert_called_once_with(case.SPEC, budget)
+        self.assertEqual(ordered, ["pin", "inventory"])
+        self.assertIs(actual_contents, contents)
+        self.assertEqual(receipt, {"url": case.SPEC["url"], "resolved_origin": "https://static.devin.ai",
+            "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest(),
+            "integrity": "sha256:" + case.ARCHIVE, "pin_verified": True,
+            "members": members, "installer_executed": False})
+
+    def test_publisher_failures_and_partial_bytes_cannot_reach_inventory(self):
+        import project_native_cursor_acquisition as transport
+        body = b"partial"
+        for mutation in ("transport", "url", "size", "pin"):
+            with self.subTest(mutation=mutation):
+                result = (body, case.SPEC["url"] if mutation != "url" else "https://other.invalid")
+                with (patch.dict(case.SPEC, {"expected_bytes": len(body) if mutation != "size" else len(body) + 1}),
+                      patch.object(transport, "download_devin", return_value=result,
+                          side_effect=ValueError("acquisition failed") if mutation == "transport" else None),
+                      patch.object(case.shared.native, "verify_digest",
+                          side_effect=ValueError("pin differs") if mutation == "pin" else None) as verify,
+                      patch.object(case.shared, "inventory_archive", side_effect=AssertionError("inventory")) as inventory,
+                      patch.object(case.shared, "materialize", side_effect=AssertionError("materialization"))):
+                    with self.assertRaises(ValueError):
+                        case.acquire_publisher_archive(object())
+                    inventory.assert_not_called()
+                    self.assertEqual(verify.call_count, 1 if mutation == "pin" else 0)
+
+    def test_connection_guard_includes_non_rpc_connections_and_stdio_start(self):
+        probe = SimpleNamespace(methods=lambda: (), call_records=lambda: ([], 0), accepted_connections=[])
+        with tempfile.TemporaryDirectory() as temporary:
+            marker = Path(temporary) / "started"
+            case.zero_effects({"owned": probe}, marker)
+            probe.accepted_connections.append(("127.0.0.1", 1234))
+            with self.assertRaises(ValueError): case.zero_effects({"owned": probe}, marker)
+            probe.accepted_connections.clear()
+            marker.write_text("unexpected")
+            with self.assertRaises(ValueError): case.zero_effects({"owned": probe}, marker)
+
+    def test_probe_observer_preserves_existing_handler_and_sets_connection_deadline(self):
+        connection = Mock()
+        address = ("127.0.0.1", 1234)
+        server = SimpleNamespace(get_request=lambda: (connection, address))
+        probe = case.observe_connections(SimpleNamespace(server=server))
+        self.assertEqual(probe.server.get_request(), (connection, address))
+        connection.settimeout.assert_called_once_with(2)
+        self.assertEqual(probe.accepted_connections, [address])
+
+    def test_runner_exception_keeps_process_cleanup_fence_closed(self):
+        ctx = object.__new__(case.AdmissionContext)
+        ctx.summary = {}
+        with patch.object(case.shared.Context, "command", side_effect=RuntimeError("cleanup failed")):
+            with self.assertRaisesRegex(RuntimeError, "cleanup failed"):
+                ctx.command("native-list", [])
+        self.assertFalse(ctx.process_cleanup_proved)
+        self.assertEqual(ctx.summary["in_flight_command"], "native-list")
+        ctx = object.__new__(case.AdmissionContext)
+        ctx.summary = {}
+        negative = ({"exit": 1}, b"", b"authentication refused")
+        with patch.object(case.shared.Context, "command", return_value=negative):
+            self.assertEqual(ctx.command("native-list", []), negative)
+        self.assertTrue(ctx.process_cleanup_proved)
+        self.assertNotIn("in_flight_command", ctx.summary)
+
+    def test_outer_inventory_detects_new_runtime_companion_and_unknown_directory(self):
+        with tempfile.TemporaryDirectory() as temporary, case.shared.Budget(10) as budget:
+            root = Path(temporary).resolve()
+            runtime = root / "client"
+            runtime.mkdir()
+            (runtime / "devin").write_bytes(b"inert original runtime")
+            before = case.metadata_inventory(root, budget)
+            companion = runtime / "new-companion"
+            companion.write_bytes(b"unexpected")
+            self.assertNotEqual(before, case.metadata_inventory(root, budget))
+            companion.unlink()
+            unknown = root / "unknown-native-directory"
+            unknown.mkdir()
+            self.assertNotEqual(before, case.metadata_inventory(root, budget))
+            unknown.rmdir()
+            (runtime / "alias").symlink_to(runtime / "devin")
+            with self.assertRaisesRegex(ValueError, "alias/special"):
+                case.metadata_inventory(root, budget)
+
+    def test_fixture_preserves_original_profile_legacy_and_collision_sources(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            home = root / "home"; home.mkdir()
+            projects = {name: root / ("project-" + name) for name in ("a", "b", "user")}
+            for path in projects.values(): path.mkdir()
+            ctx = SimpleNamespace(root=root, home=home, projects=projects, env={"XDG_CONFIG_HOME": str(home / "config")})
+            urls = {name: "http://127.0.0.1:" + str(1000 + i) + "/mcp" for i, name in enumerate(("a", "b", "user", "local", "legacy"))}
+            expected, startup, marker = case.fixture(ctx, urls, "f" * 64)
+            self.assertFalse(startup.exists())
+            self.assertIn("unexpected native start", marker.read_text())
+            for name in ("a", "b", "user"):
+                entry = expected[name]
+                body = (Path(entry["root"]) / "mcp_config.json").read_bytes()
+                self.assertEqual(hashlib.sha256(body).hexdigest(), entry["mcp_config_sha256"])
+                self.assertEqual(json.loads(body)["mcpServers"]["same-name"]["url"], urls[name])
+                self.assertFalse(json.loads(body)["mcpServers"]["same-name"]["disabled"])
+            self.assertEqual(json.loads(Path(expected["local"]["path"]).read_text())["mcpServers"]["same-name"]["url"], urls["local"])
+            self.assertEqual(json.loads((home / ".codeium/windsurf/mcp_config.json").read_text())["mcpServers"]["legacy-foreign"], {"url": urls["legacy"], "disabled": True})
+            self.assertIn("inert_legacy_sentinel", (home / ".codeium/windsurf/config.json").read_text())
+            self.assertIn("legacy-foreign", (home / ".codeium/windsurf/skills/legacy-foreign/SKILL.md").read_text())
+
+
+
+
+class KnownFileDiagnosticContracts(unittest.TestCase):
+    def fixture(self, root):
+        for relative in case.KnownFileDiagnostics.PATHS.values():
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'{"read_config_from":{"cloud":false}}\n' if relative.endswith('config.json') else b'# owned Git template\n')
+        return root / case.KnownFileDiagnostics.PATHS['user-config'], root / case.KnownFileDiagnostics.PATHS['git-a-exclude']
+
+    def hold(self, root):
+        baseline = {}
+        for label, relative in case.KnownFileDiagnostics.PATHS.items():
+            body = (root / relative).read_bytes()
+            key = "home/config/devin/config.json" if label == "user-config" else "a/.git/info/exclude"
+            baseline[key] = {"kind": "file", "size": len(body), "sha256": hashlib.sha256(body).hexdigest()}
+        return case.KnownFileDiagnostics(root, case.root_identity(root), baseline)
+
+    def test_original_root_and_fixture_join_precede_admission(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / 'owned'
+            config, _ = self.fixture(root)
+            original = case.root_identity(root)
+            root.rename(root.with_name('old'))
+            root.mkdir()
+            (root / 'foreign').write_text('preserve')
+            with patch.object(case.os, 'read', side_effect=AssertionError('foreign read')), self.assertRaises(ValueError):
+                case.KnownFileDiagnostics(root, original, {})
+            self.assertEqual((root / 'foreign').read_text(), 'preserve')
+            config, _ = self.fixture(root)
+            config.write_bytes(b'{"unexpected":true}')
+            with self.assertRaises(ValueError): self.hold(root)
+            config, exclude = self.fixture(root)
+            baseline = {
+                key: {'kind': 'file', 'size': path.stat().st_size, 'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
+                for key, path in [('home/config/devin/config.json', config), ('a/.git/info/exclude', exclude)]}
+            exclude.write_bytes(b'foreign replacement')
+            with self.assertRaises(ValueError):
+                case.KnownFileDiagnostics(root, case.root_identity(root), baseline)
+
+    def test_replaced_file_is_observed_without_renewing_original_or_leaking_values(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config, exclude = self.fixture(root)
+            held = self.hold(root)
+            try:
+                original = copy.deepcopy(held.before)
+                replacement = config.with_suffix('.replacement')
+                replacement.write_bytes(b'{"read_config_from":{"cloud":false},"setup":true,"token":"PRIVATE","count":123,"bad-key":"PRIVATE"}')
+                replacement.replace(config)
+                exclude.write_bytes(exclude.read_bytes() + b'.devin/cache/\n/private/SECRET\n')
+                result = held.finish()
+                self.assertEqual(result['files']['user-config']['before'], original['user-config'])
+                self.assertNotEqual(result['files']['user-config']['after']['identity'], original['user-config']['identity'])
+                text = json.dumps(result)
+                self.assertNotIn('PRIVATE', text)
+                self.assertNotIn('SECRET', text)
+                self.assertNotIn('bad-key', text)
+                self.assertIn('"setup", "value": true', text)
+                self.assertNotIn('"value": 123', text)
+                self.assertIn(b'PRIVATE', config.read_bytes())
+            finally:
+                held.close()
+
+    def test_missing_large_alias_hardlink_malformed_and_parent_replacement_refuse(self):
+        for change in ('missing', 'large', 'alias', 'hardlink', 'malformed', 'parent', 'root'):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary) / 'owned'
+                config, exclude = self.fixture(root)
+                held = self.hold(root)
+                try:
+                    if change == 'missing': config.unlink()
+                    elif change == 'large': config.write_bytes(b'x' * 4097)
+                    elif change == 'alias':
+                        config.unlink()
+                        config.symlink_to(exclude)
+                    elif change == 'hardlink':
+                        import os
+                        os.link(config, config.with_suffix('.alias'))
+                    elif change == 'malformed': config.write_bytes(b'{"setup":true,"setup":false}')
+                    else:
+                        target = config.parent if change == 'parent' else root
+                        target.rename(target.with_name(target.name + '-old'))
+                        target.mkdir()
+                        (target / 'foreign').write_text('preserve')
+                    with self.assertRaises((ValueError, OSError)):
+                        held.finish()
+                    if change in ('parent', 'root'):
+                        self.assertEqual((target / 'foreign').read_text(), 'preserve')
+                finally:
+                    held.close()
+
+    def test_mid_read_identity_race_refuses(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            config, _exclude = self.fixture(root)
+            held = self.hold(root)
+            original_read = case.os.read
+            def racing_read(fd, limit):
+                result = original_read(fd, limit)
+                config.write_bytes(b'{"changed":true}')
+                return result
+            try:
+                with patch.object(case.os, 'read', side_effect=racing_read), self.assertRaises(ValueError):
+                    held.finish()
+            finally:
+                held.close()
+
+
+class ProspectiveBootstrapContracts(unittest.TestCase):
+    def fixture(self, root):
+        root = Path(root).resolve()
+        for name in ("home/cache", "home/config/devin", "home/data", "private"):
+            (root / name).mkdir(parents=True, exist_ok=True)
+        config = root / case.METADATA_CONFIG
+        config.write_bytes(b'{"read_config_from":{"cloud":false}}\n'); config.chmod(0o600)
+        user = root / "home/config/devin/config.json"
+        user.write_bytes(config.read_bytes()); user.chmod(0o644)
+        ctx = SimpleNamespace(root=root, original_output_identity=case.root_identity(root),
+                              budget=SimpleNamespace(check=lambda: None))
+        baseline = case.metadata_inventory(root, ctx.budget)
+        return ctx, case.BootstrapEffects(ctx, baseline), user
+
+    def create_aux(self, ctx):
+        for name in sorted(case.BOOTSTRAP_DIRS, key=lambda item: len(Path(item).parts)):
+            (ctx.root / name).mkdir(mode=0o755, exist_ok=True)
+        for name, body in ((case.INSTALLATION_ID, b"12345678-1234-1234-1234-123456789abc"),
+                           (case.MAINTENANCE, b"1234\n"),
+                           ("home/data/devin/cli/logs/devin_20261113-093816_2273.log", b"inert bounded log")):
+            (ctx.root / name).write_bytes(body); (ctx.root / name).chmod(0o644)
+
+    def test_prospective_creation_and_version_do_not_renew_original_user_baseline(self):
+        with tempfile.TemporaryDirectory() as root:
+            ctx, effects, user = self.fixture(root)
+            original = copy.deepcopy(effects.baseline)
+            effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+            self.create_aux(ctx)
+            (ctx.root / case.METADATA_CONFIG).write_bytes(b'{"version":1,"read_config_from":{"cloud":false}}')
+            effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+            self.assertEqual(effects.baseline, original)
+            self.assertEqual(user.read_bytes(), b'{"read_config_from":{"cloud":false}}\n')
+            self.assertTrue(effects.version_seen)
+            self.assertNotIn("inert bounded log", json.dumps(effects.proofs))
+            user.write_bytes(b'{"version":1}')
+            with self.assertRaisesRegex(ValueError, "protected original"):
+                effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+
+    def test_unknown_settings_paths_and_unmeasured_formats_are_refused(self):
+        changes = ("permission", "numeric-cloud", "oversize-config", "unknown", "oauth", "uuid", "maintenance", "date", "fixed")
+        for change in changes:
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, effects, _ = self.fixture(root); self.create_aux(ctx)
+                leaf = ctx.root / case.METADATA_CONFIG
+                if change == "permission": leaf.write_bytes(b'{"read_config_from":{"cloud":false},"permissions":{}}')
+                elif change == "numeric-cloud": leaf.write_bytes(b'{"read_config_from":{"cloud":0}}')
+                elif change == "oversize-config": leaf.write_bytes(b" " * 256 + b'{}')
+                elif change == "unknown": (ctx.root / "home/cache/devin/unknown").write_bytes(b"unknown")
+                elif change == "oauth": (ctx.root / "home/data/devin/mcp/oauth/token").write_bytes(b"secret")
+                elif change == "uuid": (ctx.root / case.INSTALLATION_ID).write_bytes(b"not-measured")
+                elif change == "maintenance": (ctx.root / case.MAINTENANCE).write_bytes(b"1234")
+                elif change == "date": (ctx.root / "home/data/devin/cli/logs/devin_20261313-093816_2273.log").write_bytes(b"log")
+                else: (ctx.root / "home/cache/devin/telemetry_state.json").write_bytes(b"unreviewed")
+                with self.assertRaises(ValueError): effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+
+    def test_auxiliary_aliases_modes_and_file_bounds_are_not_adopted(self):
+        for change in ("hardlink", "symlink", "mode", "size"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, effects, user = self.fixture(root); self.create_aux(ctx)
+                leaf = ctx.root / case.MAINTENANCE
+                if change == "hardlink": leaf.unlink(); os.link(user, leaf)
+                elif change == "symlink": leaf.unlink(); leaf.symlink_to(user)
+                elif change == "mode": leaf.chmod(0o600)
+                else: leaf.write_bytes(b"x" * 16385)
+                with self.assertRaises(ValueError): effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+
+    def test_continuity_and_no_version_regression_are_additional_constraints(self):
+        for change in ("uuid", "version"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, effects, _ = self.fixture(root); self.create_aux(ctx)
+                config = ctx.root / case.METADATA_CONFIG
+                config.write_bytes(b'{"read_config_from":{"cloud":false},"version":1}')
+                effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+                if change == "uuid": (ctx.root / case.INSTALLATION_ID).write_bytes(b"87654321-1234-1234-1234-123456789abc")
+                else: config.write_bytes(b'{"read_config_from":{"cloud":false}}')
+                with self.assertRaises(ValueError): effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+
+    def test_log_birth_count_and_original_snapshot_remain_bounded(self):
+        with tempfile.TemporaryDirectory() as root:
+            ctx, effects, _ = self.fixture(root)
+            before = case.metadata_inventory(ctx.root, ctx.budget)
+            self.create_aux(ctx)
+            after = case.metadata_inventory(ctx.root, ctx.budget)
+            effects.verify_command(before, after)
+            (ctx.root / "home/data/devin/cli/logs/devin_20261113-093817_2273.log").write_bytes(b"second")
+            with self.assertRaisesRegex(ValueError, "multiple logs"):
+                effects.verify_command(before, case.metadata_inventory(ctx.root, ctx.budget))
+            baseline = {"home/data": {"kind": "directory", "mode": "0o755", "size": 10},
+                        "home/config/devin/config.json": {"kind": "file", "size": 37, "sha256": "original"}}
+            changed = copy.deepcopy(baseline); changed["home/data"]["size"] = 20
+            effects.verify_snapshot(baseline, changed)
+            changed["home/config/devin/config.json"]["sha256"] = "rewritten"
+            with self.assertRaises(ValueError): effects.verify_snapshot(baseline, changed)
+
+    def test_original_parent_swap_refuses_before_foreign_bytes_are_read(self):
+        with tempfile.TemporaryDirectory() as root:
+            ctx, effects, _ = self.fixture(root)
+            current = case.metadata_inventory(ctx.root, ctx.budget)
+            private = ctx.root / "private"; private.rename(ctx.root / "old-private")
+            private.mkdir(); foreign = private / "metadata-config.json"; foreign.write_bytes(b"foreign")
+            real_read = case.os.read
+            def guarded(fd, count):
+                self.assertNotEqual(os.fstat(fd).st_ino, foreign.stat().st_ino)
+                return real_read(fd, count)
+            with patch.object(case.os, "read", side_effect=guarded), self.assertRaises(ValueError):
+                case.read_bootstrap_file(ctx, case.METADATA_CONFIG, current[case.METADATA_CONFIG], current)
+            self.assertEqual(foreign.read_bytes(), b"foreign")
+
+    def test_mcp_source_binding_rejects_config_rebase_and_local_override_loss(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root); home = root / "home"; home.mkdir()
+            projects = {name: root / ("project-" + name) for name in ("a", "b", "user")}
+            for path in projects.values(): path.mkdir()
+            ctx = SimpleNamespace(root=root, home=home, projects=projects, env={"XDG_CONFIG_HOME": str(home / "config")})
+            expected, _, _ = case.fixture(ctx, {name: "http://127.0.0.1:1234/" + name for name in ("a", "b", "user", "local", "legacy")}, "a" * 64)
+            for scope in ("a", "b", "user"):
+                wanted = {name: (entry, Path(expected["user"]["root"]) / "mcp_config.json") for name, entry in expected["user"]["mcp"].items()}
+                if scope != "user": wanted.update({name: (entry, Path(expected[scope]["root"]) / "mcp_config.json") for name, entry in expected[scope]["mcp"].items()})
+                if scope == "a": wanted["same-name"] = ({"url": expected["local"]["url"], "disabled": True}, Path(expected["local"]["path"]))
+                wanted["legacy-foreign"] = ({"url": expected["legacy_url"], "disabled": True}, home / ".codeium/windsurf/mcp_config.json")
+                rows = [{"name": name, "enabled": not entry.get("disabled", False), "disabled_reason": "disabled" if entry.get("disabled") else None,
+                         "transport": "stdio" if "command" in entry else "http", "source": str(source), "url": entry.get("url"),
+                         "command": entry.get("command"), "args": entry.get("args", []), "disabled_tools": entry.get("disabledTools", [])}
+                        for name, (entry, source) in wanted.items()]
+                case.verify_metadata_sources(json.dumps(rows).encode(), ctx, expected, scope)
+                bad = copy.deepcopy(rows); bad[0]["source"] = str(root / "private/metadata-config.json")
+                with self.assertRaises(ValueError): case.verify_metadata_sources(json.dumps(bad).encode(), ctx, expected, scope)
+                if scope == "a":
+                    bad = copy.deepcopy(rows)
+                    next(row for row in bad if row["name"] == "same-name")["enabled"] = True
+                    with self.assertRaises(ValueError): case.verify_metadata_sources(json.dumps(bad).encode(), ctx, expected, scope)
+
+
+class SkillsMetadataContracts(unittest.TestCase):
+    def fixture(self):
+        root = Path('/owned'); ctx = SimpleNamespace(root=root, home=root / 'home', projects={key: root / ('project-' + key) for key in ('a', 'b')})
+        expected = {key: {'skill': str(root / ('home/config/devin' if key == 'user' else 'project-' + key + '/.devin') / 'skills/same-skill/SKILL.md')} for key in ('a', 'b', 'user')}
+        def row(name, description, provider, base, display, triggers):
+            return dict(name=name, description=description, triggers=triggers, provider=provider, base_dir=base, display_name=display, warnings=[], errors=[])
+        rows = [row('legacy-foreign', 'Preserve legacy Windsurf skill.', 'Windsurf', '/owned/home/.codeium/windsurf/skills/legacy-foreign', 'legacy-foreign', ['user', 'model'])]
+        for source in ('user', 'a'):
+            rows.append(row('/owned/project-a:same-skill', 'Inert ' + source + ' ' + 'f' * 64, 'Devin', str(Path(expected[source]['skill']).parent), 'same-skill', ['user', 'model']))
+        rows += [
+            row('devin-cli', 'Look up Devin CLI documentation (skills, extensibility, configuration, commands, models, troubleshooting)', 'Builtin', '/owned/client/share/devin', 'devin-cli', ['model']),
+            row('declarative-repo-setup', 'Generate and verify a working environment.yaml (Devin snapshot-setup blueprint) for a repo', 'Builtin', '', 'declarative-repo-setup', ['model', 'user']),
+            row('upload-secrets', 'Securely upload local secrets (dotenv files, env vars, API keys) to the Devin Cloud secrets manager — values never enter the conversation', 'Builtin', '', 'upload-secrets', ['model', 'user'])]
+        return ctx, expected, rows
+
+    def test_same_native_name_is_admitted_only_with_distinct_original_sources(self):
+        ctx, expected, rows = self.fixture()
+        self.assertEqual(rows[1]['name'], rows[2]['name'])
+        case.verify_skill_metadata_sources(json.dumps(rows).encode(), ctx, expected, 'a', 'f' * 64)
+        user = copy.deepcopy(rows); del user[2]; user[1]['name'] = 'same-skill'
+        case.verify_skill_metadata_sources(json.dumps(user).encode(), ctx, expected, 'user', 'f' * 64)
+        b = copy.deepcopy(rows)
+        for i in (1, 2): b[i]['name'] = '/owned/project-b:same-skill'
+        b[2].update(base_dir=str(Path(expected['b']['skill']).parent), description='Inert b ' + 'f' * 64)
+        case.verify_skill_metadata_sources(json.dumps(b).encode(), ctx, expected, 'b', 'f' * 64)
+
+    def test_foreign_duplicate_missing_legacy_builtin_and_changed_semantics_refuse(self):
+        ctx, expected, original = self.fixture()
+        for change in ('sibling', 'duplicate', 'missing', 'legacy', 'builtin-path', 'builtin-extra', 'nonce', 'name', 'triggers', 'warning', 'errors', 'extra-field', 'wrong-type'):
+            rows = copy.deepcopy(original)
+            if change == 'sibling': rows[2]['base_dir'] = str(Path(expected['b']['skill']).parent)
+            elif change == 'duplicate': rows[2] = copy.deepcopy(rows[1])
+            elif change == 'missing': rows.pop(2)
+            elif change == 'legacy': rows[0]['provider'] = 'Devin'
+            elif change == 'builtin-path': rows[3]['base_dir'] = '/foreign/share/devin'
+            elif change == 'builtin-extra': rows.append(copy.deepcopy(rows[-1]))
+            elif change == 'nonce': rows[2]['description'] = 'Inert a stale-nonce'
+            elif change == 'name': rows[2]['name'] = 'same-skill'
+            elif change == 'triggers': rows[2]['triggers'] = ['user']
+            elif change == 'warning': rows[2]['warnings'] = ['native warning']
+            elif change == 'errors': rows[2]['errors'] = {}
+            elif change == 'extra-field': rows[2]['unexpected'] = True
+            else: rows[2]['base_dir'] = []
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                case.verify_skill_metadata_sources(json.dumps(rows).encode(), ctx, expected, 'a', 'f' * 64)
+
+
+class ClosedDevinReadoutContracts(unittest.TestCase):
+    def fixture(self):
+        summary = dict(collection_complete=False, metadata_capture_complete=False, admission_qualified=False,
+                       cleanup_complete=True, qualification=dict.fromkeys(case.shared.QUALIFICATION_CASES, False),
+                       source_commit='a' * 40, source_tree='b' * 40,
+                       error='ValueError: PRIVATE_CONFIG_UUID', commands=[dict(exit=1, error=None)],
+                       command_effects=[dict(label='mcp-a', changes={'PRIVATE_CONFIG': {'before': None, 'after': {'private': 'PRIVATE_UUID'}}},
+                                             outer_changes={'PRIVATE_PATH': {'before': [1], 'after': [2]}})])
+        state = dict(phase='mcp-a', reason='bootstrap-path-refused', deadline=case.time.monotonic() + 5)
+        return summary, state
+
+
+    def acquisition_fixture(self, diagnostic):
+        summary, state = self.fixture()
+        summary.update(metadata_recipe="private", commands=[], command_effects=[])
+        state.update(phase="acquisition", reason="unclassified-refusal",
+                     acquisition_refusal=diagnostic)
+        return summary, state
+
+    def test_real_owned_acquisition_sites_and_dynamic_refusal_keep_closed_categories(self):
+        import project_native_cursor_acquisition as publisher
+        budget = SimpleNamespace(check=lambda: 30)
+        with patch.object(publisher, "run_probe", return_value=(
+                {"exit": 0, "error": None}, b"PRIVATE not a curl version", b"PRIVATE")):
+            try:
+                publisher.download_devin(case.SPEC, budget)
+            except ValueError as error:
+                first = case.acquisition_refusal_site(error)
+            else:
+                self.fail("publisher version refusal required")
+        self.assertEqual(first, {"module": "publisher", "site": "download", "line": 45, "exception": "value"})
+        class ReviewedLength:
+            def __len__(self):
+                return case.SPEC["expected_bytes"]
+        # This real dynamically loaded refusal is not matched by importing
+        # another copy of its class; it retains the fixed category other.
+        refusal = case.shared.legacy.CollectorDeadline("PRIVATE dynamic refusal")
+        with patch.object(publisher, "download_devin", return_value=(ReviewedLength(), case.SPEC["url"])), \
+                patch.object(case.shared.native, "verify_digest", side_effect=refusal):
+            try:
+                case.acquire_publisher_archive(budget)
+            except Exception as error:
+                self.assertIs(error, refusal)
+                second = case.acquisition_refusal_site(error)
+            else:
+                self.fail("digest refusal required")
+        self.assertEqual(second, {"module": "collector", "site": "acquire", "line": 104, "exception": "other"})
+        for value in (first, second):
+            summary, state = self.acquisition_fixture(value)
+            projected = case.closed_readout(summary, state)
+            self.assertEqual(projected["acquisition_refusal"], value)
+            self.assertFalse(projected["collection_complete"])
+            self.assertNotIn("PRIVATE", json.dumps(projected))
+            self.assertNotIn(str(Path(__file__).parent), json.dumps(projected))
+
+    def test_unknown_overflow_and_helper_failure_omit_without_swallowing_interrupts(self):
+        def fail(depth):
+            if depth:
+                return fail(depth - 1)
+            case.admitted_archive({"members": [], "pin_verified": False})
+        try:
+            fail(34)
+        except ValueError as error:
+            self.assertIsNone(case.acquisition_refusal_site(error))
+        try:
+            raise ValueError("PRIVATE foreign source")
+        except ValueError as error:
+            self.assertIsNone(case.acquisition_refusal_site(error))
+            summary, state = self.fixture()
+            summary.update(metadata_recipe="ordinary")
+            state.update(phase="acquisition", reason="unclassified-refusal")
+            original = copy.deepcopy(summary)
+            with patch.object(case, "acquisition_refusal_site", side_effect=RuntimeError("PRIVATE")):
+                case.record_acquisition_refusal(error, summary, state)
+            self.assertEqual(summary, original)
+            self.assertNotIn("acquisition_refusal", state)
+            with patch.object(case, "acquisition_refusal_site", side_effect=KeyboardInterrupt):
+                with self.assertRaises(KeyboardInterrupt):
+                    case.record_acquisition_refusal(error, summary, state)
+
+    def test_exact_publisher_transport_guard_projects_only_finite_existing_facts(self):
+        import project_native_cursor_acquisition as publisher
+        budget = SimpleNamespace(check=lambda: 30)
+        expected_url = case.SPEC["url"].encode()
+        def refusal(record, body):
+            with patch.object(publisher, "run_probe", side_effect=[
+                    ({"exit": 0, "error": None}, b"curl 8.4.0 PRIVATE\n", b""),
+                    (record, body, b"PRIVATE stderr")]):
+                try:
+                    publisher.download_devin(case.SPEC, budget)
+                except ValueError as error:
+                    return error, case.acquisition_refusal_site(error)
+                self.fail("original transport guard must refuse")
+        controls = (
+            ({"exit": 22, "error": None}, b"403\n" + expected_url + b"\n",
+             dict(process_error=False, curl_exit=22, http_status="403",
+                  framing_valid=True, effective_url_matches=True)),
+            ({"exit": None, "error": "PRIVATE process error"}, b"000\nPRIVATE\n",
+             dict(process_error=True, curl_exit=None, http_status="000",
+                  framing_valid=True, effective_url_matches=False)),
+            ({"exit": 0, "error": None}, b"200\nPRIVATE wrong URL\n",
+             dict(process_error=False, curl_exit=0, http_status="200",
+                  framing_valid=True, effective_url_matches=False)),
+            ({"exit": 0, "error": None}, b"PRIVATE malformed response",
+             dict(process_error=False, curl_exit=0, http_status="unavailable",
+                  framing_valid=False, effective_url_matches=False)),
+        )
+        for record, body, expected in controls:
+            with self.subTest(expected=expected):
+                error, value = refusal(record, body)
+                self.assertIs(type(error), ValueError)
+                self.assertEqual(value, dict(module="publisher", site="download", line=60,
+                                             exception="value", transport=expected))
+                summary, state = self.acquisition_fixture(value)
+                projected = case.closed_readout(summary, state)
+                self.assertEqual(projected["acquisition_refusal"]["transport"], expected)
+                self.assertFalse(projected["collection_complete"])
+                self.assertNotIn("PRIVATE", json.dumps(projected))
+                self.assertNotIn(case.SPEC["url"], json.dumps(projected))
+                self.assertNotIn(str(Path(__file__).parent), json.dumps(projected))
+        for record, body in (
+                ({"exit": True, "error": None}, b"403\nPRIVATE\n"),
+                ({"exit": 1 << 100, "error": None}, b"403\nPRIVATE\n"),
+                ({"exit": 1.5, "error": None}, b"403\nPRIVATE\n"),
+                ({"exit": 22, "error": None}, b"403\n" + b"x" * 16384)):
+            with self.subTest(record=record):
+                _, value = refusal(record, body)
+                self.assertEqual(value, dict(module="publisher", site="download", line=60,
+                                            exception="value"))
+        error, _ = refusal({"exit": 22, "error": None}, b"403\nPRIVATE\n")
+        with patch.object(case, "acquisition_transport_facts", side_effect=ValueError("PRIVATE")):
+            value = case.acquisition_refusal_site(error)
+        self.assertEqual(value, dict(module="publisher", site="download", line=60, exception="value"))
+        summary, state = self.acquisition_fixture(value)
+        original_summary = copy.deepcopy(summary)
+        with patch.object(case, "acquisition_transport_facts", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                case.record_acquisition_refusal(error, summary, state)
+        self.assertEqual(summary, original_summary)
+        def foreign():
+            record, stdout, url, client = {"exit": 22, "error": None}, b"403\nPRIVATE\n", case.SPEC["url"], "devin"
+            raise ValueError("PRIVATE foreign frame")
+        try:
+            foreign()
+        except ValueError as foreign_error:
+            self.assertIsNone(case.acquisition_transport_facts(foreign_error.__traceback__))
+            self.assertIsNone(case.acquisition_refusal_site(foreign_error))
+        valid = dict(module="publisher", site="download", line=60, exception="value",
+                     transport=controls[0][2])
+        malformed = [
+            {**valid, "line": 45},
+            {**valid, "site": "transport"},
+            {**valid, "exception": "other"},
+        ]
+        for key, bad in (("curl_exit", True), ("curl_exit", 256),
+                         ("process_error", 1), ("framing_valid", 1),
+                         ("effective_url_matches", 0), ("http_status", "PRIVATE"),
+                         ("http_status", 403)):
+            malformed.append({**valid, "transport": {**valid["transport"], key: bad}})
+        malformed.append({**valid, "transport": {**valid["transport"], "raw": "PRIVATE"}})
+        for value in malformed:
+            summary, state = self.acquisition_fixture(value)
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                case.closed_readout(summary, state)
+
+    def test_acquisition_site_schema_and_global_scope_remain_closed(self):
+        valid = {"module": "publisher", "site": "download", "line": 60, "exception": "value"}
+        for changed in (
+                {**valid, "module": "PRIVATE"}, {**valid, "line": True},
+                {**valid, "line": 1 << 100}, {**valid, "line": 80},
+                {**valid, "exception": "PRIVATE"}, {**valid, "path": "PRIVATE"}):
+            summary, state = self.acquisition_fixture(changed)
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                case.closed_readout(summary, state)
+        for changed in ("recipe", "phase", "collection", "metadata", "cleanup", "qualification"):
+            summary, state = self.acquisition_fixture(valid)
+            if changed == "recipe": summary["metadata_recipe"] = "ordinary-global"
+            elif changed == "phase": state["phase"] = "materialization"
+            elif changed == "collection": summary["collection_complete"] = True
+            elif changed == "metadata": summary["metadata_capture_complete"] = True
+            elif changed == "cleanup": summary["cleanup_complete"] = False
+            else: summary["qualification"][case.shared.QUALIFICATION_CASES[0]] = True
+            with self.subTest(changed=changed), self.assertRaises(ValueError):
+                case.closed_readout(summary, state)
+
+    def test_fixed_projection_has_no_private_values_and_never_qualifies(self):
+        summary, state = self.fixture()
+        value = case.closed_readout(summary, state)
+        self.assertEqual(value, dict(schema_version=1, phase='mcp-a', reason='bootstrap-path-refused',
+                                    collection_complete=False, metadata_capture_complete=False, cleanup_complete=True,
+                                    commands=1, failed_commands=1,
+                                    effects=[dict(phase='mcp-a', fixture=dict(added=1, removed=0, changed=0),
+                                                  outer=dict(added=0, removed=0, changed=1))]))
+        for word in ('PRIVATE', 'UUID', 'source_commit', 'config', 'error'):
+            self.assertNotIn(word, json.dumps(value))
+        self.assertEqual(case.readout_reason(ValueError('unknown PRIVATE_CONFIG')), 'unclassified-refusal')
+        self.assertEqual(case.readout_reason(ValueError('unknown native bootstrap path')), 'bootstrap-path-refused')
+
+    def complete_fixture(self):
+        summary, state = self.fixture()
+        summary.pop('error')
+        summary.update(collection_complete=True, metadata_capture_complete=True,
+                       native_json_schema=case.METADATA_SCHEMA, exact_source_admission=case.METADATA_SCHEMA,
+                       probe_methods=dict.fromkeys(('a', 'b', 'user', 'local', 'legacy'), []),
+                       accepted_connections=dict.fromkeys(('a', 'b', 'user', 'local', 'legacy'), 0))
+        names = ('source-commit', 'source-tree', 'source-clean', 'git-init-a', 'git-init-b', 'git-init-c') + case.METADATA_PROBES + ('source-final-clean',)
+        summary['commands'] = [dict(probe=name, exit=0, error=None) for name in names]
+        summary['command_effects'] = [dict(label=name, changes={}, outer_changes={}) for name in case.METADATA_PROBES]
+        state.update(phase='source-final-clean', reason='metadata-complete')
+        return summary, state
+
+    def test_completion_requires_original_order_effects_and_zero_endpoint_activity(self):
+        summary, state = self.complete_fixture()
+        self.assertTrue(case.closed_readout(summary, state)['collection_complete'])
+        for change in ('missing', 'order', 'bool-exit', 'error', 'effect', 'endpoint', 'methods', 'schema', 'cleanup', 'artifact', 'reason'):
+            summary, state = self.complete_fixture()
+            if change == 'missing': summary['commands'].pop()
+            elif change == 'order': summary['commands'][0], summary['commands'][1] = summary['commands'][1], summary['commands'][0]
+            elif change == 'bool-exit': summary['commands'][0]['exit'] = False
+            elif change == 'error': summary['error'] = 'late failure'
+            elif change == 'effect': summary['command_effects'].pop()
+            elif change == 'endpoint': summary['accepted_connections']['legacy'] = 1
+            elif change == 'methods': summary['probe_methods']['user'] = ['initialize']
+            elif change == 'schema': summary['native_json_schema'] = 'unreviewed'
+            elif change == 'cleanup': summary['cleanup_complete'] = False
+            elif change == 'artifact': summary['artifact_admission_failed'] = True
+            else: state['reason'] = 'capture-incomplete'
+            with self.subTest(change=change), self.assertRaises(ValueError): case.closed_readout(summary, state)
+
+    def test_successful_metadata_publication_preserves_false_runtime_and_failed_join_revokes_success(self):
+        import zipfile
+        for corrupt in (False, True):
+            with self.subTest(corrupt=corrupt), tempfile.TemporaryDirectory() as temporary:
+                summary, state = self.complete_fixture(); captures = {}
+                for command in summary['commands']:
+                    for stream in ('stdout', 'stderr'):
+                        name = command['probe'] + '.' + stream + '.log'; captures[name] = b''
+                        command.update({stream + '_file': name, stream + '_bytes': 0, stream + '_sha256': hashlib.sha256(b'').hexdigest()})
+                if corrupt: summary['commands'][-1]['stdout_sha256'] = '0' * 64
+                root = Path(temporary).resolve()
+                with patch.object(case.os, 'write'):
+                    case.publish_with_readout(summary, SimpleNamespace(captures=captures, secrets=[]), root, case.root_identity(root), state)
+                with zipfile.ZipFile(root / 'upload/research.zip') as archive:
+                    self.assertIsNone(archive.testzip()); committed = json.loads(archive.read('research.json'))
+                self.assertIs(committed['collection_complete'], not corrupt)
+                self.assertTrue(all(value is False for value in committed['qualification'].values()))
+                if not corrupt: self.assertFalse(committed['admission_qualified'])
+
+    def test_unknown_types_flags_bounds_and_deadline_refuse(self):
+        for change in ('phase', 'reason', 'metadata', 'qualification', 'admission', 'cleanup', 'artifact', 'commands', 'missing-exit', 'effects', 'deadline'):
+            with self.subTest(change=change):
+                summary, state = self.fixture()
+                if change in ('phase', 'reason'): state[change] = 'PRIVATE'
+                elif change == 'metadata': summary['metadata_capture_complete'] = 0
+                elif change == 'qualification': summary['qualification'][case.shared.QUALIFICATION_CASES[0]] = 0
+                elif change == 'admission': summary['admission_qualified'] = True
+                elif change == 'cleanup': summary['cleanup_complete'] = False
+                elif change == 'artifact': summary['artifact_admission_failed'] = True
+                elif change == 'commands': summary['commands'] *= 61
+                elif change == 'missing-exit': del summary['commands'][0]['exit']
+                elif change == 'effects': summary['command_effects'][0]['label'] = 'PRIVATE_PATH'
+                else: state['deadline'] = case.time.monotonic() - 1
+                with self.assertRaises(ValueError): case.closed_readout(summary, state)
+
+    def test_actual_publisher_commits_before_finite_output_and_preserves_negative(self):
+        import zipfile
+        for acquisition in (False, True):
+            with self.subTest(acquisition=acquisition), tempfile.TemporaryDirectory() as temporary:
+                summary, state = self.fixture()
+                summary['commands'] = []
+                if acquisition:
+                    summary["metadata_recipe"] = "private"
+                    state.update(phase="acquisition", reason="unclassified-refusal", acquisition_refusal={
+                        "module": "publisher", "site": "download", "line": 60, "exception": "value"})
+                root = Path(temporary).resolve()
+                original = case.root_identity(root)
+                emitted = []
+                def write(fd, body):
+                    self.assertEqual(fd, 1)
+                    with zipfile.ZipFile(root / 'upload/research.zip') as archive:
+                        self.assertIsNone(archive.testzip())
+                        committed = json.loads(archive.read('research.json'))
+                        self.assertEqual(committed, summary)
+                        self.assertFalse(committed['collection_complete'])
+                    emitted.append(body)
+                    return len(body)
+                with patch.object(case.os, 'write', side_effect=write):
+                    case.publish_with_readout(summary, None, root, original, state)
+                self.assertEqual(len(emitted), 1)
+                self.assertNotIn(b'PRIVATE', emitted[0])
+                value = json.loads(emitted[0].split(b'=', 1)[1])
+                self.assertEqual(value['phase'], state['phase'])
+                if acquisition:
+                    self.assertEqual(value['acquisition_refusal'], state['acquisition_refusal'])
+                else:
+                    self.assertNotIn('acquisition_refusal', value)
+                self.assertFalse(summary['collection_complete'])
+
+    def test_readout_failure_or_stdout_error_preserves_actual_committed_archive(self):
+        import zipfile
+        for failure in ('deadline', 'stdout-os', 'stdout-value', 'internal-admission'):
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temporary:
+                summary, state = self.fixture(); summary['commands'] = []
+                if failure == 'deadline': state['deadline'] = case.time.monotonic() - 1
+                if failure == 'internal-admission': summary['commands'] = [{}]
+                root = Path(temporary).resolve(); emitted = []
+                def write(_fd, body):
+                    if failure == 'stdout-os': raise OSError('PRIVATE_STDOUT')
+                    if failure == 'stdout-value': raise ValueError('PRIVATE_STDOUT')
+                    emitted.append(body); return len(body)
+                with patch.object(case.os, 'write', side_effect=write):
+                    case.publish_with_readout(summary, None, root, case.root_identity(root), state)
+                with zipfile.ZipFile(root / 'upload/research.zip') as archive:
+                    self.assertIsNone(archive.testzip())
+                    committed = json.loads(archive.read('research.json'))
+                    self.assertFalse(committed['collection_complete'])
+                if not failure.startswith('stdout'):
+                    self.assertEqual(emitted, [b'DEVIN_CLOSED_READOUT={"schema_version":1,"reason":"readout-refused"}\n'])
+
+    def test_failed_publication_emits_nothing_and_root_replacement_never_leaks(self):
+        summary, state = self.fixture()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            with patch.object(case.shared, 'publish', side_effect=OSError('PRIVATE_PUBLISH')), patch.object(case.os, 'write') as output:
+                with self.assertRaises(OSError):
+                    case.publish_with_readout(summary, None, root, case.root_identity(root), state)
+                output.assert_not_called()
+            original = case.root_identity(root)
+            def replace(*_args):
+                root.rename(root.with_name(root.name + '-original'))
+                root.mkdir(); (root / 'foreign').write_bytes(b'retained')
+            try:
+                with patch.object(case.shared, 'publish', side_effect=replace), patch.object(case.os, 'write') as output:
+                    case.publish_with_readout(summary, None, root, original, state)
+                self.assertEqual(output.call_args.args[1], b'DEVIN_CLOSED_READOUT={"schema_version":1,"reason":"readout-refused"}\n')
+                self.assertEqual((root / 'foreign').read_bytes(), b'retained')
+            finally:
+                import shutil
+                shutil.rmtree(root.with_name(root.name + '-original'))
+
+class FixedDefinitionCacheContracts(unittest.TestCase):
+    def fixture(self, root):
+        ctx, effects, user = ProspectiveBootstrapContracts.fixture(self, root)
+        ctx.summary = dict(metadata_recipe="private", metadata_route=effects.metadata_route,
+                           source_commit="a" * 40, source_tree="b" * 40, collection_complete=False,
+                           metadata_capture_complete=False, admission_qualified=False,
+                           qualification=dict.fromkeys(case.shared.QUALIFICATION_CASES, False), commands=[])
+        ctx.argv = [str(ctx.root / "client/bin/devin")]
+        ctx.identities = {Path(ctx.argv[0]): case.BINARY}
+        ctx.projects = {key: ctx.root / ("project-" + key) for key in ("a", "b", "user")}
+        ctx.process_cleanup_proved = True
+        # These are inert returned-command/source facts, never a native run.
+        effects = case.BootstrapEffects(ctx, effects.baseline)
+        ctx.cache_before = copy.deepcopy(effects.baseline)
+        ctx.cache_phase = {"phase": "mcp-a"}
+        ProspectiveBootstrapContracts.create_aux(self, ctx)
+        cache = ctx.root / case.DEFINITIONS_CACHE
+        body = (b"PRIVATE_CACHE_BYTES" * (case.DEFINITIONS_BYTES // 19 + 2))[:case.DEFINITIONS_BYTES]
+        cache.write_bytes(body); cache.chmod(0o600)
+        fixed = dict(case.BOOTSTRAP_FIXED)
+        fixed[case.DEFINITIONS_CACHE] = (len(body), hashlib.sha256(body).hexdigest())
+        ctx.summary["commands"] = [dict(probe="mcp-a", argv=[*ctx.argv, "--config", str(ctx.root / case.METADATA_CONFIG),
+                                                           "mcp", "list", "--json"],
+                                        cwd=str(ctx.projects["a"]), exit=0, error=None)]
+        return ctx, effects, user, cache, body, fixed
+
+    @staticmethod
+    def observe(ctx, effects):
+        after = case.metadata_inventory(ctx.root, ctx.budget)
+        effects.observe_command("mcp-a", ["mcp", "list", "--json"], "a", ctx.cache_before, after, ctx.cache_phase,
+                                ctx.summary["commands"][-1])
+        return after
+
+    def test_separate_fixed_allowance_reads_full_short_chunks_and_only_records_hash(self):
+        self.assertEqual(case.BOOTSTRAP_FIXED[case.DEFINITIONS_CACHE],
+                         (674340, "8626d6fd4ce3381b2eb32b6c60b7ad752d88c73d8a4fb848e3576bff113393f1"))
+        with tempfile.TemporaryDirectory() as root:
+            ctx, effects, user, cache, body, fixed = self.fixture(root)
+            baseline = copy.deepcopy(effects.baseline)
+            real_read, requests = case.os.read, []
+            def short_read(fd, count):
+                if os.fstat(fd).st_ino == cache.stat().st_ino:
+                    self.assertLessEqual(count, case.DEFINITIONS_LIMIT + 1)
+                    requests.append(count)
+                    return real_read(fd, min(count, 32768))
+                return real_read(fd, count)
+            with patch.object(case.os, "read", side_effect=short_read):
+                self.observe(ctx, effects)
+                first = copy.deepcopy(effects.definitions_identity)
+                effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+            self.assertGreater(len(requests), 2)
+            self.assertEqual(effects.definitions_identity, first)
+            self.assertEqual(effects.baseline, baseline)
+            self.assertEqual(user.read_bytes(), b'{"read_config_from":{"cloud":false}}\n')
+            self.assertEqual(effects.proofs[-1][case.DEFINITIONS_CACHE],
+                             {"bytes": 674340, "sha256": hashlib.sha256(body).hexdigest()})
+            bodies = case.shared.evidence({"commands": [], "proofs": effects.proofs}, {}, [])
+            self.assertNotIn(b"PRIVATE_CACHE_BYTES", bodies["research.json"])
+
+    def test_real_pin_size_and_mode_refuse_without_generic_larger_file_admission(self):
+        for change in ("hash", "size", "mode", "link", "other-name", "other-file"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, effects, _, cache, body, fixed = self.fixture(root)
+                if change == "hash":
+                    self.observe(ctx, effects)
+                    cache.write_bytes(b"changed" + body[7:])
+                elif change == "size": cache.write_bytes(b"x" * (case.DEFINITIONS_LIMIT + 1))
+                elif change == "mode": cache.chmod(0o644)
+                elif change == "link": os.link(cache, cache.with_name("hardlinked.bin"))
+                elif change == "other-name": cache.rename(cache.with_name("unleash_definitions.unreviewed.bin"))
+                elif change == "other-file":
+                    (ctx.root / case.MAINTENANCE).write_bytes(b"x" * 16385)
+                if change == "hash":
+                    with self.assertRaisesRegex(ValueError, "original identity"):
+                        effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+                else:
+                    with self.assertRaises(ValueError): self.observe(ctx, effects)
+
+    def test_first_cache_and_parent_identities_never_refresh_or_read_replacements(self):
+        for change in ("leaf", "parent", "removed", "mtime"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, effects, _, cache, body, fixed = self.fixture(root)
+                os.utime(cache, ns=(1_000_000_000, 1_000_000_000))
+                self.observe(ctx, effects)
+                original = copy.deepcopy(effects.definitions_identity)
+                if change == "leaf":
+                    cache.rename(cache.with_name("original.bin")); cache.write_bytes(body); cache.chmod(0o600)
+                elif change == "parent":
+                    cache.parent.rename(cache.parent.with_name("original-cli")); cache.parent.mkdir(mode=0o755)
+                    cache.write_bytes(body); cache.chmod(0o600)
+                    (cache.parent / "foreign").write_bytes(b"retained")
+                elif change == "removed": cache.unlink()
+                else: os.utime(cache, ns=(2_000_000_000, 2_000_000_000))
+                with patch.object(case.os, "read", side_effect=AssertionError("replacement bytes must not be read")):
+                    with self.assertRaisesRegex(ValueError, "original identity"):
+                        effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+                self.assertEqual(effects.definitions_identity, original)
+                if change == "parent": self.assertEqual((cache.parent / "foreign").read_bytes(), b"retained")
+
+    def test_preexisting_cache_is_not_seeded_into_original_baseline(self):
+        with tempfile.TemporaryDirectory() as root:
+            ctx, _, _, _, _, _ = self.fixture(root)
+            with self.assertRaisesRegex(ValueError, "preexists original baseline"):
+                case.BootstrapEffects(ctx, case.metadata_inventory(ctx.root, ctx.budget))
+
+
+
+class ObservedDefinitionCacheContracts(unittest.TestCase):
+    def test_unknown_first_body_is_read_once_at_offset_zero_and_then_stays_original(self):
+        helper = FixedDefinitionCacheContracts()
+        with tempfile.TemporaryDirectory() as root:
+            ctx, effects, user, cache, body, _ = helper.fixture(root)
+            body += b"UNQUALIFIED_OPAQUE_INPUT"
+            cache.write_bytes(body)
+            baseline, user_before = copy.deepcopy(effects.baseline), user.read_bytes()
+            inode = cache.stat().st_ino
+            opened, offsets = [], []
+            real_open, real_read, old_reader = os.open, os.read, case.read_bootstrap_file
+            def open_file(path, *args, **kwargs):
+                fd = real_open(path, *args, **kwargs)
+                if path == cache.name: opened.append(fd)
+                return fd
+            def read(fd, count):
+                if fd in opened and os.fstat(fd).st_ino == inode:
+                    offsets.append(os.lseek(fd, 0, os.SEEK_CUR))
+                    self.assertGreater(count, 0)
+                    self.assertLessEqual(count, 65536)
+                    return real_read(fd, min(count, 32768))
+                return real_read(fd, count)
+            def strict_reader(ctx, relative, *args, **kwargs):
+                self.assertNotEqual(relative, case.DEFINITIONS_CACHE)
+                return old_reader(ctx, relative, *args, **kwargs)
+            with patch.object(case.os, "open", side_effect=open_file), patch.object(case.os, "read", side_effect=read), \
+                    patch.object(case, "read_bootstrap_file", side_effect=strict_reader):
+                helper.observe(ctx, effects)
+            self.assertEqual(len(opened), 1)
+            self.assertEqual(offsets[0], 0)
+            self.assertEqual(offsets[-1], len(body))
+            self.assertGreater(len(offsets), 2)
+            with self.assertRaises(OSError): os.fstat(opened[0])
+            original = (len(body), hashlib.sha256(body).hexdigest())
+            self.assertEqual(effects.definitions_observation, original)
+            identities = copy.deepcopy(effects.definitions_identity)
+            effects.proofs[-1][case.DEFINITIONS_CACHE]["sha256"] = "f" * 64
+            effects.verify(case.metadata_inventory(ctx.root, ctx.budget))
+            self.assertEqual(effects.definitions_observation, original)
+            self.assertEqual(effects.definitions_identity, identities)
+            self.assertEqual(effects.proofs[-1][case.DEFINITIONS_CACHE], dict(bytes=original[0], sha256=original[1]))
+            self.assertEqual((effects.baseline, user.read_bytes(), cache.read_bytes()), (baseline, user_before, body))
+            self.assertIsNone(effects._definition_after)
+            self.assertNotIn("definition_cache_refusal", ctx.summary)
+            self.assertEqual(ctx.summary["qualification"], dict.fromkeys(case.shared.QUALIFICATION_CASES, False))
+            self.assertNotIn(b"UNQUALIFIED_OPAQUE_INPUT",
+                             case.shared.evidence({"commands": [], "proofs": effects.proofs}, {}, [])["research.json"])
+
+    def test_first_capture_refuses_precommand_unsettled_or_unjoined_intervals_before_read(self):
+        helper = FixedDefinitionCacheContracts()
+        changes = ("precommand", "before-present", "before-missing", "nonzero", "error", "cleanup", "in-flight",
+                   "phase", "help", "argv", "cwd", "source", "runtime", "later-command", "qualified", "complete",
+                   "not-returned", "copied-record")
+        for change in changes:
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, effects, _, _, _, _ = helper.fixture(root)
+                after = case.metadata_inventory(ctx.root, ctx.budget)
+                label, arguments = "mcp-a", ["mcp", "list", "--json"]
+                record = ctx.summary["commands"][-1]
+                completed = record
+                if change == "before-present": ctx.cache_before = dict(after)
+                elif change == "before-missing": ctx.cache_before = {}
+                elif change == "nonzero": record["exit"] = 1
+                elif change == "error": record["error"] = "inert partial capture"
+                elif change == "cleanup": ctx.process_cleanup_proved = False
+                elif change == "in-flight": ctx.summary["in_flight_command"] = label
+                elif change == "phase": ctx.cache_phase["phase"] = "skills-a"
+                elif change == "help": label, arguments = "mcp-help", ["mcp", "--help"]
+                elif change == "argv": record["argv"].append("--config=foreign")
+                elif change == "cwd": record["cwd"] = str(ctx.projects["b"])
+                elif change == "source": ctx.summary["source_tree"] = "c" * 40
+                elif change == "runtime": ctx.identities[Path(ctx.argv[0])] = "f" * 64
+                elif change == "later-command": ctx.summary["commands"].append(dict(record, probe="skills-a"))
+                elif change == "qualified": ctx.summary["qualification"][next(iter(case.shared.QUALIFICATION_CASES))] = True
+                elif change == "complete": ctx.summary["metadata_capture_complete"] = True
+                elif change == "not-returned": completed = None
+                elif change == "copied-record": completed = dict(record)
+                with patch.object(case.os, "read", side_effect=AssertionError("unjoined first bytes read")) as reader:
+                    with self.assertRaisesRegex(ValueError, "definition cache"):
+                        if change == "precommand": effects.verify(after)
+                        else: effects.observe_command(label, arguments, "a", ctx.cache_before, after, ctx.cache_phase, completed)
+                    reader.assert_not_called()
+                self.assertIsNone(effects.definitions_identity)
+                self.assertIsNone(effects.definitions_observation)
+                self.assertIsNone(effects._definition_after)
+
+    def test_first_observation_settles_leaf_parent_and_deadline_failures_without_recording(self):
+        helper = FixedDefinitionCacheContracts()
+        for change in ("leaf", "parent", "read-error", "deadline", "after-other-file"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, effects, _, cache, body, _ = helper.fixture(root)
+                after = case.metadata_inventory(ctx.root, ctx.budget)
+                inode = cache.stat().st_ino
+                real_read, changed, expired, descriptors = os.read, [], [], set()
+                real_other = case.read_bootstrap_file
+                def check():
+                    if expired: raise case.shared.legacy.CollectorDeadline("inert original deadline")
+                ctx.budget.check = check
+                def read(fd, count):
+                    if os.fstat(fd).st_ino != inode: return real_read(fd, count)
+                    descriptors.add(fd)
+                    if change == "read-error": raise OSError("inert read error")
+                    chunk = real_read(fd, min(count, 32768))
+                    if change == "deadline":
+                        if not chunk: expired.append(True)
+                    elif change in ("leaf", "parent") and not changed:
+                        changed.append(True)
+                        if change == "leaf": cache.write_bytes(body + b"changed")
+                        else:
+                            cache.parent.rename(cache.parent.with_name("original-cli")); cache.parent.mkdir(mode=0o755)
+                            cache.write_bytes(body); cache.chmod(0o600)
+                    return chunk
+                def read_other(ctx, relative, *args, **kwargs):
+                    value = real_other(ctx, relative, *args, **kwargs)
+                    if change == "after-other-file" and relative == effects.config_path:
+                        expired.append(True)
+                    return value
+                with patch.object(case.os, "read", side_effect=read), patch.object(case, "read_bootstrap_file", side_effect=read_other):
+                    with self.assertRaises((ValueError, OSError, case.shared.legacy.CollectorDeadline)):
+                        effects.observe_command("mcp-a", ["mcp", "list", "--json"], "a", ctx.cache_before, after, ctx.cache_phase,
+                                                ctx.summary["commands"][-1])
+                self.assertTrue(descriptors)
+                for fd in descriptors:
+                    with self.assertRaises(OSError): os.fstat(fd)
+                self.assertEqual(effects.proofs, [])
+                self.assertIsNone(effects.definitions_identity)
+                self.assertIsNone(effects.definitions_observation)
+                self.assertIsNone(effects._definition_after)
+
+    def test_full_hash_remains_required_even_when_inert_metadata_is_unchanged(self):
+        helper = FixedDefinitionCacheContracts()
+        with tempfile.TemporaryDirectory() as root:
+            ctx, effects, _, cache, body, _ = helper.fixture(root)
+            current = helper.observe(ctx, effects)
+            original_info, original_tuple = cache.stat(), effects.definitions_observation
+            count = len(effects.proofs)
+            cache.write_bytes(b"x" + body[1:])
+            real_fstat, real_stat = os.fstat, os.stat
+            def fstat(fd):
+                info = real_fstat(fd)
+                return original_info if info.st_ino == original_info.st_ino else info
+            def named(path, *args, **kwargs):
+                info = real_stat(path, *args, **kwargs)
+                return original_info if info.st_ino == original_info.st_ino else info
+            with patch.object(case.os, "fstat", side_effect=fstat), patch.object(case.os, "stat", side_effect=named):
+                with self.assertRaisesRegex(ValueError, "definition cache original bytes changed"):
+                    effects.verify(current)
+            self.assertEqual(effects.definitions_observation, original_tuple)
+            self.assertEqual(len(effects.proofs), count)
+
+    def test_ordinary_global_migration_and_observation_keep_original_user_authority(self):
+        import devin_ordinary_metadata_admission as ordinary
+        diagnostics = KnownFileDiagnosticContracts()
+        for recipe in ("ordinary", "ordinary-global"):
+            with self.subTest(recipe=recipe), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder).resolve()
+                user, _ = diagnostics.fixture(root)
+                user.chmod(0o644)
+                for relative in ("home/cache", "home/data", "private"):
+                    (root / relative).mkdir(parents=True, exist_ok=True)
+                held = diagnostics.hold(root)
+                try:
+                    summary = dict(metadata_recipe=recipe, metadata_route=ordinary.OrdinaryEffects.metadata_route,
+                                   source_commit="a" * 40, source_tree="b" * 40, collection_complete=False,
+                                   metadata_capture_complete=False, admission_qualified=False,
+                                   qualification=dict.fromkeys(case.shared.QUALIFICATION_CASES, False), commands=[])
+                    ctx = SimpleNamespace(root=root, original_output_identity=case.root_identity(root),
+                                          budget=SimpleNamespace(check=lambda: None), summary=summary,
+                                          argv=[str(root / "client/bin/devin")], known_file_diagnostics=held,
+                                          projects={"a": root / "project-a"}, process_cleanup_proved=True)
+                    ctx.identities = {Path(ctx.argv[0]): case.BINARY}
+                    baseline = case.metadata_inventory(root, ctx.budget)
+                    effects = ordinary.OrdinaryEffects(ctx, baseline)
+                    original = copy.deepcopy(effects.before)
+                    for _ in case.HELP: effects.verify_command(baseline, baseline)
+                    before = case.metadata_inventory(root, ctx.budget)
+                    ProspectiveBootstrapContracts().create_aux(ctx)
+                    cache = root / case.DEFINITIONS_CACHE
+                    body = b"UNKNOWN_OPAQUE_CACHE" * 17
+                    cache.write_bytes(body); cache.chmod(0o600)
+                    replacement = user.with_name("migration.tmp")
+                    replacement.write_bytes(b'{"read_config_from":{"cloud":false},"version":1}\n')
+                    replacement.chmod(0o600); os.replace(replacement, user)
+                    record = dict(probe="mcp-a", argv=[*ctx.argv, "mcp", "list", "--json"],
+                                  cwd=str(ctx.projects["a"]), exit=0, error=None)
+                    summary["commands"].append(record)
+                    after = case.metadata_inventory(root, ctx.budget)
+                    effects.observe_command("mcp-a", ["mcp", "list", "--json"], "a", before, after, dict(phase="mcp-a"), record)
+                    effects.verify(case.metadata_inventory(root, ctx.budget))
+                    self.assertEqual(effects.baseline, baseline)
+                    self.assertEqual(effects.before, original)
+                    self.assertEqual(effects.after, effects.fingerprint(user.read_bytes(), after[effects.config_path]))
+                    self.assertEqual(effects.definitions_observation, (len(body), hashlib.sha256(body).hexdigest()))
+                    self.assertFalse(effects.migrating)
+                    self.assertEqual(effects.step, len(case.HELP) + 1)
+                    self.assertEqual(summary["qualification"], dict.fromkeys(case.shared.QUALIFICATION_CASES, False))
+                finally:
+                    held.close()
+
+
+class RefusedDefinitionCacheContracts(unittest.TestCase):
+    def fixture(self, root):
+        ctx, effects, user, cache, body, _fixed = FixedDefinitionCacheContracts().fixture(root)
+        body += b"x" * 220
+        cache.write_bytes(body)
+        summary, state = ClosedDevinReadoutContracts().fixture()
+        summary.update(metadata_recipe="ordinary-global", commands=[dict(probe="skills-b", exit=0, error=None)],
+                       command_effects=[dict(label="skills-b", changes={}, outer_changes={})])
+        summary.pop("error")
+        state.update(phase="skills-b", reason="capture-incomplete")
+        ctx.summary, ctx.global_readout_state, ctx.process_cleanup_proved = summary, state, True
+        return ctx, effects, user, cache, body
+
+    def test_changed_size_is_measured_from_the_refused_held_cache_without_admission(self):
+        with tempfile.TemporaryDirectory() as root:
+            ctx, effects, user, cache, body = self.fixture(root)
+            baseline, user_before = copy.deepcopy(effects.baseline), user.read_bytes()
+            real_open, real_read, opens, reads = os.open, os.read, [], []
+            def opened(path, *args, **kwargs):
+                if path == cache.name: opens.append(path)
+                return real_open(path, *args, **kwargs)
+            def short_read(fd, count):
+                reads.append(count)
+                return real_read(fd, min(count, 32768))
+            with patch.object(case.os, "open", side_effect=opened), patch.object(case.os, "read", side_effect=short_read):
+                with self.assertRaisesRegex(ValueError, "^bootstrap opened file differs$"):
+                    inventory = case.metadata_inventory(ctx.root, ctx.budget)
+                    case.read_bootstrap_file(ctx, case.DEFINITIONS_CACHE, inventory[case.DEFINITIONS_CACHE], inventory)
+            expected = dict(bytes=674560, sha256=hashlib.sha256(body).hexdigest())
+            self.assertEqual(ctx.summary["definition_cache_refusal"], expected)
+            self.assertEqual(opens, [cache.name])
+            self.assertGreater(len(reads), 2)
+            self.assertTrue(all(0 < count <= 65536 for count in reads))
+            self.assertEqual((effects.baseline, effects.proofs, effects.definitions_identity), (baseline, [], None))
+            self.assertEqual(user.read_bytes(), user_before)
+            self.assertEqual(cache.read_bytes(), body)
+            ctx.summary["error"] = "ValueError: bootstrap opened file differs"
+            ctx.global_readout_state["reason"] = "unclassified-refusal"
+            value = case.closed_readout(ctx.summary, ctx.global_readout_state)
+            self.assertEqual(value["definition_cache_refusal"], expected)
+            self.assertEqual((value["reason"], value["phase"], value["collection_complete"]),
+                             ("unclassified-refusal", "skills-b", False))
+            self.assertEqual(ctx.summary["qualification"], dict.fromkeys(case.shared.QUALIFICATION_CASES, False))
+            self.assertNotIn("PRIVATE_CACHE_BYTES", json.dumps(value))
+
+    def test_diagnostic_never_reads_unsettled_oversize_or_substituted_cache(self):
+        for change in ("oversize", "mode", "hardlink", "substitute", "in-flight", "unsettled", "phase"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, _effects, _user, cache, body = self.fixture(root)
+                if change == "oversize": cache.write_bytes(b"x" * ((1 << 20) + 1))
+                elif change == "mode": cache.chmod(0o644)
+                inventory = case.metadata_inventory(ctx.root, ctx.budget)
+                expected = inventory[case.DEFINITIONS_CACHE]
+                if change == "hardlink": os.link(cache, cache.with_name("alias.bin"))
+                elif change == "substitute":
+                    cache.rename(cache.with_name("original.bin")); cache.write_bytes(body); cache.chmod(0o600)
+                elif change == "in-flight": ctx.summary["in_flight_command"] = "skills-b"
+                elif change == "unsettled": ctx.process_cleanup_proved = False
+                elif change == "phase": ctx.global_readout_state["phase"] = "skills-user"
+                with patch.object(case.os, "read", side_effect=AssertionError("unowned diagnostic read")) as reader:
+                    with self.assertRaisesRegex(ValueError, "^bootstrap opened file differs$"):
+                        case.read_bootstrap_file(ctx, case.DEFINITIONS_CACHE, expected, inventory)
+                    reader.assert_not_called()
+                self.assertNotIn("definition_cache_refusal", ctx.summary)
+
+    def test_diagnostic_drops_leaf_and_parent_drift_and_read_errors(self):
+        for change in ("leaf", "parent", "read-error", "deadline"):
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as root:
+                ctx, _effects, _user, cache, body = self.fixture(root)
+                inventory = case.metadata_inventory(ctx.root, ctx.budget)
+                real_read, changed, expired = os.read, [], []
+                def check():
+                    if expired: raise case.shared.legacy.CollectorDeadline("inert original deadline")
+                ctx.budget.check = check
+                def mutate(fd, count):
+                    if change == "read-error": raise OSError("inert failed read")
+                    chunk = real_read(fd, count)
+                    if change == "deadline":
+                        if not chunk: expired.append(True)
+                    elif not changed:
+                        changed.append(True)
+                        if change == "leaf": cache.write_bytes(body + b"changed")
+                        else:
+                            cache.parent.rename(cache.parent.with_name("original-cli"))
+                            cache.parent.mkdir(mode=0o755)
+                            cache.write_bytes(body); cache.chmod(0o600)
+                    return chunk
+                with patch.object(case.os, "read", side_effect=mutate):
+                    with self.assertRaisesRegex(ValueError, "^bootstrap opened file differs$"):
+                        case.read_bootstrap_file(ctx, case.DEFINITIONS_CACHE, inventory[case.DEFINITIONS_CACHE], inventory)
+                self.assertNotIn("definition_cache_refusal", ctx.summary)
+
+    def test_optional_projection_refuses_malformed_or_unsettled_failure(self):
+        with tempfile.TemporaryDirectory() as root:
+            ctx, _effects, _user, _cache, body = self.fixture(root)
+            ctx.summary.update(error="ValueError: bootstrap opened file differs",
+                               definition_cache_refusal=dict(bytes=len(body), sha256=hashlib.sha256(body).hexdigest()))
+            ctx.global_readout_state["reason"] = "unclassified-refusal"
+            for change in ("size-bool", "oversize", "known-size", "hash", "extra", "error", "complete",
+                           "in-flight", "phase", "recipe", "command"):
+                summary, state = copy.deepcopy(ctx.summary), dict(ctx.global_readout_state)
+                if change == "size-bool": summary["definition_cache_refusal"]["bytes"] = True
+                elif change == "oversize": summary["definition_cache_refusal"]["bytes"] = (1 << 20) + 1
+                elif change == "known-size": summary["definition_cache_refusal"]["bytes"] = case.DEFINITIONS_BYTES
+                elif change == "hash": summary["definition_cache_refusal"]["sha256"] = "A" * 64
+                elif change == "extra": summary["definition_cache_refusal"]["path"] = "PRIVATE_PATH"
+                elif change == "error": summary["error"] = "ValueError: unrelated failure"
+                elif change == "complete": summary["metadata_capture_complete"] = True
+                elif change == "in-flight": summary["in_flight_command"] = "skills-b"
+                elif change == "phase": state["phase"] = "skills-user"
+                elif change == "recipe": summary["metadata_recipe"] = "ordinary"
+                else: summary["commands"][-1]["exit"] = 1
+                with self.subTest(change=change), self.assertRaisesRegex(ValueError, "readout definition cache"):
+                    case.closed_readout(summary, state)
+        summary, state = ClosedDevinReadoutContracts().complete_fixture()
+        self.assertNotIn("definition_cache_refusal", case.closed_readout(summary, state))
+
+
+class OriginalConfigReadoutContracts(unittest.TestCase):
+    def test_only_two_original_config_phases_extend_the_global_readout(self):
+        import devin_global_lifecycle_admission as global_case
+
+        expected = ("mcp-original-config-installed-a", "skills-original-config-installed-a")
+        self.assertEqual(global_case.ORIGINAL_CONFIG_NATIVE, expected)
+        for phase in expected:
+            summary, state = ClosedDevinReadoutContracts().fixture()
+            summary.update(metadata_recipe="ordinary-global", ordinary_metadata_capture_complete=True,
+                           metadata_capture_complete=True)
+            summary["command_effects"][0]["label"] = phase
+            state.update(phase=phase, reason="unclassified-refusal")
+            before = copy.deepcopy(summary)
+            value = case.closed_readout(summary, state)
+            self.assertEqual((value["phase"], value["effects"][0]["phase"]), (phase, phase))
+            self.assertFalse(value["collection_complete"])
+            self.assertEqual(summary, before)
+            self.assertNotIn("PRIVATE", json.dumps(value))
+            for recipe in ("ordinary", None):
+                changed = copy.deepcopy(summary)
+                changed["metadata_recipe"] = recipe
+                with self.subTest(phase=phase, recipe=recipe), self.assertRaises(ValueError):
+                    case.closed_readout(changed, state)
+            state["phase"] = phase[:-1] + "b"
+            with self.assertRaisesRegex(ValueError, "readout state"):
+                case.closed_readout(summary, state)
+
+    def test_global_two_extra_observations_do_not_expand_other_recipe_or_effect_bounds(self):
+        from test_devin_global_lifecycle_admission import GlobalLifecycleContracts
+
+        summary = GlobalLifecycleContracts().completed_summary()
+        summary.update(collection_complete=True, cleanup_complete=True)
+        state = dict(phase="source-final-clean", reason="metadata-complete", deadline=case.time.monotonic() + 10)
+        value = case.closed_readout(summary, state)
+        self.assertEqual((value["commands"], len(value["effects"])), (39, 32))
+        self.assertEqual(summary["qualification"], dict.fromkeys(case.shared.QUALIFICATION_CASES, False))
+        for field in ("commands", "command_effects"):
+            changed = copy.deepcopy(summary)
+            changed["collection_complete"] = False
+            changed[field].append(copy.deepcopy(changed[field][-1]))
+            with self.subTest(field=field), self.assertRaisesRegex(ValueError, "readout counts"):
+                case.closed_readout(changed, state)
+        ordinary, original_state = ClosedDevinReadoutContracts().complete_fixture()
+        original = case.closed_readout(ordinary, original_state)
+        self.assertEqual((original["commands"], len(original["effects"])), (20, 13))
+        ordinary["command_effects"].append(copy.deepcopy(ordinary["command_effects"][-1]))
+        with self.assertRaises(ValueError):
+            case.closed_readout(ordinary, original_state)
+
+
+
+class OfficialNpmFallbackContracts(unittest.TestCase):
+    """The official npm copy is bounded and independently pinned, not the CDN archive."""
+
+    def receipt(self):
+        members = [
+            {"name": "bin/devin", "kind": "file", "bytes": 213734376,
+             "executable": True, "sha256": case.BINARY},
+            {"name": "package.json", "kind": "file", "bytes": 128,
+             "executable": False, "sha256": "b" * 64},
+            {"name": "distribution", "kind": "file", "bytes": 3,
+             "executable": False, "sha256": "c" * 64},
+        ]
+        return {"url": case.NPM_SPEC["url"], "resolved_origin": "https://registry.npmjs.org",
+                "bytes": 70000000, "sha256": "a" * 64, "integrity": case.NPM_SRI,
+                "pin_verified": True, "members": members,
+                "installer_executed": False, "provenance": "official-npm-platform"}
+
+    def test_official_npm_admission_preserves_closed_member_and_binary_refusals(self):
+        case.admitted_npm_archive(self.receipt())
+        for change in ("provenance", "url", "integrity", "bytes", "archive-sha",
+                       "member-duplicate", "member-link", "member-executable",
+                       "wrong-binary", "wrong-binary-size", "missing-binary",
+                       "missing-pin", "installer-executed"):
+            receipt = copy.deepcopy(self.receipt())
+            if change == "provenance": receipt["provenance"] = "publisher"
+            elif change == "url": receipt["url"] = "https://other.invalid/archive"
+            elif change == "integrity": receipt["integrity"] = "sha512-untrusted"
+            elif change == "bytes": receipt["bytes"] = case.NPM_SPEC["max_bytes"] + 1
+            elif change == "archive-sha": receipt["sha256"] = "private"
+            elif change == "member-duplicate": receipt["members"].append(copy.deepcopy(receipt["members"][1]))
+            elif change == "member-link": receipt["members"][1]["kind"] = "link"
+            elif change == "member-executable": receipt["members"][1]["executable"] = True
+            elif change == "wrong-binary": receipt["members"][0]["sha256"] = "0" * 64
+            elif change == "wrong-binary-size": receipt["members"][0]["bytes"] -= 1
+            elif change == "missing-binary": receipt["members"].pop(0)
+            elif change == "missing-pin": receipt["pin_verified"] = False
+            else: receipt["installer_executed"] = True
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                case.admitted_npm_archive(receipt)
+
+    def test_official_npm_copy_reuses_bounded_origin_and_normalizes_only_package_root(self):
+        import devin_project_auto_install_e2e as native
+        manifest = json.dumps({
+            "name": "devin", "version": native.PACKAGE_VERSION,
+            "os": ["linux"], "cpu": ["x64"],
+            "repository": {"url": "git+https://github.com/CognitionAI/devin-cli.git"},
+        }).encode()
+        entries = [
+            {"name": "package", "kind": "directory", "bytes": 0, "executable": True},
+            {"name": "package/bin/devin", "kind": "file", "bytes": 213734376,
+             "executable": True, "sha256": case.BINARY},
+            {"name": "package/package.json", "kind": "file", "bytes": len(manifest),
+             "executable": False, "sha256": hashlib.sha256(manifest).hexdigest()},
+            {"name": "package/distribution", "kind": "file", "bytes": 3,
+             "executable": False, "sha256": hashlib.sha256(b"npm").hexdigest()},
+        ]
+        contents = {"package/bin/devin": b"inert mocked executable",
+                    "package/package.json": manifest, "package/distribution": b"npm"}
+        original = dict(url=case.NPM_SPEC["url"], resolved_origin="https://registry.npmjs.org",
+                        bytes=70000000, sha256="a" * 64,
+                        integrity=case.NPM_SRI, pin_verified=True,
+                        members=entries, installer_executed=False)
+        budget = SimpleNamespace(check=Mock())
+        with patch.object(case.shared, "acquire",
+                          return_value=(original, contents)) as fetch:
+            receipt, normalized = case.acquire_official_npm_archive(budget)
+        fetch.assert_called_once_with(case.NPM_SPEC, budget)
+        self.assertEqual([row["name"] for row in receipt["members"]],
+                         ["bin/devin", "package.json", "distribution"])
+        self.assertEqual(normalized["bin/devin"], contents["package/bin/devin"])
+        self.assertEqual(receipt["integrity"], case.NPM_SRI)
+        self.assertEqual(receipt["resolved_origin"], "https://registry.npmjs.org")
+        self.assertTrue(receipt["pin_verified"])
+        self.assertFalse(receipt["installer_executed"])
+
+    def test_rejects_changed_origin_or_sri_before_native_member_use(self):
+        for mutation in ("origin", "integrity", "pin", "size"):
+            with self.subTest(mutation=mutation):
+                receipt = self.receipt()
+                if mutation == "origin": receipt["resolved_origin"] = "https://other.invalid"
+                elif mutation == "integrity": receipt["integrity"] = "sha512-untrusted"
+                elif mutation == "pin": receipt["pin_verified"] = False
+                else: receipt["bytes"] = case.NPM_SPEC["max_bytes"] + 1
+                with (patch.object(case.shared, "acquire", return_value=(receipt, {})),
+                      patch.object(case, "strict_json",
+                                   side_effect=AssertionError("should not inspect native manifest"))):
+                    with self.assertRaisesRegex(ValueError, "origin/integrity differs"):
+                        case.acquire_official_npm_archive(SimpleNamespace(check=Mock()))
+
+
+
+if __name__ == "__main__": unittest.main()

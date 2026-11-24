@@ -1328,7 +1328,8 @@ class CodexGroupDiagnosticTest(unittest.TestCase):
 
 
 class CodexNativeProcessCleanupTest(unittest.TestCase):
-    def observed_exit(self, exit_code, stderr, *, orphan=False):
+    def observed_exit(self, exit_code, stderr, *, orphan=False, native_version="0.153.4",
+                      versions=("0.153.4",), with_metadata=False):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             profile = root / "profile"
@@ -1345,6 +1346,8 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
                 print(json.dumps({'id': second['id'], 'result': {'data': []}}), flush=True)
                 sys.stdin.read()
             """)
+            script = script.replace("agentplugins/0.153.4 (fixture)",
+                                    f"agentplugins/{native_version} (fixture)")
             if orphan:
                 self.orphan_cleanup_complete = False
                 # This child has no capture pipes; only its owned process group
@@ -1363,7 +1366,8 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
                            if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "TMPDIR"}}
             environment.update(HOME=str(root), USERPROFILE=str(root), CODEX_HOME=str(profile))
             try:
-                return asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment))
+                return asyncio.run(audit._exchange(Path(sys.executable), root, profile, environment,
+                                                  versions=versions, with_metadata=with_metadata))
             finally:
                 # Keep the inert fixture bounded even if the observer regresses.
                 marker = root / "owned-orphan-pid"
@@ -1375,6 +1379,98 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
                     self.orphan_cleanup_complete = not process_running(pid)
                     if not self.orphan_cleanup_complete:
                         os.kill(pid, signal.SIGKILL)
+
+    def test_plugin_version_tuple_does_not_widen_default_skill_pin(self):
+        self.assertEqual(self.observed_exit(0, b'', native_version='0.162.0',
+            versions=('0.153.4', '0.162.0'), with_metadata=True), ('0.162.0', {'data': []}))
+        with self.assertRaisesRegex(ValueError, 'pinned native version'):
+            self.observed_exit(0, b'', native_version='0.162.0')
+        with self.assertRaisesRegex(ValueError, 'pinned native version'):
+            self.observed_exit(0, b'', native_version='0.162.1', versions=('0.153.4', '0.162.0'))
+
+
+    @unittest.skipIf(os.name == "nt", "POSIX process-group diagnostic")
+    def test_dual_failure_labels_preserve_errors_and_single_failure_type(self):
+        from types import SimpleNamespace
+
+        class Input:
+            def write(self, body):
+                pass
+
+            async def drain(self):
+                pass
+
+            def close(self):
+                pass
+
+            async def wait_closed(self):
+                pass
+
+        class Output:
+            def __init__(self):
+                self.replies = iter((
+                    {"id": 1, "result": {"codexHome": str(profile),
+                                         "userAgent": "agentplugins/0.153.4 (fixture)"}},
+                    {"id": 2, "result": {"data": []}},
+                ))
+
+            async def readline(self):
+                return (json.dumps(next(self.replies)) + "\n").encode()
+
+        async def exercise(cleanup_fails):
+            primary = PermissionError(errno.EPERM, "primary-group-probe")
+            cleanup = PermissionError(errno.EPERM, "cleanup-group-kill")
+            closed = []
+
+            async def wait():
+                return 0
+
+            process = SimpleNamespace(
+                pid=12345, returncode=0, stdin=Input(), stdout=Output(), stderr=object(),
+                wait=wait, _transport=SimpleNamespace(close=lambda: closed.append(True)))
+
+            async def start(*args):
+                return process, None
+
+            async def drain(*args):
+                return b""
+
+            signals = []
+
+            def killpg(pid, sig):
+                signals.append((pid, sig))
+                if sig == 0:
+                    raise primary
+                if cleanup_fails:
+                    raise cleanup
+
+            # Inert protocol/process objects isolate the genuine exchange and
+            # cleanup branches; no native process or signal is used.
+            with (patch.object(audit, "_start_native", side_effect=start),
+                  patch.object(audit, "_drain", side_effect=drain),
+                  patch.object(audit.os, "killpg", side_effect=killpg, create=True)):
+                if cleanup_fails:
+                    with self.assertRaises(RuntimeError) as raised:
+                        await audit._exchange(Path("/inert/codex"), Path("/inert/project"),
+                                              profile, {})
+                    self.assertIn("phase=group-check; " + str(primary), str(raised.exception))
+                    self.assertIn("phase=group-kill; " + str(cleanup), str(raised.exception))
+                    self.assertIs(raised.exception.__cause__, primary)
+                else:
+                    with self.assertRaises(PermissionError) as raised:
+                        await audit._exchange(Path("/inert/codex"), Path("/inert/project"),
+                                              profile, {})
+                    self.assertIs(raised.exception, primary)
+            # One gate probe, two read-only failure diagnostics, one owned kill.
+            self.assertEqual(signals, [(12345, 0), (12345, 0),
+                                       (12345, signal.SIGKILL), (12345, 0)])
+            self.assertEqual(closed, [True])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = Path(temporary).resolve()
+            for cleanup_fails in (True, False):
+                with self.subTest(cleanup_fails=cleanup_fails):
+                    asyncio.run(exercise(cleanup_fails))
 
     def test_nonzero_exit_still_refuses_with_observed_diagnostic(self):
         self.assertEqual(self.observed_exit(0, b""), {"data": []})
@@ -1455,7 +1551,9 @@ class CodexNativeProcessCleanupTest(unittest.TestCase):
 
             async def exercise_fault():
                 with patch.object(audit, "_start_native", side_effect=capture_owned_pipes):
-                    with self.assertRaises(TimeoutError):
+                    with self.assertRaisesRegex(
+                            TimeoutError,
+                            r"Codex native discovery timed out: phase=(?:process-wait|reader-drain); launcher_exit_code=0"):
                         await audit._exchange(Path(sys.executable), root, profile, environment)
                 self.assertEqual([descriptor for descriptor, _, _ in pipes], [1, 2])
                 # Check at the observer boundary, before asyncio.run closes the
@@ -1854,6 +1952,159 @@ class CodexSystemSkillInitializationTest(unittest.TestCase):
                         audit, "_regular_bytes", side_effect=replace_after_read), self.assertRaises(ValueError):
                 audit.system_skill_initialization(profile)
 
+
+
+class CodexSystemSkillBaselineTest(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix="codex-system-inert-")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+
+    def case(self, name):
+        root = self.root / name
+        home, project = root / "home", root / "project"
+        profile = home / ".codex"
+        for path in (profile, project, root / "tmp"):
+            path.mkdir(parents=True)
+        selected = project / ".agents/skills/skill-creator/SKILL.md"
+        foreign = project / ".agents/skills/foreign-neighbor/SKILL.md"
+        system = profile / "skills/.system/skill-creator/SKILL.md"
+        for path, body in ((foreign, "foreign original\n"), (system, "inert System original\n")):
+            path.parent.mkdir(parents=True)
+            path.write_bytes(body.encode("utf-8"))
+        state = {"system": {"name": "skill-creator", "path": str(system),
+                            "scope": "system", "enabled": True, "pluginId": None},
+                 "shadow": False, "duplicate": False, "selected": {}}
+        calls = []
+
+        async def discover(binary, cwd, native_profile, environment):
+            self.assertEqual((binary, cwd, native_profile), (Path(sys.executable), project, profile))
+            self.assertEqual(environment["CODEX_HOME"], str(profile))
+            calls.append(True)
+            database = home / ".local/state/codex-sqlite/state_5.sqlite"
+            if not database.exists():
+                with closing(sqlite3.connect(database)) as connection:
+                    connection.execute("CREATE TABLE inert (id INTEGER PRIMARY KEY)")
+            skills = [{"name": "foreign-neighbor", "path": str(foreign),
+                       "scope": "repo", "enabled": True, "pluginId": None}]
+            if not state["shadow"]:
+                skills.append(copy.deepcopy(state["system"]))
+                if state["duplicate"]:
+                    skills.append(copy.deepcopy(state["system"]))
+            if selected.exists():
+                entry = {"name": "skill-creator", "path": str(selected),
+                         "scope": "repo", "enabled": True, "pluginId": None}
+                entry.update(state["selected"])
+                skills.append(entry)
+            return {"data": [{"cwd": str(project), "errors": [], "skills": skills}]}
+
+        return SimpleNamespace(root=root, home=home, project=project, profile=profile,
+                               selected=selected, foreign=foreign, system=system,
+                               state=state, calls=calls, discover=discover)
+
+    def observer(self, case):
+        return audit.CodexRuntimeAudit(Path(sys.executable), case.root, case.home,
+                                       case.project, {}, "skill-creator", case.foreign)
+
+    def test_exact_project_lifecycle_preserves_same_named_system_baseline(self):
+        case = self.case("lifecycle")
+        system_before = (case.system.stat(), case.system.read_bytes())
+        with patch.object(audit, "_exchange", side_effect=case.discover):
+            observer = self.observer(case)
+            case.selected.parent.mkdir()
+            case.selected.write_text("inert selected project Skill\n", encoding="utf-8")
+            self.assertTrue(observer.checkpoint("installed", True))
+            case.state["shadow"] = True
+            self.assertTrue(observer.checkpoint("repeat-installed", True))
+            case.selected.unlink()
+            case.state["shadow"] = False
+            self.assertTrue(observer.checkpoint("removed", False))
+            evidence = observer.evidence()
+        self.assertEqual(len(case.calls), 4)
+        self.assertEqual([row["phase"] for row in evidence["observations"]],
+                         ["before-install", "installed", "repeat-installed", "removed"])
+        self.assertEqual([row["selected_skill_present"] for row in evidence["observations"]],
+                         [False, True, True, False])
+        self.assertTrue(os.path.samestat(system_before[0], case.system.stat()))
+        self.assertEqual(case.system.read_bytes(), system_before[1])
+        self.assertEqual(case.foreign.read_bytes(), b"foreign original\n")
+        self.assertEqual(evidence["system_skill_baseline"]["path"],
+                         str(Path("home/.codex/skills/.system/skill-creator/SKILL.md")))
+        self.assertIs(evidence["system_skill_baseline"]["unchanged"], True)
+
+    def test_system_baseline_refuses_unknown_inventory_and_changed_custody(self):
+        for field, value in (("path", "/foreign/not-read/SKILL.md"), ("path", None),
+                             ("path", {}), ("path", "/foreign/" + "x" * 6000),
+                             ("path", "relative/SKILL.md"), ("scope", "user"),
+                             ("enabled", False), ("pluginId", "unowned@market")):
+            with self.subTest(initial_field=field, value=value):
+                case = self.case("initial-" + str(len(tuple(self.root.iterdir()))))
+                case.state["system"][field] = value
+                with patch.object(audit, "_exchange", side_effect=case.discover):
+                    with self.assertRaises(ValueError) as caught:
+                        self.observer(case)
+                message = str(caught.exception)
+                self.assertIn("checkpoint='before-install'", message)
+                self.assertNotIn("/foreign/not-read", message)
+                self.assertLess(len(message.encode()), 4096)
+        attacks = ["bytes", "replacement", "directory", "hardlink", "missing",
+                   "native-metadata", "enabled-type", "nested-type", "disappeared", "duplicate",
+                   "selected-scope", "selected-path", "selected-disabled", "foreign"]
+        if os.name != "nt":
+            attacks.extend(("mode", "symlink"))
+        for attack in attacks:
+            with self.subTest(attack=attack):
+                case = self.case(attack)
+                if attack == "nested-type":
+                    case.state["system"]["metadata"] = {"nested": [True]}
+                with patch.object(audit, "_exchange", side_effect=case.discover):
+                    observer = self.observer(case)
+                    baseline = copy.deepcopy(observer.baseline)
+                    observations = copy.deepcopy(observer.observations)
+                    present = attack.startswith("selected-")
+                    if present:
+                        case.selected.parent.mkdir()
+                        case.selected.write_text("inert selected\n")
+                        field, value = {"selected-scope": ("scope", "system"),
+                                        "selected-path": ("path", str(case.foreign)),
+                                        "selected-disabled": ("enabled", False)}[attack]
+                        case.state["selected"][field] = value
+                    elif attack == "bytes":
+                        case.system.write_text("changed\n")
+                    elif attack == "replacement":
+                        original = case.system.with_name("held-original")
+                        case.system.rename(original)
+                        case.system.write_bytes(original.read_bytes())
+                    elif attack == "directory":
+                        original = case.system.parent.with_name("held-original")
+                        case.system.parent.rename(original)
+                        shutil.copytree(original, case.system.parent)
+                    elif attack == "hardlink":
+                        os.link(case.system, case.root / "extra-link")
+                    elif attack == "missing":
+                        case.system.unlink()
+                    elif attack == "native-metadata":
+                        case.state["system"]["description"] = "changed"
+                    elif attack == "enabled-type":
+                        case.state["system"]["enabled"] = 1
+                    elif attack == "nested-type":
+                        case.state["system"]["metadata"]["nested"][0] = 1
+                    elif attack == "disappeared":
+                        case.state["shadow"] = True
+                    elif attack == "duplicate":
+                        case.state["duplicate"] = True
+                    elif attack == "mode":
+                        case.system.chmod(0o400)
+                    elif attack == "symlink":
+                        original = case.system.with_name("held-original")
+                        case.system.rename(original)
+                        case.system.symlink_to(original)
+                    else:
+                        case.foreign.write_text("changed foreign\n")
+                    with self.assertRaises((OSError, ValueError)):
+                        observer.checkpoint("after-attack", present)
+                    self.assertEqual(observer.baseline, baseline)
+                    self.assertEqual(observer.observations, observations)
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -52,7 +53,7 @@ func (adapter *dependencyInstaller) populateDependencyTargets(view installer.Ins
 			if !ok {
 				return fmt.Errorf("installed sibling %s is not detected", binding.ClientID)
 			}
-			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, NativeConfigRoot: dependencyNativeConfigRoot(adapter.app, sibling), Executable: backendExecutable(sibling, adapter.detected, adapter.app.scope()), Version: sibling.Version})
+			request.KnownTargets = append(request.KnownTargets, installer.TargetFacts{ClientID: binding.ClientID, BindingID: binding.BindingID, ConfigRoot: sibling.ConfigRoot, NativeConfigRoot: dependencyNativeConfigRoot(adapter.app, sibling), Executable: backendExecutable(sibling, adapter.detected, adapter.app.scope()), Version: sibling.Version, Surfaces: slices.Clone(sibling.Surfaces)})
 		}
 	}
 	return nil
