@@ -33,7 +33,8 @@ class DevinUserNativeContracts(unittest.TestCase):
                             {"name": subject.NAME}]:
                 with self.subTest(changed=changed), self.assertRaises(RuntimeError):
                     subject.skill_present(json.dumps([changed]), selected)
-            for body in [json.dumps([row, row]), "{}", "[null]"]:
+            for body in [json.dumps([row, row]),
+                         json.dumps([row, dict(row, name="project:" + subject.NAME)]), "{}", "[null]"]:
                 with self.subTest(body=body), self.assertRaises(RuntimeError):
                     subject.skill_present(body, selected)
 
