@@ -55,8 +55,17 @@ func canPreviewSavedAddOwnership(snapshot environmentSnapshot, alias, derivedAli
 // refusals remain with the authoritative resolver. Product identity alone is
 // insufficient to diagnose ownership of an unselected Directory distribution.
 func inspectSavedAddSelection(ctx context.Context, app App, opts *options, source string, loaded *loadedPackage) (map[domain.ClientID]prompt.TargetChoice, error) {
-	if app.Installer == nil || loaded == nil || explicitLocalPath(source) || localArchiveInput(source) {
+	if app.Installer == nil || explicitLocalPath(source) || localArchiveInput(source) {
 		return nil, nil
+	}
+	if loaded == nil {
+		// A retained Directory binding can exclude every candidate before
+		// package acquisition. Preserve the verified-feed ownership diagnostic.
+		// Explicit aliases still belong to the authoritative alias resolver.
+		if opts.alias != "" {
+			return nil, nil
+		}
+		return nil, earlyForeignBinding(app, inspectSavedDirectoryOwnership(ctx, app, source))
 	}
 	key := savedDirectSourceKey(source)
 	if loaded.directorySelection != nil {

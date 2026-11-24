@@ -82,3 +82,27 @@ func TestSavedAddExistingStateIsExplainedBeforeSelection(t *testing.T) {
 		})
 	}
 }
+
+// When every candidate was filtered before package acquisition, still explain
+// an exact retained Directory installation using its verified identity.
+func TestSavedAddUnloadedDirectoryPreservesOwnershipDiagnostic(t *testing.T) {
+	rollout := newRolloutDirectoryFixture(t, []domain.ClientID{domain.ClientCursor, domain.ClientGemini}, nil)
+	clients, err := rollout.cli.app.Detector.Detect(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture, _ := newDependencyHarness(t, t.TempDir(), clients, installer.Config{Runner: &cliRunOnlyRunner{}})
+	fixture.app.DirectoryClient, fixture.app.SourceAcquirer = rollout.directory, rollout.acquirer
+	if out, stderr, err := fixture.execute(false, "add", "rollout-demo", "--target", "cursor", "--yes", "--no-save", "--format", "json"); err != nil {
+		t.Fatalf("seed imperative install: %v\\n%s\\n%s", err, out, stderr)
+	}
+	_, err = inspectSavedAddSelection(t.Context(), fixture.app, &options{format: "human"}, "rollout-demo", nil)
+	var foreign *environment.ForeignBindingError
+	if !errors.As(err, &foreign) || len(foreign.Bindings) != 1 || foreign.Bindings[0].ClientID != "cursor" || !strings.Contains(err.Error(), "existing package ownership") {
+		t.Fatalf("missing retained Directory diagnosis: %v", err)
+	}
+	// An explicit alias must not lose the resolver's more specific diagnostic.
+	if _, err := inspectSavedAddSelection(t.Context(), fixture.app, &options{alias: "chosen", format: "human"}, "rollout-demo", nil); err != nil {
+		t.Fatalf("explicit alias handled too early: %v", err)
+	}
+}
