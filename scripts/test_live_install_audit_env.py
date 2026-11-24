@@ -6629,9 +6629,9 @@ module.exports = {
     def test_windsurf_workflow_preserves_selected_go_and_refuses_wrong_version(self):
         workflow = (Path(__file__).resolve().parents[1] /
                     ".github/workflows/live-install-remaining-clients.yml").read_text()
-        step = workflow.split("      - name: Run explicit installation contracts and preserve native outcomes\n", 1)[1]
+        step = workflow.split("      - name: Run real acquisitions and report every source and outcome\n", 1)[1]
         prelude = textwrap.dedent(step.split("        run: |\n", 1)[1]
-            .split("          # Keep installation", 1)[0])
+            .split("          acceptance=()", 1)[0])
         # Execute the actual prelude only: no vendor, audit, or native process.
         script = prelude + '\n[[ "$(command -v go)" == "$EXPECTED_GO" ]]\nprintf "%s\\n" "$(command -v go)"\n'
         for version in ("go version go1.26.11 linux/amd64", "go version go1.26.10 linux/amd64"):
@@ -6780,28 +6780,24 @@ module.exports = {
         run = workflow.split("      - name: Run real acquisitions and report every source and outcome\n", 1)[1]
         prefix = textwrap.dedent(run.split("        run: |\n", 1)[1].split("          python3 scripts/live-install-audit.py", 1)[0])
         fixed = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
-        self.assertEqual(prefix, 'acceptance=()\n'
-                         'if [[ "$AUDIT_TARGET" == kiro ]]; then\n'
-                         '  test -n "$KIRO_NODE_BIN"\n'
-                         '  export PATH="$KIRO_NODE_BIN:' + fixed + '"\n'
-                         '  if [[ "$AUDIT_KIND" == plugin ]]; then\n'
-                         '    acceptance=(--acceptance kiro-prepared-installation)\n'
-                         '  fi\n'
-                         'else\n  export PATH="' + fixed + '"\nfi\n'
-                         'if [[ "$AUDIT_TARGET" == cursor && "$AUDIT_KIND" == plugin ]]; then\n'
-                         '  acceptance=(--acceptance cursor-prepared-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == cursor && "$AUDIT_KIND" == skill ]]; then\n'
-                         '  acceptance=(--acceptance cursor-prepared-skills-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == skill ]]; then\n'
-                         '  acceptance=(--acceptance kiro-prepared-skills-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == grok && "$AUDIT_KIND" == skill ]]; then\n'
-                         '  acceptance=(--acceptance grok-prepared-skills-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then\n'
-                         '  acceptance=(--acceptance windsurf-prepared-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == vscode && "$AUDIT_KIND" == plugin ]]; then\n'
-                         '  # User preparation and preserved refusal only; no uninstall attestation.\n'
-                         '  acceptance=(--acceptance vscode-user-manual-preparation)\n'
-                         'fi\n')
+        self.assertTrue(prefix.startswith('audit_go_bin=""\n'))
+        self.assertIn('audit_go="$(command -v go)"', prefix)
+        self.assertIn('GOTOOLCHAIN=local "$audit_go" version', prefix)
+        self.assertIn('go version go1.26.11 linux/amd64', prefix)
+        self.assertIn('audit_go_bin="${audit_go%/*}:"', prefix)
+        self.assertIn('acceptance=()\nif [[ "$AUDIT_TARGET" == kiro ]]; then\n', prefix)
+        self.assertIn('test -n "$KIRO_NODE_BIN"', prefix)
+        self.assertIn('export PATH="${audit_go_bin}$KIRO_NODE_BIN:' + fixed + '"', prefix)
+        self.assertIn('export PATH="${audit_go_bin}' + fixed + '"', prefix)
+        for mode in ('kiro-installation', 'kiro-skills-installation',
+                     'cursor-prepared-installation', 'cursor-prepared-skills-installation',
+                     'grok-prepared-skills-installation', 'windsurf-global-installation',
+                     'vscode-user-manual-preparation'):
+            self.assertIn('acceptance=(--acceptance ' + mode + ')', prefix)
+        self.assertNotIn('kiro-prepared-skills-installation', prefix)
+        self.assertNotIn('windsurf-prepared-installation', prefix)
+        self.assertIn('[[ "$(command -v go)" == "$audit_go" ]]', prefix)
+        self.assertIn('[[ "$(command -v docker)" == "$RUNNER_TEMP/vendor-root/usr/bin/docker" ]]', prefix)
         self.assertNotIn("$PATH", prefix)
         audit = load_audit()
         with TemporaryDirectory() as temporary:

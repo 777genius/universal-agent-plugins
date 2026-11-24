@@ -5019,6 +5019,7 @@ def main():
                    "cursor-prepared-skills-installation", "kiro-prepared-skills-installation",
                    "qoder-prepared-skills-installation", "windsurf-prepared-installation", "vscode-user-manual-preparation",
                     HISTORICAL_CODEX["ACCEPTANCE"], HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"],
+                     *PREPARED_INSTALLATION["KIRO_ACCEPTANCES"],
                      WINDSURF_INSTALLATION["ACCEPTANCE"]),
                    default="native")
     args = p.parse_args()
