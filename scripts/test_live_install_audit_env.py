@@ -4285,7 +4285,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     runner["published_cli_version"](value)
         finally:
             runner["_CLI_VERSION"].reset(token)
-        require({**valid, "stdout_tail": "agentplugins 0.1.104\n"})
+        require({**valid, "stdout_tail": "agentplugins 0.1.115\n"})
 
     def test_marketing_kit_published_abort_watchdog_refuses_stranded_proof_phases(self):
         # Run the actual script with an inert private bootstrap. A stranded

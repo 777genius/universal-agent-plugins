@@ -24,7 +24,7 @@ SignedClosureRetirement = claude_retirement["SignedClosureRetirement"]
 observe_claude_checkpoint = claude_retirement["observe_project_checkpoint"]
 RemovalDiscovery = runpy.run_path(str(ROOT / "scripts/marketing_kit_claude_discovery.py"))["RemovalDiscovery"]
 isolated_env = audit["isolated_client_env"]
-_CLI_VERSION = ContextVar("marketing_kit_cli_version", default="0.1.104")
+_CLI_VERSION = ContextVar("marketing_kit_cli_version", default="0.1.115")
 invoke = audit["call"]
 
 
@@ -1909,7 +1909,7 @@ def main():
     parser.add_argument("--target", required=True, choices=["codex", "cursor", "claude", "gemini", "opencode", "copilot"])
     parser.add_argument("--report", required=True)
     parser.add_argument("--cli", default="agentplugins")
-    parser.add_argument("--cli-version", type=published_cli_version, default="0.1.104")
+    parser.add_argument("--cli-version", type=published_cli_version, default="0.1.115")
     options = parser.parse_args()
     report_path = Path(options.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
