@@ -132,6 +132,24 @@ func TestEnvironmentClassificationStaysGenericForLookalikes(t *testing.T) {
 	}
 }
 
+// A socket permission refusal is not a folder permission error, and a TLS
+// trust failure nested in a net.OpError is not lack of network connectivity.
+func TestEnvironmentClassificationDoesNotMislabelNetworkCauses(t *testing.T) {
+	t.Parallel()
+	cases := map[string]error{
+		"socket dial permission": fmt.Errorf("fetch: %w", &net.OpError{Op: "dial", Net: "tcp", Err: syscall.EACCES}),
+		"nested TLS authority":   &url.Error{Op: "Get", URL: "https://example.test", Err: &net.OpError{Op: "dial", Net: "tcp", Err: x509.UnknownAuthorityError{}}},
+	}
+	for name, err := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := failureKindOf(err); got != failureUnknown {
+				t.Fatalf("wrong user-facing cause: %s", got)
+			}
+		})
+	}
+}
+
 // A refusal only gets the plain public error when the person can fix the cause
 // and the technical chain really landed in a log; every other case keeps the
 // original error and writes nothing.

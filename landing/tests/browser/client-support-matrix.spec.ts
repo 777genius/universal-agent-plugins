@@ -161,7 +161,7 @@ for (const { client, locale, theme, width } of nativeClientCases) {
     await expect(install.locator('p code')).toHaveText(selector);
     if (pinned) await expect(install).toContainText(t('registryUi.install.pinnedCatalogSource'));
     else await expect(install).not.toContainText(t('registryUi.install.pinnedCatalogSource'));
-    const repairNotice = t('registryUi.install.antigravityRepairUnavailable', { version: '0.1.115' });
+    const repairNotice = t('registryUi.install.antigravityRepairUnavailable', { version: 'latest' });
     await expect(install).not.toContainText(repairNotice);
     await expect(page.locator('.agent-page__steps article').nth(2).locator('p'))
       .toHaveText(t('registryUi.agentPage.useTheSameCliToInspectUpdateRepairSwitchSourceOrRemoveThePlugin'));

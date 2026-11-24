@@ -17,7 +17,10 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 audit = runpy.run_path(str(ROOT / "scripts/live-install-audit.py"))
-SignedClosureRetirement = runpy.run_path(str(ROOT / "scripts/marketing_kit_claude_retirement.py"))["SignedClosureRetirement"]
+CodexProfile = runpy.run_path(str(ROOT / "scripts/marketing_kit_codex_profile.py"))["CodexProfile"]
+claude_retirement = runpy.run_path(str(ROOT / "scripts/marketing_kit_claude_retirement.py"))
+SignedClosureRetirement = claude_retirement["SignedClosureRetirement"]
+observe_claude_checkpoint = claude_retirement["observe_project_checkpoint"]
 isolated_env = audit["isolated_client_env"]
 invoke = audit["call"]
 REQUIRED_DISTRIBUTIONS = audit["MARKETING_KIT_DISTRIBUTIONS"]
@@ -1351,7 +1354,7 @@ def native_component_residuals(target, home, case_root, stage, project_scope=Fal
 
 def check_removed_native_components(target, home, case_root, stage, project_scope=False,
                                     copilot_disabled_proof=None, claude_retirement=None,
-                                    cleanup=None, keep_claude_retirement=False,
+                                    cleanup=None, codex_profile=None, keep_claude_retirement=False,
                                     retained_claude_retirement=None):
     leftovers = native_component_residuals(target, home, case_root, stage, project_scope)
     if retained_claude_retirement is not None:
@@ -1366,6 +1369,18 @@ def check_removed_native_components(target, home, case_root, stage, project_scop
         return claude_retirement.finish(cleanup, leftovers,
             lambda: native_component_residuals(target, home, case_root, stage, project_scope),
             keep_open=keep_claude_retirement)
+    if codex_profile is not None:
+        if target != "codex" or project_scope or codex_profile.home != home:
+            raise AssertionError(f"{stage}: Codex proof belongs to another profile")
+        codex_profile.checkpoint("native-cleanup")
+        system = codex_profile.system_files()
+        if native_component_residuals(target, home, case_root, stage, project_scope) != leftovers:
+            raise AssertionError(f"{stage}: native residuals changed during System Skill proof")
+        codex_profile.guard()
+        if leftovers and all(path in system for path in leftovers):
+            return {"status": "verified-unchanged-pinned-system-files-at-checkpoint",
+                    "native_version": "0.153.4", "residuals": {path: system[path] for path in sorted(leftovers)},
+                    "atomic_snapshot_claimed": False, "writer_closure_claimed": False}
     if leftovers:
         # BUG-045: vendor-disabled preferences are not active registrations,
         # but only a separate, exact native CLI absence + four-key proof can
@@ -1551,15 +1566,19 @@ def current_vscode_boundary_kind(policy):
             or policy.get("closure") != FIXED_SIGNED_CLOSURE):
         raise AssertionError("current VS Code boundary requires authenticated positive policy")
     targets = policy.get("root_target_compatibility")
-    # The published, authenticated Directory may list these three additional
-    # managed roots. Accept only the two observed, exact target sets; never
-    # infer saved VS Code authority from arbitrary new targets.
-    extended = {**managed, **{client: {"scopes": ["user"], "delivery": "managed"}
-                              for client in ("hermes", "antigravity", "pi")}}
-    if targets in (managed, extended):
+    # The authenticated Directory may add other clients without changing this
+    # Copilot/VS Code boundary. Keep every required grant exact, and validate
+    # additional User grants rather than pinning the entire feed's client set.
+    if (not isinstance(targets, dict)
+            or any(targets.get(client) != grant for client, grant in managed.items())
+            or any(not isinstance(client, str) or not client
+                   or grant != {"scopes": ["user"], "delivery": "managed"}
+                   for client, grant in targets.items()
+                   if client not in managed and client != "vscode")):
+        raise AssertionError("current VS Code boundary has unqualified signed target shape")
+    if "vscode" not in targets:
         return "signed_grant_refusal"
-    prepared_vscode = {"vscode": {"scopes": ["user"], "delivery": "prepared"}}
-    if targets in ({**managed, **prepared_vscode}, {**extended, **prepared_vscode}):
+    if targets["vscode"] == {"scopes": ["user"], "delivery": "prepared"}:
         return "saved_management_capability"
     raise AssertionError("current VS Code boundary has unqualified signed target shape")
 
@@ -1803,6 +1822,7 @@ def main():
               "historical_policy_results": {"signed45": {
                   "status": "separate_point_in_time_audit", "required_for_current_qualification": False}}}
     codex_sqlite = MarketingCodexSQLiteProfiles(options.target)
+    claude_checkpoint_diagnostics = {}
     try:
         with tempfile.TemporaryDirectory(prefix="uap-real-marketing-kit-") as location, ExitStack() as custody:
             # Canonicalize this newly owned root before deriving fixture paths;
@@ -1826,6 +1846,18 @@ def main():
                 check_all_guards((lambda: check_foreign(foreign_files, root),
                                   copilot_b_trust_guard,
                                   lambda: claude_a_retirement.checkpoint() if claude_a_retirement else None))
+            codex_profiles = {}
+            def prepare_codex(e, p):
+                try:
+                    if options.target == "codex":
+                        codex_profiles[p] = CodexProfile(audit, root, e, p)
+                finally:
+                    check_all_guards((lambda: check_fixture_guards(),
+                                      lambda: check_codex_profiles("after-profile-preparation")))
+            def check_codex_profiles(phase):
+                check_all_guards(lambda proof=proof: proof.checkpoint(phase)
+                                 for proof in codex_profiles.values())
+            prepare_codex(env, project_a)
             project_before_user = None
             protected_b = None
             protected_c_project = None
@@ -1848,6 +1880,7 @@ def main():
                 guards=(lambda: check_fixture_guards(),))
             def run(e, p, label, *args, capture=None):
                 try:
+                    check_codex_profiles("before-" + label)
                     if claude_a_retirement is not None:
                         claude_a_retirement.checkpoint()
                     report["steps"].append(codex_sqlite.call(label,
@@ -1855,8 +1888,9 @@ def main():
                                         checkpoint=codex_sqlite.checkpoint,
                                         **({"capture": capture} if capture is not None else {}))))
                 finally:
-                    # Protect every peer even when another custody check fails.
-                    checks = [check_fixture_guards]
+                    # Keep every peer/foreign guard independent of a failed native proof.
+                    checks = [lambda: check_fixture_guards(),
+                              lambda: check_codex_profiles("after-" + label)]
                     if project_before_user is not None:
                         checks.append(lambda: check_user_project_unchanged(project_a, project_before_user, label))
                     if protected_b is not None:
@@ -1917,23 +1951,29 @@ def main():
                 receipt = []
                 retained = False
                 if options.target == "claude":
-                    listed = read_inventory(options.cli, e, p, options.target)
-                    retirement = SignedClosureRetirement(root, Path(e["HOME"]), p,
-                        listed, FIXED_SIGNED_CLOSURE, audit)
+                    listed = inventory(options.cli, e, p, options.target)
+                    checkpoint = []
+                    try:
+                        retirement = SignedClosureRetirement(root, Path(e["HOME"]), p,
+                            listed, FIXED_SIGNED_CLOSURE, audit, checkpoint_diagnostics=checkpoint)
+                    finally:
+                        key = "project_a_before_remove" if p == project_a else "project_b_before_remove"
+                        claude_checkpoint_diagnostics[key] = checkpoint[0] if checkpoint else {"status": "unavailable"}
                     if keep_retirement:
                         custody.callback(retirement.close)
                 try:
                     run(e, p, label, "remove", "marketing-kit", *scoped_args,
                         capture=receipt.append if retirement is not None else None)
-                    if identities(read_inventory(options.cli, e, p, options.target), options.target):
+                    if identities(inventory(options.cli, e, p, options.target), options.target):
                         raise AssertionError(f"{label}: Project retains root or mandatory children")
-                    proof = removed(options.target, Path(e["HOME"]), root,
+                    proof = check_removed_native_components(options.target, Path(e["HOME"]), root,
                         label + " native HOME", claude_retirement=retirement,
                         cleanup=receipt[0] if retirement is not None else None,
+                        codex_profile=codex_profiles.get(p),
                         keep_claude_retirement=keep_retirement)
                     if proof is not None:
                         report.setdefault("native_cleanup_proofs", []).append({"stage": label, **proof})
-                    removed(options.target, p, root,
+                    check_removed_native_components(options.target, p, root,
                         label + " native Project", project_scope=True)
                     retained = keep_retirement and retirement is not None
                     return retirement if retained else None
@@ -1974,10 +2014,15 @@ def main():
             manifest_after_update = (project_a / "uap.toml").read_bytes()
             run(env, project_a, "repair intact", "repair", "marketing-kit",
                 "--target", options.target, *scoped)
-            if identities(read_inventory(options.cli, env, project_a, options.target), options.target) != identities_after_update:
+            repaired_rows = inventory(options.cli, env, project_a, options.target)
+            if identities(repaired_rows, options.target) != identities_after_update:
                 raise AssertionError("repair changed installation identities")
             if (project_a / "uap.lock").read_bytes() != pinned_after_update:
                 raise AssertionError("repair changed the signed lock")
+            if options.target == "claude":
+                claude_checkpoint_diagnostics["project_a_after_repair"] = observe_claude_checkpoint(
+                    root, project_a, repaired_rows, audit)
+            del repaired_rows
             native_a_before_b = settled_profile_snapshot(env, project_a)
             env_b, project_b, foreign_b, project_foreign_b, native_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
             codex_sqlite.prepare("B", env_b, project_b)
@@ -1986,6 +2031,7 @@ def main():
                                            (project_foreign_b, "unmanaged project data\n"),
                                            *native_foreign_b], root)
             foreign_files.extend(foreign_b_files)
+            prepare_codex(env_b, project_b)
             if options.target == "copilot":
                 try:
                     proof, copilot_b_trust_guard = prepare_copilot_project_b_trust(env_b, project_b, root)
@@ -2109,6 +2155,7 @@ def main():
                 run_case(options.cli, options.target, root, "C"))
             codex_sqlite.prepare("C", env_c, project_c)
             bind_pinned_launcher_cache(env_c, launcher_cache, root)
+            prepare_codex(env_c, project_c)
             # User operations must not mutate their own working Project C.
             protected_c_project = scoped_snapshot([project_c])
             foreign_files.extend(pin_foreign([(foreign_c, "unmanaged user data\n"),
@@ -2176,6 +2223,7 @@ def main():
                         lambda: codex_user_native_remove_attestation(env_c, project_c)),
                     (
                         lambda: check_fixture_guards(),
+                        lambda: check_codex_profiles("User C native uninstall"),
                         lambda: check_profile_unchanged(
                             env, project_a, user_a_native_before_c, "User C native uninstall"),
                         lambda: check_profile_unchanged(
@@ -2212,7 +2260,8 @@ def main():
                     "disabled_only": bool(copilot_c_disabled)}
             removed(options.target, Path(env_c["HOME"]),
                                             root, "User C remove",
-                                            copilot_disabled_proof=copilot_c_disabled)
+                                            copilot_disabled_proof=copilot_c_disabled,
+                                            codex_profile=codex_profiles.get(project_c))
             if user_inventory() != user_after_update:
                 raise AssertionError("User C remove mutated User A installations")
             if (user_portable / "uap.lock").read_bytes() != user_lock_after_update:
@@ -2231,6 +2280,7 @@ def main():
                         lambda: codex_user_native_remove_attestation(env, project_a)),
                     (
                         lambda: check_fixture_guards(),
+                        lambda: check_codex_profiles("User A native uninstall"),
                         lambda: check_user_project_unchanged(
                             project_a, project_before_user, "User A native uninstall"),
                         lambda: check_profile_unchanged(
@@ -2265,8 +2315,9 @@ def main():
                     "disabled_only": bool(copilot_a_disabled)}
                 report["copilot_user_a_settings_shape"] = copilot_a_shapes
             retained_proof = guarded_native_attestation(
-                lambda: removed(options.target, Path(env["HOME"]),
+                lambda: check_removed_native_components(options.target, Path(env["HOME"]),
                     root, "User A remove", copilot_disabled_proof=copilot_a_disabled,
+                    codex_profile=codex_profiles.get(project_a),
                     retained_claude_retirement=claude_a_retirement),
                 (check_fixture_guards,
                  lambda: check_user_project_unchanged(project_a, project_before_user, "User A cleanup"),
@@ -2320,6 +2371,10 @@ def main():
                     status="refused_as_expected", contract=boundary["contract"],
                     reason=boundary["reason"], policy=boundary["policy"])
             codex_sqlite.checkpoint("final-qualification")
+            check_codex_profiles("final-lifecycle")
+            if codex_profiles:
+                report["codex_runtime_profiles"] = {p.parent.name: proof.evidence()
+                                                    for p, proof in codex_profiles.items()}
             report["scope_results"]["user"]["status"] = "passed"
         # TemporaryDirectory cleanup is part of qualification; exceptions from
         # its __exit__ must never leave a successful two-scope result behind.
@@ -2328,6 +2383,8 @@ def main():
     except Exception as error:
         report["status"] = "failed"
         report["failure"] = str(error)[:2500]
+        if options.target == "claude" and claude_checkpoint_diagnostics:
+            report["claude_project_checkpoint_diagnostics"] = claude_checkpoint_diagnostics
         traceback.print_exc()
     finally:
         if options.target == "codex":

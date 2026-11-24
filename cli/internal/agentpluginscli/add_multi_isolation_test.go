@@ -421,6 +421,30 @@ func TestGroupIsolationIsOffWhenVSCodeIsSelected(t *testing.T) {
 	}
 }
 
+// Native backend ownership, not a generic CLI ClientID switch, decides whether
+// a prepared sibling may split off after a failed group. Preserve the existing
+// VS Code whole-selection rule in both User and Project without disabling the
+// native Copilot owner or independent clients.
+func TestGroupIsolationUsesNativeBackendOwnerAcrossScopes(t *testing.T) {
+	t.Parallel()
+	for _, scope := range []domain.InstallScope{domain.ScopeUser, domain.ScopeProject} {
+		t.Run(string(scope), func(t *testing.T) {
+			// Project registries are intentionally independent. The frozen
+			// VS Code guard still applies, rather than borrowing Project
+			// sibling identity to decide whether retry isolation is safe.
+			if scope == domain.ScopeProject && len(domain.BackendSiblingsForScope(domain.ClientVSCode, scope)) != 0 {
+				t.Fatal("Project backends unexpectedly share a physical registry")
+			}
+			owner := newGroupIsolation([]domain.DetectedClient{{ClientID: domain.ClientCopilot}}, []usecase.AddInput{{Scope: scope}}, "op")
+			sibling := newGroupIsolation([]domain.DetectedClient{{ClientID: domain.ClientVSCode}}, []usecase.AddInput{{Scope: scope}}, "op")
+			independent := newGroupIsolation([]domain.DetectedClient{{ClientID: domain.ClientCursor}}, []usecase.AddInput{{Scope: scope}}, "op")
+			if !owner.enabled() || sibling.enabled() || !independent.enabled() {
+				t.Fatalf("scope %s: native owner=%v, prepared sibling=%v, independent=%v", scope, owner.enabled(), sibling.enabled(), independent.enabled())
+			}
+		})
+	}
+}
+
 // flaggingStager fails one client and records that it did.
 type flaggingStager struct {
 	ports.PackageStager

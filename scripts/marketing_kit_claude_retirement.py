@@ -11,20 +11,143 @@ import sys
 _CUSTODY = run_path(str(Path(__file__).with_name("claude_cache_retirement_audit.py")))
 require = _CUSTODY["require"]
 
-# Published CLI 0.1.115 reloads locked packages without CatalogEvidence.
-# Its observed native installation qualifies the pinned Skill-only root and
-# local Playwright MCP as not_required only while active. Prepared installs
-# retain not_checked, or a prior not_required across repeat/repair. Remote
-# Notion/HubSpot MCP installation stays not_checked; this is no account grant.
+# Exact published 0.1.115 producer contract for this immutable signed closure:
+# marketing-kit contains only Skills; Playwright contains a local stdio MCP.
+# With absent catalog evidence, the active/installed/allowed native qualifiers
+# produce not_required for these two aliases. Remote Notion/HubSpot remain
+# not_checked. Fresh prepared outcomes do not enter those active-only qualifiers.
+# This pinned Project fixture's mutating SDK reload has absent catalog evidence;
+# explicit catalog objects, including schema-1 unknown, need a different contract
+# and refuse here. This is installation setup, never future model/tool credentials;
+# no observed authentication value selects the oracle.
+
+
+def expected_project_authentication(alias, binding):
+    if binding["package_revision"].get("catalog_evidence") is not None:
+        raise ValueError(f"Claude cache retirement {alias} authentication catalog evidence "
+                         "differs from pinned Project checkpoint: expected=absent_or_null")
+    if alias in ("marketing-kit", "playwright") and binding.get("activation") == "active":
+        return "not_required"
+    return "not_checked"
+
+
+def authentication_checkpoint_label(row):
+    """Report only public domain states; do not echo arbitrary state-file data."""
+    if "authentication" not in row:
+        return "missing"
+    value = row["authentication"]
+    known = ("not_checked", "not_required", "auth_pending", "authenticated", "failed")
+    return value if type(value) is str and value in known else "invalid"
+
+
+def _checkpoint_label(row, key, allowed):
+    if type(row) is not dict:
+        return "invalid"
+    if key not in row:
+        return "missing"
+    value = row[key]
+    return value if type(value) is str and value in allowed else "invalid"
+
+
+def _checkpoint_readiness(binding):
+    return {key: _checkpoint_label(binding, key, allowed) for key, allowed in (
+        ("authentication", ("not_checked", "not_required", "auth_pending", "authenticated", "failed")),
+        ("activation", ("active", "prepared", "manual_activation_required", "failed", "not_required")),
+        ("verification", ("installation_verified", "package_validated", "runtime_verified", "not_run", "failed")),
+        ("policy", ("allowed", "blocked", "approval_required")))}
+
+
+def _checkpoint_catalog(binding, record):
+    revision = binding.get("package_revision") if type(binding) is dict else None
+    if type(revision) is not dict:
+        return {"presence": "unavailable"}
+    if "catalog_evidence" not in revision:
+        return {"presence": "absent"}
+    evidence = revision["catalog_evidence"]
+    if evidence is None:
+        return {"presence": "null"}
+    if type(evidence) is not dict:
+        return {"presence": "invalid"}
+    schema = evidence.get("schema_version")
+    compatibility = evidence.get("compatibility")
+    selected = compatibility.get("claude") if type(compatibility) is dict else None
+    directory = record.get("directory") if type(record) is dict else None
+    digest = evidence.get("digest")
+    digest_valid = type(digest) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is not None
+    recorded_digest = directory.get("snapshot_digest") if type(directory) is dict else None
+    return {"presence": "object", "schema_version": schema if type(schema) is int and schema in (1, 2) else "invalid",
+        "catalog_version": _checkpoint_label(evidence, "catalog_version", ("directory-snapshot-1", "directory-snapshot-2")),
+        "digest_shape": "sha256" if digest_valid else "invalid",
+        "digest_matches_recorded_snapshot": digest == recorded_digest if digest_valid and type(recorded_digest) is str else None,
+        "claude_compatibility": "object" if type(selected) is dict else "absent" if type(compatibility) is dict and "claude" not in compatibility else "invalid",
+        "authentication": _checkpoint_label(selected, "authentication", ("unknown", "required", "not_required")),
+        "package": _checkpoint_label(selected, "package", ("native", "projected", "prepared", "unsupported")),
+        "verification": _checkpoint_label(selected, "verification", ("tested", "schema_only", "not_tested"))}
+
+
+def project_checkpoint_summary(state, public_rows, audit):
+    """Finite diagnostic projection only; never installation or custody authority."""
+    try:
+        records = state.get("installations") if type(state) is dict else None
+        if type(records) is not list or type(public_rows) is not list:
+            return {"status": "unavailable"}
+        members = {}
+        for alias in ("marketing-kit", "notion", "hubspot-crm", "playwright"):
+            distribution = audit["MARKETING_KIT_DISTRIBUTIONS"][alias]
+            raw = [row for row in records if type(row) is dict and row.get("clients")
+                   and type(row.get("directory")) is dict and row["directory"].get("distribution_id") == distribution]
+            public = [row for row in public_rows if type(row) is dict and type(row.get("directory")) is dict
+                      and row["directory"].get("recorded_distribution") == distribution]
+            def select(rows):
+                return rows[0] if len(rows) == 1 else {}, "one" if len(rows) == 1 else "missing" if not rows else "multiple"
+            record, raw_status = select(raw)
+            view, public_status = select(public)
+            def binding(row):
+                values = row.get("clients")
+                if type(values) is dict:
+                    values = list(values.values())
+                if type(values) is not list:
+                    return {}, "missing" if "clients" not in row else "invalid"
+                if len(values) != 1:
+                    return {}, "missing" if not values else "multiple"
+                return (values[0], "one") if type(values[0]) is dict else ({}, "invalid")
+            (raw_binding, raw_binding_status), (public_binding, public_binding_status) = binding(record), binding(view)
+            members[alias] = {"recorded_selection": raw_status, "public_selection": public_status,
+                "recorded_binding_selection": raw_binding_status, "public_binding_selection": public_binding_status,
+                "same_installation_id": type(record.get("installation_id")) is str
+                    and record["installation_id"] == view.get("installation_id") if raw_status == public_status == "one" else None,
+                "recorded": _checkpoint_readiness(raw_binding), "public": _checkpoint_readiness(public_binding),
+                "recorded_catalog_evidence": _checkpoint_catalog(raw_binding, record),
+                "public_catalog_evidence": "not_exposed_by_public_schema"}
+        return {"status": "observed", "diagnostic_only": True, "members": members}
+    except Exception:
+        return {"status": "unavailable"}
+
+
+def _checkpoint_document(audit, case, path):
+    text, error = audit["copilot_settings_read"](path, case)
+    require(error is None and type(text) is str)
+    return json.loads(text, object_pairs_hook=audit["_unique_json_object"],
+                      parse_constant=lambda _: require(False))
+
+
+def observe_project_checkpoint(case, project, public_rows, audit):
+    """Read through the custody reader; a diagnostic failure never qualifies state."""
+    try:
+        return project_checkpoint_summary(_checkpoint_document(audit, case, project / ".uap/state-v2.json"), public_rows, audit)
+    except Exception:
+        return {"status": "unavailable"}
 
 
 class SignedClosureRetirement:
     """Hold all four owned caches continuously across one Project removal."""
 
-    def __init__(self, case_root, home, project, public_rows, pins, audit):
+    def __init__(self, case_root, home, project, public_rows, pins, audit, checkpoint_diagnostics=None):
         self.fds, self.owners, self.anchors = [], [], {}
         self.finished = False
         self.retired_allowed = None
+        if checkpoint_diagnostics is not None:
+            checkpoint_diagnostics.append({"status": "unavailable"})
         try:
             require(sys.platform == "linux")
             self.case, self.home, self.project = map(Path, (case_root, home, project))
@@ -39,6 +162,8 @@ class SignedClosureRetirement:
                     and set(aliases.values()) == set(pins)
                     and type(public_rows) is list and len(public_rows) == 4)
             state = self.document(self.project / ".uap/state-v2.json")
+            if checkpoint_diagnostics is not None:
+                checkpoint_diagnostics[-1] = project_checkpoint_summary(state, public_rows, audit)
             require(type(state.get("schema_version")) is int and state["schema_version"] == 5)
             records = state["installations"]
             require(type(records) is list)
@@ -78,10 +203,7 @@ class SignedClosureRetirement:
             raise
 
     def document(self, path):
-        text, error = self.audit["copilot_settings_read"](path, self.case)
-        require(error is None and type(text) is str)
-        return json.loads(text, object_pairs_hook=self.audit["_unique_json_object"],
-                          parse_constant=lambda _: require(False))
+        return _checkpoint_document(self.audit, self.case, path)
 
     def capture(self, alias, distribution, pin, public, record):
         require(record["declared_name"] == record["package"]["declared_name"] == public["name"] == alias
@@ -107,19 +229,20 @@ class SignedClosureRetirement:
                 and type(record["clients"]) is dict and len(record["clients"]) == 1)
         binding_id, binding = next(iter(record["clients"].items()))
         require(type(binding_id) is str and bool(binding_id) and binding["client_binding_id"] == binding_id)
-        authentication = ("not_checked",)
-        if alias in ("marketing-kit", "playwright"):
-            authentication = (("not_required",) if binding.get("activation") == "active"
-                              else ("not_checked", "not_required"))
+        expected_authentication = expected_project_authentication(alias, binding)
         checkpoint = {"client_id": ("claude",), "scope": ("project",),
                 # Installed but unready MCPs and untrusted/suppressed plugins
                 # can remain prepared in the published adapter. Exact cache,
                 # registry and receipt ownership below is still mandatory.
                 "activation": ("active", "prepared"), "materialization": ("materialized",),
                 "verification": ("installation_verified",),
-                "authentication": authentication, "policy": ("allowed",)}
+                "authentication": (expected_authentication,), "policy": ("allowed",)}
         for key, allowed in checkpoint.items():
             if binding.get(key) != clients[0].get(key) or binding.get(key) not in allowed:
+                if key == "authentication":
+                    raise ValueError(f"Claude cache retirement {alias} binding field authentication "
+                        f"differs from checkpoint contract: recorded={authentication_checkpoint_label(binding)}, "
+                        f"public={authentication_checkpoint_label(clients[0])}; expected={expected_authentication}")
                 raise ValueError(f"Claude cache retirement {alias} binding field {key} differs from checkpoint contract")
         readiness = {key: binding[key] for key in checkpoint}
         for revision in (binding["package_revision"], clients[0]["package_revision"]):

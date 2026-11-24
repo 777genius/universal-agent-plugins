@@ -193,7 +193,12 @@ func (c *windProjectCycle) publicProof(t *testing.T, label string, r *windCompon
 	w.freezeProof(t, r)
 }
 
+// The observed exact no-change repeat emits only resolver progress. This
+// assertion does not waive any native, state, cache or foreign-tree checks.
 func windCycleProgress(stage string) string {
+	if stage == "repeat-add-a" {
+		return "Resolving and validating one Agent Plugin package for every selected target...\n"
+	}
 	if stage == "add-user" {
 		stage = "add-a"
 	}

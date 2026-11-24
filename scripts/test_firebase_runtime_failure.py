@@ -244,6 +244,11 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                             "stage-root": "staging-root",
                             "stage-manifest": "staging-manifest",
                         }[mutation])
+                        if mutation == "stage-data":
+                            self.assertEqual(result["staging_parent_probe"], {
+                                "absolute": True, "lexical_parent": False,
+                                "physical_parent": False,
+                            })
                     elif result["refusal_phase"] == "staging-binding":
                         self.assertEqual(result["refusal_detail"], "unclassified")
                     if mutation in ("owner-state", "owner-digest", "owner-id",
@@ -254,6 +259,25 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                                   else "unselected backend" if mutation == "data-extra"
                                   else "data authority")
                         self.assertEqual(result["refusal_detail"], wanted)
+                        if wanted == "data authority":
+                            evidence = result["owned_data_probe"]
+                            self.assertEqual(set(evidence), {
+                                "receipt_bounded", "owner_fields_bounded", "state_owned",
+                                "scope_user", "backend_identity", "locator_lexical",
+                                "locator_physical", "digest_lexical", "digest_physical",
+                            })
+                            self.assertTrue(all(type(flag) is bool
+                                                for flag in evidence.values()))
+                            if mutation == "owner-digest":
+                                self.assertFalse(evidence["digest_lexical"])
+                                self.assertFalse(evidence["digest_physical"])
+                            elif mutation == "owner-state":
+                                self.assertFalse(evidence["state_owned"])
+                            elif mutation == "owner-id":
+                                self.assertFalse(evidence["receipt_bounded"])
+                            elif mutation == "foreign":
+                                self.assertFalse(evidence["locator_lexical"])
+                                self.assertFalse(evidence["locator_physical"])
                     elif mutation == "extra-log":
                         self.assertEqual(result["refusal_phase"], "npm-cache")
 

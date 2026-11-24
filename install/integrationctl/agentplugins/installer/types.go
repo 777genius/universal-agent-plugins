@@ -33,7 +33,8 @@ const (
 
 // Request is copied by Prepare. Subsequent caller edits do not change the handle.
 type Request struct {
-	// ConfirmPluginEnable is transient single-Project repair consent.
+	// ConfirmPluginEnable applies only to one explicit Project repair. It is
+	// captured by Prepare and cannot be granted by diagnostic JSON or Apply.
 	ConfirmPluginEnable bool `json:"-"`
 	Scope               domain.InstallScope
 	ProjectRoot         string `json:"-"`

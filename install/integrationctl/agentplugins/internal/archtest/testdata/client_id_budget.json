@@ -1,5 +1,3 @@
 {
-  "packages": {
-    "cli/internal/agentpluginscli": 1
-  }
+  "packages": {}
 }

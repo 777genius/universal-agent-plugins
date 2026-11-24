@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"syscall"
 	"unsafe"
 
@@ -51,13 +52,14 @@ func replaceSessionContext(ctx context.Context, command string, args []string, c
 	if err != nil {
 		return fmt.Errorf("create managed stdio job: %w", err)
 	}
-	defer func() {
-		if job != 0 {
-			_ = windows.CloseHandle(job)
-		}
-	}()
+	defer closeOwnedSessionJob(&job)
 	limits := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{}
 	limits.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+	// The x/sys wrapper receives a uintptr and may execute Go before the syscall.
+	// Keep the buffer pinned across that wrapper call.
+	var limitsPin runtime.Pinner
+	limitsPin.Pin(&limits)
+	defer limitsPin.Unpin()
 	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
 		uintptr(unsafe.Pointer(&limits)), uint32(unsafe.Sizeof(limits))); err != nil {
 		return fmt.Errorf("configure managed stdio job: %w", err)
@@ -92,6 +94,12 @@ func replaceSessionContext(ctx context.Context, command string, args []string, c
 		return err
 	}
 	return waitSessionContext(ctx, cmd, &job)
+}
+
+func closeOwnedSessionJob(job *windows.Handle) {
+	if *job != 0 {
+		_ = windows.CloseHandle(*job)
+	}
 }
 
 func waitSessionContext(ctx context.Context, cmd *exec.Cmd, job *windows.Handle) error {

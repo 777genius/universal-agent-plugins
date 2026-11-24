@@ -48,7 +48,7 @@ func TestCIMainPushEvidenceIsNeverCancelledByNextMerge(t *testing.T) {
 				t.Fatalf("main push must retain exact run identity: got %q, want %q", got, want)
 			}
 			if w.Concurrency.Cancel != prOnly {
-				t.Fatalf("only obsolete PR runs may be cancelled: %s", w.Concurrency.Cancel)
+				t.Fatalf("only obsolete PR runs may be canceled: %s", w.Concurrency.Cancel)
 			}
 		})
 	}
