@@ -912,6 +912,47 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                         (path / "unexpected").write_text("native mutation")
                     with self.assertRaises(ValueError): self.finish(observer, row, sequence)
 
+    def test_retained_empty_devin_writer_state_refuses_foreign_or_active_bytes(self):
+        for skill_parent in (False, True):
+            for corruption in (None, "foreign", "active-server", "nonempty-lock",
+                               "nonempty-skill", "wrong-mode"):
+                with self.subTest(skill_parent=skill_parent, corruption=corruption), TemporaryDirectory() as temporary:
+                    observer, _ = self.fixture(Path(temporary).resolve())
+                    row = self.row(0)
+                    for position, (argv, outcome) in enumerate(self.authored_sequence(
+                            observer, row, self.sequence(observer, row))):
+                        if position == 4:
+                            config = observer.global_root / "mcp_config.json"
+                            config.write_bytes(b'{"mcpServers":{}}\n')
+                            config.chmod(0o600)
+                            lock = observer.global_root / "mcp_config.json.agentplugins.lock"
+                            lock.write_bytes(b"")
+                            lock.chmod(0o600)
+                            if skill_parent:
+                                (observer.global_root / "skills").mkdir()
+                            if corruption == "foreign":
+                                (observer.global_root / "alien-mcp.json").write_bytes(b"{}")
+                            elif corruption == "active-server":
+                                config.write_bytes(b'{"mcpServers":{"foreign":{"command":"other"}}}')
+                            elif corruption == "nonempty-lock":
+                                lock.write_bytes(b"not-empty")
+                            elif corruption == "nonempty-skill":
+                                skills = observer.global_root / "skills"
+                                skills.mkdir(exist_ok=True)
+                                (skills / "foreign").write_bytes(b"foreign")
+                            elif corruption == "wrong-mode":
+                                lock.chmod(0o644)
+                        observer.observe(argv, outcome)
+                    if corruption is None:
+                        proof = observer.finish(row, row["source"], 0, self.fixtures)
+                        self.assertEqual(proof["native_post_remove_state"], "empty-writer-coordination")
+                        self.assertEqual(proof["public_state"], PREPARED)
+                        self.assertNotEqual(proof["observations"][4]["native_image"],
+                                            proof["initial_native_image"])
+                    else:
+                        with self.assertRaises(ValueError):
+                            observer.finish(row, row["source"], 0, self.fixtures)
+
     def test_repeat_and_late_native_mutations_refuse(self):
         for when in ("repeat", "late"):
             with self.subTest(when=when), TemporaryDirectory() as temporary:

@@ -369,6 +369,38 @@ class WindsurfInstallationAudit:
         self.guard()
         return image
 
+    def removed_empty_native_coordination(self, observed):
+        """Accept only an exact empty MCP writer file/lock and optional empty Skills parent.
+
+        The common nativeconfig writer leaves these inert paths after removal.
+        No pre-existing entry, foreign file or native registration may change.
+        """
+        if any(observed.get(key) != value for key, value in self.initial.items()):
+            return False
+        added = set(observed) - set(self.initial)
+        files = {"devin/mcp_config.json", "metadata:2:mcp_config.json",
+                 "devin/mcp_config.json.agentplugins.lock",
+                 "metadata:2:mcp_config.json.agentplugins.lock"}
+        optional = {"directory:2:skills", "metadata:2:skills"}
+        if added not in (files, files | optional):
+            return False
+        fd = os.open(self.global_root,
+                     os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            require(self.directory_identity(os.fstat(fd)) == self.anchors[self.global_root])
+            config, config_fact = read_file(fd, "mcp_config.json", limit=4096)
+            lock, lock_fact = read_file(fd, "mcp_config.json.agentplugins.lock", limit=4096)
+            require(strict_json(config) == {"mcpServers": {}} and lock == b""
+                    and stat.S_IMODE(config_fact["mode"]) == 0o600
+                    and stat.S_IMODE(lock_fact["mode"]) == 0o600)
+            if added == files | optional:
+                with member(fd, "skills") as skill_fd:
+                    require(set(frame(skill_fd)) == {""})
+            require(self.directory_identity(os.fstat(fd)) == self.anchors[self.global_root])
+        finally:
+            os.close(fd)
+        return self.image() == observed
+
     def observe(self, argv, outcome):
         """Consume complete existing parsed JSON, without rerunning any command."""
         require(type(argv) is list and argv and argv[0] == self.cli and len(self.observations) < 6
@@ -425,6 +457,8 @@ class WindsurfInstallationAudit:
             self.same_native_evidence(native_proof, self.native_runtime.evidence())
         return {"status": "verified-installation-negative" if negative else "verified-installation-lifecycle",
                 **({"preserved_native_proof": reference} if reference is not None else {}),
+                "native_post_remove_state": ("empty-writer-coordination"
+                    if not negative and self.retained_empty_native_coordination else "pristine"),
                 "scope": "user", "canonical_client_id": "windsurf", "fixture_index": index,
                 "source": source, "identity": identity, "public_state": state,
                 "source_projection": self.source_projection,
@@ -495,7 +529,11 @@ class WindsurfInstallationAudit:
                     "removal_verified", "post_list_schema_valid"))
                 and row.get("post_removal_leftovers") == [])
         frames = [image for _, _, image in self.observations]
-        unchanged = frames[0] == frames[1] == frames[2] == frames[3] and frames[4] == frames[5] == self.initial
+        self.retained_empty_native_coordination = (
+            frames[4] != self.initial and self.removed_empty_native_coordination(frames[4]))
+        unchanged = (frames[0] == frames[1] == frames[2] == frames[3]
+                     and frames[4] == frames[5]
+                     and (frames[4] == self.initial or self.retained_empty_native_coordination))
         if not unchanged:
             error = ValueError("Devin Global installation evidence is unresolved")
             error.windsurf_installation_diagnostics = {
@@ -772,9 +810,14 @@ def summary(report, fixtures, *, fixture_sha256):
                 require("preserved_native_proof" not in proof)
             if negative:
                 require(frames == [initial, initial]
+                        and proof.get("native_post_remove_state") == "pristine"
                         and row.get("status") == ("documented-or-source-unsupported" if index == 13 else "install-failed"))
             else:
-                require(frames[0] == frames[1] == frames[2] == frames[3] and frames[4] == frames[5] == initial
+                retained = proof.get("native_post_remove_state") == "empty-writer-coordination"
+                require(proof.get("native_post_remove_state") in ("pristine", "empty-writer-coordination")
+                        and frames[0] == frames[1] == frames[2] == frames[3] and frames[4] == frames[5]
+                        and (frames[4] == initial if not retained else
+                             frames[4] != initial and frames[4]["entries"] - initial["entries"] in (4, 6))
                         and row.get("status") in ("prepared-lifecycle-passed", "passed")
                         and row.get("prepared_components_only") is True
                         and all(row.get(key) is True for key in (

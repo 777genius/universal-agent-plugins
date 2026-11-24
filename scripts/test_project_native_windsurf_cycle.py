@@ -133,6 +133,26 @@ class WindsurfCycleContracts(unittest.TestCase):
                 value["cache"]["after_parent"]["Inode"]+=1
         with self.assertRaises(ValueError):self.admit()
 
+    def test_retained_noop_lock_requires_exact_prior_bytes_and_inode(self):
+        old_time = cycle.stamp("2030-03-17T00:00:00Z")
+        start = cycle.stamp("2030-03-17T00:01:00Z")
+        end = cycle.stamp("2030-03-17T00:01:01Z")
+        raw = cycle.compact({"pid": 4321, "acquired_at": "2030-03-17T00:00:00Z"}) + b"\n"
+        recorded = {"Modified": [old_time // 10**9, 0],
+                    "Changed": [old_time // 10**9, 0], "Inode": 20}
+        root = "/held"
+        previous = {"mutation_lock": wire(raw),
+                    "frames": {root: {"mutation.lock": copy.deepcopy(recorded)}}}
+        for stage in ("repeat-add-a", "unchanged-update-a", "intact-repair-a"):
+            self.assertTrue(cycle.verified_mutation_lock_time(stage, raw, recorded, previous, root, start, end))
+        for stage in ("add-a", "update-a", "remove-a", "missing-repair-a"):
+            self.assertFalse(cycle.verified_mutation_lock_time(stage, raw, recorded, previous, root, start, end))
+        self.assertFalse(cycle.verified_mutation_lock_time("repeat-add-a", raw, recorded, None, root, start, end))
+        self.assertFalse(cycle.verified_mutation_lock_time("repeat-add-a", raw + b"x", recorded, previous, root, start, end))
+        replaced = copy.deepcopy(recorded)
+        replaced["Inode"] += 1
+        self.assertFalse(cycle.verified_mutation_lock_time("repeat-add-a", raw, replaced, previous, root, start, end))
+
     def test_repeat_remove_cannot_refresh_unchanged_lock(self):
         value=next(row["value"] for row in self.proofs if row["stage"]=="repeat-remove-a")
         command=next(row["value"] for row in self.commands if row["stage"]=="repeat-remove-a")

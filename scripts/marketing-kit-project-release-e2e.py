@@ -927,7 +927,10 @@ def check_refusal_data_unchanged(data, before, observed, *, store_pins=()):
         if created_root and key == "root-kind:0":
             continue
         if observed.get(key) != value:
-            raise AssertionError("corrupt restore changed existing data entry")
+            # Preserve refusal; share only bounded sanitized keys and hashes.
+            delta = audit["copilot_snapshot_delta"](previous, observed)
+            raise AssertionError("corrupt restore changed existing data entry: "
+                                 + json.dumps(delta, sort_keys=True))
     files = {"directory-v1-cache.json", "directory-v1-cache.json.lock"}
     if not before.get("directory_only"):
         files.update((REFUSAL_SCANNER_PATH, *before["subjects"]))
@@ -2025,9 +2028,15 @@ def main():
                             or audit["path_inside_case"](candidate, canonical_root)):
                         raise AssertionError("Claude native observation root is unsafe")
                 complete = profile_snapshot(e, p)
-                if (any(key.startswith(("root-link:", "link:")) for key in complete)
-                        or any(value in ("symlink", "non-regular") for value in complete.values())):
-                    raise AssertionError("Claude native observation contains an unsafe entry")
+                unsafe = {key: value for key, value in complete.items()
+                          if key.startswith(("root-link:", "link:"))
+                          or value in ("symlink", "non-regular")}
+                if unsafe:
+                    # Fail closed. Native data and symlink targets are not
+                    # printed; the shared reporter bounds and hashes values.
+                    delta = audit["copilot_snapshot_delta"]({}, unsafe)
+                    raise AssertionError("Claude native observation contains an unsafe entry: "
+                                         + json.dumps(delta, sort_keys=True))
                 check_foreign(foreign_files, root)
                 own = scoped_snapshot((p, Path(e["AGENTPLUGINS_HOME"]))) if initializing else complete
                 runtime_before = complete if initializing else None

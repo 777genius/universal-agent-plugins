@@ -156,6 +156,18 @@ def times(value,start,end):
     return all(start <= value[k][0]*10**9+value[k][1] <= end for k in ("Modified","Changed"))
 
 
+def verified_mutation_lock_time(stage, raw, recorded, previous, root, start, end):
+    """Reuse only an unchanged prior lock in an actual no-op public phase."""
+    body = load(raw)
+    fresh = start <= stamp(body["acquired_at"]) <= end and times(recorded, start, end)
+    if fresh:
+        return True
+    if stage not in {"repeat-add-a", "unchanged-update-a", "intact-repair-a"} or previous is None:
+        return False
+    return (raw == stream(previous["mutation_lock"])
+            and same(recorded, previous["frames"][root]["mutation.lock"]))
+
+
 def selected_parent_times(old,now,start,end):
     # processlock can advance ctime without advancing mtime; unchanged stamps
     # remain the exact original values, every changed stamp belongs to the call.
@@ -283,7 +295,8 @@ def installation(value,paths,previous,stage,cmd):
     if stage=="repeat-remove-a":
         require(previous is not None and lock_raw==stream(previous["mutation_lock"]) and same(previous["frames"][root]["mutation.lock"],lock_record) and same(frames,previous["frames"]))
     else:
-        require(start<=stamp(lock["acquired_at"])<=end and times(lock_record,start,end))
+        if not verified_mutation_lock_time(stage, lock_raw, lock_record, previous, root, start, end):
+            raise ValueError("Windsurf mutation.lock timing outside selected public phase: " + stage)
     if previous is not None:
         require(authority(previous["frames"][root]["mutation.lock"],lock_record))
     payload(current,paths)
