@@ -11815,7 +11815,7 @@ class CopilotManagedSkillReceiptTest(unittest.TestCase):
                             shutil.rmtree(destination)
                         (f["project"] / "uap.lock").write_text('{"packages":[]}')
                         state["installed"] = False
-                        doc = {"schema_version": 1, "command": "remove", "result": "success", "data": {}}
+                        doc = {"schema_version": 1, "command": "agentplugins remove", "result": "success", "data": {}}
                     else:
                         raise AssertionError("unexpected public command: " + repr(argv))
                     return {"exit_code": 0, "timeout": False, "stdout_tail": json.dumps(doc),
@@ -11909,7 +11909,7 @@ class CopilotManagedSkillConsistencyTest(unittest.TestCase):
                     (f["project"] / "uap.lock").write_text('{"packages":[]}')
                     state["installed"] = False
                     phase = "remove"
-                    doc = {"schema_version": 1, "command": "remove", "result": "success", "data": {}}
+                    doc = {"schema_version": 1, "command": "agentplugins remove", "result": "success", "data": {}}
                 else:
                     raise AssertionError("unexpected public command")
                 if envelope_change is not None and envelope_change[0] == phase:
@@ -11995,7 +11995,7 @@ class CopilotManagedSkillConsistencyTest(unittest.TestCase):
     def test_copilot_cleanup_requires_successful_remove_and_list_envelopes(self):
         for phase in ("remove", "after-remove"):
             for key, value in (("schema_version", True), ("schema_version", 2),
-                               ("command", "doctor"), ("result", "failure"),
+                               ("command", "doctor"), ("command", "remove"), ("result", "failure"),
                                ("result", "partial"), ("result", None)):
                 with self.subTest(phase=phase, key=key, value=value):
                     row = self.run_case(envelope_change=(phase, key, value))
