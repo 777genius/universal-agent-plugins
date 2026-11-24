@@ -1,3 +1,5 @@
+# Routine version updates are disabled. Security updates remain enabled in repository settings.
+# Group security fixes per ecosystem and directory; review other upgrades manually.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -8,6 +10,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -20,6 +27,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -32,6 +44,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -44,6 +61,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -56,6 +78,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -68,6 +95,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -80,6 +112,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -92,6 +129,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -104,6 +146,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -116,6 +163,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -128,6 +180,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -140,6 +197,11 @@ updates:
       time: "09:00"
       timezone: "Europe/Kiev"
     open-pull-requests-limit: 0
+    groups:
+      security:
+        applies-to: security-updates
+        patterns:
+          - "*"
     commit-message:
       prefix: "chore"
       include: "scope"
