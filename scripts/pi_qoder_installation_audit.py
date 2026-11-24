@@ -627,9 +627,28 @@ class PiQoderInstallationAudit:
                     require(exact(_stable_dir(current[rel]), _stable_dir(old)), "native directory authority was replaced")
         for path, old in self.foreign.items():
             require(self._file(Path(path)) == old, "foreign sentinel changed")
-        require(unchanged_private_tmp_frame(self.tmp_frame, frame(self.dirs[self.case / "tmp"][0])),
-                "public command left private temp residue")
+        self._advance_tmp_frame()
         return image
+
+    def _advance_tmp_frame(self):
+        """Refresh only an admitted command's private temporary directory frame."""
+        current = frame(self.dirs[self.case / "tmp"][0])
+        if not unchanged_private_tmp_frame(self.tmp_frame, current):
+            # Keep the original strict predicate. Bound diagnostics and avoid
+            # exposing temporary names or contents from a failed native case.
+            before = self.tmp_frame
+            changed = sorted(path for path in set(before) | set(current)
+                             if not exact(before.get(path), current.get(path)))
+            delta = []
+            for path in changed[:8]:
+                old, new = before.get(path), current.get(path)
+                fields = sorted(key for key in set(old or {}) | set(new or {})
+                                if not exact((old or {}).get(key), (new or {}).get(key)))
+                delta.append({"path_sha256": sha(path.encode()), "change": "created" if old is None
+                              else "removed" if new is None else "modified", "fields": fields})
+            require(False, "public command left private temp residue: " +
+                    compact({"delta": delta, "omitted": max(0, len(changed) - len(delta))}).decode())
+        self.tmp_frame = current
 
     def _hold_saved(self):
         self.current_files = {str(path): self._file(path) for path in (
@@ -867,7 +886,6 @@ class PiQoderInstallationAudit:
                 "stderr_base64": base64.b64encode(stderr.encode()).decode(),
                 "document": None, "admission": "unqualified"}
             self.source_metadata = capture
-            self.guard()
             require(stderr == "", "clean Pi metadata read emitted stderr")
             document = strict_json(stdout.encode())
             capture["document"] = copy.deepcopy(document)
@@ -891,6 +909,7 @@ class PiQoderInstallationAudit:
                     and candidate.get("status") == "available" and candidate.get("diagnostic_codes") in (None, [])
                     and type(candidate.get("description")) is str and bool(candidate["description"]),
                     "clean Pi metadata candidate differs")
+            self._advance_tmp_frame()
             self.guard()
             capture["admission"] = "verified"
         except (OSError, ValueError, KeyError, TypeError) as error:

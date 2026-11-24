@@ -875,6 +875,17 @@ class PiQoderInstallationAuditTest(unittest.TestCase):
         self.assertTrue(row["pi_qoder_installation_audit"]["installation_qualified"])
         self.assertTrue(row["pi_qoder_installation_audit"]["native_discovery_qualified"] is False)
 
+        # Only transitions already covered by the original tmp predicate
+        # may refresh their frame. The final inventory guard stays exact.
+        for acceptance in installation.PROJECT_ACCEPTANCES:
+            for phase in PHASES[:-1]:
+                with self.subTest(acceptance=acceptance, phase=phase):
+                    row, _ = self.exercise_main_project(acceptance, phase=phase, mutate=cleaned_child)
+                    self.assertTrue(row["pi_qoder_installation_audit"]["installation_qualified"])
+            with self.subTest(acceptance=acceptance, phase=PHASES[-1]), self.assertRaisesRegex(
+                    ValueError, "private temp changed outside"):
+                self.exercise_main_project(acceptance, phase=PHASES[-1], mutate=cleaned_child)
+
         # Root replacement remains a refusal even if the new root is empty.
         before = {"": {"kind": "dir", "device": 1, "inode": 2, "mode": 16832,
                        "links": 2, "bytes": 4096, "modified_ns": 100,
@@ -893,6 +904,40 @@ class PiQoderInstallationAuditTest(unittest.TestCase):
                 retained = copy.deepcopy(changed)
                 retained[member] = {"kind": "file", "sha256": digest(b"unowned")}
                 self.assertFalse(installation.unchanged_private_tmp_frame(before, retained))
+
+    def test_tmp_frame_remains_strict_between_public_calls(self):
+        with TemporaryDirectory() as temporary:
+            fixture = InertLifecycle(self.audit, self.fixtures, "qoder", "skill", 0,
+                                     acceptance="qoder-prepared-skills-installation")
+            observer = fixture.prepare(Path(temporary).resolve())
+            try:
+                fixture.step(observer, "install")
+                outside = fixture.case / "tmp" / "outside-phase"
+                write(outside, b"never retained")
+                outside.unlink()
+                with self.assertRaisesRegex(ValueError, "private temp changed outside"):
+                    observer.guard()
+            finally:
+                observer.close()
+
+    def test_tmp_frame_residue_diagnostic_is_bounded_and_does_not_advance(self):
+        with TemporaryDirectory() as temporary:
+            fixture = InertLifecycle(self.audit, self.fixtures, "qoder", "skill", 0,
+                                     acceptance="qoder-prepared-skills-installation")
+            observer = fixture.prepare(Path(temporary).resolve())
+            try:
+                before = copy.deepcopy(observer.tmp_frame)
+                for index in range(12):
+                    write(fixture.case / "tmp" / ("unowned-" + str(index)), b"inert")
+                with self.assertRaisesRegex(ValueError, "public command left private temp residue") as raised:
+                    observer._advance_tmp_frame()
+                self.assertEqual(observer.tmp_frame, before)
+                diagnostic = json.loads(str(raised.exception).split("residue: ", 1)[1])
+                self.assertEqual(len(diagnostic["delta"]), 8)
+                self.assertGreaterEqual(diagnostic["omitted"], 4)
+                self.assertNotIn("unowned-", str(raised.exception))
+            finally:
+                observer.close()
 
     def test_clean_pi_metadata_is_one_exact_read_only_capture_not_a_seventh_lifecycle_phase(self):
         for fault in ("argv", "revision", "schema-bool", "complete", "candidate", "duplicate-json",
