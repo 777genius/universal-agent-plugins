@@ -121,7 +121,7 @@ class AcquisitionBoundaryTests(unittest.TestCase):
                  mock.patch.object(npm, "run", side_effect=process):
                 result = npm.provision(audit, root, "linux-amd64", context)
             self.assertEqual(result["env"], {})
-            self.assertEqual(result["command"], ["/trusted/node", str(root / "public-npm/project/node_modules" / npm.PACKAGE / "bin/agentplugins.js")])
+            self.assertEqual(result["command"], [str(Path("/trusted/node")), str(root / "public-npm/project/node_modules" / npm.PACKAGE / "bin/agentplugins.js")])
             self.assertEqual(calls[-1], [*result["command"], "version"])
             self.assertTrue(result["proof"]["lifecycle_must_use_wrapper"])
 

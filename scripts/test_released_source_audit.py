@@ -1391,7 +1391,12 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
         return outcome, calls, stages
 
     def test_complete_closure_exercises_all_ids_and_reauthenticates_mutations(self):
-        outcome, calls, stages = self.exercise()
+        def windows_write_text(path, data, encoding=None, errors=None, newline=None):
+            with path.open("w", encoding=encoding, errors=errors, newline="\r\n" if newline is None else newline) as stream:
+                return stream.write(data)
+        # Model Windows text-mode newline translation even on POSIX hosts.
+        with mock.patch.object(Path, "write_text", autospec=True, side_effect=windows_write_text):
+            outcome, calls, stages = self.exercise()
         self.assertEqual(outcome["status"], "materialized-closure-lifecycle-passed", outcome.get("reason"))
         self.assertEqual(stages, ["add", "update", "repair"])
         self.assertEqual([target for op, target in calls if op == "info"], list(audit.live.MARKETING_KIT_DISTRIBUTIONS))

@@ -908,7 +908,7 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
     project_native.mkdir()
     sentinels = [home / "foreign.txt", project / "foreign.txt", native_root / "foreign.txt", project_native / "foreign.txt"]
     for path in sentinels:
-        path.write_text("unmanaged source audit neighbor\n", encoding="utf-8")
+        path.write_bytes(b"unmanaged source audit neighbor\n")
     foreign_mcp_control = seed_unrelated_native_mcp(
         native_root if case["scope"] == "user" else project_native, case["client"], root)
     live.initialize_project_skill_git_root(project, env, root)

@@ -196,7 +196,7 @@ class ClosureTests(unittest.TestCase):
         owners = self.check()
         selected = self.root / "native"
         selected.mkdir()
-        (selected / "foreign.txt").write_text("unmanaged source audit neighbor\n")
+        (selected / "foreign.txt").write_bytes(b"unmanaged source audit neighbor\n")
         plugins = selected / "plugins"
         plugins.mkdir()
         for alias, owner in owners.items():
@@ -213,7 +213,7 @@ class ClosureTests(unittest.TestCase):
         for owner in owners.values(): owner["locator"].rmdir()
         selected = self.root / "native"
         selected.mkdir()
-        (selected / "foreign.txt").write_text("unmanaged source audit neighbor\n")
+        (selected / "foreign.txt").write_bytes(b"unmanaged source audit neighbor\n")
         config = {audit.FOREIGN_NATIVE_MCP: {"command": "echo", "args": ["unrelated-native-audit"]},
                   "unowned-extra": {"url": "https://extra.invalid/mcp"}}
         (selected / "config.yaml").write_text(audit.yaml.safe_dump({"mcp_servers": config}))
