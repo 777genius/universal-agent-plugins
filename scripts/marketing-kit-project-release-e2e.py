@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Actual public npm 0.1.115 + signed Marketing Kit Project lifecycle, no mocks."""
 import argparse
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 import hashlib
 import json
 import os
@@ -1670,6 +1670,15 @@ def verify_final_production_observation(cli, env, project, target, expected_poli
             raise failures[0]
 
 
+@contextmanager
+def unchanged_profile(env, project, stage):
+    before = settled_profile_snapshot(env, project)
+    try:
+        yield
+    finally:
+        check_profile_unchanged(env, project, before, stage)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True, choices=["codex", "cursor", "claude", "gemini", "opencode", "copilot"])
@@ -2001,10 +2010,13 @@ def main():
 
             # Project B has previously installed packages; a true cold User
             # restore needs a third HOME with no prior installs or native state.
-            env_c, project_c, foreign_c, project_foreign_c, native_foreign_c = (
-                run_case(options.cli, options.target, root, "C"))
-            bind_pinned_launcher_cache(env_c, launcher_cache, root)
-            prepare_codex(env_c, project_c)
+            # Native initialization is already a peer operation: pin A before
+            # creating C, and reject writes even when initialization raises.
+            with unchanged_profile(env, project_a, "User C initialization"):
+                env_c, project_c, foreign_c, project_foreign_c, native_foreign_c = (
+                    run_case(options.cli, options.target, root, "C"))
+                bind_pinned_launcher_cache(env_c, launcher_cache, root)
+                prepare_codex(env_c, project_c)
             # User operations must not mutate their own working Project C.
             protected_c_project = scoped_snapshot([project_c])
             foreign_files.extend(pin_foreign([(foreign_c, "unmanaged user data\n"),
