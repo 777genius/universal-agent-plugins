@@ -97,9 +97,9 @@ func runSavedEnvironment(cmd *cobra.Command, app App, opts *options, snapshot en
 	request, err := prepareSavedSync(cmd, stopPluginActivityOnWrite(app, stop), opts, snapshot, requirements, locked, manifest, aliases, attest, targets)
 	stop()
 	if err != nil {
-		return err
-	}
-	if err := renderSavedTargetNotice(cmd, opts, locked, aliases, targets); err != nil {
+		if opts.environmentOutput != nil {
+			return earlyForeignBinding(app, err)
+		}
 		return err
 	}
 	if opts.dryRun {
@@ -132,6 +132,9 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	}
 	prepared, err := (environment.Coordinator{EnvironmentID: app.environmentID()}).PrepareSyncForTargets(requirements, locked, observed, aliases, attest, targets)
 	if err != nil {
+		return request, err
+	}
+	if err := renderSavedTargetNotice(cmd, opts, locked, aliases, targets); err != nil {
 		return request, err
 	}
 	prepared.Bindings, err = reviewedSavedAddActions(cmd, app, opts, targets, prepared.Bindings)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
@@ -25,13 +26,18 @@ func (e CLIUsageError) Error() string { return e.Message }
 
 // AgentFailure deliberately never serializes raw native/transport errors.
 type AgentFailure struct {
-	Code        string        `json:"code"`
-	Message     string        `json:"message"`
-	Retryable   bool          `json:"retryable"`
-	NextActions []AgentAction `json:"next_actions,omitempty"`
+	Code        string                   `json:"code"`
+	Message     string                   `json:"message"`
+	Retryable   bool                     `json:"retryable"`
+	NextActions []AgentAction            `json:"next_actions,omitempty"`
+	Conflicts   []foreignBindingConflict `json:"conflicts,omitempty"`
 }
 
 func classifyAgentFailure(err error) AgentFailure {
+	var foreign *environment.ForeignBindingError
+	if errors.As(err, &foreign) {
+		return AgentFailure{Code: "FOREIGN_BINDING", Message: "Existing package bindings are not owned by the selected saved environment. Inspect their ownership before retrying.", Conflicts: foreignBindingConflicts(foreign)}
+	}
 	var usage CLIUsageError
 	if errors.As(err, &usage) {
 		return AgentFailure{Code: usage.Code, Message: usage.Message, Retryable: usage.Code == "TIMEOUT"}
@@ -62,11 +68,12 @@ func classifyAgentFailure(err error) AgentFailure {
 	}
 }
 
-// ShouldWriteAgentFailure opts in only early usage errors. Source selection
+// ShouldWriteAgentFailure opts in only early usage and ownership errors. Source selection
 // errors already emit their own JSON; old native refusals require empty stdout.
 func ShouldWriteAgentFailure(err error) bool {
 	var usage CLIUsageError
-	return errors.As(err, &usage)
+	var foreign *earlyForeignBindingError
+	return errors.As(err, &usage) || errors.As(err, &foreign)
 }
 
 // WriteAgentFailure is called only when the command has not already emitted a

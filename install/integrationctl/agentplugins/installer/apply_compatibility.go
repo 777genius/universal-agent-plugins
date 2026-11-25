@@ -2,6 +2,7 @@ package installer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -138,7 +139,7 @@ func (e *Engine) compatibilityBindingCheck(binding domain.ClientBinding, facts T
 	return check, nil
 }
 
-func attachNextActions(result *Result) {
+func attachNextActions(result *Result, cause error) {
 	if result == nil || len(result.NextActions) > 0 {
 		return
 	}
@@ -146,7 +147,9 @@ func attachNextActions(result *Result) {
 	case result.Outcome == OutcomeRecovery:
 		result.NextActions = []NextAction{{Kind: "recover", Reason: result.Reason}}
 	case result.Reason == "update_required":
-		result.NextActions = []NextAction{{Kind: "update", Reason: result.Reason}}
+		if !errors.Is(cause, domain.ErrRetainedRevisionChange) {
+			result.NextActions = []NextAction{{Kind: "update", Reason: result.Reason}}
+		}
 	case result.Reason == "plan_changed":
 		result.NextActions = []NextAction{{Kind: "reprepare", Reason: result.Reason}}
 	case result.Reason == "target_facts_unavailable":
