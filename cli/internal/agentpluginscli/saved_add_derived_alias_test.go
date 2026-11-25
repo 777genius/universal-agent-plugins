@@ -85,6 +85,17 @@ func TestSavedGitDerivedAliasPreservesResolverPriority(t *testing.T) {
 			savedJourneyGit(t, repo, "commit", "-m", "test: different declared package name")
 			otherRevision := savedJourneyGit(t, repo, "rev-parse", "HEAD")
 			j := newSavedJourney(t, repo)
+			clients, err := j.cli.app.Detector.Detect(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, client := range clients {
+				if client.ClientID == domain.ClientClaude {
+					// The existing runner handles native calls; trusted-path validation
+					// still requires the disposable executable to exist.
+					dependencyWrite(t, client.ExecutablePath, "fixture executable, never launched")
+				}
+			}
 			alias := "different"
 			if claimed {
 				alias = "demo"
