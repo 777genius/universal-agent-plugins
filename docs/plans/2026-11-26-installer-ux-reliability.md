@@ -94,6 +94,8 @@ Target reliability after mandatory evidence: 8/10, not a current qualification.
 ### Preserve actual execution facts
 
 - Build Skills result items from exact observed binding outcomes first.
+- An observed BindingUnchanged stays unchanged if a later unrelated binding
+  fails. Native readiness facts alone are not a completed transaction outcome.
 - For reviewed actions not reached because required checks failed, preserve
   the classified apply-level cause, including planned unchanged actions.
 - A verified successful unchanged action remains unchanged. Do not erase an
@@ -105,6 +107,9 @@ Target reliability after mandatory evidence: 8/10, not a current qualification.
   to explain what did not run.
 - Report normalization must not count failed/canceled/not_attempted items as
   successful merely because optional failure metadata is absent.
+- Normalize at one private item boundary shared by report/log/JSON. Failed
+  bindings with completed native facts use existing failed status; typed
+  cancellation remains its cause/code, not a new status vocabulary.
 - Preserve errors.Is/As, public JSON shape and exit conventions. Correcting an
   incorrect status value is a bug fix; it must have an explicit regression.
 
@@ -113,12 +118,16 @@ Target reliability after mandatory evidence: 8/10, not a current qualification.
 Use one small internal diagnostic result containing saved path and write error.
 A logging failure never changes installation effects or the primary outcome.
 
-When recording is disabled or unavailable, retain a useful classified cause.
-If attempted recording fails, say that the diagnostic file could not be saved.
-Never advise opening a nonexistent file. Reuse existing redaction and safe-text
-policies; do not print an arbitrary raw error chain. Bound diagnostic detail,
-remove terminal control effects and prevent credentials/URLs with secrets from
-appearing. Preserve the typed primary cause when rendering also fails.
+When recording is disabled or unavailable, retain useful existing classified
+Kind/Summary/Next facts and fixed generated wording. If attempted recording
+fails, say that technical details could not be saved, optionally classifying the
+log failure through existing fixed permission/disk/read-only wording. Do not
+render raw error chains, provider detail, PathError.Path, URLs or logErr.Error(),
+even after heuristic sanitization. Unknown causes retain safe generic recovery
+guidance; original causes survive through Unwrap, not the terminal Error string.
+Disabled recording must not be described as a failed write. Never advise
+opening a nonexistent file. Private log redaction remains unchanged; no second
+sanitizer is added. Preserve the typed primary cause when rendering also fails.
 
 Integrate the same behavior into Skills, dependency install/update/repair,
 group and single-install results. Recovery and unconfirmed process cleanup
@@ -132,7 +141,13 @@ continue to prevent every retry in the affected namespace.
 - Numeric catalog, validation messages, target choice explanations, full review,
   oversized-review fallback, changed-retry review and confirmation acknowledge
   use the already selected visible interaction stream.
+- Resolve and carry the existing App/prompter/visible writer through catalog,
+  targets, review and retry review; do not discard a locally resolved host.
+  Preserve injected prompters and numeric fallback, without a writer registry.
 - Keep JSON, noninteractive results and dry-run data on their existing stream.
+- Interactive dry-run plan data also retains stdout. Pass interaction intent
+  or writer from the caller instead of globally redirecting all review/error
+  helpers. Test the stream matrix, including empty-catalog diagnostics.
 - A short/failed review write stops before consent/apply. Reuse planWriter and
   the current PromptFactory/reviewWriter/promptio contracts.
 - Preserve bounded, non-prefetching reads and fresh confirmation input. No
@@ -147,6 +162,9 @@ continue to prevent every retry in the affected namespace.
   filter and canonical basket remain the source of selection identity.
 - Query changes reset the page; basket survives filters/pages; page numbers
   refer to displayed entries only. Cancel/EOF never means acceptance.
+- Keep 50 entries/page. Next/previous navigate the current view; selected-only
+  uses the same canonical candidates and basket. Empty selected view can return
+  to all candidates. Invalid navigation never changes selection or reads ahead.
 - Bound candidate omission summaries and reuse skillDiagnosticGuidance.
   Include incomplete-scan guidance and exact-path narrowing where applicable.
 - Preserve SourceMoved detail, full sanitized destination/source paths and
@@ -157,21 +175,33 @@ continue to prevent every retry in the affected namespace.
 ## 6. Browser-to-terminal handoff
 
 Use the current server mutex and session lifetime. Atomically decide whether an
-unused session can be closed to future admission. If preparation or an accepted
-operation has started, refuse terminal takeover and continue observing that
-browser operation. Never cancel accepted work because a fallback prompt was
-answered later. A check followed by unguarded Close is insufficient.
+unused session can be closed to future admission. While preparation is in
+flight, refuse takeover. A prepared but unaccepted review may be disposed when
+handoff wins. Any accepted operation, including an already finished operation,
+blocks terminal takeover so fallback cannot start another install. Never cancel
+accepted work because a fallback prompt was answered later. A check followed
+by unguarded Close is insufficient; never wait for shutdown under the mutex.
 
 Bound the OS opener invocation, honor cancellation, check output failures and
 use a small private launcher seam for deterministic tests. Preserve session
 capability secrecy and existing HTTP/JSON schemas. Tests must prove at most one
 accepted execution path when apply and fallback race.
 
+Protect every automatic fallback/error exit after browser exposure, including
+diagnostic write and prompt failures, from unconditional deferred Close. The
+opener timeout belongs to a child context for the opener only, never the picker
+session. Explicit command-context cancellation still cancels the session.
+Cover late requests after handoff, preparation failure during handoff and opener
+timeout after operation admission as well as the ordinary apply race.
+
 ## 7. End-to-end evidence
 
 Extend scripts/terminal-ui and its existing Fixture, Session, state hashes and
-evidence format; do not introduce another test runner. Exact commands and
-assertions are versioned alongside the implementation.
+evidence format; do not introduce another test runner. Existing native_skills.py
+and native_browser.py already qualify rich public Skills and browser journeys;
+reuse their applicable parsing/progress/oracles. New cases address deterministic
+failures, no-op/retry, plain/redirect/paging and platform gaps. Exact commands
+and assertions are versioned alongside the implementation.
 
 | User scenario | Required assertion |
 | --- | --- |
@@ -196,13 +226,41 @@ the existing npm ci + bundle:go sequence (TypeScript 7.0.2 or newer), then test
 the actual resulting CLI hash. Never hand-edit generated assets.
 
 Public source constraints must be proven first. Skills sources are GitHub/HTTPS,
-not arbitrary local folders. For deterministic Unix HTTPS fixtures, use a valid
-local CA through standard SSL_CERT_FILE only if actual production acquisition
-accepts the endpoint; TLS verification stays enabled. No policy test bypass.
-If this does not work, use existing pinned public source or verified HTTPS Git
-fixture mechanisms. Windows trust/ConPTY needs its own supported proof; label
-production-composed Go tests and actual-binary cases separately. Do not claim
-unexecuted Windows source coverage.
+not arbitrary local folders. A deterministic Linux HTTPS publisher uses a valid
+local CA through standard SSL_CERT_FILE with TLS verification enabled. Production
+source policy accepts HTTPS loopback endpoints; prove the real composition early.
+Go macOS/Windows trust does not consume SSL_CERT_FILE like Linux does. Those
+platforms use a pinned public own-repository GitHub Skill, full commit in the
+source selector and exact path, isolated profiles and native protocol fixtures.
+For example the base contains examples/skills/docs-only-review/skills/review-checklist.
+Explicit --ref is a branch/tag selector, not the full-SHA source syntax.
+
+Raw GitHub acquisition strips GIT_* and user Git configuration; GIT_SSL_CAINFO
+or insteadOf fixtures from native Git acquisition are not a valid substitute.
+The HTTPS website route requires exact --skill and cannot exercise catalog or
+automatic browser selection. Catalog/paging/plain-browser cases therefore need
+a proven pinned GitHub route with no explicit-path flag that bypasses routing.
+Public-source availability failures remain failures, never silent source swaps.
+Label Go composition tests and actual-binary cases separately. Synthetic native
+protocol responders qualify installer behavior, not vendor acceptance.
+
+| Evidence group | Linux | macOS | Windows |
+| --- | --- | --- | --- |
+| Actual apply, partial, unchanged failure, retry, JSON | Trusted local TLS publisher and pinned GitHub control | Pinned GitHub | Pinned GitHub |
+| Actual plain/catalog routing with bundled assets | Pinned GitHub without routing-bypassing flags | Same | Same with ConPTY |
+| Large generated or incomplete catalog | Production-composed command and real renderer | Same | Same |
+| Review short/failed writes | Command writer fixture and actual pipe control | Same | Same |
+| Browser handoff races | Synchronized existing server/bridge fixtures and bundled CLI control | Applicable opener behavior | Applicable opener behavior |
+| Terminal restoration | Same-descriptor Unix probe | Same-descriptor Unix probe | Native console owner/reuse probe |
+
+Require actual Windows Skills fresh/repeat/partial/retry and cancelled-review
+cases; Go command-seam coverage is supplementary. Record product and source
+fixture SHAs separately. Public acquisition gets a realistic bounded deadline,
+separate from short interaction deadlines after the menu is ready. The public
+source fixture exposes only required Git/runtime directories and removes the
+existing test deny-network proxy settings, without inheriting host credentials.
+Do not create a remote repository or enlarge product fixtures for generated
+2,000-item catalog tests; use the labeled composed command boundary.
 
 Keep actual command, SHA, binary hash, fixture classification, exit, raw output,
 state/native snapshots and terminal restoration evidence. Skipped/unsupported,
@@ -253,14 +311,23 @@ review comments, revalidate changed code and use ordinary merge.
 
 ## 10. Review log and acceptance
 
-Plan critique rounds: pending.
+Plan critique round 1 incorporated: authoritative observed outcomes; typed-only
+log fallback; carried visible writer and dry-run stream matrix; bounded paging;
+atomic handoff across every browser exit; isolated opener timeout; actual source
+policy, existing public Skills harnesses, Linux-only CA fixture and distinct
+pinned-public-source macOS/Windows lanes.
+Round 2: all three independent reviewers rechecked the revised plan and
+reported PASS with no remaining blocking plan findings. This is plan review,
+not production-code approval or E2E evidence.
 
-- [ ] Two plan critique rounds incorporated.
+- [x] Two plan critique rounds incorporated.
 - [ ] Exact source-fixture / bundled-binary feasibility proven.
 - [ ] Confirmed outcome and console regressions fixed.
 - [ ] Diagnostics remain useful when log recording is unavailable.
 - [ ] Large catalogs and fallback races covered.
 - [ ] Public-process / terminal evidence complete for declared platforms.
+- [ ] Actual Windows/macOS Skills source/process lanes executed, not replaced
+  by plugin-only or composed-command evidence.
 - [ ] Required final-HEAD gates passed; review findings resolved.
 - [ ] Independent review requirement satisfied.
 - [ ] Ordinary merge and actual merged-main verification complete.
