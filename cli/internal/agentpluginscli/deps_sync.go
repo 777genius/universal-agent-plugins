@@ -421,21 +421,6 @@ func repairOwnedDependenciesOnce(cmd *cobra.Command, app App, opts *options, sel
 	return true, applyDependencyRepairs(cmd, app, opts, actions, detected)
 }
 
-func resolveDependencyBindingIdentity(view installer.Inspection, action *environment.PreparedBinding) error {
-	for _, receipt := range view.EnvironmentReceipts {
-		if receipt.EnvironmentID == action.Authority.EnvironmentID && receipt.Alias == action.Alias {
-			if action.InstallationID == "" {
-				action.InstallationID = receipt.InstallationID
-				action.Authority.InstallationID = receipt.InstallationID
-			}
-			if receipt.ClientID == action.ClientID && action.Action == environment.ActionInstall {
-				return installer.ErrPlanChanged
-			}
-		}
-	}
-	return nil
-}
-
 func (adapter *dependencyInstaller) recordedDependencyRelease(action environment.PreparedBinding) (*domain.RecordedDirectoryRelease, error) {
 	var recorded *domain.RecordedDirectoryRelease
 	if action.Package.Source.Registry != nil && (dependencyRepairOperation(action.Action) || action.Action == environment.ActionInstall && action.InstallationID != "") {

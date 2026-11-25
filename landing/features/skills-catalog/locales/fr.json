@@ -76,6 +76,7 @@
         "source": "Source",
         "metricsNotice": "Les chiffres d’installation proviennent d’un annuaire externe et ne sont pas vérifiés indépendamment.",
         "loadingDocument": "Chargement des instructions de la source…",
+        "waitingDocument": "L’aperçu est occupé. Nouvelle tentative dans un instant…",
         "sourceDocumentNotice": "Instructions de l’éditeur · contenu non vérifié. Examinez-le avant utilisation.",
         "documentUnavailable": "Le SKILL.md de l’éditeur n’a pas pu être chargé. Consultez directement sa source.",
         "viewPublisher": "Voir la source de l’éditeur",

@@ -6,7 +6,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/nativeconfig"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
@@ -46,6 +48,74 @@ func geminiProbeFixture(t *testing.T) (domain.ActivationRequest, nativeconfig.Ke
 	object := domain.NativeObjectOwnership{ObjectID: GeminiSkillObjectKind + ":audit", Kind: GeminiSkillObjectKind, LogicalName: "audit", Path: skill, ManagedDigest: digest, ProtectionClass: "managed"}
 	request := domain.ActivationRequest{VerifyOnly: true, Client: domain.DetectedClient{ClientID: domain.ClientGemini, ConfigRoot: filepath.Join(user, ".gemini"), ExecutablePath: filepath.Join(user, "gemini")}, Plan: domain.DeliveryPlan{Scope: domain.ScopeProject, NativeRegistryRoot: root, TargetContext: domain.TargetContext{Scope: domain.ScopeProject, ProjectRoot: project}, Components: []domain.ComponentDecision{{Kind: domain.ComponentSkill, Name: "audit", Support: domain.SupportNative}}}, Delivery: domain.StagedDelivery{NativeObjects: []domain.NativeObjectOwnership{object}}}
 	return request, nativeconfig.New()
+}
+
+type geminiInventoryEnvironmentProbe struct {
+	command  legacyports.Command
+	deadline time.Time
+}
+
+func (probe *geminiInventoryEnvironmentProbe) Run(ctx context.Context, command legacyports.Command) (legacyports.CommandResult, error) {
+	probe.command = command
+	if deadline, ok := ctx.Deadline(); ok {
+		probe.deadline = deadline
+	}
+	return legacyports.CommandResult{ExitCode: 0, CleanupComplete: true}, nil
+}
+
+func TestGeminiInventoryForwardsOnlyExplicitProfileContextEnvironment(t *testing.T) {
+	request, _ := geminiProbeFixture(t)
+	if err := os.MkdirAll(request.Client.ConfigRoot, 0700); err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Dir(request.Client.ConfigRoot)
+	expected := map[string]string{
+		"PATH": filepath.Join(root, "bin"), "HOME": root, "USERPROFILE": root,
+		"SYSTEMROOT": filepath.Join(root, "system"), "WINDIR": filepath.Join(root, "windows"),
+		"TEMP": filepath.Join(root, "temp"), "TMP": filepath.Join(root, "tmp"),
+		"TMPDIR": filepath.Join(root, "tmpdir"), "GEMINI_RESTRICTED_MODE": "false",
+		"GEMINI_CLI_TRUST_WORKSPACE": "false", "LANG": "en_US.UTF-8", "LC_ALL": "en_US.UTF-8",
+		"TZ":                              "UTC",
+		"GEMINI_CLI_SYSTEM_SETTINGS_PATH": filepath.Join(request.Client.ConfigRoot, "inventory-system.json"),
+		"GEMINI_CLI_SYSTEM_DEFAULTS_PATH": filepath.Join(request.Client.ConfigRoot, "inventory-defaults.json"),
+	}
+	for key, value := range expected {
+		t.Setenv(key, value)
+	}
+	for _, key := range []string{"PRIVATE_CANARY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "CODEX_HOME", "GEMINI_CLI_UNKNOWN"} {
+		t.Setenv(key, "must-not-be-forwarded")
+	}
+	t.Setenv("GEMINI_CLI_HOME", filepath.Join(root, "foreign-native-profile"))
+	expected["GEMINI_CLI_HOME"] = root
+	expected["NO_COLOR"], expected["TERM"] = "1", "dumb"
+	probe := &geminiInventoryEnvironmentProbe{}
+	before := time.Now()
+	if _, err := runGeminiInventory(context.Background(), clients.Env{Runner: probe}, request, "skills", "list", "--all"); err != nil {
+		t.Fatal(err)
+	}
+	after := time.Now()
+	if probe.command.Dir != request.Plan.TargetContext.ProjectRoot || probe.command.StdoutLimitBytes != 1<<20 ||
+		strings.Join(probe.command.Argv, "\x00") != strings.Join([]string{request.Client.ExecutablePath, "skills", "list", "--all"}, "\x00") ||
+		probe.deadline.IsZero() || probe.deadline.Before(before.Add(20*time.Second)) ||
+		probe.deadline.After(after.Add(20*time.Second)) {
+		t.Fatal("inventory argv, directory, capture bound or finite deadline changed")
+	}
+	actual := map[string]string{}
+	for _, entry := range probe.command.Env {
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) != 2 || actual[parts[0]] != "" {
+			t.Fatal("malformed or duplicate explicit environment")
+		}
+		actual[parts[0]] = parts[1]
+	}
+	if len(actual) != len(expected) {
+		t.Fatal("unexpected ambient environment reached native inventory")
+	}
+	for key, value := range expected {
+		if actual[key] != value {
+			t.Fatalf("explicit environment binding changed for %s", key)
+		}
+	}
 }
 
 func TestGeminiCompletionPropagatesUnclosedProbeMetadata(t *testing.T) {

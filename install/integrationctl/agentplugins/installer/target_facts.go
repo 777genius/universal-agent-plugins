@@ -84,8 +84,8 @@ func (e *Engine) detectedClients(req Request) (map[domain.ClientID]domain.Detect
 func (fact TargetFacts) clientRequest(operation Operation) Request {
 	return Request{
 		Operation: operation, ClientID: fact.ClientID,
-		ClientConfigRoot: fact.ConfigRoot, ClientNativeConfigRoot: fact.NativeConfigRoot, ClientSurfaces: fact.Surfaces,
-		ClientExecutable: fact.Executable, ClientVersion: fact.Version,
+		ClientConfigRoot: fact.ConfigRoot, ClientNativeConfigRoot: fact.NativeConfigRoot,
+		ClientExecutable: fact.Executable, ClientVersion: fact.Version, ClientSurfaces: fact.Surfaces,
 	}
 }
 

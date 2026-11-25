@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -56,6 +57,11 @@ func newCommandContainment(cmd *exec.Cmd) (*commandContainment, error) {
 	}
 	limits := windows.JOBOBJECT_EXTENDED_LIMIT_INFORMATION{}
 	limits.BasicLimitInformation.LimitFlags = windows.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+	// The x/sys wrapper receives a uintptr and may execute Go before the syscall.
+	// Keep the buffer pinned across that wrapper call.
+	var limitsPin runtime.Pinner
+	limitsPin.Pin(&limits)
+	defer limitsPin.Unpin()
 	if _, err := windows.SetInformationJobObject(job, windows.JobObjectExtendedLimitInformation,
 		uintptr(unsafe.Pointer(&limits)), uint32(unsafe.Sizeof(limits))); err != nil {
 		closeErr := closeWindowsHandle(job)
@@ -129,23 +135,23 @@ func (containment *commandContainment) terminate() terminationResult {
 	containment.mu.Unlock()
 	if attached {
 		forcedMembers := containment.activeProcesses() > 0
-		if err := terminateWindowsJob(containment.job, cleanupExitCode); err == nil {
+		err := terminateWindowsJob(containment.job, cleanupExitCode)
+		if err == nil {
 			stopped, confirmErr := containment.confirmTermination(time.Second)
 			if !stopped && confirmErr == nil {
 				confirmErr = fmt.Errorf("process job remained active after cleanup deadline")
 			}
 			return terminationResult{leaderStopped: stopped, forcedMembers: forcedMembers, err: confirmErr}
-		} else {
-			killErr := containment.killLeader()
-			if errors.Is(killErr, os.ErrProcessDone) {
-				killErr = nil
-			}
-			stopped, confirmErr := containment.confirmTermination(time.Second)
-			if !stopped && confirmErr == nil {
-				confirmErr = fmt.Errorf("leader fallback kill was requested but job shutdown was not observed")
-			}
-			return terminationResult{leaderStopped: stopped, err: errors.Join(fmt.Errorf("terminate process job: %w", err), killErr, confirmErr)}
 		}
+		killErr := containment.killLeader()
+		if errors.Is(killErr, os.ErrProcessDone) {
+			killErr = nil
+		}
+		stopped, confirmErr := containment.confirmTermination(time.Second)
+		if !stopped && confirmErr == nil {
+			confirmErr = fmt.Errorf("leader fallback kill was requested but job shutdown was not observed")
+		}
+		return terminationResult{leaderStopped: stopped, err: errors.Join(fmt.Errorf("terminate process job: %w", err), killErr, confirmErr)}
 	}
 	killErr := containment.killLeader()
 	if errors.Is(killErr, os.ErrProcessDone) {
@@ -156,6 +162,9 @@ func (containment *commandContainment) terminate() terminationResult {
 
 func (containment *commandContainment) activeProcesses() uint32 {
 	var accounting jobAccounting
+	var accountingPin runtime.Pinner
+	accountingPin.Pin(&accounting)
+	defer accountingPin.Unpin()
 	if err := windows.QueryInformationJobObject(containment.job, windows.JobObjectBasicAccountingInformation,
 		uintptr(unsafe.Pointer(&accounting)), uint32(unsafe.Sizeof(accounting)), nil); err != nil {
 		return 1 // fail closed: containment could not prove the job was empty
@@ -179,8 +188,12 @@ func (containment *commandContainment) confirmTermination(timeout time.Duration)
 		return containment.confirm(timeout)
 	}
 	deadline := time.Now().Add(timeout)
+	var accounting jobAccounting
+	var accountingPin runtime.Pinner
+	accountingPin.Pin(&accounting)
+	defer accountingPin.Unpin()
 	for {
-		var accounting jobAccounting
+		accounting = jobAccounting{}
 		if err := windows.QueryInformationJobObject(containment.job, windows.JobObjectBasicAccountingInformation,
 			uintptr(unsafe.Pointer(&accounting)), uint32(unsafe.Sizeof(accounting)), nil); err != nil {
 			return false, fmt.Errorf("confirm process job termination: %w", err)
