@@ -24,7 +24,7 @@ type skillsAddOptions struct {
 func newSkillsCommand(app App, opts *options) *cobra.Command {
 	root := &cobra.Command{Use: "skills", Short: "Install raw Agent Skills from GitHub or HTTPS publisher indexes"}
 	selection := &skillsAddOptions{}
-	add := &cobra.Command{Use: "add <owner/repository or HTTPS URL>", Short: "Select and install raw Skills through the saved environment installer", Long: "Select Skills from a public GitHub repository, folder or SKILL.md URL.\nHTTPS publishers expose a complete .well-known Skills index; use --skill with an exact name.\n\nExplicit --skill, --path, --target and exact file/folder URLs use terminal review.\n--ui opens interactive selection and cannot combine with --skill, --target or --dry-run.\nJSON and non-interactive use require explicit selections, targets and --yes (except --dry-run).\nTerminal selection: arrows move, space toggles Skills, / opens search, and Enter reviews.\nWhile searching, Enter applies the filter. Esc or Ctrl+C cancels.\nWith --plain: numbers toggle Skills, /query searches, / clears the filter,\nclear removes all selections, done reviews, q or Enter cancels.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error { return selection.run(cmd, app, opts, args[0]) }}
+	add := &cobra.Command{Use: "add <owner/repository or HTTPS URL>", Short: "Select and install raw Skills through the saved environment installer", Long: "Select Skills from a public GitHub repository, folder or SKILL.md URL.\nHTTPS publishers expose a complete .well-known Skills index; use --skill with an exact name.\n\nExplicit --skill, --path, --target and exact file/folder URLs use terminal review.\n--ui opens interactive selection and cannot combine with --skill, --target or --dry-run.\nJSON and non-interactive use require explicit selections, targets and --yes (except --dry-run).\nTerminal selection: arrows move, space toggles Skills, / opens search, and Enter reviews.\nWhile searching, Enter applies the filter. Esc or Ctrl+C cancels.\nWith --plain: numbers toggle Skills, /query searches, / clears the filter,\nnext/prev browse pages, selected shows your basket, all returns to the catalog,\nclear removes all selections, done reviews, q or Enter cancels.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error { return selection.run(cmd, app, opts, args[0]) }}
 	add.Flags().StringSliceVar(&selection.names, "skill", nil, "exact Skill name (repeatable; ambiguity requires --path)")
 	add.Flags().StringVar(&selection.folder, "path", "", "exact repository-relative Skill folder (empty selects repository root)")
 	add.Flags().StringVar(&selection.ref, "ref", "", "exact Git ref when a URL boundary is ambiguous")
@@ -66,6 +66,15 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 	if err != nil {
 		return renderSkillsCommandIssue(cmd, opts, err)
 	}
+	if interactive && app.Prompter == nil && app.PromptFactory != nil {
+		resolved, promptErr := withPrompter(cmd, app, opts)
+		if promptErr != nil && !errors.Is(promptErr, prompt.ErrPromptUnavailable) {
+			return promptErr
+		}
+		if promptErr == nil {
+			app = resolved
+		}
+	}
 	requested, err := parseTargetOption(opts.target)
 	if err != nil {
 		return renderSkillsCommandIssue(cmd, opts, err)
@@ -106,7 +115,7 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 	return runSkillsTerminal(cmd, app, opts, session, selection.names, interactive, selection.yes)
 }
 func (selection *skillsAddOptions) useBrowserPicker(interactive bool, opts *options, pathSet, exactPath bool) bool {
-	return selection.ui || interactive && !selection.noUI && !opts.dryRun && len(selection.names) == 0 && !pathSet && !exactPath && opts.target == ""
+	return selection.ui || interactive && !selection.noUI && !opts.plain && !opts.dryRun && len(selection.names) == 0 && !pathSet && !exactPath && opts.target == ""
 }
 
 func runSkillsBrowser(cmd *cobra.Command, app App, opts *options, session *skillsCatalogSession, explicit bool) (bool, error) {

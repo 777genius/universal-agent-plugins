@@ -149,12 +149,12 @@ func skillsTerminalTargets(cmd *cobra.Command, app App, opts *options, interacti
 	if err != nil {
 		return nil, err
 	}
-	request := prompt.TargetSelectionRequest{}
-	for _, target := range choices {
-		if target.Available {
-			request.Choices = append(request.Choices, prompt.TargetChoice{ID: domain.ClientID(target.Id), Label: target.Label})
-			request.DefaultIDs = append(request.DefaultIDs, domain.ClientID(target.Id))
+	request := skillsTargetSelectionRequest(choices)
+	if len(request.Choices) == 0 {
+		if _, err := fmt.Fprint(&planWriter{writer: reviewWriter(cmd, app)}, prompt.SkippedClientsNotice(request.Skipped)); err != nil {
+			return nil, err
 		}
+		return nil, errors.New("no eligible detected agent; install or configure a supported agent, then retry with --target <agent>")
 	}
 	selected, err := app.Prompter.SelectTargets(cmd.Context(), request)
 	if err != nil {
@@ -177,10 +177,14 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 	}
 	richReview := false
 	if rich, ok := app.Prompter.(interface{ RichReview() bool }); ok {
-		richReview = confirm && !opts.plain && opts.format == "human" && rich.RichReview()
+		richReview = confirm && !opts.dryRun && !opts.plain && opts.format == "human" && rich.RichReview()
 	}
 	if opts.format != "json" && !richReview {
-		if err := renderHumanSkillsReview(cmd, review); err != nil {
+		writer := cmd.OutOrStdout()
+		if confirm && !opts.dryRun {
+			writer = reviewWriter(cmd, app)
+		}
+		if err := renderHumanSkillsReviewTo(writer, review); err != nil {
 			return err
 		}
 	}
@@ -193,11 +197,11 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 			return err
 		}
 		if !accepted {
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Installation canceled. No changes applied.")
+			_, err = fmt.Fprintln(&planWriter{writer: reviewWriter(cmd, app)}, "Installation canceled. No changes applied.")
 			return err
 		}
 		if opts.format == "human" {
-			if _, err := fmt.Fprintln(&planWriter{writer: cmd.OutOrStdout()}, "\nSkills installation confirmed."); err != nil {
+			if _, err := fmt.Fprintln(&planWriter{writer: reviewWriter(cmd, app)}, "\nSkills installation confirmed."); err != nil {
 				return err
 			}
 		}
@@ -211,7 +215,7 @@ func confirmSkillsReview(cmd *cobra.Command, app App, review skillspicker.Plan, 
 	}
 	answer, err := app.Prompter.Confirm(cmd.Context(), request)
 	if errors.Is(err, prompt.ErrReviewTooLarge) {
-		if err := renderHumanSkillsReview(cmd, review); err != nil {
+		if err := renderHumanSkillsReviewTo(reviewWriter(cmd, app), review); err != nil {
 			return false, err
 		}
 		answer, err = app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Install the reviewed Skills?", Default: true})
