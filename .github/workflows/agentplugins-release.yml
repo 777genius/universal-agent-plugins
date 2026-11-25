@@ -269,13 +269,97 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: agentplugins-binaries
-          path: ${{ runner.temp }}/agentplugins_*
+          path: |
+            ${{ runner.temp }}/agentplugins_*_linux_*
+            ${{ runner.temp }}/agentplugins_*_windows_*
+          if-no-files-found: error
+          retention-days: 3
+      # Unsigned macOS binaries go only to sign-macos, never to staging.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: unsigned-darwin-binaries
+          path: ${{ runner.temp }}/agentplugins_*_darwin_*
           if-no-files-found: error
           retention-days: 3
 
+  sign-macos:
+    if: ${{ inputs.publish_release != true }}
+    needs: [validate, build]
+    # Hosted Apple silicon. codesign and notarytool handle the x86_64 binary
+    # without running it; platform-proof runs it on macos-15-intel.
+    runs-on: macos-15
+    timeout-minutes: 45
+    environment: macos-signing
+    permissions:
+      contents: read
+    outputs:
+      darwin_amd64_sha256: ${{ steps.sign.outputs.darwin_amd64_sha256 }}
+      darwin_arm64_sha256: ${{ steps.sign.outputs.darwin_arm64_sha256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: unsigned-darwin-binaries
+          path: ${{ runner.temp }}/agentplugins-darwin
+      - name: Sign, notarize and verify macOS binaries
+        id: sign
+        env:
+          TAG: ${{ inputs.tag }}
+          FROZEN_COMMIT: ${{ needs.validate.outputs.commit }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set +x
+          test "$(git rev-parse HEAD)" = "${FROZEN_COMMIT}"
+          bash scripts/sign-agentplugins-macos.sh "${TAG}" \
+            "${RUNNER_TEMP}/agentplugins-darwin" "${RUNNER_TEMP}/macos-notarization"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: agentplugins-darwin-signed
+          path: ${{ runner.temp }}/agentplugins-darwin/agentplugins_*
+          if-no-files-found: error
+          retention-days: 3
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: macos-notarization-evidence-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/macos-notarization/
+          if-no-files-found: error
+          retention-days: 90
+
+  verify-macos:
+    if: ${{ inputs.publish_release != true }}
+    needs: [validate, sign-macos]
+    runs-on: macos-15
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: agentplugins-darwin-signed
+          path: ${{ runner.temp }}/agentplugins-darwin
+      - name: Verify and run quarantined signed binary without signing secrets
+        env:
+          TAG: ${{ inputs.tag }}
+          SIGNED_DARWIN_ARM64_SHA256: ${{ needs.sign-macos.outputs.darwin_arm64_sha256 }}
+          SIGNED_DARWIN_AMD64_SHA256: ${{ needs.sign-macos.outputs.darwin_amd64_sha256 }}
+        run: |
+          bash scripts/verify-agentplugins-macos.sh "${TAG}" "${RUNNER_TEMP}/agentplugins-darwin"
+
   stage-draft:
     if: ${{ inputs.publish_release != true }}
-    needs: [validate, qualify-go, qualify-npm, build]
+    needs: [validate, qualify-go, qualify-npm, build, sign-macos, verify-macos]
     runs-on: ubuntu-24.04
     environment: agentplugins-release
     outputs:
@@ -295,8 +379,11 @@ jobs:
           ref: ${{ needs.validate.outputs.commit }}
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          pattern: agentplugins-*
-          merge-multiple: true
+          name: agentplugins-binaries
+          path: ${{ runner.temp }}/agentplugins-assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: agentplugins-darwin-signed
           path: ${{ runner.temp }}/agentplugins-assets
       - name: Prepare immutable stable assets
         id: draft
@@ -304,10 +391,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
           FROZEN_COMMIT: ${{ needs.validate.outputs.commit }}
+          SIGNED_DARWIN_AMD64_SHA256: ${{ needs.sign-macos.outputs.darwin_amd64_sha256 }}
+          SIGNED_DARWIN_ARM64_SHA256: ${{ needs.sign-macos.outputs.darwin_arm64_sha256 }}
         working-directory: ${{ runner.temp }}/agentplugins-assets
         run: |
           git -C "${GITHUB_WORKSPACE}" fetch --force origin "refs/tags/${TAG}:refs/tags/${TAG}"
           test "$(git -C "${GITHUB_WORKSPACE}" rev-list -n 1 "refs/tags/${TAG}")" = "${FROZEN_COMMIT}"
+          # Hash and attest only the exact macOS bytes that sign-macos signed,
+          # notarized and verified.
+          for signed in "darwin_amd64:${SIGNED_DARWIN_AMD64_SHA256}" "darwin_arm64:${SIGNED_DARWIN_ARM64_SHA256}"; do
+            asset="agentplugins_${TAG#agentplugins-v}_${signed%%:*}"
+            if [[ ! "${signed#*:}" =~ ^[0-9a-f]{64}$ ]] ||
+              [[ "$(sha256sum -- "${asset}" | cut -d ' ' -f 1)" != "${signed#*:}" ]]; then
+              echo "macOS asset is not the exact signed and notarized sign-macos output: ${asset}" >&2
+              exit 1
+            fi
+          done
           node "${GITHUB_WORKSPACE}/npm/agentplugins/scripts/release-assets.js" \
             prepare "${PWD}" "${TAG}" "${FROZEN_COMMIT}"
           node "${GITHUB_WORKSPACE}/npm/agentplugins/scripts/release-assets.js" \
@@ -337,6 +436,9 @@ jobs:
             for asset in agentplugins_* checksums.txt release-manifest.json THIRD_PARTY_NOTICES.txt; do
               cmp -- "${asset}" "${existing}/${asset}" || {
                 echo "existing draft asset differs from the frozen build: ${asset}" >&2
+                case "${asset}" in
+                  *_darwin_*) echo "A new signature carries a new Apple timestamp, so re-signed macOS bytes never match an earlier draft. Use Re-run failed jobs in the run that created this draft, or delete only this never-public draft (not the tag) and qualify again." >&2 ;;
+                esac
                 exit 1
               }
             done

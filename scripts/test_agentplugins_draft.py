@@ -282,7 +282,7 @@ class ProducerPermissionTests(unittest.TestCase):
         header = self.workflow.split("\njobs:\n", 1)[0]
         self.assertIn("\npermissions:\n  contents: read\n", header)
         self.assertNotIn(": write", header)
-        for name in ("validate", "build", "platform-proof", "hermes-native-proof", "antigravity-native-proof"):
+        for name in ("validate", "build", "sign-macos", "platform-proof", "hermes-native-proof", "antigravity-native-proof"):
             self.assertNotIn(": write", self.job(name))
         platform = (SOURCE / ".github/workflows/agentplugins-platform-proof.yml").read_text()
         self.assertNotIn(": write", platform)
