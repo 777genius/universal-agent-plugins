@@ -1,0 +1,40 @@
+name: Fixed source receipt original readout
+on:
+  push:
+    branches: [diagnostics/source-receipt-originals-20261125]
+    paths:
+      - .github/workflows/source-receipt-original-readout.yml
+      - scripts/read-source-receipt-originals.py
+permissions:
+  contents: read
+  actions: read
+jobs:
+  original-receipts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Bind dedicated readout source
+        run: |
+          python3 -B - <<'PY'
+          import os, subprocess
+          def git(*args):
+              return subprocess.check_output(["git", *args], text=True).strip()
+          base = "2c7d48c0440c7e596dd9ab8453551b147713fb8a"
+          head = git("rev-parse", "HEAD")
+          assert head == os.environ["GITHUB_SHA"]
+          assert git("rev-list", "--parents", "-n", "1", head).split() == [head, base]
+          assert git("status", "--porcelain", "--untracked-files=all") == ""
+          assert set(git("diff", "--name-status", base, head).splitlines()) == {
+              "A\t.github/workflows/source-receipt-original-readout.yml",
+              "A\tscripts/read-source-receipt-originals.py"}
+          assert git("rev-parse", "HEAD:scripts/read-authoring-evidence-zip.py") == "aadd5107cbda79947b3a47437c95f3a7f3962645"
+          PY
+      - name: Read fixed original receipts without executing archive contents
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: python3 -B scripts/read-source-receipt-originals.py
