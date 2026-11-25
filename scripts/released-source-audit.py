@@ -220,14 +220,14 @@ def protected_scope_changes(before, after, root, scope, native_root):
     return {"entries": changes, "total": total, "truncated": total > len(changes)}
 
 
-def read_saved_record(path):
+def read_saved_record(path, *, max_bytes=1 << 20):
     """Read owned manifest/lock/state bytes only after a held identity join."""
     try:
         before = path.lstat()
     except FileNotFoundError:
         return None, None
     require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
-            and 0 <= before.st_size <= 1 << 20,
+            and 0 <= before.st_size <= max_bytes,
             "protected saved record must be a bounded single-link regular file")
     # Windows os.read must not translate CRLF before the exact size/digest join.
     flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -945,7 +945,7 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
         require(closure_state["identity"] in (None, identity), "closure changed saved installation identity")
         closure_state.update(owners=owners, proofs=proofs, identity=identity)
         if stage == "add":
-            closure_state["native_baseline"] = live.snapshot([selected_root])
+            closure_state["native_baseline"] = live.snapshot([selected_root], include_directories=True)
 
     def verified_pi_owners(oracle, selected_case):
         require(selected_case == case and closure_state["owners"] is not None
@@ -976,7 +976,7 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
         if (case["expected"] == "dependency-closure" and closure_state["native_baseline"] is not None
                 and operation in ("info", "list", "update", "repair")
                 and not closure_state["removed"]):
-            require(live.snapshot([selected_root]) == closure_state["native_baseline"],
+            require(live.snapshot([selected_root], include_directories=True) == closure_state["native_baseline"],
                     "closure operation changed native resources")
         current = protected_scope_snapshot(root, case["scope"], protected_root)
         if pi_trust is not None and result.get("exit_code") == 0:
@@ -984,15 +984,17 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
         if current != protected:
             scope_changes = protected_scope_changes(protected, current, root, case["scope"], protected_root)
             raise ValueError(operation + " changed the other scope")
-        if success:
-            require(result["exit_code"] == 0 and not result.get("timeout") and isinstance(parsed, dict), operation + " did not complete")
+        if success or result.get("exit_code") == 0:
+            require(result["exit_code"] == 0 and not result.get("timeout")
+                    and isinstance(parsed, dict) and parsed.get("result") == "success",
+                    operation + " did not complete successfully")
         return parsed, result
 
     selected_root = native_root if case["scope"] == "user" else project_native
     protected_root = project_native if case["scope"] == "user" else native_root
     protected = protected_scope_snapshot(root, case["scope"], protected_root)
     pi_trust = None
-    before = live.snapshot([selected_root])
+    before = live.snapshot([selected_root], include_directories=True)
     try:
         if case["expected"] == "dependency-closure":
             require(case["name"] == "marketing-kit" and policy_context is not None,
@@ -1018,20 +1020,21 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
                         and not state_file(root, case["scope"]).get("environment_receipts"),
                         "refused closure left owned state")
                 require(not any(path.exists() or path.is_symlink() for path in documents)
-                        and live.snapshot([selected_root]) == before, "refused closure published native or saved effects")
+                        and live.snapshot([selected_root], include_directories=True) == before,
+                        "refused closure published native or saved effects")
                 outcome = {"status": "expected-dependency-refusal", "refusal": refusal,
                            "authenticated_policy": closure_state["authorities"]}
             else:
                 require(closure_state["owners"] is not None, "successful closure lacks authenticated owners")
                 installed_owners = closure_state["owners"]
-                initial_native = live.snapshot([selected_root])
+                initial_native = live.snapshot([selected_root], include_directories=True)
                 require(initial_native != before, "closure native materialization not observed")
                 for owner in installed_owners.values():
                     run("info", owner["installation"]["installation_id"])
                 run("list")
                 for stage in ("update", "repair"):
                     run(stage, "marketing-kit")
-                    require(live.snapshot([selected_root]) == initial_native,
+                    require(live.snapshot([selected_root], include_directories=True) == initial_native,
                             "immutable closure operation changed native resources")
                 proofs = closure_state["proofs"]
                 run("remove", "marketing-kit")
@@ -1048,7 +1051,7 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
             refusal = checked_dependency_refusal(added, case)
             require(not state_file(root, case["scope"]).get("installations"), "refused closure left managed installation")
             require(not any(path.exists() for path in documents), "refused closure published saved state")
-            require(live.snapshot([selected_root]) == before, "refused closure mutated native state")
+            require(live.snapshot([selected_root], include_directories=True) == before, "refused closure mutated native state")
             outcome = {"status": "expected-dependency-refusal", "refusal": refusal}
         else:
             installation, binding, receipt = checked_binding(state_file(root, case["scope"]), case)
@@ -1133,13 +1136,17 @@ def main():
             binary, report["installer"] = native.provision_release(ROOT, directory, args.target, RELEASE_TAG, RELEASE_COMMIT, REPOSITORY)
             executable, report["native_client"] = provision_native(args.client, args.target, directory, args.native_bin)
             policy_context = prepare_policy_context(directory, args.report_dir / "verified-public-policy", args.target)
-            npm = module("source_public_npm", "released_source_npm.py").provision(
-                SimpleNamespace(**globals()), directory, args.target,
-                release_context={"binary": binary, "proof": report["installer"]})
-            report["npm"] = npm["proof"]
             scopes = ("user",) if args.client == "hermes" else ("user", "project")
-            channels = (("binary", binary, None), ("npm", npm["command"], npm.get("env")))
-            for channel, command, command_env in channels:
+            for channel in ("binary", "npm"):
+                command, command_env = binary, None
+                if channel == "npm":
+                    # Retain the independently verified binary results even if
+                    # the required public npm acquisition cannot complete.
+                    npm = module("source_public_npm", "released_source_npm.py").provision(
+                        SimpleNamespace(**globals()), directory, args.target,
+                        release_context={"binary": binary, "proof": report["installer"]})
+                    report["npm"] = npm["proof"]
+                    command, command_env = npm["command"], npm.get("env")
                 for scope in scopes:
                     for distribution, refusal in (("777genius/notion", False), ("777genius/marketing-kit", True)):
                         case = source_case(snapshot, distribution, 1, args.client, scope, refusal)

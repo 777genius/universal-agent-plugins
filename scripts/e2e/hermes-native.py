@@ -23,6 +23,15 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
+def source_root():
+    """Exact source output of the fixture's official installation."""
+    value = os.environ.get("HERMES_NATIVE_SOURCE")
+    source = Path(value) if value else Path(os.environ["RUNNER_TEMP"]) / "hermes-agent"
+    require(source.is_absolute() and source.resolve() == source and source.is_dir(),
+            "official source directory is absent or aliased")
+    return source
+
+
 def observe_skills(user_marker, project_count, trusted):
     # runtime_command uses the installed Hermes Python/bootstrap/dependencies.
     # No copied parser or mocked loader. The caller selects HERMES_HOME as the
@@ -33,7 +42,7 @@ def observe_skills(user_marker, project_count, trusted):
                                   get_untrusted_project_skills_root,
                                   is_project_root_trusted)
 
-    source = Path(os.environ["RUNNER_TEMP"]) / "hermes-agent"
+    source = source_root()
     require(Path(skills_tool.__file__).resolve().parents[1] == source.resolve(),
             "native Skills observer imported another Hermes checkout")
     require(_get_mcp_servers().get("foreign") == {"command": "echo", "args": ["foreign"]},
@@ -89,7 +98,7 @@ def observe_selected_skill(name, expected, marker):
     from tools import skills_tool
     from agent.skill_utils import find_project_root, is_project_root_trusted
 
-    source = Path(os.environ["RUNNER_TEMP"]) / "hermes-agent"
+    source = source_root()
     require(Path(skills_tool.__file__).resolve().parents[1] == source.resolve(),
             "selected Skill observer imported another Hermes checkout")
     project = find_project_root()
@@ -108,7 +117,7 @@ def observe_selected_skill(name, expected, marker):
 
 
 def invoke_native_observer(arguments):
-    source = Path(os.environ["RUNNER_TEMP"]) / "hermes-agent"
+    source = source_root()
     # This official pre-bootstrap API is stdlib-only. The host Python builds
     # argv; only the installation-bound interpreter executes the observation.
     sys.path.insert(0, str(source))
@@ -171,7 +180,7 @@ def run_lifecycle(script):
     profile = Path(os.environ["HERMES_HOME"]).resolve()
     require(profile.is_relative_to(runner) and profile != runner,
             "Hermes profile must belong to the disposable runner")
-    source = runner / "hermes-agent"
+    source = source_root()
     actual = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"],
                                      text=True, timeout=15).strip()
     require(actual == HERMES_SHA, "Hermes source pin differs")

@@ -32,72 +32,130 @@ func TestRuntimeCacheAuthenticationAndIdentity(t *testing.T) {
 	// Real signed producer bootstrap bytes, never a test key admitted to
 	// production trust. This test must run in exact producer checkout/cli.
 	snapshot, err := os.ReadFile(filepath.Join(base, "snapshot.json"))
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	envelope, err := os.ReadFile(filepath.Join(base, "envelope.json"))
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	trust, err := producerTrust()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	bundle, err := directoryv1.VerifyBundle(snapshot, envelope, trust)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	at, err := time.Parse(time.RFC3339, bundle.Snapshot.GeneratedAt)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	expires, err := time.Parse(time.RFC3339, bundle.Snapshot.ExpiresAt)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(t.TempDir(), "cache.json")
 	write := func(s, e []byte) {
 		t.Helper()
 		body, marshalErr := json.Marshal(map[string]any{"schema_version": 1, "sequence": bundle.Snapshot.Sequence,
 			"snapshot": base64.StdEncoding.EncodeToString(s), "envelope": base64.StdEncoding.EncodeToString(e)})
-		if marshalErr != nil { t.Fatal(marshalErr) }
-		if writeErr := os.WriteFile(path, body, 0600); writeErr != nil { t.Fatal(writeErr) }
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
+		}
+		if writeErr := os.WriteFile(path, body, 0600); writeErr != nil {
+			t.Fatal(writeErr)
+		}
 	}
 	write(snapshot, envelope)
-	if _, err := authenticateCache(path, trust, bundle.Snapshot.Sequence, bundle.Digest, at); err != nil { t.Fatal(err) }
-	for _, test := range []struct{name string; seq uint64; digest string; at time.Time}{
+	if _, err := authenticateCache(path, trust, bundle.Snapshot.Sequence, bundle.Digest, at); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name   string
+		seq    uint64
+		digest string
+		at     time.Time
+	}{
 		{"wrong-sequence", bundle.Snapshot.Sequence + 1, bundle.Digest, at},
 		{"wrong-digest", bundle.Snapshot.Sequence, "sha256:wrong", at},
 		{"not-yet-valid", bundle.Snapshot.Sequence, bundle.Digest, at.Add(-time.Second)},
 		{"expired", bundle.Snapshot.Sequence, bundle.Digest, expires},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := authenticateCache(path, trust, test.seq, test.digest, test.at); err == nil { t.Fatal("unverified cache accepted") }
+			if _, err := authenticateCache(path, trust, test.seq, test.digest, test.at); err == nil {
+				t.Fatal("unverified cache accepted")
+			}
 		})
 	}
 	write(append(append([]byte{}, snapshot...), ' '), envelope)
-	if _, err := authenticateCache(path, trust, bundle.Snapshot.Sequence, bundle.Digest, at); err == nil { t.Fatal("changed signed bytes accepted") }
+	if _, err := authenticateCache(path, trust, bundle.Snapshot.Sequence, bundle.Digest, at); err == nil {
+		t.Fatal("changed signed bytes accepted")
+	}
 	var wire map[string]any
-	if err := json.Unmarshal(envelope, &wire); err != nil { t.Fatal(err) }
+	if err := json.Unmarshal(envelope, &wire); err != nil {
+		t.Fatal(err)
+	}
 	wire["signature"] = base64.StdEncoding.EncodeToString(make([]byte, 64))
 	badEnvelope, err := json.Marshal(wire)
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	write(snapshot, badEnvelope)
-	if _, err := authenticateCache(path, trust, bundle.Snapshot.Sequence, bundle.Digest, at); err == nil { t.Fatal("forged signature accepted") }
+	if _, err := authenticateCache(path, trust, bundle.Snapshot.Sequence, bundle.Digest, at); err == nil {
+		t.Fatal("forged signature accepted")
+	}
 	write(snapshot, envelope)
-	if _, err := authenticateCache(path, directoryv1.TrustStore{}, bundle.Snapshot.Sequence, bundle.Digest, at); err == nil { t.Fatal("untrusted key accepted") }
+	if _, err := authenticateCache(path, directoryv1.TrustStore{}, bundle.Snapshot.Sequence, bundle.Digest, at); err == nil {
+		t.Fatal("untrusted key accepted")
+	}
 }
 
 func TestProducerPolicyNeverPromotesV1GrantToSignedProjectGrant(t *testing.T) {
-	// Wrong schema and unsupported Project backends must fail through the
-	// production function, rather than through an audit-side allowlist.
-	request := domain.DirectoryResolveRequest{Scope: domain.ScopeProject, Targets: []domain.ClientID{"hermes"}}
-	for _, schema := range []int{1, 2} {
-		if _, err := domain.ResolveDirectoryV1ProjectSource(domain.DirectorySnapshot{SnapshotSchemaVersion: schema}, request); err == nil {
-			t.Fatal("unsupported project tuple accepted")
-		}
+	trust, err := producerTrust()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundle, err := producerBootstrap(frozenProducerRoot(t), trust)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := dependencyRequest(policyOptions{client: "codex", scope: "project", target: "linux-amd64"}, "777genius/notion", 1)
+	if _, err := domain.ResolveDirectoryV1ProjectSource(bundle.Snapshot, request); err != nil {
+		t.Fatalf("valid v1 supported Project source control: %v", err)
+	}
+	wrongSchema := bundle.Snapshot
+	wrongSchema.SnapshotSchemaVersion = 2
+	if _, err := domain.ResolveDirectoryV1ProjectSource(wrongSchema, request); err == nil {
+		t.Fatal("unsupported schema accepted")
+	}
+	request.Targets = []domain.ClientID{"hermes"}
+	if _, err := domain.ResolveDirectoryV1ProjectSource(bundle.Snapshot, request); err == nil {
+		t.Fatal("unsupported Project backend accepted")
 	}
 }
 
 func TestProducerBootstrapFloorAndEquivocation(t *testing.T) {
 	trust, err := producerTrust()
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	root := frozenProducerRoot(t)
 	embedded, err := producerBootstrap(root, trust)
-	if err != nil { t.Fatal(err) }
-	if err := checkFloor(embedded, embedded); err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := checkFloor(embedded, embedded); err != nil {
+		t.Fatal(err)
+	}
 	below := embedded
 	below.Snapshot.Sequence--
-	if err := checkFloor(below, embedded); err == nil { t.Fatal("producer bootstrap rollback accepted") }
+	if err := checkFloor(below, embedded); err == nil {
+		t.Fatal("producer bootstrap rollback accepted")
+	}
 	conflict := embedded
 	conflict.Digest = "sha256:different"
-	if err := checkFloor(conflict, embedded); err == nil { t.Fatal("producer bootstrap equivocation accepted") }
+	if err := checkFloor(conflict, embedded); err == nil {
+		t.Fatal("producer bootstrap equivocation accepted")
+	}
 }

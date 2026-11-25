@@ -76,6 +76,7 @@
         "source": "Fonte",
         "metricsNotice": "As contagens são fornecidas pelo catálogo externo e não foram verificadas independentemente.",
         "loadingDocument": "Carregando instruções da fonte…",
+        "waitingDocument": "A prévia está ocupada. Uma nova tentativa será feita em breve…",
         "sourceDocumentNotice": "Instruções do editor · conteúdo não verificado. Revise antes de usar.",
         "documentUnavailable": "Não foi possível carregar SKILL.md do editor. Você pode consultar a fonte diretamente.",
         "viewPublisher": "Ver fonte do editor",

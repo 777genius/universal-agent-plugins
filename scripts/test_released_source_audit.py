@@ -18,6 +18,28 @@ audit = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(audit)
 
 
+def assert_no_private_path(test, value, private_path):
+    """Inspect decoded strings so Windows JSON escaping cannot hide a leak."""
+    if isinstance(value, str):
+        test.assertNotIn(str(private_path), value)
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            assert_no_private_path(test, key, private_path)
+            assert_no_private_path(test, item, private_path)
+    elif isinstance(value, list):
+        for item in value:
+            assert_no_private_path(test, item, private_path)
+
+
+class DiagnosticPrivacyAssertionTests(unittest.TestCase):
+    def test_windows_backslash_leak_is_detected_after_json_roundtrip(self):
+        private = r"C:\Users\private-owner\case"
+        leaked = json.loads(json.dumps({"nested": [{"path": private + r"\state.json"}]}))
+        with self.assertRaises(AssertionError):
+            assert_no_private_path(self, leaked, private)
+        assert_no_private_path(self, {"nested": [{"path": "<redacted>"}]}, private)
+
+
 def snapshot():
     return {"revocations": [], "evidence": [], "distributions": [{
         "id": "fixture/portable", "status": "active", "releases": [{
@@ -654,7 +676,7 @@ class RuntimeLineageDiagnosticTests(unittest.TestCase):
         self.assertEqual(result["records"][1]["snapshot_sequence"], 49)
         self.assertEqual(result["records"][1]["snapshot_digest"], "sha256:" + "a" * 64)
         self.assertNotIn("secret", json.dumps(result))
-        self.assertNotIn(str(self.root), json.dumps(result))
+        assert_no_private_path(self, result, self.root)
         self.assertNotIn(self.selected["source"]["repository"], json.dumps(result))
 
     def test_missing_malformed_duplicate_and_oversize_are_unresolved(self):
@@ -707,7 +729,7 @@ class RuntimeLineageDiagnosticTests(unittest.TestCase):
             self.assertTrue(swapped)
             self.assertEqual(result, {"status": "unresolved", "reason": "state_unavailable_or_invalid"})
             self.assertNotIn("987654", json.dumps(result))
-            self.assertNotIn(foreign, json.dumps(result))
+            assert_no_private_path(self, result, foreign)
 
     def test_bounded_unknown_and_mismatched_identities_are_redacted(self):
         value = self.make_state()
@@ -809,7 +831,7 @@ class ProtectedScopeDiagnosticTests(unittest.TestCase):
                            "field": "metadata", "changed_fields": ["mtime"]}, result["entries"])
             self.assertIn({"path": "<redacted>", "kind": "added", "field": "entry"}, result["entries"])
             encoded = json.dumps(result)
-            self.assertNotIn(temporary, encoded)
+            assert_no_private_path(self, result, temporary)
             self.assertNotIn("private-value", encoded)
             self.assertNotIn("secret link destination", encoded)
             self.assertNotIn("PRIVATE", encoded)
@@ -829,7 +851,7 @@ class ProtectedScopeDiagnosticTests(unittest.TestCase):
             self.assertEqual(receipt["reason"], "add changed the other scope")
             changes = receipt["protected_scope_changes"]
             self.assertEqual(changes["entries"][0]["changed_fields"], ["mtime"])
-            self.assertNotIn(temporary, json.dumps(changes))
+            assert_no_private_path(self, changes, temporary)
 
     def test_successful_dependency_add_remains_inconclusive(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1166,8 +1188,17 @@ class PiProjectTrustTests(unittest.TestCase):
 
     def test_duplicate_trust_key_and_extra_foreign_owner_are_refused(self):
         self.install()
-        self.oracle.files[1].write_text('{"schema_version":1,"schema_version":1,"projects":{}}', encoding="utf-8")
-        with self.assertRaises((ValueError, AssertionError)):
+        valid = json.dumps(self.record)
+        self.rewrite_record()
+        # Keep an independent fresh phase for the duplicate-key check so it
+        # reaches the parser rather than the already-installed mutation guard.
+        fresh = copy.copy(self.oracle)
+        self.observe()
+        duplicate = valid.replace('"schema_version": 1', '"schema_version": 1, "schema_version": 1', 1)
+        self.assertNotEqual(duplicate, valid)
+        self.oracle.files[1].write_text(duplicate, encoding="utf-8")
+        self.oracle = fresh
+        with self.assertRaisesRegex(ValueError, "duplicate"):
             self.observe()
 
     @unittest.skipIf(os.name == "nt", "POSIX hardlink fixture")
@@ -1317,16 +1348,18 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
                 "revision": pin["resolved_revision"], "path": pin["package_path"]},
                 "tree_digest": pin["tree_digest"], "manifest_digest": pin["manifest_digest"]}
 
-    def exercise(self, *, policy="eligible", error=None, retain_child=False, missing_native=False):
+    def exercise(self, *, policy="eligible", error=None, retain_child=False, missing_native=False, partial_saved=False, malformed_operation=None, malformed_result=None):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name).resolve() / "case"
-        calls, stages, owners = [], [], {}
+        calls, stages, owners, events = [], [], {}, []
         selected = self.selected()
         helper = SimpleNamespace()
         real_closure = audit.module("real_cleanup_contract", "released_source_closure.py")
         def authorize(api, context, case_root, case, stage):
             stages.append(stage)
+            events.append(("authorize", stage))
+            self.assertEqual(events[-2], ("cli-completed", stage))
             if error is not None:
                 raise ValueError(error)
             return {"policy_status": policy, "ineligible_distributions": ["777genius/notion"]}
@@ -1338,6 +1371,7 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
             return {alias: {"content_verified": True} for alias in joined}
         def cli(argv, env, project, *args, **kwargs):
             operation = argv[1]
+            events.append(("cli", operation))
             calls.append((operation, argv[2] if operation in ("info", "update", "repair", "remove") else None))
             data = root / "uap-data"
             if operation == "add" and policy == "eligible":
@@ -1355,8 +1389,11 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
                     owners[alias] = {"installation": {"installation_id": alias},
                         "binding": {"client_binding_id": alias, "physical_artifact_id": alias},
                         "locator": locator}
-                (data / "uap.toml").write_text('schema_version=1\n[dependencies]\n[targets]\n', encoding="utf-8")
-                (data / "uap.lock").write_text('{"lock_version":1,"packages":[]}', encoding="utf-8")
+                (data / "uap.toml").write_text('schema_version=1\n[dependencies]\nmarketing-kit="github:fixture"\n[targets]\nhermes=["marketing-kit"]\n', encoding="utf-8")
+                packages = [{"alias": alias, "source_key": selected["selector"] if alias == "marketing-kit"
+                             else "directory:" + distribution}
+                            for alias, distribution in audit.live.MARKETING_KIT_DISTRIBUTIONS.items()]
+                (data / "uap.lock").write_text(json.dumps({"lock_version": 1, "packages": packages}), encoding="utf-8")
             if operation == "remove":
                 native = root / "home/.hermes"
                 (native / "skills/campaign-planning/SKILL.md").unlink()
@@ -1366,12 +1403,23 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
                 for owner in owners.values():
                     (owner["locator"] / "plugin.json").unlink()
                     owner["locator"].rmdir()
-                if retain_child:
-                    (data / "uap.lock").write_text('{"lock_version":1,"packages":[{"alias":"notion","source_key":"directory:777genius/notion"}]}', encoding="utf-8")
+                locked = json.loads((data / "uap.lock").read_text(encoding="utf-8"))
+                retained = [item for item in locked["packages"] if item["alias"] == "notion"] if retain_child else []
+                self.assertEqual(len(retained), 1 if retain_child else 0)
+                (data / "uap.toml").write_text('schema_version=1\n[dependencies]\n[targets]\n', encoding="utf-8")
+                (data / "uap.lock").write_text(json.dumps({"lock_version": 1, "packages": retained}), encoding="utf-8")
                 (data / "state-v2.json").write_text('{"schema_version":5,"installations":[],"environment_receipts":[]}', encoding="utf-8")
             refused = operation == "add" and policy == "ineligible"
+            if refused and partial_saved:
+                (data / "uap.toml").write_text('schema_version=1\n', encoding="utf-8")
+            events.append(("cli-completed", operation))
+            envelope = {"result": "success", "data": {"installations": []}}
+            if operation == malformed_operation:
+                envelope = {"data": {"installations": []}}
+                if malformed_result is not None:
+                    envelope["result"] = malformed_result
             return {"exit_code": 1 if refused else 0, "timeout": False,
-                    "_json": {"data": {"installations": []}},
+                    "_json": envelope,
                     "stdout_full": "", "stderr_full": ("agentplugins: dependency conflict for directory:777genius/notion: marketing-kit version 1.0.0" if refused else ""),
                     "stdout_tail": "", "stderr_tail": ""}
         helper.authorize = authorize
@@ -1417,6 +1465,21 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
     def test_authenticated_ineligible_refusal_has_no_effects(self):
         outcome, calls, stages = self.exercise(policy="ineligible")
         self.assertEqual(outcome["status"], "expected-dependency-refusal", outcome.get("reason"))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(stages, ["add"])
+
+    def test_zero_exit_add_and_info_require_success_envelope(self):
+        for operation in ("add", "info"):
+            for result in (None, "error"):
+                with self.subTest(operation=operation, result=result):
+                    outcome, _, _ = self.exercise(malformed_operation=operation, malformed_result=result)
+                    self.assertEqual(outcome["status"], "failed")
+                    self.assertIn(operation, outcome["reason"])
+
+    def test_authenticated_ineligible_partial_saved_write_is_refused(self):
+        outcome, calls, stages = self.exercise(policy="ineligible", partial_saved=True)
+        self.assertEqual(outcome["status"], "failed")
+        self.assertIn("published native or saved effects", outcome["reason"])
         self.assertEqual(len(calls), 1)
         self.assertEqual(stages, ["add"])
 

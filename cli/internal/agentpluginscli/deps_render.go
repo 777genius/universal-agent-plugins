@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -90,7 +91,7 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 }
 
 // renderInstallAttention explains agents that did not succeed in plain words.
-// The raw per-binding lines above stay for scripts; technical detail is in the log.
+// Human-readable binding results appear above; technical detail is in the log.
 func renderInstallAttention(cmd *cobra.Command, opts *options) error {
 	result := opts.installResult
 	if result == nil || len(result.failedAgents()) == 0 {
@@ -110,7 +111,8 @@ func renderDependencyHumanResults(cmd *cobra.Command, opts *options, actions []d
 		return err
 	}
 	for _, result := range out {
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s/%s: %s %s\n", result.Operation, result.InstallationID, result.ClientID, result.Outcome, result.Reason); err != nil {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s for %s: %s %s\n", humanDependencyVerb(result.Operation),
+			prompt.SafeText(dependencyResultAlias(opts.installResult, result)), prompt.SafeText(reviewClientName(domain.ClientID(result.ClientID))), result.Outcome, result.Reason); err != nil {
 			return err
 		}
 		for _, next := range result.NextActions {
@@ -122,6 +124,16 @@ func renderDependencyHumanResults(cmd *cobra.Command, opts *options, actions []d
 			if _, err := fmt.Fprintln(cmd.OutOrStdout(), "  Manual:", manual); err != nil {
 				return err
 			}
+		}
+	}
+	seen := map[string]bool{}
+	for _, result := range out {
+		if result.InstallationID == "" || seen[result.InstallationID] {
+			continue
+		}
+		seen[result.InstallationID] = true
+		if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Installation:", prompt.SafeText(result.InstallationID+dependencyInstallationAliasSuffix(opts.installResult, out, result.InstallationID))); err != nil {
+			return err
 		}
 	}
 	return nil

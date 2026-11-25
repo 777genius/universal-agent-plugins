@@ -5,6 +5,7 @@ it is never constructed from local state. The caller owns subprocess provenance.
 """
 import json
 import base64
+from itertools import islice
 import os
 import re
 import subprocess
@@ -16,6 +17,8 @@ from pathlib import Path
 
 PRODUCER = "4858d973afcf6cf31b49bba98bdf06482dce6226"
 ROOT_ALIAS = "marketing-kit"
+# Match directoryv1.Cache.Load's encoded-artifact plus JSON framing bound.
+MAX_CACHE_BYTES = 4 * (((4 << 20) + 2) // 3) + 4 * (((16 << 10) + 2) // 3) + 4096
 
 
 def require(value, message):
@@ -27,17 +30,18 @@ def reject_constant(_):
     raise ValueError("non-finite JSON value in closure authority")
 
 
-def held_read(audit, path, root):
+def held_read(audit, path, root, *, max_bytes=1 << 20):
     """Reuse the existing ancestor/handle reader and join its exact bytes."""
     path = audit.in_case(path, root)
     try:
         before = path.lstat()
     except OSError as error:
         raise ValueError("closure held document unavailable") from error
-    first, status = audit.live.copilot_settings_read(path, root)
+    bounds = {} if max_bytes == 1 << 20 else {"max_bytes": max_bytes}
+    first, status = audit.live.copilot_settings_read(path, root, **bounds)
     require(status is None and isinstance(first, str), "closure held ancestor read unavailable")
-    body, observed = audit.read_saved_record(path)
-    repeated, status = audit.live.copilot_settings_read(path, root)
+    body, observed = audit.read_saved_record(path, **bounds)
+    repeated, status = audit.live.copilot_settings_read(path, root, **bounds)
     after = path.lstat()
     require(body is not None and observed is not None and status is None
             and body == first.encode("utf-8") and repeated == first,
@@ -151,7 +155,7 @@ def authorize(audit, context, root, case, stage):
     """Capture actual held runtime bytes, then let frozen Go authenticate/select."""
     require(context is not None and stage in ("add", "update", "repair", "remove"), "runtime policy context unavailable")
     cache_path = audit.in_case(root / "uap-data/directory-v1-cache.json", root)
-    body = held_read(audit, cache_path, root)
+    body = held_read(audit, cache_path, root, max_bytes=MAX_CACHE_BYTES)
     cache = json.loads(body, object_pairs_hook=audit.live._unique_json_object, parse_constant=reject_constant)
     require(isinstance(cache, dict) and type(cache.get("schema_version")) is int and cache["schema_version"] == 1
             and type(cache.get("sequence")) is int and cache["sequence"] > 0, "runtime cache identity invalid")
@@ -323,6 +327,53 @@ def checked_native(audit, owners, verifier):
     return proofs
 
 
+def checked_antigravity_inventory(audit, locator, root, alias):
+    """Closed native projection of the four immutable source pins above.
+
+    Frozen antigravity/project.go rewrites plugin.json, removes mcp.json and
+    adds mcp_config.json for MCP members. Locked npm dependencies live under
+    PLUGIN_DATA, never in this native plugin tree.
+    """
+    source_files = {
+        # registry c5bcedd4, plugins/marketing-kit
+        "marketing-kit": {"README.md", "SOURCES.md", "plugin.json", "uap.toml",
+                          "skills/campaign-planning/SKILL.md"},
+        # product 2ddbb99d, plugins/notion and plugins/hubspot-crm
+        "notion": {"README.md", "plugin.json", "mcp_config.json"},
+        "hubspot-crm": {"README.md", "plugin.json", "mcp_config.json"},
+        # registry d9c8d778, plugins/playwright
+        "playwright": {"NOTICE", "README.md", "plugin.json", "mcp_config.json",
+            *("io.github.777genius.agentplugins/runtime/" + name for name in
+              ("launcher.mjs", "package.json", "package-lock.json", "runtime.json"))},
+    }
+    require(alias in source_files, "unreviewed Antigravity closure member")
+    files = {Path(name) for name in source_files[alias]}
+    directories = {Path(".")}
+    for path in files:
+        directories.update(path.parents)
+    expected = files | directories
+    held = {}
+    for relative in directories:
+        directory = audit.in_case(locator / relative, root)
+        info = directory.lstat()
+        require(stat.S_ISDIR(info.st_mode) and not directory.is_symlink(),
+                "closure native inventory directory replaced")
+        held[relative] = (info.st_mode, info.st_dev, info.st_ino)
+        children = {locator / path for path in expected if path != Path(".") and path.parent == relative}
+        require(set(islice(directory.iterdir(), len(children) + 1)) == children,
+                "closure native inventory differs from immutable projection")
+    for relative in files:
+        held_read(audit, locator / relative, root)
+    for relative, identity in held.items():
+        directory = audit.in_case(locator / relative, root)
+        info = directory.lstat()
+        require((info.st_mode, info.st_dev, info.st_ino) == identity,
+                "closure native inventory directory replaced")
+        children = {locator / path for path in expected if path != Path(".") and path.parent == relative}
+        require(set(islice(directory.iterdir(), len(children) + 1)) == children,
+                "closure native inventory changed during held reads")
+
+
 def checked_member_native(audit, case, root, selected_root, alias, owner):
     """Exact Hermes/Antigravity physical content; Pi needs its trust oracle too."""
     client = case["client"]
@@ -342,6 +393,7 @@ def checked_member_native(audit, case, root, selected_root, alias, owner):
             and not packages[0].get("user_modified"), "closure physical package ownership mismatch")
     if client == "antigravity":
         require(not members and locator.parent == selected_root / "plugins", "closure plugin escaped selected scope")
+        checked_antigravity_inventory(audit, locator, root, alias)
         body = held_read(audit, locator / "plugin.json", root)
         require(body is not None, "closure native manifest absent")
         manifest = json.loads(body, object_pairs_hook=audit.live._unique_json_object)

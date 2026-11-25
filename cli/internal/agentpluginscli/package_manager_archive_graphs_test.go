@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func packageManagerArchiveCases() map[string]func(*testing.T) {
@@ -31,10 +32,19 @@ func packageManagerArchiveCases() map[string]func(*testing.T) {
 
 func pmArchiveInstallGraph(t *testing.T, graph pmArchiveGraph, roots ...string) (*pmArchiveOrigin, pmArchiveEnvironment) {
 	t.Helper()
+	return pmArchiveInstallGraphWithTimeout(t, 3*time.Minute, graph, roots...)
+}
+
+func pmArchiveInstallGraphWithTimeout(t *testing.T, timeout time.Duration, graph pmArchiveGraph, roots ...string) (*pmArchiveOrigin, pmArchiveEnvironment) {
+	t.Helper()
 	origin := newPMArchiveOrigin(t, graph)
 	fixture := newPMArchiveEnvironment(t, origin, false)
 	fixture.manifest(t, origin, roots, map[string][]string{"gemini": roots})
-	fixture.run(t, "install", "--yes", "--format", "json")
+	args := []string{"install", "--yes", "--format", "json"}
+	output, err := fixture.executePMWithTimeout(t.Context(), t, timeout, "", false, args...)
+	if err != nil {
+		t.Fatalf("%v: %v\n%s", args, err, output)
+	}
 	fixture.assertGraph(t, origin, graph, pmArchiveAll(graph, "gemini"))
 	fixture.assertInstalled(t, pmArchiveAll(graph, "gemini"))
 	return origin, fixture
@@ -60,7 +70,10 @@ func pmArchiveFanout(t *testing.T) {
 		graph[name] = nil
 		graph["root"] = append(graph["root"], name)
 	}
-	pmArchiveInstallGraph(t, graph, "root")
+	// This correctness case commits 65 bindings with repeated full-state
+	// validation. Only its install gets extra headroom; later commands retain
+	// the ordinary three-minute fixture deadline.
+	pmArchiveInstallGraphWithTimeout(t, 5*time.Minute, graph, "root")
 }
 
 func pmArchiveDense(t *testing.T) {

@@ -109,6 +109,7 @@ func (e *Engine) Prepare(ctx context.Context, req Request) (*PreparedOperation, 
 		target := copied.Targets[0]
 		copied.ClientID = target.ClientID
 		copied.ClientConfigRoot = target.ClientConfigRoot
+		copied.ClientSurfaces = slices.Clone(target.ClientSurfaces)
 		copied.ClientExecutable = firstNonEmpty(target.ClientExecutable, copied.ClientExecutable)
 		copied.PackageRoot = firstNonEmpty(target.PackageRoot, copied.PackageRoot)
 		copied.ExternalUninstalled = target.ExternalUninstalled

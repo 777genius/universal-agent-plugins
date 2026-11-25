@@ -13,7 +13,10 @@ on:
       - 'npm/agentplugins/scripts/npm-public-contract.js'
       - 'scripts/test_released_source_closure.py'
       - 'scripts/test_released_source_audit.py'
+      - 'scripts/test_released_source_channels.py'
+      - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
       - 'scripts/run-native-client-matrix.py'
       - 'scripts/native_client_draft.py'
       - 'scripts/pi_project_native_e2e.py'
@@ -37,7 +40,10 @@ on:
       - 'npm/agentplugins/scripts/npm-public-contract.js'
       - 'scripts/test_released_source_closure.py'
       - 'scripts/test_released_source_audit.py'
+      - 'scripts/test_released_source_channels.py'
+      - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_research.py'
       - 'scripts/run-native-client-matrix.py'
       - 'scripts/native_client_draft.py'
       - 'scripts/pi_project_native_e2e.py'
@@ -79,7 +85,7 @@ jobs:
           cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22.21.1'
+          node-version: '24.22.3'
           package-manager-cache: false
       - name: Install pinned native config parser
         run: python3 -m pip install PyYAML==6.0.3
@@ -155,7 +161,7 @@ jobs:
           cache: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '22.21.1'
+          node-version: '24.22.3'
           package-manager-cache: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
@@ -174,6 +180,10 @@ jobs:
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           git diff --exit-code
           ${{ runner.os == 'Windows' && 'python' || 'python3' }} -m unittest discover -s scripts -p 'test_released_source_*.py' -v
+      - name: Verify Windows owned full-output process custody
+        if: runner.os == 'Windows'
+        shell: bash
+        run: python -m unittest discover -s scripts -p 'test_live_install_audit_env.py' -k WindowsOwnedFileCaptureContracts -v
       - name: Install pinned real Hermes for native target detection
         if: matrix.client == 'hermes'
         shell: bash
