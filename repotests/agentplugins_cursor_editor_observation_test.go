@@ -463,7 +463,11 @@ func cursorEditorHelpAndUI(ctx context.Context, t *testing.T, root, project, out
 		t.Fatal("editor input encoding or bound")
 	}
 	report["stage"] = "editor-ui"
-	observed, captureFacts, runErr := cursorEditorCapture(ctx, []string{paths["node"], paths["driver"]}, env, project, encoded)
+	// Playwright's supported browser diagnostics reach the existing bounded
+	// stderr capture, never the published report. Only fixed categories survive.
+	driverEnv := append([]string(nil), env...)
+	driverEnv = append(driverEnv, "DEBUG=pw:browser")
+	observed, captureFacts, runErr := cursorEditorCapture(ctx, []string{paths["node"], paths["driver"]}, driverEnv, project, encoded)
 	report["driver_completion"] = captureFacts
 	stdoutDigest := sha256.Sum256(observed)
 	report["driver_stdout_bytes"], report["driver_stdout_sha256"] = len(observed), hex.EncodeToString(stdoutDigest[:])
@@ -492,7 +496,8 @@ func cursorEditorCompletionFacts(ctx context.Context, err error) map[string]any 
 	facts := map[string]any{"error_present": err != nil,
 		"supervisor_failure":      process.OrdinarySupervisorFailureClass(err),
 		"forced_cleanup":          errors.Is(err, process.ErrOrdinaryForcedCleanup),
-		"containment_unsupported": errors.Is(err, process.ErrOrdinaryContainmentUnsupported)}
+		"containment_unsupported": errors.Is(err, process.ErrOrdinaryContainmentUnsupported),
+		"launch_diagnostic":       cursorEditorLaunchDiagnostic(err)}
 	if ctx.Err() != nil {
 		facts["context"] = acpMetadataCompletionClass(ctx.Err())
 	}
@@ -508,6 +513,65 @@ func cursorEditorCompletionFacts(ctx context.Context, err error) map[string]any 
 		facts["observed_errno"] = uint64(errno)
 	}
 	return facts
+}
+
+// Native text is an untrusted diagnostic hint, never acceptance authority.
+// Do not retain messages, paths, environment values or unknown tokens.
+func cursorEditorLaunchDiagnostic(err error) string {
+	if err == nil {
+		return "none"
+	}
+	diagnostic := err.Error()
+	if len(diagnostic) > 64<<10 {
+		return "diagnostic-bound"
+	}
+	seen := false
+	for _, line := range strings.Split(diagnostic, "\n") {
+		if !strings.Contains(line, "pw:browser") || !strings.Contains(line, "][err] ") {
+			continue
+		}
+		seen = true
+		for _, known := range []struct{ fragment, category string }{
+			{"The SUID sandbox helper binary was found, but is not configured correctly.", "sandbox-helper-configuration"},
+			{"No usable sandbox!", "sandbox-unavailable"},
+			{"Failed to move to new namespace:", "namespace-refused"},
+			{"error while loading shared libraries:", "shared-library-unavailable"},
+			{"Missing X server or $DISPLAY", "display-unavailable"},
+			{"Unable to open X display", "display-unavailable"},
+		} {
+			if strings.Contains(line, known.fragment) {
+				return known.category
+			}
+		}
+	}
+	if !seen {
+		return "unavailable"
+	}
+	return "unclassified"
+}
+
+func TestCursorEditorLaunchDiagnosticNeverPublishesNativeContents(t *testing.T) {
+	for _, test := range []struct{ message, want string }{
+		{"pw:browser [pid=42][err] The SUID sandbox helper binary was found, but is not configured correctly. PRIVATE-CANARY", "sandbox-helper-configuration"},
+		{"pw:browser [pid=42][err] No usable sandbox! PRIVATE-CANARY", "sandbox-unavailable"},
+		{"pw:browser [pid=42][err] Failed to move to new namespace: PRIVATE-CANARY", "namespace-refused"},
+		{"pw:browser [pid=42][err] PRIVATE-CANARY: error while loading shared libraries: PRIVATE-CANARY", "shared-library-unavailable"},
+		{"pw:browser [pid=42][err] Missing X server or $DISPLAY PRIVATE-CANARY", "display-unavailable"},
+		{"pw:browser [pid=42][err] Unable to open X display PRIVATE-CANARY", "display-unavailable"},
+		{"pw:browser [pid=42][err] PRIVATE-CANARY", "unclassified"},
+		{"pw:browser [pid=42][err] PRIVATE-CANARY\nNo usable sandbox!", "unclassified"},
+		{"No usable sandbox! PRIVATE-CANARY", "unavailable"},
+		{strings.Repeat("PRIVATE-CANARY", 6000), "diagnostic-bound"},
+	} {
+		facts := cursorEditorCompletionFacts(context.Background(), errors.New(test.message))
+		encoded, err := json.Marshal(facts)
+		if err != nil || strings.Contains(string(encoded), "PRIVATE-CANARY") || facts["launch_diagnostic"] != test.want {
+			t.Fatal("launch diagnostic leaked native contents or lost its fixed category")
+		}
+	}
+	if cursorEditorLaunchDiagnostic(nil) != "none" {
+		t.Fatal("successful completion invented a native diagnostic")
+	}
 }
 
 func TestCursorEditorCompletionFactsNeverPublishNativeContents(t *testing.T) {

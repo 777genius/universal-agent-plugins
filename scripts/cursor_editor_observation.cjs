@@ -139,9 +139,11 @@ async function observe(input, progress = () => {}) {
     if (JSON.parse(fs.readFileSync(path.join(input.playwright, 'package.json'), 'utf8')).version !== '1.64.1') throw new Error('tool-version-refused');
     const args = isolationArguments(input.help, input);
     const { _electron } = require(input.playwright);
+    const nativeEnv = { ...process.env };
+    delete nativeEnv.DEBUG;
     result.stage = 'editor-launch';
     app = await _electron.launch({ executablePath: input.electron, args,
-      cwd: input.project, env: process.env, chromiumSandbox: true, timeout: 30000 });
+      cwd: input.project, env: nativeEnv, chromiumSandbox: true, timeout: 30000 });
     const child = app.process();
     closed = once(child, 'close');
     if (child.spawnargs.includes('--no-sandbox') || child.spawnfile !== input.electron) throw new Error('launch-authority-refused');

@@ -175,7 +175,10 @@ for (const [name, action, observation] of terminalModes) {
         JSON.stringify({ version: '1.64.1', main: 'index.js' }));
       // Controlled failure of the library/child boundary, never native proof.
       fs.writeFileSync(path.join(root, 'playwright', 'index.js'),
-        `module.exports = { _electron: { launch: async () => { ${action} } } };`);
+        `module.exports = { _electron: { launch: async ({ env }) => {
+          if (process.env.DEBUG !== 'pw:browser' || env.DEBUG !== undefined) throw Error('diagnostic-environment-leak');
+          ${action}
+        } } };`);
       const input = {
         root, project: path.join(root, 'project'), userData: path.join(root, 'userdata'),
         extensions: path.join(root, 'extensions'), output: path.join(root, 'output'),
@@ -183,6 +186,7 @@ for (const [name, action, observation] of terminalModes) {
       };
       const result = spawnSync(process.execPath, [path.join(__dirname, 'cursor_editor_observation.cjs')], {
         input: JSON.stringify(input), encoding: 'utf8', timeout: 10000,
+        env: { ...process.env, DEBUG: 'pw:browser' },
       });
       assert.equal(result.error, undefined);
       assert.equal(result.status, 1);
