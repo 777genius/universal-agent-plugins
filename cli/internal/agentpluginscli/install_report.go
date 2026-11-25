@@ -77,6 +77,7 @@ func reportByAgent(items []agentItem) []agentReport {
 	var reports []agentReport
 	index := map[string]int{}
 	for _, item := range items {
+		item = normalizeAgentItem(item)
 		position, seen := index[item.ClientID]
 		if !seen {
 			position = len(reports)
@@ -229,6 +230,7 @@ type bindingJSON struct {
 func (outcome *installOutcome) bindingsJSON() []bindingJSON {
 	out := make([]bindingJSON, 0, len(outcome.Items))
 	for _, item := range outcome.Items {
+		item = normalizeAgentItem(item)
 		entry := bindingJSON{Alias: item.Alias, ClientID: item.ClientID, Status: item.Status}
 		if item.failure != nil {
 			entry.Code = string(item.failure.Kind)
@@ -275,6 +277,7 @@ func (app App) recordInstallRun(command string, attempt int, entries []installlo
 func agentLogEntries(items []agentItem) []installlog.Entry {
 	entries := make([]installlog.Entry, 0, len(items))
 	for _, item := range items {
+		item = normalizeAgentItem(item)
 		entry := installlog.Entry{Alias: item.Alias, Client: item.ClientID, Status: item.Status}
 		if item.failure != nil {
 			entry.Code, entry.Summary, entry.Detail = string(item.failure.Kind), item.failure.Summary, item.failure.Detail
