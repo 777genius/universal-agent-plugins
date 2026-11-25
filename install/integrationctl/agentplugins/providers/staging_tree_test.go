@@ -44,7 +44,7 @@ func TestStagerGoldenTreesAcrossClients(t *testing.T) {
 				plan.TargetContext = domain.TargetContext{Scope: domain.ScopeUser, UserConfigRoot: plan.NativeRegistryRoot}
 			}
 			dataRoot := ""
-			if domain.ClientTraitsFor(definition.ID).VerifiesNativeDirectory {
+			if definition.ID == domain.ClientPi {
 				envelope, plan, dataRoot = piGoldenStagingFixture(t, envelope, plan)
 			}
 			if definition.ID == domain.ClientOpenCode {

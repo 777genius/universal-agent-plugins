@@ -312,7 +312,9 @@ func (f *kimiProjectNativeFixture) uap(t *testing.T, label, scope string, mutate
 	switch args[0] {
 	case "add":
 		progress = "Resolving and validating one Agent Plugin package for every selected target...\n"
-		if strings.HasPrefix(label, "repeat-") {
+		if handled {
+			// The independently validated exact no-change receipt has no apply phase.
+		} else if strings.HasPrefix(label, "repeat-") {
 			progress += "Applying transactional client package...\n"
 		} else {
 			progress += "Installing " + f.packages[scope].Name + " for 1 selected clients...\n"

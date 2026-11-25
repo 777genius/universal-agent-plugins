@@ -595,9 +595,6 @@ linters:
       - path: ^install/integrationctl/adapters/process/osrunner_tree_linux\.go$
         linters: [revive, funlen, gocyclo, gocognit]
         text: 'file length is|^error-return:|^indent-error-flow:|too many statements|cyclomatic complexity|cognitive complexity'
-      - path: ^install/integrationctl/adapters/process/osrunner_tree_windows\.go$
-        linters: [revive]
-        text: '^indent-error-flow:'
       - path: ^install/integrationctl/adapters/safemutate/osmutator\.go$
         linters: [funlen, gocognit]
         text: 'too many statements|cognitive complexity'

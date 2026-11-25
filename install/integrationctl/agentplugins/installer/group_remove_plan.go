@@ -14,7 +14,7 @@ func (e *Engine) planRemoveGroup(ctx context.Context, handle *PreparedOperation,
 	for _, target := range req.Targets {
 		client, err := e.detectedClient(Request{
 			Operation: OpRemove, ClientID: target.ClientID,
-			ClientConfigRoot: target.ClientConfigRoot, ClientExecutable: firstNonEmpty(target.ClientExecutable, req.ClientExecutable),
+			ClientConfigRoot: target.ClientConfigRoot, ClientExecutable: firstNonEmpty(target.ClientExecutable, req.ClientExecutable), ClientSurfaces: target.ClientSurfaces,
 		})
 		if err != nil {
 			return nil, err

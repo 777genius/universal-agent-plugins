@@ -124,6 +124,11 @@ func (f *geminiProjectAttempt) command(t *testing.T, label, cwd string, env, arg
 	f.keep(t, label+".command.json", body)
 	f.check(t)
 	if err != nil || ctx.Err() != nil || result.ExitCode != 0 || len(result.Stdout) > projectNativeRuntimeBodyLimit || bytes.Contains(result.Stderr, []byte("stderr bytes omitted")) {
+		facts := geminiCommandFailureFacts(result, err, ctx.Err())
+		f.evidence["command_failure"] = facts
+		t.Logf("Gemini command failure class=%s exit=%d no_child_started=%t cleanup_complete=%t deadline=%t canceled=%t error=%t context_error=%t",
+			facts["class"], facts["exit_code"], facts["no_child_started"], facts["cleanup_complete"],
+			facts["deadline"], facts["canceled"], facts["error"], facts["context_error"])
 		t.Fatalf("%s process/capture/cleanup failed; see bounded evidence", label)
 	}
 	return result

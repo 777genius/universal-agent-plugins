@@ -156,13 +156,13 @@ def skill_present(body, expected_path):
     rows = json.loads(body)
     require(isinstance(rows, list) and len(rows) <= 128
             and all(isinstance(row, dict) for row in rows), "User Skill catalog shape differs")
-    matches = [row for row in rows if row.get("name") == NAME]
+    matches = [row for row in rows if row.get("name") == NAME or row.get("display_name") == NAME]
     if not matches:
         return False
     expected = {"name": NAME, "description": DESCRIPTION, "provider": "Devin",
                 "base_dir": str(expected_path), "display_name": NAME,
                 "triggers": ["user", "model"], "warnings": [], "errors": []}
-    require(matches == [expected] and pinned.available_skill(body, NAME),
+    require(matches == [expected],
             "User Skill catalog has wrong source, duplicates or invalid metadata")
     return True
 

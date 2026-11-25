@@ -7,9 +7,11 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -94,15 +96,20 @@ func cursorEditorAlias(root, path string, before os.FileInfo) (acpMetadataFile, 
 		Identity: []any{stat.Dev, stat.Ino, stat.Nlink, stat.Uid}, info: before}, nil
 }
 
-func cursorEditorCapture(ctx context.Context, argv, env []string, cwd string, input []byte) ([]byte, error) {
+func cursorEditorCapture(ctx context.Context, argv, env []string, cwd string, input []byte) ([]byte, error, map[string]any) {
 	var body []byte
+	facts := map[string]any{"exchange_phase": "not-started", "stdin_bytes": 0}
 	err := (process.OS{}).RunDuplexToCompletion(ctx, ports.Command{Argv: argv, Env: env, Dir: cwd},
 		func(writer io.Writer, reader io.Reader) error {
+			facts["exchange_phase"] = "stdin-write"
 			if len(input) > 0 {
-				if _, err := writer.Write(input); err != nil {
+				n, err := writer.Write(input)
+				facts["stdin_bytes"] = n
+				if err != nil {
 					return err
 				}
 			}
+			facts["exchange_phase"] = "stdin-close"
 			closer, ok := writer.(io.Closer)
 			if !ok {
 				return fmt.Errorf("editor input closure unavailable")
@@ -110,14 +117,19 @@ func cursorEditorCapture(ctx context.Context, argv, env []string, cwd string, in
 			if err := closer.Close(); err != nil {
 				return err
 			}
+			facts["exchange_phase"] = "stdout-read"
 			var err error
 			body, err = io.ReadAll(io.LimitReader(reader, (1<<20)+1))
 			if err != nil || len(body) > 1<<20 {
 				return fmt.Errorf("editor output read or bound")
 			}
+			facts["exchange_phase"] = "completed"
 			return nil
 		})
-	return body, err
+	for key, value := range cursorEditorCompletionFacts(ctx, err) {
+		facts[key] = value
+	}
+	return body, err, facts
 }
 
 func cursorEditorRefusalCause(err error) string {
@@ -417,7 +429,7 @@ func cursorEditorHelpAndUI(ctx context.Context, t *testing.T, root, project, out
 	t.Helper()
 	report["stage"] = "native-help"
 	probe, stop := context.WithTimeout(ctx, 30*time.Second)
-	help, helpErr := cursorEditorCapture(probe, []string{paths["launcher"], "--help"}, env, project, nil)
+	help, helpErr, _ := cursorEditorCapture(probe, []string{paths["launcher"], "--help"}, env, project, nil)
 	stop()
 	nativeWrite(t, filepath.Join(output, "help.txt"), help, 0600)
 	if helpErr != nil || len(help) > 65536 {
@@ -451,7 +463,8 @@ func cursorEditorHelpAndUI(ctx context.Context, t *testing.T, root, project, out
 		t.Fatal("editor input encoding or bound")
 	}
 	report["stage"] = "editor-ui"
-	observed, runErr := cursorEditorCapture(ctx, []string{paths["node"], paths["driver"]}, env, project, encoded)
+	observed, runErr, captureFacts := cursorEditorCapture(ctx, []string{paths["node"], paths["driver"]}, env, project, encoded)
+	report["driver_completion"] = captureFacts
 	stdoutDigest := sha256.Sum256(observed)
 	report["driver_stdout_bytes"], report["driver_stdout_sha256"] = len(observed), hex.EncodeToString(stdoutDigest[:])
 	var result map[string]any
@@ -471,4 +484,44 @@ func cursorEditorHelpAndUI(ctx context.Context, t *testing.T, root, project, out
 		t.Fatal("Cursor Editor UI observation remains unqualified; inspect bounded metadata and screenshots")
 	}
 	report["status"] = "component-names-observed"
+}
+
+// Error identities are diagnostic facts only; an observed exit never overrides
+// supervisor failure or changes the natural-completion acceptance predicate.
+func cursorEditorCompletionFacts(ctx context.Context, err error) map[string]any {
+	facts := map[string]any{"error_present": err != nil,
+		"supervisor_failure":      process.OrdinarySupervisorFailureClass(err),
+		"forced_cleanup":          errors.Is(err, process.ErrOrdinaryForcedCleanup),
+		"containment_unsupported": errors.Is(err, process.ErrOrdinaryContainmentUnsupported)}
+	if ctx.Err() != nil {
+		facts["context"] = acpMetadataCompletionClass(ctx.Err())
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ProcessState != nil {
+		facts["observed_exit_code"] = exit.ExitCode()
+		if status, ok := exit.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+			facts["observed_signal"] = int(status.Signal())
+		}
+	}
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		facts["observed_errno"] = uint64(errno)
+	}
+	return facts
+}
+
+func TestCursorEditorCompletionFactsNeverPublishNativeContents(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := errors.Join(fmt.Errorf("PRIVATE-CANARY %w", syscall.EACCES), process.ErrOrdinaryForcedCleanup)
+	facts := cursorEditorCompletionFacts(ctx, err)
+	encoded, marshalErr := json.Marshal(facts)
+	if marshalErr != nil || strings.Contains(string(encoded), "PRIVATE-CANARY") ||
+		facts["context"] != "canceled" || facts["observed_errno"] != uint64(syscall.EACCES) ||
+		facts["error_present"] != true || facts["forced_cleanup"] != true || facts["supervisor_failure"] != "" {
+		t.Fatal("driver completion diagnostics leaked contents or lost error identity")
+	}
+	if got := cursorEditorCompletionFacts(context.Background(), nil); got["error_present"] != false || got["forced_cleanup"] != false {
+		t.Fatal("successful completion diagnostics invented errors")
+	}
 }

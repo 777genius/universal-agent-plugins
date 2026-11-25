@@ -199,7 +199,7 @@ def _startup(body, filename, project_hash, interval, project_temp):
 class GeminiRepeatAudit:
     """Hold the pre-repeat namespace and verify both actual public phases."""
 
-    def __init__(self, home, project, before, version, *, profile_snapshot):
+    def __init__(self, home, project, before, version, *, profile_snapshot, expected_binary=None):
         self.parents, self.leaves, self.files, self.phases = {}, {}, {}, []
         self.reason, self.complete = None, False
         self.failure_facts = None
@@ -208,6 +208,13 @@ class GeminiRepeatAudit:
         self.startup_template = None
         self.baseline_observed = False
         self.baseline_record = None
+        self.registry_lease = None
+        self.lease_fd = None
+        self.lease_removed = False
+        self.lease_unlinked = None
+        self.lease_transitions = []
+        self.baseline_command = None
+        self.expected_binary = expected_binary
         self.before = self.previous = before
         self.profile_snapshotter = profile_snapshot
         self.profile, self.project = Path(home) / ".gemini", Path(project)
@@ -223,6 +230,10 @@ class GeminiRepeatAudit:
                 self.windows = backend["Custody"](lambda: self.deadline)
             self._hold(self.project)
             self._hold(self.profile)
+            self.lease_path = self.profile / "projects.json.lock"
+            self.lease_key = "directory:" + self.profile.name + "/projects.json.lock"
+            if self.windows is None and os.path.lexists(self.lease_path):
+                raise ValueError("Gemini registry lease was already present before observation")
             registry = _json(self._read(self.profile / "projects.json", 65536, before))
             if (not isinstance(registry, dict) or set(registry) != {"projects"}
                     or not isinstance(registry["projects"], dict)):
@@ -283,6 +294,18 @@ class GeminiRepeatAudit:
             relative = key[len(self.profile.name) + 1:].replace("\\", "/")
             observed.pop(key, None)
             observed.pop("metadata:0:" + relative, None)
+        if self.registry_lease is not None:
+            facts = self._lease_facts()
+            key = "metadata:0:projects.json.lock"
+            directory = "directory:0:projects.json.lock"
+            expected = (facts["mode"], facts["device"], facts["inode"])
+            if facts["namespace_present"]:
+                if observed.get(key) != expected or observed.get(directory) != "present":
+                    raise ValueError("Gemini registry lease protected snapshot differs")
+                del observed[key]
+                del observed[directory]
+            elif key in observed or directory in observed:
+                raise ValueError("Gemini removed registry lease remains in protected snapshot")
         if observed != self.protected_profile:
             raise ValueError("Gemini protected profile entries changed")
         self._guard()
@@ -318,6 +341,99 @@ class GeminiRepeatAudit:
             if (_FILES["identity"](os.fstat(fd)) != identity
                     or _FILES["identity"](path.lstat()) != identity):
                 raise ValueError("Gemini runtime previous file changed or replaced")
+        if self.registry_lease is not None:
+            self._lease_facts()
+
+    @staticmethod
+    def _lease_stat(info):
+        return {key: getattr(info, field) for key, field in (
+            ("device", "st_dev"), ("inode", "st_ino"), ("mode", "st_mode"),
+            ("uid", "st_uid"), ("gid", "st_gid"), ("links", "st_nlink"),
+            ("bytes", "st_size"), ("modified_ns", "st_mtime_ns"), ("changed_ns", "st_ctime_ns"))}
+
+    def _lease_facts(self):
+        # This FD never enters the ordinary parent set: its only permitted
+        # transition is the exact empty directory's observed unlink, not rename.
+        held = self._lease_stat(os.fstat(self.lease_fd))
+        original = self.registry_lease
+        if any(held[key] != original[key] for key in ("device", "inode", "mode", "uid", "gid")):
+            raise ValueError("Gemini registry lease held identity changed")
+        try:
+            named = self._lease_stat(os.stat("projects.json.lock", dir_fd=self.parents[self.profile][0], follow_symlinks=False))
+        except FileNotFoundError:
+            named = None
+        if os.listdir(self.lease_fd):
+            raise ValueError("Gemini registry lease is not empty")
+        if named is not None:
+            if self.lease_removed or named != original or held != original:
+                raise ValueError("Gemini registry lease was changed or recreated")
+        elif held["links"] != 0:
+            raise ValueError("Gemini registry lease was renamed instead of removed")
+        elif self.lease_unlinked is not None and held != self.lease_unlinked:
+            raise ValueError("Gemini removed registry lease metadata changed")
+        # Re-read after enumeration so a lease or metadata swap during the read
+        # cannot authorize a stale snapshot.
+        if self._lease_stat(os.fstat(self.lease_fd)) != held:
+            raise ValueError("Gemini registry lease changed during observation")
+        try:
+            after = self._lease_stat(os.stat("projects.json.lock", dir_fd=self.parents[self.profile][0], follow_symlinks=False))
+        except FileNotFoundError:
+            after = None
+        if after != named:
+            raise ValueError("Gemini registry lease namespace changed during observation")
+        if named is None and self.lease_unlinked is None:
+            self.lease_unlinked = dict(held)
+        return {**held, "namespace_present": named is not None, "entries": []}
+
+    def _observe_lease(self, snapshot, phase):
+        facts = self._lease_facts()
+        expected = f'{facts["mode"]}:{facts["device"]}:{facts["inode"]}' if facts["namespace_present"] else None
+        if snapshot.get(self.lease_key) != expected:
+            raise ValueError("Gemini registry lease differs from complete phase snapshot")
+        if not facts["namespace_present"]:
+            self.lease_removed = True
+        self.lease_transitions.append({"phase": phase, **facts})
+
+    def _capture_lease(self, snapshot):
+        # Pinned ProjectRegistry/proper-lockfile create this empty directory.
+        # Early CLI cleanup is concurrent with list and can be interrupted at
+        # acquisition. Account for its actual finite transition without deleting
+        # it, inferring its writer, or exempting unrelated registry entries.
+        if self.windows is not None or self.baseline_command is None or self.expected_binary is None:
+            raise ValueError("Gemini registry lease requires POSIX custody and native command evidence")
+        self._guard()
+        fd = os.open("projects.json.lock", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+                     dir_fd=self.parents[self.profile][0])
+        self.lease_fd = fd
+        facts = self._lease_stat(os.fstat(fd))
+        profile = os.fstat(self.parents[self.profile][0])
+        if (facts["mode"] != (stat.S_IFDIR | 0o755) or facts["links"] != 2
+                or facts["uid"] != os.geteuid() or facts["gid"] != os.getegid()
+                or facts["uid"] != profile.st_uid or facts["gid"] != profile.st_gid):
+            raise ValueError("Gemini registry lease ownership, mode or link count differs")
+        self.registry_lease = facts
+        self._observe_lease(snapshot, "native-skills-list-baseline")
+        self._guard()
+
+    def _baseline_command(self, command):
+        if command is None:
+            return
+        keys = {"argv", "cwd", "exit_code", "timeout", "stdout_bytes", "stdout_sha256", "stderr_bytes", "stderr_sha256"}
+        if (type(command) is not dict or set(command) != keys
+                or type(command["argv"]) is not list or len(command["argv"]) != 4
+                or not all(type(arg) is str for arg in command["argv"])
+                or not Path(command["argv"][0]).is_absolute()
+                or str(Path(command["argv"][0])) != command["argv"][0]
+                or command["argv"][0] != self.expected_binary
+                or "\0" in command["argv"][0] or "\n" in command["argv"][0] or "\r" in command["argv"][0]
+                or command["argv"][1:] != ["skills", "list", "--all"]
+                or command["cwd"] != str(self.project)
+                or type(command["exit_code"]) is not int or command["exit_code"] != 0 or command["timeout"] is not False
+                or any(type(command[key + "_bytes"]) is not int or not 0 <= command[key + "_bytes"] <= 1 << 20
+                       or type(command[key + "_sha256"]) is not str or not re.fullmatch("[0-9a-f]{64}", command[key + "_sha256"])
+                       for key in ("stdout", "stderr"))):
+            raise ValueError("Gemini native baseline command evidence differs")
+        self.baseline_command = {**command, "argv": list(command["argv"])}
 
     def _open(self, path, limit):
         if self.windows is not None:
@@ -356,7 +472,7 @@ class GeminiRepeatAudit:
             raise ValueError("Gemini runtime file differs from its complete phase snapshot")
         return bytes(body)
 
-    def baseline(self, snapshot, *, interval):
+    def baseline(self, snapshot, *, interval, command=None):
         """Join the explicit native list to custody held before that command."""
         if self.reason:
             return
@@ -365,12 +481,16 @@ class GeminiRepeatAudit:
             self._guard()
             _complete_snapshot(snapshot)
             started, finished = _interval(interval)
+            self._baseline_command(command)
             if (self.baseline_observed or self.phases or started < self.observed_at
                     or finished > _now()):
                 raise ValueError("Gemini startup baseline command interval is invalid")
             if any(snapshot.get(path) != digest for path, digest in self.before.items()):
                 raise ValueError("Gemini startup baseline changed previous entries")
             added = sorted(set(snapshot) - set(self.before))
+            if self.lease_key in added:
+                self._capture_lease(snapshot)
+                added.remove(self.lease_key)
             if len(added) > 1:
                 raise ValueError("Gemini startup baseline exceeds one fresh list record")
             if sum(key.startswith(self.prefix) for key in snapshot) > 64:
@@ -414,7 +534,10 @@ class GeminiRepeatAudit:
             started, finished = _interval(interval)
             if started < self.command_finished or finished > _now():
                 raise ValueError("Gemini startup command intervals overlap or are in the future")
-            if any(snapshot.get(path) != digest for path, digest in self.previous.items()):
+            if self.registry_lease is not None:
+                self._observe_lease(snapshot, label)
+            if any(snapshot.get(path) != digest for path, digest in self.previous.items()
+                   if self.registry_lease is None or path != self.lease_key):
                 raise ValueError("Gemini runtime repeat changed a previous entry")
             added = sorted(set(snapshot) - set(self.before))
             if len(added) > 16:
@@ -461,6 +584,8 @@ class GeminiRepeatAudit:
                 self._guard_profile()
                 if len(self.phases) != 2 or snapshot != self.previous:
                     raise ValueError("Gemini runtime final snapshot differs from the public phases")
+                if self.registry_lease is not None and (not self.lease_removed or self._lease_facts()["namespace_present"]):
+                    raise ValueError("Gemini registry lease survives the actual repeat phases")
                 self.complete = True
             except (OSError, ValueError, RuntimeError, TypeError) as error:
                 self.reason = "os-error" if isinstance(error, OSError) else str(error)[:512]
@@ -477,10 +602,19 @@ class GeminiRepeatAudit:
                 "client_version": "0.66.0", "platform": sys.platform,
                 "producer_attribution": False, "writer_closure": False,
                 "source_reference": "google-gemini/gemini-cli@970413207732f5d4d8c50540c7fc359c44fdaaf2",
+                **({"registry_lease": {"path": self.lease_key, "initially_absent": True,
+                    "baseline": dict(self.registry_lease), "transitions": list(self.lease_transitions),
+                    "final_absence_verified": self.complete and self.lease_removed and not self.reason,
+                    "native_baseline_command": self.baseline_command,
+                    "audit_mutated_lease": False, "producer_attribution": False, "writer_closure": False}}
+                   if self.registry_lease is not None else {}),
                 **({"failure_facts": dict(self.failure_facts)}
                    if self.reason and self.failure_facts is not None else {})}
 
     def close(self):
+        if self.lease_fd is not None:
+            os.close(self.lease_fd)
+            self.lease_fd = None
         if self.windows is not None:
             self.windows.close()
         for fd, _ in (*self.leaves.values(), *reversed(tuple(self.parents.values()))):

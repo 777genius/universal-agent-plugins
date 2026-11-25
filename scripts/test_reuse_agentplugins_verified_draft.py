@@ -45,7 +45,7 @@ class ReuseTests(unittest.TestCase):
                     "conclusion": "success", "run_started_at": "2026-09-28T01:00:00Z",
                     "updated_at": "2026-09-28T03:00:00Z"}
         # Literal list on purpose: it pins the verifier constant independently.
-        names = ("validate", "build", "stage-draft", "platform-proof / Verify release and pack exact npm tarball",
+        names = ("validate", "build", "sign-macos", "verify-macos", "stage-draft", "platform-proof / Verify release and pack exact npm tarball",
                  *(f"platform-proof / native runtime E2E ({target})" for target in reuse.TARGETS),
                  "platform-proof / Aggregate all six native platform proofs", "verified-draft")
         self.jobs = [{"name": name, "run_id": 42, "status": "completed",
@@ -140,6 +140,22 @@ class ReuseTests(unittest.TestCase):
                 job["steps"][0]["conclusion"] = "skipped"
                 self.reject()
                 job["steps"][0]["conclusion"] = "success"
+
+    def test_missing_or_unsuccessful_macos_signing_refuses_promotion(self):
+        self.verify()
+        for name in ("sign-macos", "verify-macos"):
+            job = next(job for job in self.jobs if job["name"] == name)
+            for conclusion in ("failure", "skipped", "cancelled"):
+                with self.subTest(job=name, conclusion=conclusion):
+                    job["conclusion"] = conclusion
+                    self.reject()
+            job["conclusion"] = "success"
+            job["steps"][0]["conclusion"] = "skipped"
+            self.reject()
+            job["steps"][0]["conclusion"] = "success"
+            self.jobs.remove(job)
+            self.reject()
+            self.jobs.append(job)
 
     def test_current_producer_requires_both_new_native_aggregates(self):
         self.args.require_hermes_antigravity = True
