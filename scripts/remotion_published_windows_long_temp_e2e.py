@@ -1,6 +1,10 @@
 """Real pinned Remotion Skill lifecycle on short and default-long Windows TEMP.
 
-Reuses the existing published/native case auditor with a published npm CLI pinned to release 0.1.102.
+Reuses the existing published/native case auditor with a published npm CLI pinned to release 0.1.116.
+The immutable 0.1.102 historical run (45478547843) failed public Ready:
+that release always requested native verification after a successful add.
+0.1.116 contains Codex completion logic; it must pass the unchanged strict
+native and public-Ready oracle. The separate 0.1.101 negative control remains.
 No alternate success interpretation, fixture edit or native trust bypass.
 """
 
@@ -201,7 +205,7 @@ def main():
         raise SystemExit("genuine Windows runner required")
     repo = Path(__file__).resolve().parent.parent
     fixture_path = repo / "tests/live-install/fixtures.json"
-    report = Path(os.environ["RUNNER_TEMP"]) / "remotion-windows-published-0.1.102.json"
+    report = Path(os.environ["RUNNER_TEMP"]) / "remotion-windows-published-0.1.116.json"
     # Windows checkout may convert LF to CRLF. Bind the immutable fixture to
     # Git's committed object, then accept only that exact platform conversion
     # in the disposable worktree; never invent or rewrite fixture bytes.
@@ -233,8 +237,8 @@ def main():
         raise SystemExit("published Windows CLI shim invalid")
     version = subprocess.run([str(cli), "version"], capture_output=True, text=True,
                              errors="replace", timeout=30)
-    if version.returncode != 0 or version.stdout.strip() != "agentplugins 0.1.102":
-        raise SystemExit("published npm CLI version does not match 0.1.102")
+    if version.returncode != 0 or version.stdout.strip() != "agentplugins 0.1.116":
+        raise SystemExit("published npm CLI version does not match 0.1.116")
     evidence = {
         "source_checkout_sha": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip(),
         "fixture_sha256": FIXTURE_SHA256,
@@ -242,7 +246,7 @@ def main():
         "remotion_commit": REMOTION_SHA,
         "cli_path_kind": "published-npm-windows",
         "published_version": version.stdout.strip(),
-        "published_tag": "agentplugins-v0.1.102",
+        "published_tag": "agentplugins-v0.1.116",
         "results": {},
         "temp_roots": {},
     }
@@ -313,7 +317,7 @@ def main():
         report.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     if failures:
         raise SystemExit("; ".join(failures))
-    print("Published npm 0.1.102 Codex Remotion lifecycle PASS in both Windows TEMP profiles")
+    print("Published npm 0.1.116 Codex Remotion lifecycle PASS in both Windows TEMP profiles")
 
 
 if __name__ == "__main__":

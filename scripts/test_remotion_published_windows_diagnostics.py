@@ -199,7 +199,7 @@ class RemotionFailureDiagnosticsTest(unittest.TestCase):
 
 class PublishedTemporaryRootContracts(unittest.TestCase):
     def exercise(self, *, failure_at=0, replacement=False, reparse=False,
-                 case=None, version="agentplugins 0.1.102\n", lexical_alias=False):
+                 case=None, version="agentplugins 0.1.116\n", lexical_alias=False):
         temporary = tempfile.TemporaryDirectory(prefix="published-remotion-unit-")
         self.addCleanup(temporary.cleanup)
         base = Path(temporary.name).resolve(strict=True)
@@ -301,14 +301,14 @@ class PublishedTemporaryRootContracts(unittest.TestCase):
             except SystemExit as error:
                 failed = error
         remove.assert_not_called()
-        should_fail = bool(failure_at or version != "agentplugins 0.1.102\n" or
+        should_fail = bool(failure_at or version != "agentplugins 0.1.116\n" or
                            case is not None and
                            (case.get("status") != "passed" or not case.get("codex_runtime_proof")))
         self.assertEqual(failed is not None, should_fail, "published wrapper exit contract differs")
         if failed is not None:
             self.assertIsInstance(failed.code, str)
             self.assertTrue(failed.code)
-        report_path = runner / "remotion-windows-published-0.1.102.json"
+        report_path = runner / "remotion-windows-published-0.1.116.json"
         report = json.loads(report_path.read_text()) if report_path.exists() else None
         exported = json.dumps(report)
         self.assertNotIn("PRIVATE", exported)
@@ -325,7 +325,7 @@ class PublishedTemporaryRootContracts(unittest.TestCase):
         self.assertEqual(admissions, ["runner-temp", "default-windows-temp"])
         self.assertEqual([row["admitted"] for row in calls], [2, 2])
         self.assertEqual([row["root"] for row in calls], created)
-        self.assertEqual(report["published_version"], "agentplugins 0.1.102")
+        self.assertEqual(report["published_version"], "agentplugins 0.1.116")
         self.assertEqual(report["fixture_sha256"], AUDIT.FIXTURE_SHA256)
         self.assertEqual(report["remotion_commit"], AUDIT.REMOTION_SHA)
         roots = report["temp_roots"]
@@ -375,9 +375,11 @@ class PublishedTemporaryRootContracts(unittest.TestCase):
                                         for row in report["results"].values()))
 
     def test_published_wrong_version_refuses_before_creating_profiles(self):
-        report, created, calls, admissions = self.exercise(version="agentplugins 0.1.102-dev\n")
-        self.assertIsNone(report)
-        self.assertEqual((created, calls, admissions), ([], [], []))
+        for version in ("agentplugins 0.1.102\n", "agentplugins 0.1.116-dev\n"):
+            with self.subTest(version=version):
+                report, created, calls, admissions = self.exercise(version=version)
+                self.assertIsNone(report)
+                self.assertEqual((created, calls, admissions), ([], [], []))
 
 
 

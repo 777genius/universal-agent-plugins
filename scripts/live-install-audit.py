@@ -5354,8 +5354,7 @@ def main():
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--report-dir", required=True)
     p.add_argument("--acceptance", choices=("native", "pi-foreign-prepared-skills-installation", "pi-clean-native-skills", "kiro-prepared-installation",
-                   "cursor-prepared-installation", "grok-prepared-skills-installation",
-                   "cursor-prepared-skills-installation", "kiro-prepared-skills-installation",
+                   "kiro-prepared-skills-installation",
                    "qoder-prepared-skills-installation", "windsurf-prepared-installation", "vscode-user-manual-preparation",
                     HISTORICAL_CODEX["ACCEPTANCE"], HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"],
                     *PREPARED_INSTALLATION["ACCEPTANCES"], *PREPARED_INSTALLATION["KIRO_ACCEPTANCES"],
@@ -5378,10 +5377,9 @@ def main():
             and (args.target, args.kind, sys.platform, args.limit)
             != ("kiro", "plugin", "darwin", 30)):
         p.error("Prepared installation acceptance requires the complete Kiro plugin Darwin lane")
-    prepared_routes = {"cursor-prepared-installation": ("cursor", "plugin", "linux", 30),
-                       "grok-prepared-skills-installation": ("grok", "skill", "linux", 30),
-                       "cursor-prepared-skills-installation": ("cursor", "skill", "linux", 30),
-                       "kiro-prepared-skills-installation": ("kiro", "skill", "darwin", 30),
+    # Legacy Kiro/Windsurf and Qoder routes are distinct from the strict
+    # Cursor/Grok envelopes below; no earlier summary may shadow them.
+    prepared_routes = {"kiro-prepared-skills-installation": ("kiro", "skill", "darwin", 30),
                        "windsurf-prepared-installation": ("windsurf", "plugin", "linux", 30),
                        "qoder-prepared-skills-installation": ("qoder", "skill", "linux", 30)}
     if (args.acceptance in prepared_routes
@@ -5588,8 +5586,7 @@ def main():
     if args.acceptance in prepared_routes:
         summary = (qoder_prepared_audit()["summary"] if args.acceptance == QODER_PREPARED_ACCEPTANCE
                    else prepared_project_skill_summary
-                   if args.acceptance in ("cursor-prepared-skills-installation",
-                                          "kiro-prepared-skills-installation")
+                   if args.acceptance == "kiro-prepared-skills-installation"
                    else prepared_installation_summary)
         report.update(summary(report, doc, args.acceptance))
         save()
@@ -5620,13 +5617,6 @@ def main():
         print(f'Historical npm lifecycle observations: {report["historical_lifecycle_observed"]}/2; '
               'modern public readiness remains unavailable; native PASS count unchanged')
         return 0 if report["historical_observation_complete"] else 1
-    if historical_plugin_archive:
-        report.update(HISTORICAL_CODEX["plugin_summary"](report, doc))
-        save()
-        print(f'Historical archived plugin lifecycles: {report["archived_plugin_lifecycles_observed"]}/2; '
-              f'current default-feed refusals={report["current_default_refusals_observed"]}; '
-              'current native PASS count remains zero')
-        return 0 if report["historical_plugin_observation_complete"] else 1
     if prepared_installation:
         report.update(PREPARED_INSTALLATION["summary"](report, doc, args.acceptance))
         save()

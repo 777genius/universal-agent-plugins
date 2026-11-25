@@ -210,8 +210,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  published-remotion-v0102:
-    name: Published npm 0.1.102 / Codex Remotion long TEMP
+  published-remotion-v0116:
+    name: Published npm 0.1.116 / Codex Remotion long TEMP
     runs-on: windows-2025
     timeout-minutes: 45
     steps:
@@ -239,7 +239,7 @@ jobs:
       - name: Install exact published npm CLI and pinned native Codex
         shell: pwsh
         run: |
-          npm.cmd install --global --ignore-scripts universal-agent-plugins@0.1.102
+          npm.cmd install --global --ignore-scripts universal-agent-plugins@0.1.116
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm.cmd install --global '@openai/codex@0.153.4'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -259,7 +259,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
         with:
-          name: remotion-windows-published-0.1.102
-          path: ${{ runner.temp }}\remotion-windows-published-0.1.102.json
+          name: remotion-windows-published-0.1.116
+          path: ${{ runner.temp }}\remotion-windows-published-0.1.116.json
           if-no-files-found: warn
           retention-days: 7

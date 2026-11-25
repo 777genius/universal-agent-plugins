@@ -283,12 +283,10 @@ def installation(value,paths,previous,stage,cmd):
     retained_lock=(previous is not None and lock_raw==stream(previous["mutation_lock"])
                    and same(previous["frames"][root]["mutation.lock"],lock_record))
     if stage=="repeat-remove-a":
-        require(previous is not None and lock_raw==stream(previous["mutation_lock"]) and same(previous["frames"][root]["mutation.lock"],lock_record) and same(frames,previous["frames"]))
-    elif not (stage=="repeat-add-a" and previous is not None
-              and lock_raw==stream(previous["mutation_lock"])
-              and same(previous["frames"][root]["mutation.lock"],lock_record)):
-        # The imperative add returns a verified planned.NoChange before its
-        # confirmed apply. Only that exact held lock can retain its old window.
+        require(retained_lock and same(frames,previous["frames"]))
+    elif stage not in NOOPS or not retained_lock:
+        # Early unchanged reconciliation may preserve the exact prior lock.
+        # Every rewritten lock still belongs to this command's time window.
         require(start<=stamp(lock["acquired_at"])<=end and times(lock_record,start,end))
     if previous is not None:
         require(authority(previous["frames"][root]["mutation.lock"],lock_record))
