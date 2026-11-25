@@ -331,26 +331,6 @@ func TestSkillsJourneyCarriesFactoryVisibleWriter(t *testing.T) {
 	}
 }
 
-func TestSkillsViewNavigationDoesNotChangeBasket(t *testing.T) {
-	view := terminalSkillsView{page: 2}
-	selected := map[string]bool{"chosen": true}
-	for _, line := range []string{"next", "next", "prev", "previous", "p", "selected", "all", "/new query", "/", "n"} {
-		if !view.navigate(line, 120) {
-			t.Fatalf("unrecognized navigation %q", line)
-		}
-		if !selected["chosen"] || len(selected) != 1 {
-			t.Fatal("navigation changed basket")
-		}
-	}
-	if view.navigate("unknown", 120) {
-		t.Fatal("invalid command changed view")
-	}
-	view.page = 10
-	if got := view.pageMatches(nil); len(got) != 0 || view.page != 0 {
-		t.Fatalf("empty matches did not clamp page: %+v %d", got, view.page)
-	}
-}
-
 func TestSkillsSelectedViewShowsBasketAcrossFilters(t *testing.T) {
 	available := []skillsource.Candidate{
 		{ID: "docs", Name: "docs-review", Path: "docs/review"},

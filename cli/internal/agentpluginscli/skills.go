@@ -129,33 +129,19 @@ func runSkillsBrowser(cmd *cobra.Command, app App, opts *options, session *skill
 	}
 	server, err := session.startPicker(cmd.Context())
 	if err != nil {
-		return true, err
+		if explicit || cmd.Context().Err() != nil {
+			return true, err
+		}
+		_, writeErr := fmt.Fprintln(&planWriter{writer: reviewWriter(cmd, app)}, "Browser picker could not start; continuing with terminal selection. Use --no-ui to select it directly.")
+		return false, writeErr
 	}
-	defer server.Close()
-	if err := openSkillsBrowser(cmd.Context(), server.URL()); err == nil {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Skills picker opened. Keep this command running while reviewing and installing.")
-		return true, waitForSkillsPicker(cmd.Context(), server)
-	}
-	// Display a capability URL only for the human opening this local tab, never
-	// in structured output or provider logs. Keep it usable until fallback is chosen.
-	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Browser could not open. Picker URL: %s\n", server.URL())
-	prompted, err := withPrompter(cmd, app, opts)
-	if err != nil {
-		return true, err
-	}
-	answer, err := prompted.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Continue with terminal selection?", Default: true})
-	if err != nil {
-		return true, err
-	}
-	if !answer.Accepted {
-		return true, waitForSkillsPicker(cmd.Context(), server)
-	}
-	return false, nil
+	return runSkillsBrowserSession(cmd, app, opts, server, openSkillsBrowser)
 }
+
 func waitForSkillsPicker(ctx context.Context, server *skillspicker.Server) error {
 	select {
 	case <-server.Done():
-		return nil
+		return ctx.Err()
 	case <-ctx.Done():
 		return ctx.Err()
 	}
