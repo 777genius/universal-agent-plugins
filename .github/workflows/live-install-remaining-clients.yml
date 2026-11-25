@@ -311,8 +311,20 @@ jobs:
             test -f "$executable" && test -x "$executable" && test ! -L "$executable"
             ln -s "$executable" "$HOME/.local/bin/$target_binary"
           elif [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then
-            mkdir -p "$RUNNER_TEMP/vendor-root"
-            dpkg-deb --extract "$artifact" "$RUNNER_TEMP/vendor-root"
+            if [[ "$TARGET" == cursor ]]; then
+              # The verified package's stock chrome-sandbox is root:root 4755.
+              # Preserve its archive metadata in a fresh isolated destination;
+              # do not run postinst or change host policy or sandbox flags.
+              test "$(readlink -f "$RUNNER_TEMP")" = "$RUNNER_TEMP"
+              mkdir "$RUNNER_TEMP/vendor-root"
+              sudo -n dpkg-deb --extract "$artifact" "$RUNNER_TEMP/vendor-root"
+              cursor_sandbox_metadata="$(stat -c '%u:%g:%a' "$RUNNER_TEMP/vendor-root/usr/share/cursor/chrome-sandbox")"
+              printf '%s\n' "$cursor_sandbox_metadata" | tee "$RUNNER_TEMP/vendor-proof/cursor-sandbox-metadata.txt"
+              test "$cursor_sandbox_metadata" = '0:0:4755'
+            else
+              mkdir -p "$RUNNER_TEMP/vendor-root"
+              dpkg-deb --extract "$artifact" "$RUNNER_TEMP/vendor-root"
+            fi
             export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
             if [[ "$TARGET" == vscode ]]; then
               # A staged .deb may carry /usr/bin/code as an absolute symlink:

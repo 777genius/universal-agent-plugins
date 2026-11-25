@@ -6616,6 +6616,65 @@ module.exports = {
         self.assertIn('vscode) SHA256="b8fbff92d8d95908990eed0acf004c980f29003725469e794ddbd017ea511a20"', workflow)
 
     @unittest.skipUnless(sys.platform == "linux", "Debian staged launcher contract")
+    def test_cursor_deb_stock_metadata_requires_fresh_canonical_destination(self):
+        import shutil
+
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        start = '          elif [[ "$TARGET" == vscode || "$TARGET" == cursor ]]; then\n'
+        extraction = textwrap.dedent(workflow.rsplit(start, 1)[1].split(
+            '            export PATH=', 1)[0])
+        script = "set -euo pipefail\n" + extraction
+        bash = shutil.which("bash")
+        self.assertIsNotNone(bash)
+        for variant in ("fresh", "existing", "destination-link", "parent-alias", "wrong-metadata", "extract-refused"):
+            with self.subTest(variant=variant), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                runtime, tools = root / "run", root / "tools"
+                (runtime / "vendor-proof").mkdir(parents=True)
+                tools.mkdir()
+                trace = root / "extract-call"
+                for command in ("mkdir", "readlink", "tee"):
+                    original = shutil.which(command)
+                    self.assertIsNotNone(original)
+                    (tools / command).symlink_to(original)
+                # Inert commands record invocation only: no sudo, extraction,
+                # native software or privilege change is performed by this test.
+                (tools / "sudo").write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$EXTRACT_TRACE"\nexit "$EXTRACT_EXIT"\n')
+                (tools / "stat").write_text('#!/bin/sh\nprintf "%s\\n" "$SANDBOX_METADATA"\n')
+                (tools / "sudo").chmod(0o755)
+                (tools / "stat").chmod(0o755)
+                destination = runtime / "vendor-root"
+                selected = runtime
+                if variant == "existing":
+                    destination.mkdir()
+                elif variant == "destination-link":
+                    foreign = root / "foreign"
+                    foreign.mkdir()
+                    destination.symlink_to(foreign)
+                elif variant == "parent-alias":
+                    selected = root / "alias"
+                    selected.symlink_to(runtime)
+                artifact = root / "verified.deb"
+                env = dict(os.environ, RUNNER_TEMP=str(selected), TARGET="cursor",
+                           PATH=str(tools), artifact=str(artifact), EXTRACT_TRACE=str(trace),
+                           EXTRACT_EXIT="43" if variant == "extract-refused" else "0",
+                           SANDBOX_METADATA="1000:1000:4755" if variant == "wrong-metadata" else "0:0:4755")
+                result = subprocess.run([bash, "--noprofile", "--norc", "-c", script],
+                                        env=env, capture_output=True, text=True, timeout=5, check=False)
+                self.assertEqual(result.returncode == 0, variant == "fresh", result.stderr)
+                invoked = variant in ("fresh", "wrong-metadata", "extract-refused")
+                self.assertEqual(trace.exists(), invoked)
+                if invoked:
+                    self.assertEqual(trace.read_text().splitlines(),
+                                     ["-n", "dpkg-deb", "--extract", str(artifact), str(destination)])
+                if variant == "fresh":
+                    self.assertEqual((runtime / "vendor-proof/cursor-sandbox-metadata.txt").read_text(),
+                                     "0:0:4755\n")
+                elif variant == "extract-refused":
+                    self.assertFalse((runtime / "vendor-proof/cursor-sandbox-metadata.txt").exists())
+
+    @unittest.skipUnless(sys.platform == "linux", "Debian staged launcher contract")
     def test_cursor_deb_binds_staged_launcher_without_package_install(self):
         import shutil
 
