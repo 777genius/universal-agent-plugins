@@ -138,8 +138,16 @@ def provision(audit, directory, target, release_context):
                      PACKAGE + "@" + VERSION])
     run([node, contract, "download", retained["pack"], packed, VERSION, integrity, shasum], cwd=project, env=env)
     packed_record = json.loads(retained["pack"].read_bytes())
-    require(isinstance(packed_record, list) and len(packed_record) == 1, "npm pack inventory differs")
-    filename = packed_record[0]["filename"]
+    # The frozen verifier accepts an exact package-named npm12 record as
+    # well as the earlier singleton array. Keep its captured input unchanged.
+    if isinstance(packed_record, dict) and set(packed_record) == {PACKAGE}:
+        packed_record = packed_record[PACKAGE]
+    elif isinstance(packed_record, list) and len(packed_record) == 1:
+        packed_record = packed_record[0]
+    else:
+        raise ValueError("npm pack inventory differs")
+    require(isinstance(packed_record, dict), "npm pack inventory differs")
+    filename = packed_record.get("filename")
     require(filename == PACKAGE + "-" + VERSION + ".tgz", "npm pack filename differs")
     tarball = packed / filename
     verified = json.loads(run([node, audit.ROOT / "npm/agentplugins/scripts/release-assets.js", "verify",

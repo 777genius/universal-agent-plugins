@@ -59,6 +59,12 @@ class AcquisitionBoundaryTests(unittest.TestCase):
         self.assertNotIn("secret", str(caught.exception))
 
     def test_successful_provision_returns_wrapper_and_preserves_case_environment(self):
+        self.provision_with_pack_shape(named=False)
+
+    def test_successful_provision_accepts_exact_package_named_pack_record(self):
+        self.provision_with_pack_shape(named=True)
+
+    def provision_with_pack_shape(self, *, named):
         # Public processes are replaced at their I/O boundary only. The real
         # provision API and existing bounded archive/package inspector execute.
         # This test does not claim registry/Sigstore or hosted lifecycle proof.
@@ -86,11 +92,17 @@ class AcquisitionBoundaryTests(unittest.TestCase):
             audit = SimpleNamespace(ROOT=ROOT, live=SimpleNamespace(isolated_client_env=isolated),
                                     native=SimpleNamespace(draft=draft))
             calls = []
+            packed_bytes = []
             def process(command, *, cwd, env):
                 argv = list(map(str, command)); calls.append(argv)
                 self.assertFalse(any(k.startswith("AGENTPLUGINS_INTERNAL_PROOF_") for k in env))
                 if argv[-1] == "--version": return b"12.0.2\n"
-                if argv[1].endswith("npm-public-contract.js"): return b""
+                if argv[1].endswith("npm-public-contract.js"):
+                    if argv[2] == "download":
+                        captured = Path(argv[3]).read_bytes()
+                        self.assertEqual(isinstance(json.loads(captured), dict), named)
+                        self.assertEqual(captured, packed_bytes[0])
+                    return b""
                 if argv[1].endswith("release-assets.js"): return json.dumps(verified).encode()
                 if argv[2] == "view": return b'[{"dist":{"integrity":"test-integrity","shasum":"test-shasum"}}]'
                 if argv[2] == "pack":
@@ -100,7 +112,9 @@ class AcquisitionBoundaryTests(unittest.TestCase):
                         for name, body in files.items():
                             info = tarfile.TarInfo("package/" + name); info.size = len(body)
                             archive.addfile(info, io.BytesIO(body))
-                    return json.dumps([{"filename": filename}]).encode()
+                    record = {"filename": filename}
+                    packed_bytes.append(json.dumps({npm.PACKAGE: record} if named else [record]).encode())
+                    return packed_bytes[0]
                 if argv[2] == "install":
                     installed = cwd / "node_modules" / npm.PACKAGE
                     for name, body in files.items():
@@ -120,6 +134,7 @@ class AcquisitionBoundaryTests(unittest.TestCase):
             with mock.patch.object(npm, "tools", return_value=(Path("/trusted/node"), Path("/trusted/npm-cli.js"))), \
                  mock.patch.object(npm, "run", side_effect=process):
                 result = npm.provision(audit, root, "linux-amd64", context)
+            self.assertEqual((root / "public-npm/pack.json").read_bytes(), packed_bytes[0])
             self.assertEqual(result["env"], {})
             self.assertEqual(result["command"], [str(Path("/trusted/node")), str(root / "public-npm/project/node_modules" / npm.PACKAGE / "bin/agentplugins.js")])
             self.assertEqual(calls[-1], [*result["command"], "version"])
@@ -221,13 +236,27 @@ class FrozenValidatorTests(unittest.TestCase):
         tarball = self.root / filename
         tarball.write_bytes(body)
         pack = self.root / "pack.json"
-        pack.write_text(json.dumps([{"id": npm.PACKAGE + "@" + npm.VERSION, "name": npm.PACKAGE,
-            "version": npm.VERSION, "filename": filename, "integrity": integrity, "shasum": shasum}]))
-        result = self.invoke("download", pack, self.root, npm.VERSION, integrity, shasum)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        tarball.write_bytes(body + b"mutated")
-        result = self.invoke("download", pack, self.root, npm.VERSION, integrity, shasum)
-        self.assertNotEqual(result.returncode, 0)
+        record = {"id": npm.PACKAGE + "@" + npm.VERSION, "name": npm.PACKAGE,
+                  "version": npm.VERSION, "filename": filename, "integrity": integrity, "shasum": shasum}
+        for value in ([record], {npm.PACKAGE: record}):
+            with self.subTest(value=value):
+                pack.write_text(json.dumps(value))
+                captured = pack.read_bytes()
+                tarball.write_bytes(body)
+                result = self.invoke("download", pack, self.root, npm.VERSION, integrity, shasum)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(pack.read_bytes(), captured)
+                tarball.write_bytes(body + b"mutated")
+                result = self.invoke("download", pack, self.root, npm.VERSION, integrity, shasum)
+                self.assertNotEqual(result.returncode, 0)
+        tarball.write_bytes(body)
+        for value in ({}, {"other-package": record}, {npm.PACKAGE: record, "other": record},
+                      {npm.PACKAGE: [record]}, {npm.PACKAGE: None}, [], [record, record],
+                      [[record]], record, None, "record"):
+            with self.subTest(invalid=value):
+                pack.write_text(json.dumps(value))
+                result = self.invoke("download", pack, self.root, npm.VERSION, integrity, shasum)
+                self.assertNotEqual(result.returncode, 0)
 
 
 if __name__ == "__main__":
