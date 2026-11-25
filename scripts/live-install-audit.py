@@ -423,7 +423,7 @@ def native_file_digest(path):
             opened = os.fstat(descriptor)
             if not stat.S_ISREG(opened.st_mode):
                 return "non-regular"
-            if not NATIVE_ARTIFACTS["same_opened"](initial, opened):
+            if not NATIVE_ARTIFACTS["same_opened"](initial, opened, path=path):
                 return "unreadable"
             sha, remaining = hashlib.sha256(), opened.st_size + 1
             while remaining:

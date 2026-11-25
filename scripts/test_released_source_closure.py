@@ -3,6 +3,7 @@ import copy
 import base64
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -407,6 +408,139 @@ class ClosureTests(unittest.TestCase):
         case = {**self.case, "client": "hermes"}
         with self.assertRaisesRegex(ValueError, "unowned MCP"):
             closure.checked_namespace(audit, case, self.root, selected, owners, removed=True)
+
+
+class PiStartupStoreTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.selected = self.root / "native"
+        self.selected.mkdir()
+        self.case = {"client": "pi", "scope": "user", "name": "marketing-kit", "expected": "dependency-closure",
+                     "components": ["skills"]}
+        (self.selected / "foreign.txt").write_bytes(b"unmanaged source audit neighbor\n")
+        (self.selected / "extensions").mkdir()
+        (self.selected / "skills/campaign-planning").mkdir(parents=True)
+        self.owners = {}
+        for alias in closure.pins_for(audit):
+            locator = self.selected / "extensions" / alias
+            locator.mkdir()
+            self.owners[alias] = {"locator": locator}
+        entries = {name: {"url": "https://example.invalid"} for name in ("notion", "hubspot-crm", "playwright")}
+        entries[audit.FOREIGN_NATIVE_MCP] = {"url": "https://foreign.invalid/mcp", "enabled": False}
+        (self.selected / "mcp.json").write_text(json.dumps({"mcpServers": entries}))
+        closure.require_fresh_pi_startup_stores(audit, self.case, self.root, self.selected)
+
+    def create_stores(self):
+        for name in closure.PI_STARTUP_STORES:
+            path = self.selected / name
+            path.write_bytes(b"{}")
+            path.chmod(0o600)
+
+    def custody(self):
+        return closure.pi_startup_store_custody(audit, self.case, self.root, self.selected)
+
+    def namespace(self, baseline=None, **kwargs):
+        closure.checked_namespace(audit, self.case, self.root, self.selected, self.owners,
+                                  startup_stores=baseline, **kwargs)
+
+    def test_real_rpc_startup_shape_requires_custody_and_survives_removal(self):
+        self.create_stores()
+        # Regression: the old namespace oracle refuses genuine Pi startup stores.
+        with self.assertRaisesRegex(ValueError, "unowned native sibling"):
+            self.namespace()
+        baseline = self.custody()
+        self.namespace(baseline)
+        for owner in self.owners.values(): owner["locator"].rmdir()
+        (self.selected / "skills/campaign-planning").rmdir()
+        (self.selected / "mcp.json").write_text(json.dumps({"mcpServers": {
+            audit.FOREIGN_NATIVE_MCP: {"url": "https://foreign.invalid/mcp", "enabled": False}}}))
+        self.namespace(baseline, removed=True)
+
+    def test_existing_foreign_stores_are_not_adopted(self):
+        for name in closure.PI_STARTUP_STORES:
+            with self.subTest(name=name):
+                path = self.selected / name
+                path.write_bytes(b"{}")
+                with self.assertRaisesRegex(ValueError, "not absent before add"):
+                    closure.require_fresh_pi_startup_stores(audit, self.case, self.root, self.selected)
+                path.unlink()
+
+    def test_content_and_additional_siblings_are_refused(self):
+        self.create_stores()
+        baseline = self.custody()
+        for content in (b'{"token":"foreign"}', b"{}\n", b"[]"):
+            with self.subTest(content=content):
+                (self.selected / "auth.json").write_bytes(content)
+                with self.assertRaisesRegex(ValueError, "not empty"): self.custody()
+        (self.selected / "auth.json").write_bytes(b"{}")
+        baseline = self.custody()
+        (self.selected / "extra.json").write_bytes(b"{}")
+        with self.assertRaisesRegex(ValueError, "unowned native sibling"): self.namespace(baseline)
+
+    def test_missing_or_directory_store_cannot_become_custody(self):
+        self.create_stores()
+        baseline = self.custody()
+        path = self.selected / "models-store.json"
+        path.unlink()
+        with self.assertRaises(OSError): self.namespace(baseline)
+        path.mkdir()
+        with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
+
+    def test_same_bytes_replacement_and_metadata_drift_are_refused(self):
+        self.create_stores()
+        baseline = self.custody()
+        path = self.selected / "auth.json"
+        replacement = self.selected / "replacement"
+        replacement.write_bytes(b"{}")
+        replacement.chmod(0o600)
+        replacement.replace(path)
+        with self.assertRaisesRegex(ValueError, "changed after add"): self.namespace(baseline)
+        baseline = self.custody()
+        info = path.stat()
+        os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns + 1000000000))
+        with self.assertRaisesRegex(ValueError, "changed after add"): self.namespace(baseline)
+
+    def test_nonprivate_mode_and_links_are_refused(self):
+        self.create_stores()
+        path = self.selected / "auth.json"
+        if os.name != "nt":
+            path.chmod(0o644)
+            with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
+            path.chmod(0o600)
+        linked = self.root / "linked"
+        try:
+            os.link(path, linked)
+        except OSError:
+            self.skipTest("host cannot create hardlinks")
+        with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
+        linked.unlink()
+        path.unlink()
+        linked.write_bytes(b"{}")
+        try:
+            path.symlink_to(linked)
+        except OSError:
+            self.skipTest("host cannot create symlinks")
+        with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
+
+    def test_scope_and_held_read_replacement_are_refused(self):
+        self.create_stores()
+        for fields in ({"scope": "project"}, {"client": "hermes"}, {"name": "notion"}, {"expected": "other"},
+                       {"components": ["mcp"]}):
+            with self.subTest(fields=fields), self.assertRaisesRegex(ValueError, "user Skill closure"):
+                closure.pi_startup_store_custody(audit, {**self.case, **fields}, self.root, self.selected)
+        original = closure.held_read
+        def replacing(*args, **kwargs):
+            body = original(*args, **kwargs)
+            path = args[1]
+            replacement = self.root / "new-store"
+            replacement.write_bytes(body)
+            replacement.chmod(0o600)
+            replacement.replace(path)
+            return body
+        with mock.patch.object(closure, "held_read", side_effect=replacing):
+            with self.assertRaisesRegex(ValueError, "changed during custody"): self.custody()
 
 
 if __name__ == "__main__":

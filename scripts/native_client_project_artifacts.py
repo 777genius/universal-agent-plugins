@@ -47,9 +47,24 @@ def windows_identity(info):
             info.st_mtime_ns, birth, attributes)
 
 
-def same_opened(path_info, held_info):
+def windows_opened_mode_equal(path, named_mode, opened_mode):
+    """Admit only CPython's filename-derived path-stat execute bits."""
+    if named_mode == opened_mode:
+        return True
+    if path is None or not stat.S_ISREG(named_mode) or not stat.S_ISREG(opened_mode):
+        return False
+    extension = path.name.rpartition(".")
+    return (not opened_mode & 0o111 and bool(extension[1])
+            and extension[2].lower() in ("exe", "bat", "cmd", "com")
+            and named_mode == opened_mode | 0o111)
+
+
+def same_opened(path_info, held_info, *, path=None):
     if WINDOWS:
-        return windows_identity(path_info) == windows_identity(held_info)
+        named, opened = windows_identity(path_info), windows_identity(held_info)
+        if not windows_opened_mode_equal(path, named[2], opened[2]):
+            return False
+        return named[:2] + named[3:] == opened[:2] + opened[3:]
     return identity(path_info) == identity(held_info)
 
 

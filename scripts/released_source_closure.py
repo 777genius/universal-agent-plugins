@@ -532,7 +532,50 @@ def checked_playwright_runtime(audit, locator, root):
         require(body is not None and audit.digest(body) == "sha256:" + sha, "closure Playwright executable/config differs from frozen source")
 
 
-def checked_namespace(audit, case, root, selected_root, owners, removed=False):
+PI_STARTUP_STORES = ("auth.json", "models-store.json")
+
+
+def pi_user_startup_scope(case):
+    return (case.get("client"), case.get("scope"), case.get("name"), case.get("expected")) == (
+        "pi", "user", ROOT_ALIAS, "dependency-closure") and case.get("components") == ["skills"]
+
+
+def require_fresh_pi_startup_stores(audit, case, root, selected_root):
+    require(pi_user_startup_scope(case), "Pi startup stores require the user Skill closure")
+    audit.in_case(selected_root, root)
+    require(not any((selected_root / name).exists() or (selected_root / name).is_symlink()
+                    for name in PI_STARTUP_STORES), "Pi startup stores were not absent before add")
+
+
+def pi_startup_store_custody(audit, case, root, selected_root):
+    """Pi1.4 offline Skill RPC creates two empty private stores, never credentials.
+
+    Pinned upstream 4a080252 auth-storage.ts FileAuthStorageBackend initializes
+    both AuthStorage and FileModelsStore with literal {} on their first read.
+    Keep their identities and metadata after add; names alone grant no authority.
+    """
+    require(pi_user_startup_scope(case), "Pi startup stores require the user Skill closure")
+    result = {}
+    for name in PI_STARTUP_STORES:
+        path = selected_root / name
+        before = path.lstat()
+        require(stat.S_ISREG(before.st_mode) and not path.is_symlink() and before.st_nlink == 1
+                and stat.S_IMODE(before.st_mode) == (0o666 if os.name == "nt" else 0o600)
+                and (not hasattr(before, "st_uid") or before.st_uid == root.lstat().st_uid),
+                "Pi startup store is not a private owned regular file")
+        require(held_read(audit, path, root) == b"{}", "Pi startup store is not empty")
+        after = path.lstat()
+        fields = ("st_dev", "st_ino", "st_mode", "st_nlink", "st_uid", "st_gid",
+                  "st_size", "st_mtime_ns", "st_ctime_ns", "st_birthtime_ns",
+                  "st_file_attributes", "st_reparse_tag")
+        stamp = tuple(getattr(before, field, None) for field in fields)
+        require(stamp == tuple(getattr(after, field, None) for field in fields),
+                "Pi startup store changed during custody read")
+        result[name] = stamp
+    return result
+
+
+def checked_namespace(audit, case, root, selected_root, owners, removed=False, startup_stores=None):
     """Exact fresh-case namespaces; new unowned siblings cannot become baseline."""
     require(set(owners) == set(pins_for(audit)), "namespace owner inventory differs")
     client = case["client"]
@@ -543,6 +586,10 @@ def checked_namespace(audit, case, root, selected_root, owners, removed=False):
     package_parent = next(iter(parents))
     checked_directory_namespace(audit, package_parent, root, set() if removed else locators)
     expected_top = {"foreign.txt"}
+    if startup_stores is not None:
+        require(pi_startup_store_custody(audit, case, root, selected_root) == startup_stores,
+                "Pi startup stores changed after add")
+        expected_top.update(PI_STARTUP_STORES)
     if client == "antigravity":
         require(package_parent == selected_root / "plugins", "Antigravity package namespace differs")
         expected_top.add("plugins")
@@ -607,7 +654,7 @@ def data_custody(audit, case, root, owners):
     return result
 
 
-def checked_cleanup(audit, owners, selected_root, case, root, documents=None):
+def checked_cleanup(audit, owners, selected_root, case, root, documents=None, startup_stores=None):
     for alias, owner in owners.items():
         require(not owner["locator"].exists() and not owner["locator"].is_symlink(), "closure retained managed package")
         member_case = {**case, "name": alias}
@@ -650,5 +697,5 @@ def checked_cleanup(audit, owners, selected_root, case, root, documents=None):
             and manifest.get("dependencies", {}) == {} and manifest.get("targets", {}) == {}, "closure retained saved dependency or target")
     require(type(locked.get("lock_version")) is int and locked["lock_version"] == 1
             and locked.get("packages") == [], "closure retained locked child or dependency edge")
-    checked_namespace(audit, case, root, selected_root, owners, removed=True)
+    checked_namespace(audit, case, root, selected_root, owners, removed=True, startup_stores=startup_stores)
     return retained

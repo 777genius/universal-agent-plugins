@@ -38,6 +38,11 @@ MAX_NATIVE_ARCHIVE_BYTES = 200 << 20
 # Digest-pinned AGY 1.5.3 payloads are 246837648 (Linux), 208900592 (macOS),
 # and 225159320 (Windows) bytes. Their compressed archives are all below 200 MiB.
 MAX_NATIVE_EXECUTABLE_BYTES = 256 << 20
+AUDIT_DIAGNOSTIC_FILES = (
+    "released-source-audit.py", "released_source_closure.py",
+    "released_source_npm.py", "live-install-audit.py", "run-native-client-matrix.py",
+)
+AUDIT_DIAGNOSTIC_OPERATIONS = {"add", "info", "list", "update", "repair", "remove"}
 
 
 def module(name, filename):
@@ -54,6 +59,38 @@ native = module("source_native_matrix", "run-native-client-matrix.py")
 def require(value, message):
     if not value:
         raise ValueError(message)
+
+
+def bounded_failure_location(error, trace=()):
+    """Keep at most four owned locations from the first 64 traceback frames."""
+    allowed = {str(ROOT / "scripts" / name): name for name in AUDIT_DIAGNOSTIC_FILES}
+    locations, frame = [], error.__traceback__
+    for _ in range(64):
+        if frame is None:
+            break
+        name = allowed.get(frame.tb_frame.f_code.co_filename)
+        if name is not None:
+            locations.append({"file": name, "line": frame.tb_lineno})
+        frame = frame.tb_next
+    row = trace[-1] if type(trace) in (list, tuple) and trace else None
+    operation = row.get("operation") if type(row) is dict else None
+    return {"failure_location": locations[-4:],
+            "last_operation": (operation if type(operation) is str
+                               and operation in AUDIT_DIAGNOSTIC_OPERATIONS else None)}
+
+
+def compact_report(report):
+    cases = []
+    for row in report["cases"]:
+        item = {"channel": row.get("channel"), **{key: row[key] for key in
+                ("client", "scope", "name", "status")}}
+        if row["status"] == "failed":
+            item.update({key: row.get(key) for key in ("failure_location", "last_operation")})
+        cases.append(item)
+    result = {"status": report["status"], "cases": cases}
+    if report["status"] == "failed":
+        result.update({key: report.get(key) for key in ("failure_location", "last_operation")})
+    return result
 
 
 def digest(body):
@@ -920,7 +957,7 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
     documents = [saved_root / "uap.toml", saved_root / "uap.lock"]
     closure = None
     closure_state = {"authorities": {}, "owners": None, "proofs": None, "identity": None,
-                     "native_baseline": None, "data_baseline": None, "removed": False}
+                     "native_baseline": None, "data_baseline": None, "removed": False, "startup_stores": None}
     pi_native = None
 
     def refresh_closure(stage, result):
@@ -937,7 +974,10 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
                     if case["client"] == "pi" else
                     closure.checked_member_native(api, case, root, selected_root, alias, owner))
         proofs = closure.checked_native(api, owners, verifier)
-        closure.checked_namespace(api, case, root, selected_root, owners)
+        if stage == "add" and closure.pi_user_startup_scope(case):
+            closure_state["startup_stores"] = closure.pi_startup_store_custody(api, case, root, selected_root)
+        closure.checked_namespace(api, case, root, selected_root, owners,
+                                 startup_stores=closure_state["startup_stores"])
         identity = {alias: (owner["installation"]["installation_id"], owner["binding"]["client_binding_id"],
                             owner["binding"]["physical_artifact_id"], str(owner["locator"]))
                     for alias, owner in owners.items()}
@@ -967,6 +1007,9 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
         for path in sentinels:
             require(live.preserved_regular_text(path, "unmanaged source audit neighbor\n", root), "foreign state changed")
         check_unrelated_native_mcp(foreign_mcp_control, root)
+        if closure_state["startup_stores"] is not None:
+            require(closure.pi_startup_store_custody(SimpleNamespace(**globals()), case, root, selected_root)
+                    == closure_state["startup_stores"], "Pi startup stores changed after add")
         if case["expected"] == "dependency-closure" and operation in ("add", "update", "repair"):
             require(type(result.get("exit_code")) is int and result.get("timeout") is False,
                     "closure operation did not finish")
@@ -1004,6 +1047,8 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
             require(case["name"] == "marketing-kit" and policy_context is not None,
                     "authenticated closure prerequisites unavailable")
             closure = module("source_closure_case", "released_source_closure.py")
+            if closure.pi_user_startup_scope(case):
+                closure.require_fresh_pi_startup_stores(SimpleNamespace(**globals()), case, root, selected_root)
             if case["client"] == "pi":
                 pi_native = PiProjectTrustOracle(root, native_root, verified_pi_owners)
                 if case["scope"] == "project":
@@ -1045,7 +1090,8 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
                 listed, _ = run("list")
                 require(listed.get("data", {}).get("installations") == [], "removed closure is still listed")
                 retained_data = closure.checked_cleanup(SimpleNamespace(**globals()), installed_owners,
-                                                       selected_root, case, root, documents)
+                                                       selected_root, case, root, documents,
+                                                       startup_stores=closure_state["startup_stores"])
                 outcome = {"status": "materialized-closure-lifecycle-passed", "native_content": proofs,
                            "authenticated_policy": closure_state["authorities"],
                            "owned_aliases": sorted(installed_owners), "update": "immutable-no-change",
@@ -1106,7 +1152,8 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
         return {**case, **outcome, "trace": trace, "activation_qualified": False, "runtime_qualified": False}
     except Exception as error:
         outcome = {**case, "status": "failed", "reason": str(error), "trace": trace,
-                   "activation_qualified": False, "runtime_qualified": False}
+                   "activation_qualified": False, "runtime_qualified": False,
+                   **bounded_failure_location(error, trace)}
         if scope_changes is not None:
             outcome["protected_scope_changes"] = scope_changes
         if (case.get("expected") in ("dependency-refusal", "dependency-closure") and case.get("name") == "marketing-kit"
@@ -1165,9 +1212,10 @@ def main():
             report["status"] = "passed"
     except Exception as error:
         report["reason"] = str(error)
+        report.update(bounded_failure_location(error))
     finally:
         (args.report_dir / "receipt.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"status": report["status"], "cases": [{"channel": row.get("channel"), "client": row["client"], "scope": row["scope"], "name": row["name"], "status": row["status"]} for row in report["cases"]]}))
+    print(json.dumps(compact_report(report)))
     return 0 if report["status"] == "passed" else 1
 
 

@@ -17,6 +17,8 @@ on:
       - 'scripts/test_released_source_transports.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_project_artifacts.py'
+      - 'scripts/test_native_client_project_artifacts*.py'
       - 'scripts/native_client_research.py'
       - 'scripts/run-native-client-matrix.py'
       - 'scripts/native_client_draft.py'
@@ -45,6 +47,8 @@ on:
       - 'scripts/test_released_source_transports.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/live-install-audit.py'
+      - 'scripts/native_client_project_artifacts.py'
+      - 'scripts/test_native_client_project_artifacts*.py'
       - 'scripts/native_client_research.py'
       - 'scripts/run-native-client-matrix.py'
       - 'scripts/native_client_draft.py'
@@ -93,6 +97,8 @@ jobs:
         run: python3 -m pip install PyYAML==6.0.3
       - name: Exercise receipt refusals
         run: python3 -m unittest discover -s scripts -p 'test_released_source_*.py' -v
+      - name: Verify native file custody contracts
+        run: python3 -m unittest discover -s scripts -p 'test_native_client_project_artifacts*.py' -v
       - name: Verify runtime policy adapter against the frozen released source
         shell: bash
         run: |

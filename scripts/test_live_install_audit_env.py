@@ -10171,6 +10171,41 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform == "win32", "owned file capture requires Windows jobs")
 class WindowsOwnedFileCaptureContracts(unittest.TestCase):
+    def test_native_snapshot_reads_filename_execute_shims_and_readonly_files(self):
+        import stat
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            runtime = root / "plugin-data/playwright/npm-runtime/locked/node_modules/.bin"
+            runtime.mkdir(parents=True)
+            body = b"inert Windows snapshot fixture\r\n"
+            paths = []
+            try:
+                for suffix in ("cmd", "exe", "bat", "com", "json"):
+                    for readonly in (False, True):
+                        path = runtime / (str(readonly) + "." + suffix)
+                        path.write_bytes(body)
+                        paths.append(path)
+                        path.chmod(0o444 if readonly else 0o666)
+                        named = path.lstat()
+                        fd = audit.NATIVE_ARTIFACTS["open_member"](path)
+                        try:
+                            opened = os.fstat(fd)
+                            self.assertTrue(audit.NATIVE_ARTIFACTS["same_opened"](named, opened, path=path))
+                            if suffix != "json":
+                                self.assertEqual(named.st_mode, opened.st_mode | 0o111)
+                                self.assertFalse(opened.st_mode & 0o111)
+                                self.assertFalse(audit.NATIVE_ARTIFACTS["same_opened"](named, opened))
+                            self.assertEqual(stat.S_IMODE(opened.st_mode), 0o444 if readonly else 0o666)
+                        finally:
+                            os.close(fd)
+                        self.assertEqual(audit.native_file_digest(path), hashlib.sha256(body).hexdigest())
+                snapshot = audit.scoped_snapshot([root])
+                self.assertEqual(sum(value == hashlib.sha256(body).hexdigest() for value in snapshot.values()), 10)
+            finally:
+                for path in paths:
+                    path.chmod(0o666)
+
     def environment(self, root):
         env = {key: value for key, value in os.environ.items()
                if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR"}}

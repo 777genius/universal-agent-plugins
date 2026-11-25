@@ -31,6 +31,92 @@ def assert_no_private_path(test, value, private_path):
             assert_no_private_path(test, item, private_path)
 
 
+class FailureLocationDiagnosticTests(unittest.TestCase):
+    def make_error(self, filename, depth=0):
+        namespace = {}
+        exec(compile("def fail(n):\n if n: return fail(n-1)\n raise ValueError('PRIVATE_ERROR_CANARY')\n",
+                     filename, "exec"), namespace)
+        try:
+            namespace["fail"](depth)
+        except ValueError as error:
+            return error
+        self.fail("fixture did not fail")
+
+    def test_compact_failure_keeps_canaries_only_in_original_receipt(self):
+        error = self.make_error(str(audit.ROOT / "scripts/released_source_closure.py"))
+        trace = [{"operation": "add", "argv": ["PRIVATE_ARGV_CANARY"],
+                  "stderr_full": "PRIVATE_STREAM_CANARY", "cwd": "PRIVATE_PATH_CANARY"}]
+        row = {"channel": "binary", "client": "pi", "scope": "user",
+               "name": "marketing-kit", "status": "failed",
+               "reason": str(error), "trace": trace, **audit.bounded_failure_location(error, trace)}
+        report = {"status": "failed", "cases": [row], "reason": "PRIVATE_OUTER_CANARY"}
+        before = json.dumps(report)
+        compact = audit.compact_report(report)
+        stdout = json.dumps(compact)
+        self.assertEqual(json.dumps(report), before)
+        for canary in ("PRIVATE_ERROR_CANARY", "PRIVATE_ARGV_CANARY",
+                       "PRIVATE_STREAM_CANARY", "PRIVATE_OUTER_CANARY", "PRIVATE_PATH_CANARY"):
+            self.assertIn(canary, before)
+            self.assertNotIn(canary, stdout)
+        assert_no_private_path(self, compact, audit.ROOT)
+        self.assertEqual(compact["cases"][0]["last_operation"], "add")
+        self.assertEqual(compact["cases"][0]["failure_location"][-1],
+                         {"file": "released_source_closure.py", "line": 3})
+
+    def test_same_basename_outside_exact_owned_path_is_omitted(self):
+        error = self.make_error("/PRIVATE_PATH_CANARY/released_source_closure.py")
+        result = audit.bounded_failure_location(error)
+        self.assertEqual(result, {"failure_location": [], "last_operation": None})
+        self.assertNotIn("PRIVATE_PATH_CANARY", json.dumps(result))
+
+    def test_malformed_or_unknown_trace_operations_do_not_mask_error(self):
+        error = self.make_error("/outside.py")
+        for trace in (None, {}, "PRIVATE_TRACE_CANARY", [], [None], [[]],
+                      [{"operation": []}], [{"operation": {}}],
+                      [{"operation": 7}], [{"operation": "PRIVATE_OPERATION_CANARY"}]):
+            with self.subTest(trace=trace):
+                self.assertIsNone(audit.bounded_failure_location(error, trace)["last_operation"])
+
+    def test_locations_are_bounded_to_last_four_owned_frames(self):
+        error = self.make_error(str(audit.ROOT / "scripts/released_source_closure.py"), depth=10)
+        result = audit.bounded_failure_location(error)
+        self.assertEqual(len(result["failure_location"]), 4)
+        self.assertTrue(all(row["file"] == "released_source_closure.py"
+                            and type(row["line"]) is int and row["line"] > 0
+                            and set(row) == {"file", "line"} for row in result["failure_location"]))
+        self.assertEqual(result["failure_location"][-1]["line"], 3)
+
+    def test_main_failure_keeps_exit_and_original_reason_private(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            native = base / "hermes"
+            native.write_text("fixture", encoding="utf-8")
+            args = SimpleNamespace(client="hermes", target="linux-amd64",
+                                   native_bin=native, report_dir=base / "receipt")
+            reason = "PRIVATE_MAIN_CANARY " + str(base)
+            with mock.patch.object(audit.argparse.ArgumentParser, "parse_args", return_value=args), \
+                 mock.patch.object(audit.native, "require_hosted"), \
+                 mock.patch.object(audit, "authenticated_snapshot", side_effect=ValueError(reason)), \
+                 mock.patch("sys.stdout", new_callable=io.StringIO) as output, \
+                 mock.patch.dict(os.environ, {"RUNNER_TEMP": str(base)}):
+                exit_code = audit.main()
+            receipt = json.loads((args.report_dir / "receipt.json").read_text())
+            compact = json.loads(output.getvalue())
+            self.assertEqual(exit_code, 1)
+            self.assertEqual(receipt["status"], "failed")
+            self.assertEqual(compact["status"], "failed")
+            self.assertEqual(receipt["reason"], reason)
+            self.assertEqual(receipt["cases"], [])
+            self.assertEqual(compact["cases"], [])
+            self.assertIsNone(compact["last_operation"])
+            self.assertNotIn("reason", compact)
+            self.assertNotIn("PRIVATE_MAIN_CANARY", output.getvalue())
+            assert_no_private_path(self, compact, base)
+            self.assertTrue(compact["failure_location"])
+            self.assertTrue(all(row["file"] == "released-source-audit.py"
+                                for row in compact["failure_location"]))
+
+
 class DiagnosticPrivacyAssertionTests(unittest.TestCase):
     def test_windows_backslash_leak_is_detected_after_json_roundtrip(self):
         private = r"C:\Users\private-owner\case"
@@ -852,6 +938,16 @@ class ProtectedScopeDiagnosticTests(unittest.TestCase):
             changes = receipt["protected_scope_changes"]
             self.assertEqual(changes["entries"][0]["changed_fields"], ["mtime"])
             assert_no_private_path(self, changes, temporary)
+            before = json.dumps(receipt)
+            compact = audit.compact_report({"status": "failed", "cases": [receipt]})
+            self.assertEqual(json.dumps(receipt), before)
+            self.assertEqual(receipt["trace"][-1]["exit_code"], 0)
+            self.assertEqual(receipt["reason"], "add changed the other scope")
+            self.assertEqual(compact["cases"][0]["status"], "failed")
+            self.assertEqual(compact["cases"][0]["last_operation"], "add")
+            self.assertNotIn("reason", compact["cases"][0])
+            self.assertNotIn("trace", compact["cases"][0])
+            assert_no_private_path(self, compact, temporary)
 
     def test_successful_dependency_add_remains_inconclusive(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -1520,6 +1616,9 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
         helper.checked_native = native
         helper.checked_cleanup = real_closure.checked_cleanup
         helper.data_custody = real_closure.data_custody
+        helper.pi_user_startup_scope = real_closure.pi_user_startup_scope
+        helper.require_fresh_pi_startup_stores = real_closure.require_fresh_pi_startup_stores
+        helper.pi_startup_store_custody = real_closure.pi_startup_store_custody
         helper.checked_member_native = lambda *args: {"content_verified": True}
         helper.checked_namespace = real_closure.checked_namespace
         helper.held_read = lambda api, path, case_root: path.read_bytes()
