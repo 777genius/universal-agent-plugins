@@ -62,6 +62,52 @@ class MarketingCodexProfileContracts(unittest.TestCase):
                 observer = CodexProfile(audit, root, env, project)
                 yield audit, root, home, project, data, database, observer
 
+    def test_real_orchestrator_prepares_each_profile_once_and_preserves_sticky_failures(self):
+        runner = runpy.run_path(str(ROOT / "scripts/marketing-kit-project-release-e2e.py"))
+        audit = runner["audit"]
+        runtime_globals = audit["CODEX_RUNTIME_AUDIT"]["CodexPluginSQLiteAudit"].__init__.__globals__
+        async def exchange(binary, project, profile, environment, **kwargs):
+            database = Path(environment["HOME"]) / ".local/state/codex-sqlite/state_5.sqlite"
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("CREATE TABLE owned_state(value TEXT)")
+                connection.execute("INSERT INTO owned_state VALUES ('unchanged')")
+                connection.commit()
+            return {"data": [{"cwd": str(project), "errors": [], "skills": []}]}
+        import sys
+        with tempfile.TemporaryDirectory() as temporary, \
+                patch.dict(audit["AGENT_BINARIES"], {"codex": sys.executable}), \
+                patch.dict(runtime_globals, {"_exchange": exchange}), \
+                patch.dict(runner["prepare_codex_sqlite"].__globals__, {
+                    "invoke": lambda *a, **k: {"exit_code": 0, "stdout_full": "codex-cli 0.153.4"}}):
+            root = Path(temporary).resolve()
+            profiles = runner["MarketingCodexSQLiteProfiles"]("codex")
+            for name in ("A", "B", "C"):
+                env, project, *_ = runner["run_case"]("unused", "codex", root, name)
+                proof = profiles.prepare(name, env, project)
+                self.assertIsInstance(proof, runner["CodexProfile"])
+                self.assertIs(proof, profiles.profiles[name])
+                self.assertEqual(list((Path(env["HOME"]) / ".codex/tmp/arg0").iterdir()), [])
+            profiles.checkpoint("final-qualification")
+            for proof in profiles.profiles.values():
+                proof.checkpoint("final-lifecycle")
+            self.assertTrue(all(p["runtime_semantics_unchanged"] for p in profiles.evidence().values()))
+            proof = profiles.profiles["A"]
+            with patch.object(proof.runtime, "checkpoint", side_effect=ValueError("late failure")):
+                with self.assertRaisesRegex(ValueError, "late failure"):
+                    proof.checkpoint("late-outer-check")
+            record = profiles.evidence()["A"]
+            self.assertFalse(record["runtime_semantics_unchanged"])
+            self.assertEqual(record["final_checkpoint"], "failed")
+            self.assertEqual(record["failed_phase"], "late-outer-check")
+            proof = profiles.profiles["B"]
+            with patch.object(proof.runtime, "checkpoint", side_effect=KeyboardInterrupt("late orchestrator failure")):
+                with self.assertRaisesRegex(KeyboardInterrupt, "late orchestrator failure"):
+                    profiles.checkpoint("late-orchestrator-check")
+            record = profiles.evidence()["B"]
+            self.assertFalse(record["runtime_semantics_unchanged"])
+            self.assertEqual(record["final_checkpoint"], "failed")
+            self.assertEqual(record["failed_phase"], "late-orchestrator-check")
+
     def test_shared_bootstrap_protects_foreign_bytes_and_records_exact_runtime(self):
         with self.fixture() as (_, _, home, _, _, database, observer):
             self.assertEqual((home / ".codex/foreign.txt").read_bytes(), b"unmanaged original\n")

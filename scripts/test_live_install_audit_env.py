@@ -2532,7 +2532,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                               codex_checkpoint_error=None, codex_constructor_error=None,
                                               require_copilot_trust=False, copilot_trust_mutation=None,
                                               copilot_fixture_failure=None, claude_retained_scan_error=False,
-                                              temporary_root_alias=False):
+                                              temporary_root_alias=False, real_codex=False, codex_capture_failure=False):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2545,13 +2545,33 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         installed, phases = {}, []
         retirements = []
         sqlite_profiles = {}
+        sqlite_preparations = []
 
         # This orchestration fixture already substitutes every public/native
         # lifecycle. Real SQLite custody has separate real-database regressions.
         def prepare_sqlite(name, _env, _project):
             if target == "codex":
                 self.assertIn(name, ("A", "B", "C"))
+                self.assertNotIn(name, sqlite_preparations)
+                sqlite_preparations.append(name)
+                proof = main.__globals__["CodexProfile"](runner["audit"], _project.parent.parent, _env, _project)
                 sqlite_profiles[name] = {"runtime_semantics_unchanged": True}
+                return proof
+
+        real_profiles = runner["MarketingCodexSQLiteProfiles"](target)
+        if codex_capture_failure:
+            original_evidence = real_profiles.evidence
+            def failed_capture():
+                original_evidence()
+                raise ValueError("injected live evidence guard failure")
+            real_profiles.evidence = failed_capture
+        async def native_exchange(binary, project, profile, environment, **kwargs):
+            database = Path(environment["HOME"]) / ".local/state/codex-sqlite/state_5.sqlite"
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("CREATE TABLE fixture_rows(value TEXT)")
+                connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
+                connection.commit()
+            return {"data": [{"cwd": str(project), "errors": [], "skills": []}]}
 
         mutation_checkpoints = []
         sqlite_orchestration = SimpleNamespace(
@@ -2633,6 +2653,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.alias_parent = parent / "alias"
                     self.alias_parent.symlink_to(owned, target_is_directory=True)
                     kwargs["dir"] = owned
+                self.lifecycle_root = kwargs.get("prefix") == "uap-real-marketing-kit-"
                 self.inner = TemporaryDirectory(**kwargs)
                 self.alias_directory = None
 
@@ -2656,7 +2677,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 finally:
                     if self.alias_directory is not None:
                         self.alias_directory.cleanup()
-                if exc_type is None and cleanup_failure:
+                if exc_type is None and cleanup_failure and self.lifecycle_root:
                     raise OSError("disposable cleanup failed")
 
         class FakeCodexProfile:
@@ -2742,7 +2763,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         def execute(_cli, env, project, _target, label, *args, checkpoint=None, capture=None):
             phases.append(label)
             mutation_labels.append("after-public-mutation-" + label)
-            self.assertIs(checkpoint, sqlite_orchestration.checkpoint)
+            if real_codex:
+                self.assertEqual(checkpoint, real_profiles.checkpoint)
+            else:
+                self.assertIs(checkpoint, sqlite_orchestration.checkpoint)
             scope = args[args.index("--scope") + 1]
             key = (env["AGENTPLUGINS_HOME"], scope)
             portable = project if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
@@ -2783,7 +2807,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             finally:
                 checkpoint("after-public-mutation-" + label)
             if capture is not None and removal_receipt is not None:
-                self.assertEqual(mutation_checkpoints[-1], "after-public-mutation-" + label)
+                if not real_codex:
+                    self.assertEqual(mutation_checkpoints[-1], "after-public-mutation-" + label)
                 capture(removal_receipt)
             return {"stage": label, "exit_code": 0, "result": "passed"}
 
@@ -2853,8 +2878,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
                     "execute": execute, "verify_pinned_launcher": lambda *_: None,
-                    "MarketingCodexSQLiteProfiles": lambda _: sqlite_orchestration,
-                    "CodexProfile": FakeCodexProfile, "SignedClosureRetirement": FakeRetirement,
+                    "MarketingCodexSQLiteProfiles": lambda _: real_profiles if real_codex else sqlite_orchestration,
+                    "invoke": lambda *a, **k: {"exit_code": 0, "stdout_full": "codex-cli 0.153.4"},
+                    "CodexProfile": runner["CodexProfile"] if real_codex else FakeCodexProfile, "SignedClosureRetirement": FakeRetirement,
                     "prepare_copilot_project_b_trust": prepare_trust,
                     "profile_snapshot": profile, "check_foreign": foreign,
                     "check_user_project_unchanged": project_check,
@@ -2875,11 +2901,16 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "tempfile": SimpleNamespace(TemporaryDirectory=CheckedCleanup),
                     }), \
                     patch.dict(runner["audit"], {"copilot_native_roots_guard": make_guard}), \
+                    patch.dict(runner["audit"]["AGENT_BINARIES"], {"codex": sys.executable}), \
+                    patch.dict(runner["audit"]["CODEX_RUNTIME_AUDIT"]["CodexPluginSQLiteAudit"].__init__.__globals__,
+                               {"_exchange": native_exchange}), \
                     patch.object(Path, "open", checked_open), \
                     patch.object(sys, "argv", ["runner", "--target", target, "--cli", "unused",
                                                "--report", str(report_path)]), \
                     patch.object(sys, "stdout", StringIO()), patch.object(sys, "stderr", StringIO()):
                 code = main()
+            if real_codex:
+                return code, json.loads(report_path.read_text()), phases
             self.assertEqual([phase for phase in mutation_checkpoints
                               if phase.startswith("after-public-mutation-")], mutation_labels)
             if target == "codex":
@@ -2887,12 +2918,36 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                  ("A", "B", "C").index(codex_constructor_error)
                                  if codex_constructor_error is not None else 3)
                 self.assertTrue(all(profile.checkpoints for profile in codex_profiles))
+                self.assertEqual(sqlite_preparations, list(("A", "B", "C")[:len(codex_profiles)])
+                                 + ([codex_constructor_error] if codex_constructor_error else []))
+                self.assertEqual([profile.project.parent.name for profile in codex_profiles],
+                                 list(("A", "B", "C")[:len(codex_profiles)]))
             if target == "claude":
                 self.assertTrue(retirements)
                 self.assertTrue(all(retirement.closed for retirement in retirements))
                 self.assertTrue(all(retirement.finished for retirement in retirements)
                                 if project_remove_error not in ("remove A", "remove B") else not retirements[-1].finished)
             return code, json.loads(report_path.read_text()), phases
+
+    def test_marketing_kit_real_codex_main_captures_evidence_before_cleanup(self):
+        for cleanup_failure in (False, True):
+            with self.subTest(cleanup_failure=cleanup_failure):
+                code, report, _ = self._exercise_marketing_kit_scope_report(
+                    "codex", real_codex=True, cleanup_failure=cleanup_failure)
+                self.assertEqual(code, 1 if cleanup_failure else 0, report.get("failure"))
+                self.assertEqual(report["two_scope_lifecycle_qualified"], not cleanup_failure)
+                self.assertEqual(set(report["codex_sqlite_profiles"]), {"A", "B", "C"})
+                for proof in report["codex_sqlite_profiles"].values():
+                    self.assertTrue(proof["runtime_semantics_unchanged"])
+                    self.assertEqual(proof["final_checkpoint"], "passed")
+
+    def test_marketing_kit_real_codex_capture_failure_still_writes_failed_report(self):
+        code, report, _ = self._exercise_marketing_kit_scope_report(
+            "codex", real_codex=True, codex_capture_failure=True)
+        self.assertEqual(code, 1)
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("live evidence guard failure", report["failure"])
 
     @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
     def test_marketing_kit_copilot_owned_temporary_parent_alias_keeps_full_lifecycle(self):
@@ -12028,13 +12083,15 @@ class MarketingKitCodexSQLiteTest(unittest.TestCase):
             self.bootstrap_mutation()
         return {'data': [{'cwd': str(project), 'errors': [], 'skills': []}]}
 
-    def prepare(self, version_probe=None):
+    def prepare(self, version_probe=None, *, wrapped=False):
         observer_type = self.runtime['CodexPluginSQLiteAudit']
         with patch.dict(observer_type.__init__.__globals__, {'_exchange': self.discover}), \
                 patch.dict(self.runner['prepare_codex_sqlite'].__globals__, {
                     'invoke': version_probe or (lambda *args, **kwargs: {'exit_code': 0, 'timeout': False,
                                             'stdout_full': 'codex-cli 0.153.4\n'})}):
-            return self.runner['prepare_codex_sqlite'](sys.executable, self.env, self.project)
+            with patch.dict(self.runner['audit']['AGENT_BINARIES'], {'codex': sys.executable}):
+                proof = self.runner['prepare_codex_sqlite'](sys.executable, self.env, self.project)
+                return proof if wrapped else proof.runtime
 
     def test_marketing_kit_version_probe_uses_removed_separate_native_profile(self):
         profiles = []
@@ -12152,7 +12209,7 @@ class MarketingKitCodexSQLiteTest(unittest.TestCase):
 
     def test_marketing_kit_native_bootstrap_cannot_mutate_foreign_or_add_config(self):
         self.bootstrap_mutation = lambda: self.foreign.write_text('changed')
-        with self.assertRaisesRegex(AssertionError, 'bootstrap changed protected'):
+        with self.assertRaisesRegex(ValueError, 'initialization changed protected'):
             self.prepare()
 
     def test_marketing_kit_native_bootstrap_cannot_add_extra_config_keys(self):
@@ -12198,13 +12255,6 @@ class MarketingKitCodexSQLiteTest(unittest.TestCase):
         self.assertEqual(set(profiles.evidence()), {'A'})
 
 
-    def test_marketing_kit_snapshot_file_keys_match_windows_and_posix(self):
-        key = self.runner['codex_snapshot_file_key']
-        self.assertEqual(key(PurePosixPath('/test/home'), PurePosixPath('/test/home/.codex/config.toml')),
-                         'home/.codex/config.toml')
-        self.assertEqual(key(PureWindowsPath('C:/test/home'), PureWindowsPath('C:/test/home/.codex/config.toml')),
-                         r'home/.codex\config.toml')
-
     def test_marketing_kit_profile_evidence_distinguishes_failure_from_unrun_final(self):
         profiles = self.runner['MarketingCodexSQLiteProfiles']('codex')
         observer = self.prepare()
@@ -12225,8 +12275,9 @@ class MarketingKitCodexSQLiteTest(unittest.TestCase):
 
     def test_marketing_kit_profile_evidence_pass_requires_final_checkpoint(self):
         profiles = self.runner['MarketingCodexSQLiteProfiles']('codex')
-        profiles.profiles['A'] = self.prepare()
+        profiles.profiles['A'] = self.prepare(wrapped=True)
         profiles.checkpoint('final-qualification')
+        profiles.profiles['A'].checkpoint('final-lifecycle')
         recorded = profiles.evidence()['A']
         self.assertTrue(recorded['runtime_semantics_unchanged'])
         self.assertEqual(recorded['final_checkpoint'], 'passed')

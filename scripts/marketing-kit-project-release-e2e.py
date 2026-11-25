@@ -13,7 +13,6 @@ import stat
 import tempfile
 from time import sleep
 import traceback
-import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 audit = runpy.run_path(str(ROOT / "scripts/live-install-audit.py"))
@@ -1686,11 +1685,6 @@ def unchanged_profile(env, project, stage):
         check_profile_unchanged(env, project, before, stage)
 
 
-def codex_snapshot_file_key(home, path):
-    """Use the native snapshot file-key separator on each platform."""
-    return home.name + "/" + str(path.relative_to(home))
-
-
 def prepare_codex_sqlite(binary, env, project):
     """Admit only exact authored pins and the existing native bootstrap proof."""
     home, case = Path(env["HOME"]), project.parent
@@ -1704,46 +1698,7 @@ def prepare_codex_sqlite(binary, env, project):
             or version.get("stdout_full", "").strip() != "codex-cli 0.153.4"
             or scoped_snapshot((home, project, Path(env["AGENTPLUGINS_HOME"]))) != protected):
         raise AssertionError("Codex SQLite audit requires unchanged native 0.153.4 version probe")
-    profile = home / ".codex"
-    for directory in (profile / "tmp", profile / "tmp/arg0"):
-        directory.mkdir(mode=0o700)
-    with (profile / "installation_id").open("xb") as stream:
-        if os.name != "nt":
-            os.fchmod(stream.fileno(), 0o644)
-        stream.write(str(uuid.uuid4()).encode("ascii"))
-    protected_home = scoped_snapshot((home,))
-    protected_delivery = scoped_snapshot((project, Path(env["AGENTPLUGINS_HOME"])))
-    runtime = audit["CODEX_RUNTIME_AUDIT"]
-    observer = runtime["CodexPluginSQLiteAudit"](binary, case, home, project, env)
-    bundle_files, bundle_directories, bundle_metadata = runtime["plugin_initialization"](profile)
-    initialized = scoped_snapshot((home,))
-    owned_files = {
-        observer.config: hashlib.sha256(runtime["_sqlite_config"](observer.pin)).hexdigest(),
-        **{observer.runtime / name: fact["sha256"] for name, fact in
-           observer.observations[0]["runtime_files_fully_read"].items()},
-        **bundle_files,
-    }
-    directories = (home / ".local", home / ".local/state", observer.runtime, *bundle_directories)
-    expected = dict(protected_home)
-    for path in (*directories, *owned_files):
-        directory = path in directories
-        relative = path.relative_to(home).as_posix()
-        key = "metadata:0:" + relative
-        metadata = initialized.get(key)
-        if (not isinstance(metadata, tuple) or not metadata
-                or not (stat.S_ISDIR(metadata[0]) if directory else stat.S_ISREG(metadata[0]))
-                or (path in bundle_metadata and metadata != bundle_metadata[path])):
-            raise AssertionError("Codex bootstrap changed protected fixture authority")
-        entries = {key: metadata}
-        entries[("directory:0:" + relative) if directory else codex_snapshot_file_key(home, path)] = (
-            "present" if directory else owned_files[path])
-        for entry, value in entries.items():
-            if entry not in protected_home:
-                expected[entry] = value
-    observer.guard()
-    if initialized != expected or scoped_snapshot((project, Path(env["AGENTPLUGINS_HOME"]))) != protected_delivery:
-        raise AssertionError("Codex bootstrap changed protected fixture authority")
-    return observer
+    return CodexProfile(audit, case.parent, env, project)
 
 
 class MarketingCodexSQLiteProfiles:
@@ -1782,12 +1737,13 @@ class MarketingCodexSQLiteProfiles:
             self.checkpoint("after-prepare-attempt-" + name)
         self.profiles[name] = observer
         self.checkpoint("after-prepare-" + name)
+        return observer
 
     def checkpoint(self, phase):
         for name, observer in self.profiles.items():
             try:
                 observer.checkpoint(phase)
-            except Exception:
+            except BaseException:
                 self.failed_checkpoints[name] = phase
                 raise
             if phase == "final-qualification":
@@ -1801,13 +1757,16 @@ class MarketingCodexSQLiteProfiles:
             self.checkpoint("after-" + phase)
 
     def evidence(self):
-        return {name: {
-            **observer.evidence(),
-            "runtime_semantics_unchanged": name in self.verified_final and name not in self.failed_checkpoints,
-            "final_checkpoint": ("failed" if name in self.failed_checkpoints else
-                                 "passed" if name in self.verified_final else "not_run"),
-            "failed_phase": self.failed_checkpoints.get(name),
-        } for name, observer in self.profiles.items()}
+        result = {}
+        for name, observer in self.profiles.items():
+            proof = observer.evidence()
+            failed = self.failed_checkpoints.get(name) or proof.get("failed_phase")
+            final = name in self.verified_final and proof.get("final_checkpoint") == "passed"
+            result[name] = {**proof,
+                            "runtime_semantics_unchanged": final and not failed and proof["runtime_semantics_unchanged"],
+                            "final_checkpoint": "failed" if failed else "passed" if final else "not_run",
+                            "failed_phase": failed}
+        return result
 
 
 def main():
@@ -1837,13 +1796,16 @@ def main():
             # Canonicalize this newly owned root before deriving fixture paths;
             # macOS temporary parents may use /var for canonical /private/var.
             root = Path(location).resolve(strict=True)
+            if options.target == "codex":
+                # ExitStack captures guarded evidence before TemporaryDirectory
+                # removes the authority roots, on both success and failure.
+                custody.callback(lambda: report.update(codex_sqlite_profiles=codex_sqlite.evidence()))
             # The pinned npm launcher validates the SHA-256 on every cache hit.
             # Keep one private executable cache for A/B: cold restore is still
             # independent in lock, receipts, clients and native HOME/profile.
             launcher_cache = root / "released-cli-cache"
             launcher_cache.mkdir(mode=0o700)
             env, project_a, foreign_a, project_foreign_a, native_foreign_a = run_case(options.cli, options.target, root, "A")
-            codex_sqlite.prepare("A", env, project_a)
             bind_pinned_launcher_cache(env, launcher_cache, root)
             foreign_a_files = pin_foreign([(foreign_a, "unmanaged user data\n"),
                                            (project_foreign_a, "unmanaged project data\n"),
@@ -1859,7 +1821,7 @@ def main():
             def prepare_codex(e, p):
                 try:
                     if options.target == "codex":
-                        codex_profiles[p] = CodexProfile(audit, root, e, p)
+                        codex_profiles[p] = codex_sqlite.prepare(p.parent.name, e, p)
                 finally:
                     check_all_guards((lambda: check_fixture_guards(),
                                       lambda: check_codex_profiles("after-profile-preparation")))
@@ -2034,7 +1996,6 @@ def main():
             del repaired_rows
             native_a_before_b = settled_profile_snapshot(env, project_a)
             env_b, project_b, foreign_b, project_foreign_b, native_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
-            codex_sqlite.prepare("B", env_b, project_b)
             bind_pinned_launcher_cache(env_b, launcher_cache, root)
             foreign_b_files = pin_foreign([(foreign_b, "unmanaged user data\n"),
                                            (project_foreign_b, "unmanaged project data\n"),
@@ -2166,7 +2127,6 @@ def main():
                 env_c, project_c, foreign_c, project_foreign_c, native_foreign_c = (
                     run_case(options.cli, options.target, root, "C"))
                 bind_pinned_launcher_cache(env_c, launcher_cache, root)
-                codex_sqlite.prepare("C", env_c, project_c)
                 prepare_codex(env_c, project_c)
             # User operations must not mutate their own working Project C.
             protected_c_project = scoped_snapshot([project_c])
@@ -2399,8 +2359,6 @@ def main():
             report["claude_project_checkpoint_diagnostics"] = claude_checkpoint_diagnostics
         traceback.print_exc()
     finally:
-        if options.target == "codex":
-            report["codex_sqlite_profiles"] = codex_sqlite.evidence()
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(json.dumps(report, indent=2, ensure_ascii=False))
     return 0 if report["status"] == "passed" else 1
