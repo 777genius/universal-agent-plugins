@@ -77,7 +77,12 @@ and follows the normal review and CI path.
    draft-only runs; it does not authorize public version publication.
 4. Confirm the workflow attests all six binaries, `checksums.txt`,
    `release-manifest.json`, and `THIRD_PARTY_NOTICES.txt` before creating the
-   non-public draft.
+   non-public draft. The four Linux and Windows binaries come from `build`. The
+   two macOS binaries come only from `sign-macos` (see
+   [macOS signing and notarization](#macos-signing-and-notarization)), and
+   staging refuses unless their SHA-256 equals what that job signed and
+   notarized. Checksums, the manifest, attestations, npm pins and every proof
+   therefore see the signed macOS bytes.
 5. Confirm the read-only platform-proof workflow receives the same-run frozen
    asset artifact and succeeds on all six native targets. For a draft it cold
    bootstraps the npm launcher from the exact local asset only after matching
@@ -147,22 +152,28 @@ and follows the normal review and CI path.
 The workflow rejects every existing public release. A draft-only rerun accepts an
 existing draft only when its tag, frozen commit, draft status, complete asset
 set, and every asset byte exactly match the rebuilt release; it never uploads
-over an existing asset. Promotion requires an unexpired receipt artifact from
+over an existing asset. Signed macOS binaries are not byte-reproducible: every
+signature carries a new Apple timestamp. Use Re-run failed jobs in the run that
+created the draft; it reuses the signed artifact. A new dispatch or Re-run all
+jobs re-signs, so `stage-draft` refuses the existing draft; an owner then
+verifies it was never public, deletes only that draft (not the tag) and
+qualifies again. Promotion requires an unexpired receipt artifact from
 the exact successful draft-only run attempt. A failed native proof intentionally
-leaves that exact draft non-public. Fix the proof defect and rerun the same tag
-to qualify it. If draft
+leaves that exact draft non-public. Fix the proof defect and follow the signed
+draft rerun procedure above. If draft
 creation itself was interrupted and left an incomplete or non-matching draft,
 an owner must verify that it was never public, delete only that draft release
 (not the tag), and rerun. Never edit or replace assets in place.
 Every dispatch still requires the exact frozen tag/workflow-source gate and
 proves that the candidate remains an ancestor of current `main`. Only descendant
 movement of `main` is allowed; candidate bytes and required checks never float.
-A workflow-dispatch ref of current `main` still has to equal the candidate SHA.
+Dispatch qualification from the exact tag, as required by the signing environment.
 
 Go and source npm qualification run in parallel with the binary build. One
 `build` job embeds the Skills picker bundle once and cross-compiles all six
-binaries sequentially, then refuses unless exactly six were produced. Draft
-staging requires all three lanes. Go compilation/dependency caching is
+binaries sequentially, then refuses unless exactly six were produced.
+`sign-macos` signs and notarizes the two macOS binaries after `build`. Draft
+staging requires all three lanes, `sign-macos` and `verify-macos`. Go compilation/dependency caching is
 allowed, while `-count=1` forces the release's Go tests to execute. Staged npm
 contract tests, all six native platform proofs and both three-platform
 Hermes/Antigravity release-native aggregates remain mandatory. Publication
@@ -181,6 +192,103 @@ For a schema-v1 historical platform audit, dispatch `Agentplugins Platform
 Proof` with `--ref <exact-tag>` and `allow_legacy_manifest=true`. The workflow
 must already exist at that tag, and its source SHA must equal the audited tag
 commit; current `main` is never allowed to impersonate a historical harness.
+
+## macOS signing and notarization
+
+The `sign-macos` job runs on a GitHub-hosted `macos-15` runner after `build`
+and before `stage-draft`, in the `macos-signing` environment. It runs
+`scripts/sign-agentplugins-macos.sh`, which:
+
+- imports the Developer ID Application certificate into a throwaway keychain
+  with a random password, takes the signing identity from that certificate,
+  and deletes the keychain and decoded key files on every exit path;
+- signs both macOS binaries in place with `codesign --force --options runtime
+  --timestamp --identifier com.777genius.agentplugins`. `--force` replaces the
+  ad-hoc signature the Go linker adds to darwin/arm64 binaries. The x86_64
+  binary is signed on the Apple silicon runner without running it;
+- verifies `codesign --verify --strict`, the Developer ID Application
+  authority, `TeamIdentifier` equal to `APPLE_TEAM_ID` and to the pinned release
+  team `86399583GS`, the hardened runtime flag and a secure Apple timestamp;
+- notarizes one zip with both binaries through `xcrun notarytool submit --wait`
+  (30-minute wait limit, 45-minute job limit), requires `Accepted`, and requires
+  that the notary log ticket covers each binary's CDHash;
+- uploads `agentplugins-darwin-signed` for staging and the
+  `macos-notarization-evidence-<attempt>` artifact (90 days): the notary
+  submission and log, `codesign -dv` output and
+  `signing-summary.json` with the CDHash and SHA-256 of each binary.
+
+A separate `verify-macos` job without signing secrets verifies both SHA-256
+outputs and runs a quarantined copy of the native arm64 binary with an empty
+environment. Its log records `spctl --status`; the run is a Gatekeeper check
+only when assessments are enabled. Promotion and npm publication authenticate
+that both `sign-macos` and `verify-macos` succeeded in the qualification run.
+Either job failing, being skipped or cancelled blocks staging and promotion.
+
+### Setup
+
+The `macos-signing` environment holds exactly six secrets: `APPLE_CERTIFICATE`
+(base64 `.p12` with the Developer ID Application certificate and key),
+`APPLE_CERTIFICATE_PASSWORD`, `APPLE_TEAM_ID`, `APPLE_API_KEY_BASE64` (base64
+App Store Connect `.p8` key), `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`. Its
+deployment policy allows only the `agentplugins-v*` tag pattern, so dispatch
+with `--ref <exact-tag>`; a run from `main` cannot reach the secrets and fails
+closed at `sign-macos`. The active release-tag ruleset restricts creation, update and deletion of
+`agentplugins-v*` tags to administrators. Anyone able to create such a tag can
+run a modified workflow with access to these secrets; the validation job alone
+is not a boundary against that actor. Rotate the secrets before the certificate
+expires; an expired or revoked certificate fails `sign-macos` and blocks the
+release until it is replaced.
+
+### What users get
+
+Notarization means Apple scanned these exact binaries and issued a ticket keyed
+by their CDHash. A bare Mach-O cannot be stapled (`stapler` accepts only app
+bundles, disk images and installer packages), so the ticket stays with Apple.
+When a quarantined file runs, for example a browser download from the release
+page, Gatekeeper can fetch the ticket online to assess it.
+Offline, a first launch of a quarantined download can still be blocked. Downloads
+by `install.sh`, `curl`, the npm launcher or Homebrew are not quarantined, so
+Gatekeeper does not assess them. Windows binaries stay unsigned (there is no Authenticode
+certificate) and, like the Linux binaries, are covered by checksums and GitHub
+artifact attestations only.
+
+### Verify a signed release
+
+```bash
+gh release download agentplugins-vX.Y.Z --repo 777genius/universal-agent-plugins \
+  --pattern 'agentplugins_X.Y.Z_darwin_arm64'
+codesign --verify --strict --verbose=2 agentplugins_X.Y.Z_darwin_arm64
+codesign -dv --verbose=4 agentplugins_X.Y.Z_darwin_arm64
+spctl -a -vv -t install agentplugins_X.Y.Z_darwin_arm64
+```
+
+`codesign -dv` must show `Authority=Developer ID Application: ... (86399583GS)`,
+`TeamIdentifier=86399583GS`, `flags=0x10000(runtime)`, a `Timestamp=` line and
+`Identifier=com.777genius.agentplugins`. `spctl -t install` reports
+`accepted` and `source=Notarized Developer ID` when the ticket is reachable
+(`spctl -t exec` rejects any bare command-line tool as "not an app"). The
+qualification run's `macos-notarization-evidence-<attempt>` artifact has
+`notary-log.json` with `"status": "Accepted"` and a `ticketContents` CDHash
+equal to the `CDHash=` line of `codesign -dv`.
+
+### One-time identity check
+
+Before the first signed release, a maintainer runs the same script locally on
+macOS with Xcode command-line tools:
+
+1. Build the two binaries:
+   `mkdir -p "$TMPDIR/uap-sign/bin" && (cd cli && for arch in amd64 arm64; do GOOS=darwin GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=0.0.0" -o "$TMPDIR/uap-sign/bin/agentplugins_0.0.0_darwin_$arch" ./cmd/agentplugins; done)`
+2. Load the six secret values into the current shell only (for example with
+   `read -rs` followed by `export`), never into shell history or files.
+3. Run `bash scripts/sign-agentplugins-macos.sh agentplugins-v0.0.0 "$TMPDIR/uap-sign/bin" "$TMPDIR/uap-sign/evidence"`.
+
+Its output must include `darwin_amd64_sha256=` and `darwin_arm64_sha256=` lines.
+This exercises the `.p12` import, the identity, signing, the notary API key,
+the CDHash binding, and submits the
+test binaries to Apple. The script temporarily adds the throwaway keychain to
+the user keychain search list and restores it on exit. If it is killed, check
+`security list-keychains -d user` and delete the leftover
+`agentplugins-macos-signing.*` keychain with `security delete-keychain`.
 
 ## Third-party notice delivery
 

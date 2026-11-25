@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -244,7 +245,7 @@ func TestExistingCodexProfileRejectsUnsupportedCLIWithoutMutation(t *testing.T) 
 
 func TestEnvironmentFailsClosed(t *testing.T) {
 	root := tempRoot(t)
-	for _, entries := range [][]string{{"CODEX_HOME=a", "CODEX_HOME=b"}, {"PATH=a", "Path=b"}, {"IGNORED=a", "IGNORED=b"}, {"broken"}, {"=value"}, {"BAD-NAME=x"}, {"X=a\x00b"}, {strings.Repeat("X", 128*1024+1) + "=v"}} {
+	for _, entries := range [][]string{{"CODEX_HOME=a", "CODEX_HOME=b"}, {"CODEX_HOME=a", "codex_home=b"}, {"PATH=a", "Path=b"}, {"IGNORED=a", "IGNORED=b"}, {"broken"}, {"=value"}, {"BAD-NAME=x"}, {"X=a\x00b"}, {strings.Repeat("X", 128*1024+1) + "=v"}} {
 		if _, err := codexCommand(root, filepath.Join(root, "codex"), entries, "plugin", "list"); err == nil {
 			t.Fatalf("accepted malformed environment %q", entries)
 		}
@@ -256,6 +257,39 @@ func TestEnvironmentFailsClosed(t *testing.T) {
 	b, err := codexEnvironment(root, []string{"HOME=/home/user", "CODEX_HOME=/other", "PATH=/bin"})
 	if err != nil || !reflect.DeepEqual(a, b) {
 		t.Fatalf("%v %v %v", a, b, err)
+	}
+}
+
+func TestDiscardedCaseDistinctEnvironmentUsesExactCleanChild(t *testing.T) {
+	root := tempRoot(t)
+	basics := []string{"PATH=/bin", "HOME=/fixture-home", "CODEX_HOME=/discarded-profile"}
+	baseline, err := codexEnvironment(root, basics)
+	if err != nil {
+		t.Fatal(err)
+	}
+	discarded := []string{
+		"HTTP_PROXY=https://fixture.invalid/upper", "http_proxy=https://fixture.invalid/lower",
+		"NPM_CONFIG_PROXY=upper-fixture", "npm_config_proxy=lower-fixture",
+		"NODE_OPTIONS=upper-fixture", "node_options=lower-fixture",
+		"LD_PRELOAD=upper-fixture", "ld_preload=lower-fixture",
+	}
+	for _, reverse := range []bool{false, true} {
+		t.Run(fmt.Sprint(reverse), func(t *testing.T) {
+			ambient := append(append([]string(nil), basics...), discarded...)
+			if reverse {
+				for left, right := 0, len(ambient)-1; left < right; left, right = left+1, right-1 {
+					ambient[left], ambient[right] = ambient[right], ambient[left]
+				}
+			}
+			got, err := codexEnvironment(root, ambient)
+			if runtime.GOOS == "windows" {
+				if err == nil {
+					t.Fatal("accepted case-duplicate Windows environment")
+				}
+			} else if err != nil || !reflect.DeepEqual(got, baseline) {
+				t.Fatalf("discarded Unix variables changed exact child: %v %v", got, err)
+			}
+		})
 	}
 }
 
@@ -273,6 +307,17 @@ func TestWindowsInstallationMetadataIsValidatedButNotInherited(t *testing.T) {
 	for _, entries := range [][]string{
 		{"ProgramFiles(x86)=first", "PROGRAMFILES(X86)=second"},
 		{"CommonProgramFiles(x86)=first", "commonprogramfiles(x86)=second"},
+	} {
+		got, err := codexEnvironment(root, append([]string{"PATH=/bin"}, entries...))
+		if runtime.GOOS == "windows" {
+			if err == nil {
+				t.Fatal("accepted case-duplicate Windows metadata")
+			}
+		} else if err != nil || !reflect.DeepEqual(got, baseline) {
+			t.Fatalf("discarded case-distinct Unix metadata affected child: %v %v", got, err)
+		}
+	}
+	for _, entries := range [][]string{
 		{"ProgramFiles(x86)=bad\x00value"},
 		{"ProgramFiles(x86)=later", "BROKEN(NAME)=ignored"},
 	} {

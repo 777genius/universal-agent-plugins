@@ -145,6 +145,11 @@ def collect(case):
         if not case.is_absolute() or case.name != "plugin-06" or ".." in case.parts:
             raise ValueError("case authority")
         directory(case)
+        canonical_case = case.resolve(strict=True)
+        directory(canonical_case)
+        if directories[case] != directories[canonical_case]:
+            raise ValueError("case authority")
+        case = canonical_case
         refusal_phase = "native-projection"
         source_facts = []
         entrypoint = None

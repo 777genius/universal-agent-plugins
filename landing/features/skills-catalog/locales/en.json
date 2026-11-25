@@ -76,6 +76,7 @@
         "source": "Source",
         "metricsNotice": "Install counts are reported by the external directory, not independently verified.",
         "loadingDocument": "Loading source instructions…",
+        "waitingDocument": "Preview is busy. Retrying shortly…",
         "sourceDocumentNotice": "Published source instructions · unverified content. Review before using.",
         "documentUnavailable": "The publisher's SKILL.md could not be loaded. You can inspect its source directly.",
         "viewPublisher": "View publisher source",

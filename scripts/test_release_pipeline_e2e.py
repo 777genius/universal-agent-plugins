@@ -117,7 +117,7 @@ class ReleasePipelineE2E(unittest.TestCase):
         packed = self.run_command(['npm', 'pack', '--ignore-scripts', '--json'], cwd=self.package)
         self.tarball_file = json.loads(packed.stdout)[0]['filename']
         self.tarball = (self.package / self.tarball_file).read_bytes()
-        names = ['validate', 'build', 'stage-draft', 'platform-proof / Verify release and pack exact npm tarball',
+        names = ['validate', 'build', 'sign-macos', 'verify-macos', 'stage-draft', 'platform-proof / Verify release and pack exact npm tarball',
                  *(f'platform-proof / native runtime E2E ({target})' for target in TARGETS),
                  'platform-proof / Aggregate all six native platform proofs',
                  'hermes-native-proof / Aggregate hermes release-native proofs',
@@ -142,6 +142,15 @@ class ReleasePipelineE2E(unittest.TestCase):
                     'status': 'completed', 'conclusion': 'success',
                     'run_started_at': '2026-10-26T00:00:00Z', 'updated_at': '2099-01-01T00:00:00Z'}
         self.add(prefix + '/actions/runs/42', self.run)
+        # The release's full Required gate is an exact main-push workflow,
+        # independent of individual merged-PR check-runs.
+        self.required_push_endpoint = (prefix + '/actions/workflows/ci.yml/runs?head_sha=' + self.commit
+                                      + '&event=push&per_page=100')
+        self.required_push = {'name': 'Required', 'path': '.github/workflows/ci.yml',
+                              'event': 'push', 'head_branch': 'main', 'head_sha': self.commit,
+                              'status': 'completed', 'conclusion': 'success'}
+        self.add(self.required_push_endpoint, [{'workflow_runs': [self.required_push]}],
+                 ['--paginate', '--slurp'])
         self.add(prefix + '/actions/workflows/7', {'id': 7, 'path': WORKFLOW})
         self.add(prefix + '/actions/runs/42/attempts/2/jobs?per_page=100', [{'jobs': self.jobs}],
                  ['--paginate', '--slurp'])
@@ -307,6 +316,29 @@ pathlib.Path(os.environ['PUBLISH_HASH']).write_text(hashlib.sha256(pathlib.Path(
                     self.assertEqual(result.stdout, b'')
                     self.assertIn('missing or wrong qualification job: ' + name, result.stderr.decode())
 
+    def test_promotion_and_npm_refuse_missing_or_failed_macos_signing(self):
+        self.qualify()
+        original = copy.deepcopy(self.jobs)
+        output = self.root / 'unsigned-output'
+        output.mkdir(mode=0o700)
+        for failure in ('missing', 'failure', 'skipped', 'cancelled'):
+            with self.subTest(failure=failure):
+                self.jobs[:] = copy.deepcopy(original)
+                job = next(job for job in self.jobs if job['name'] == 'sign-macos')
+                if failure == 'missing':
+                    self.jobs.remove(job)
+                else:
+                    job['conclusion'] = failure
+                result = self.helper('reuse-agentplugins-verified-draft.py',
+                                     ['--require-hermes-antigravity'], check=False)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(result.stdout, b'')
+                self.assertIn('missing or wrong qualification job: sign-macos', result.stderr.decode())
+                self.release['draft'] = False
+                self.reject_reuse(output, 'missing or wrong qualification job: sign-macos')
+                self.release['draft'] = True
+        self.jobs[:] = original
+
     def reject_reuse(self, output, reason):
         result = self.helper('reuse-agentplugins-npm-artifact.py', ['--output-dir', str(output)], check=False)
         self.assertNotEqual(result.returncode, 0)
@@ -382,6 +414,32 @@ pathlib.Path(os.environ['PUBLISH_HASH']).write_text(hashlib.sha256(pathlib.Path(
             self.assertIn('required successful check is missing on merge commit and PR head: govulncheck (sdk)',
                           result.stderr.decode())
         self.add(pr_endpoint, [{'check_runs': success}], ['--paginate', '--slurp'])
+        # A merged-PR success cannot rescue a failed, cancelled or missing
+        # full Required main-push run on the immutable tagged commit.
+        self.add(merge_endpoint, [{'check_runs': success}], ['--paginate', '--slurp'])
+        for state in ('missing', 'failure', 'cancelled', 'queued', 'shadow'):
+            with self.subTest(main_required=state):
+                if state == 'missing':
+                    observed = []
+                elif state == 'shadow':
+                    # A same-name successful foreign workflow is not ci.yml.
+                    observed = [{**self.required_push,
+                                 'path': '.github/workflows/shadow-required.yml'},
+                                {**self.required_push, 'conclusion': 'failure'}]
+                else:
+                    change = ({'status': 'queued', 'conclusion': None} if state == 'queued'
+                              else {'conclusion': state})
+                    observed = [{**self.required_push, **change}]
+                self.add(self.required_push_endpoint, [{'workflow_runs': observed}],
+                         ['--paginate', '--slurp'])
+                self.save()
+                denied = self.run_command(['bash', '-e', '-o', 'pipefail', '-c', gate],
+                                          env=env, check=False)
+                self.assertNotEqual(denied.returncode, 0)
+                self.assertIn('frozen commit lacks successful full Required main-push workflow',
+                              denied.stderr.decode())
+        self.add(self.required_push_endpoint, [{'workflow_runs': [self.required_push]}],
+                 ['--paginate', '--slurp'])
         # A direct commit is eligible only when every required check succeeded
         # on that exact commit; no unrelated PR head can supply evidence.
         self.add(pulls_endpoint, [], ['-H', 'Accept: application/vnd.github+json'])

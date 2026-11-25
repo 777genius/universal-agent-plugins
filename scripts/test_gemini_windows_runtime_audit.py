@@ -316,7 +316,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
             changed = []
             def swap(fd, count):
                 block = read(fd, count)
-                if not changed:
+                selected = case["observer"].windows.leaves.get(str(new))
+                if not changed and selected is not None and fd == selected[0]:
                     new.rename(new.with_name("held-old-session"))
                     new.write_bytes(original)
                     changed.append(True)

@@ -76,6 +76,7 @@
         "source": "来源",
         "metricsNotice": "安装量由外部目录提供，未经独立验证。",
         "loadingDocument": "正在加载源文件说明…",
+        "waitingDocument": "预览服务繁忙，稍后将重试…",
         "sourceDocumentNotice": "发布方说明 · 内容未经验证。使用前请检查。",
         "documentUnavailable": "无法从发布方加载 SKILL.md。你可以直接查看其源代码。",
         "viewPublisher": "查看发布方源代码",
