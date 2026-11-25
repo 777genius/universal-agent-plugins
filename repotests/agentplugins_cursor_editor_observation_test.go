@@ -96,7 +96,7 @@ func cursorEditorAlias(root, path string, before os.FileInfo) (acpMetadataFile, 
 		Identity: []any{stat.Dev, stat.Ino, stat.Nlink, stat.Uid}, info: before}, nil
 }
 
-func cursorEditorCapture(ctx context.Context, argv, env []string, cwd string, input []byte) ([]byte, error, map[string]any) {
+func cursorEditorCapture(ctx context.Context, argv, env []string, cwd string, input []byte) ([]byte, map[string]any, error) {
 	var body []byte
 	facts := map[string]any{"exchange_phase": "not-started", "stdin_bytes": 0}
 	err := (process.OS{}).RunDuplexToCompletion(ctx, ports.Command{Argv: argv, Env: env, Dir: cwd},
@@ -129,7 +129,7 @@ func cursorEditorCapture(ctx context.Context, argv, env []string, cwd string, in
 	for key, value := range cursorEditorCompletionFacts(ctx, err) {
 		facts[key] = value
 	}
-	return body, err, facts
+	return body, facts, err
 }
 
 func cursorEditorRefusalCause(err error) string {
@@ -429,7 +429,7 @@ func cursorEditorHelpAndUI(ctx context.Context, t *testing.T, root, project, out
 	t.Helper()
 	report["stage"] = "native-help"
 	probe, stop := context.WithTimeout(ctx, 30*time.Second)
-	help, helpErr, _ := cursorEditorCapture(probe, []string{paths["launcher"], "--help"}, env, project, nil)
+	help, _, helpErr := cursorEditorCapture(probe, []string{paths["launcher"], "--help"}, env, project, nil)
 	stop()
 	nativeWrite(t, filepath.Join(output, "help.txt"), help, 0600)
 	if helpErr != nil || len(help) > 65536 {
@@ -463,7 +463,7 @@ func cursorEditorHelpAndUI(ctx context.Context, t *testing.T, root, project, out
 		t.Fatal("editor input encoding or bound")
 	}
 	report["stage"] = "editor-ui"
-	observed, runErr, captureFacts := cursorEditorCapture(ctx, []string{paths["node"], paths["driver"]}, env, project, encoded)
+	observed, captureFacts, runErr := cursorEditorCapture(ctx, []string{paths["node"], paths["driver"]}, env, project, encoded)
 	report["driver_completion"] = captureFacts
 	stdoutDigest := sha256.Sum256(observed)
 	report["driver_stdout_bytes"], report["driver_stdout_sha256"] = len(observed), hex.EncodeToString(stdoutDigest[:])

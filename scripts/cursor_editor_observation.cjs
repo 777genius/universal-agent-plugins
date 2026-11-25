@@ -126,11 +126,12 @@ async function quit(app, closed, result) {
   if (code !== 0 || signal !== null || acknowledged !== true) throw new Error('non-natural-exit');
 }
 
-async function observe(input) {
+async function observe(input, progress = () => {}) {
   const result = { status: 'unqualified', stage: 'preflight', observation: 'not-started',
     skills_ready: false, model_runtime_qualified: false, authentication_qualified: false,
     sandbox_requested: true, quit_requested: false, screenshots: [], markers: {},
     source_paths_visible: false, source_attribution_qualified: false };
+  progress(result);
   let app, closed;
   try {
     for (const name of ['root', 'project', 'userData', 'extensions', 'output', 'playwright']) ordinary(input[name], true);
@@ -181,19 +182,45 @@ async function observe(input) {
   return result;
 }
 
-async function main() {
+async function main(write, progress) {
   let body = Buffer.alloc(0);
   for await (const chunk of process.stdin) {
     body = Buffer.concat([body, chunk]);
     if (body.length > 65536) throw new Error('input-bound');
   }
-  const result = await observe(JSON.parse(body.toString('utf8')));
-  process.stdout.write(JSON.stringify(result) + '\n');
+  const result = await observe(JSON.parse(body.toString('utf8')), progress);
+  write(result);
   if (result.status !== 'observed') process.exitCode = 1;
 }
 
 module.exports = { isolationArguments, gate, ordinary, inventoryScreenshot };
-if (require.main === module) main().catch(() => {
-  process.stdout.write('{"status":"unqualified","observation":"driver-refused"}\n');
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  let written = false;
+  let latest = { stage: 'input' };
+  let crash = 'driver-exited-before-report';
+  function write(result) {
+    if (written) return;
+    const body = JSON.stringify(result) + '\n';
+    if (Buffer.byteLength(body) > 65536) throw new Error('report-bound');
+    written = true;
+    fs.writeSync(1, body);
+  }
+  process.on('uncaughtExceptionMonitor', error => {
+    crash = error instanceof Error && error.message === 'Process failed to launch!'
+      ? 'electron-launch-failed' : 'driver-crashed';
+  });
+  process.on('exit', code => {
+    if (written) return;
+    // Preserve Node's original crash/exit semantics; this only retains facts.
+    write({ status: 'unqualified', stage: latest.stage, observation: crash,
+      skills_ready: false, model_runtime_qualified: false,
+      authentication_qualified: false, source_attribution_qualified: false,
+      terminal_exit_code: code });
+  });
+  main(write, result => { latest = result; }).catch(() => {
+    process.exitCode = 1;
+    write({ status: 'unqualified', stage: latest.stage, observation: 'driver-refused',
+      skills_ready: false, model_runtime_qualified: false,
+      authentication_qualified: false, source_attribution_qualified: false });
+  });
+}

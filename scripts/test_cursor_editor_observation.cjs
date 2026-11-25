@@ -5,6 +5,7 @@ const test = require('node:test');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { isolationArguments, gate, ordinary, inventoryScreenshot } = require('./cursor_editor_observation.cjs');
 
 const directories = { userData: '/owned/userdata', extensions: '/owned/extensions', project: '/owned/project' };
@@ -153,4 +154,69 @@ test('a marker disappearing during capture cannot produce a positive inventory r
     assert.equal(events.includes('screenshot'), true);
     assert.equal(fs.existsSync(path.join(root, 'plugins.png')), true);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+const terminalModes = [
+  ['caught launch refusal', "throw Error('PRIVATE-CANARY')", 'editor-observation-refused'],
+  ['abrupt launch exit', 'process.exit(1)', 'driver-exited-before-report'],
+  ['uncaught launch exception', "setImmediate(() => { throw Error('PRIVATE-CANARY'); }); return new Promise(() => {});", 'driver-crashed'],
+  ['unhandled launch rejection', "Promise.reject(Error('PRIVATE-CANARY')); return new Promise(() => {});", 'driver-crashed'],
+  ['known Electron launch rejection', "Promise.reject(Error('Process failed to launch!')); return new Promise(() => {});", 'electron-launch-failed'],
+];
+for (const [name, action, observation] of terminalModes) {
+  test(`CLI retains one private terminal report after ${name}`, () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'cursor-terminal-')));
+    try {
+      for (const directory of ['project', 'userdata', 'extensions', 'output', 'playwright']) {
+        fs.mkdirSync(path.join(root, directory));
+      }
+      fs.writeFileSync(path.join(root, 'electron'), 'inert executable placeholder');
+      fs.writeFileSync(path.join(root, 'playwright', 'package.json'),
+        JSON.stringify({ version: '1.64.1', main: 'index.js' }));
+      // Controlled failure of the library/child boundary, never native proof.
+      fs.writeFileSync(path.join(root, 'playwright', 'index.js'),
+        `module.exports = { _electron: { launch: async () => { ${action} } } };`);
+      const input = {
+        root, project: path.join(root, 'project'), userData: path.join(root, 'userdata'),
+        extensions: path.join(root, 'extensions'), output: path.join(root, 'output'),
+        playwright: path.join(root, 'playwright'), electron: path.join(root, 'electron'), help,
+      };
+      const result = spawnSync(process.execPath, [path.join(__dirname, 'cursor_editor_observation.cjs')], {
+        input: JSON.stringify(input), encoding: 'utf8', timeout: 10000,
+      });
+      assert.equal(result.error, undefined);
+      assert.equal(result.status, 1);
+      assert.equal(result.signal, null);
+      assert.ok(Buffer.byteLength(result.stdout) <= 65536);
+      assert.equal(result.stdout.trim().split('\n').length, 1);
+      assert.equal(result.stdout.includes('PRIVATE-CANARY'), false);
+      const report = JSON.parse(result.stdout);
+      assert.equal(report.status, 'unqualified');
+      assert.equal(report.stage, 'editor-launch');
+      assert.equal(report.observation, observation);
+      for (const key of ['skills_ready', 'model_runtime_qualified',
+        'authentication_qualified', 'source_attribution_qualified']) {
+        assert.equal(report[key], false);
+      }
+      if (name.includes('uncaught') || name.includes('rejection')) {
+        assert.ok(result.stderr.length > 0, 'default Node crash diagnostics remain enabled');
+      }
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test('library import installs no terminal or crash handlers', () => {
+  const events = ['exit', 'uncaughtExceptionMonitor', 'uncaughtException', 'unhandledRejection'];
+  const result = spawnSync(process.execPath, ['-e', `
+    const assert = require('node:assert/strict');
+    const events = ${JSON.stringify(events)};
+    const before = events.map(event => process.listenerCount(event));
+    require(${JSON.stringify(path.join(__dirname, 'cursor_editor_observation.cjs'))});
+    assert.deepEqual(events.map(event => process.listenerCount(event)), before);
+  `], { encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.error, undefined);
+  assert.equal(result.status, 0);
+  assert.equal(result.stdout, '');
 });
