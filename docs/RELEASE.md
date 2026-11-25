@@ -15,6 +15,9 @@ authorize public publication.
 - `.github/workflows/agentplugins-release.yml` builds and attests the six native
   `agentplugins` binaries, stages a non-public draft, runs platform proof, and
   promotes only when `publish_release=true` after all dependencies succeed.
+  Before staging, its `sign-macos` job signs both macOS binaries with the
+  Developer ID Application identity and notarizes them; Windows binaries stay
+  unsigned beyond checksums and attestations.
 - `.github/workflows/agentplugins-npm-publish.yml` is the trusted publisher for
   the `universal-agent-plugins` npm facade. Promotion auto-dispatches it against
   the exact public tag; its prepare job is read-only, its publish job uses the
@@ -67,7 +70,11 @@ For an owner-authorized release, after choosing and reporting the exact version:
    public tag, approve its protected publish gate, and retain its prepare,
    publish, and public-readback evidence.
 6. Record the native and npm artifact identities, attestations, checksums,
-   workflow run IDs, commit SHA, approvals, and any truthful limitation.
+   workflow run IDs, commit SHA, approvals, and any truthful limitation. For
+   macOS, also record the notary submission ID and the `Accepted` notary log
+   from the `macos-notarization-evidence-<attempt>` artifact, and the
+   `codesign -dv` authority, team and CDHash of both binaries (see "macOS
+   signing and notarization" in the runbook).
 
 A pull request that only prepares the release (notes, changelog, documentation,
 non-executable version references) is merged immediately once mergeable; see

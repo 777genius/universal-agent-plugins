@@ -139,7 +139,7 @@ func (c Config) validateConstructionRoots() error {
 
 func (c Config) resolvedOpenCodeProbe() (Config, error) {
 	if c.OpenCodeProbe == nil {
-		c.OpenCodeProbe = clientdetect.ProbeOpenCodeTarget
+		c.OpenCodeProbe = clientdetect.ProbeIsolatedOpenCodeTarget
 	}
 	env := c.OpenCodeProbeEnvironment
 	if env == nil {

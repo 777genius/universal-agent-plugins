@@ -13684,8 +13684,11 @@ class PreparedProjectSkillEvidenceContracts(unittest.TestCase):
         for target in ("cursor", "kiro"):
             with self.subTest(target=target):
                 audit, _fixtures, report = self.fixture(target)
+                # Cursor now requires the strict full-envelope receipt; the reduced
+                # legacy fixture must fail its CLI route. Kiro retains its legacy route.
                 for acceptance, expected_code in (("native", 1),
-                                                  (target + "-prepared-skills-installation", 0)):
+                                                  (target + "-prepared-skills-installation",
+                                                   1 if target == "cursor" else 0)):
                     with TemporaryDirectory() as directory:
                         argv = ["live-install-audit", "--cli", sys.executable,
                                 "--target", target, "--kind", "skill",
@@ -13706,11 +13709,16 @@ class PreparedProjectSkillEvidenceContracts(unittest.TestCase):
                         self.assertEqual(runs.call_count, 30)
                         saved = json.loads((Path(directory) / f"{target}-skill.json").read_text())
                         self.assertEqual(saved["passed"], 0)
-                        if acceptance != "native":
+                        self.assertEqual(saved["results"], report["results"])
+                        if acceptance == "native":
+                            self.assertNotIn("installation_acceptance_passed", saved)
+                        elif target == "cursor":
+                            self.assertEqual(saved["installation_passed"], 0)
+                            self.assertIs(saved["installation_acceptance_passed"], False)
+                            self.assertIs(saved["native_activation_qualified"], False)
+                        else:
                             self.assertEqual(saved["installation_passed"], 30)
                             self.assertIs(saved["installation_acceptance_passed"], True)
-                        else:
-                            self.assertNotIn("installation_acceptance_passed", saved)
 
 
 class WindsurfRecoveredFixtureContracts(unittest.TestCase):

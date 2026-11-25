@@ -1,0 +1,106 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { delimiter, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
+import { isGitHubSkillSource } from '../scripts/skills-source-host.ts';
+
+// Exercise the actual evidence runner with a disposable process adapter, never
+// npm, network, native clients or the user's HOME. These are harness tests only.
+const adapter = `#!${process.execPath}
+const fs = require('node:fs'), p = require('node:path');
+const args = process.argv.slice(4), mode = process.env.MOCK_MODE;
+// Synthetic manifest names observed in the original public 0.1.116 run.
+// The saved lock alias is the public Skill name.
+const packageNames = {
+ 'frontend-design': 'skill-b0a5b0253f26020d7acb797250495459c1bd758fe440530b3db1347e',
+ 'ui-radar': 'skill-7f6b1bf3b1c4ba0c55922be29ac0e545672db905d8183e83e57a28da',
+};
+const command = args[0], root = process.cwd(), marker = p.join(root, 'mock-identity');
+const envelope = (command, data) => console.log(JSON.stringify({schema_version:1,command,result:'success',data}));
+if (command === 'version') { envelope('version', {version:'mock-version'}); process.exit(0); }
+if (command === 'skills') {
+ const skill = args[args.indexOf('--skill')+1];
+ if(skill==='frontend-design' && args[2]!=='https://github.com/anthropics/skills') throw Error('Expected captured root source');
+ const native = p.join(root,'.agents','skills',skill);
+ fs.mkdirSync(native,{recursive:true}); fs.writeFileSync(p.join(native,'SKILL.md'),'mock Skill');
+ fs.writeFileSync(marker,skill); fs.writeFileSync(p.join(root,'uap.toml'),'mock requirements');
+ const digest = 'sha256:'+'a'.repeat(64);
+ const website = skill==='ui-radar', url='https://uizze.com';
+ const source = website ? {web:{url,skill,index_url:url+'/.well-known/agent-skills/index.json',index_sha256:'a'.repeat(64),raw_tree_digest:digest,normalizer:'agent-skill-package/v1',files:[{path:'SKILL.md',url:url+'/SKILL.md',sha256:'a'.repeat(64)}]}} : {git:{repository:'anthropics/skills',kind:'skill',skill,path:'skills/frontend-design',resolved_skill_path:'skills/frontend-design',commit:'b'.repeat(40),raw_tree_digest:digest,normalizer:'agent-skill-package/v1'}};
+ const sourceKey = website?'https-skill:'+url+':'+skill:'github-skill:anthropics/skills:'+skill+':skills/frontend-design';
+ fs.writeFileSync(p.join(root,'uap.lock'),JSON.stringify({lock_version:1,packages:[{alias:mode==='identity'?'other':skill,source,source_key:mode==='wrong-source'?'wrong-source':sourceKey,tree_digest:digest,manifest_digest:digest,targets:['codex']}]}));
+ if(mode==='json') console.log('not JSON');
+ else console.log(JSON.stringify({schema_version:1,command:'skills add',result:'success',status:'succeeded',readiness:mode==='reported-ready'?'ready':'needs_action',items:[{alias:skill,targetId:'codex',status:'succeeded'}]}));
+} else if(command === 'info') {
+ const skill=fs.readFileSync(marker,'utf8');
+ if(args[1]!==skill) throw Error('Expected saved public alias');
+ envelope('info',{name:mode==='declared-name'?'other':packageNames[skill],source:skill==='ui-radar'?'https://uizze.com':'anthropics/skills/skills/frontend-design',installation_id:'verified-id',clients:[{client_id:'codex',package_revision:{tree_digest:'sha256:'+'a'.repeat(64),manifest_digest:'sha256:'+'a'.repeat(64),resolved_revision:skill==='ui-radar'?undefined:'b'.repeat(40)},native_discovery_reconciled:mode==='reported-ready'}]});
+} else if(command === 'remove') {
+ if(args[1]!=='verified-id') throw Error('unverified selector');
+ const skill=fs.readFileSync(marker,'utf8');
+ if(mode==='remove-error'){console.error('refused');process.exit(2);}
+ if(mode!=='leftover') fs.rmSync(p.join(root,'.agents','skills',skill),{recursive:true});
+ if(mode==='foreign') fs.rmSync(p.join(root,'foreign.txt'));
+ fs.writeFileSync(p.join(root,'uap.lock'),JSON.stringify({lock_version:1,packages:[]}));
+ console.log(JSON.stringify({schema_version:1,command:'agentplugins remove',result:'success',outcome:'completed'}));
+} else if(command === 'deps') console.log(JSON.stringify({facts:[],diagnostics:mode==='stale-requirement'?[{code:'manifest_mismatch'}]:[],manifest_digest:'sha256:'+'a'.repeat(64),lock_digest:'sha256:'+'a'.repeat(64),pending_recovery:false}));
+else if(command === 'list') envelope('list',{installations:[]});
+else throw Error('unexpected command '+args.join(' '));
+`;
+for (const mode of ['success', 'reported-ready', 'wrong-source', 'stale-requirement', 'json', 'identity', 'declared-name', 'remove-error', 'leftover', 'foreign']) {
+  test(`published lifecycle harness: ${mode}`, () => {
+    const root = mkdtempSync(join(tmpdir(), 'uap-lifecycle-test-'));
+    try {
+      const bin = join(root, 'bin'); mkdirSync(bin);
+      const npx = join(bin, 'npx'); writeFileSync(npx, adapter); chmodSync(npx, 0o700);
+      const temp = join(root, 'tmp'); mkdirSync(temp);
+      const home = join(root, 'home'); mkdirSync(home);
+      const report = join(root, 'report');
+      const output = spawnSync(process.execPath, ['--experimental-strip-types', fileURLToPath(new URL('../scripts/skills-install-native-live-e2e.ts', import.meta.url))], {
+        env: { ...process.env, PATH: bin + delimiter + process.env.PATH, HOME: home, CODEX_HOME: join(home, '.codex'),
+          XDG_CONFIG_HOME: join(home, 'config'), XDG_CACHE_HOME: join(home, 'cache'), XDG_DATA_HOME: join(home, 'data'),
+          TMPDIR: temp, TMP: temp, TEMP: temp, UAP_E2E_LIVE_SKILLS: '1', UAP_E2E_PUBLISHED_CLI: '1',
+          UAP_SKILLS_INSTALL_REPORT_DIR: report, MOCK_MODE: mode }, encoding: 'utf8', timeout: 20000,
+      });
+      assert.ifError(output.error);
+      const evidence = JSON.parse(readFileSync(join(report, 'npm-install.json'), 'utf8'));
+      assert.equal(evidence.results.length, 2);
+      assert.equal(evidence.results[0].source, 'https://github.com/anthropics/skills');
+      assert.equal(evidence.results[0].id, 'skills-sh:anthropics/skills:frontend-design');
+      assert.equal(evidence.results[0].command, 'npx -y universal-agent-plugins@latest skills add https://github.com/anthropics/skills --skill frontend-design');
+      assert.deepEqual(evidence.historical_capture.commands[evidence.results[0].id], evidence.results[0].command);
+      assert.equal(output.status === 0, ['success', 'reported-ready'].includes(mode), output.stderr);
+      for (const result of evidence.results) {
+        assert.equal(result.lifecycle.removed, ['success', 'reported-ready'].includes(mode));
+        assert.match(result.lifecycle.version_before.stdout, /mock-version/);
+        assert.equal(result.lifecycle.observed_version_before, 'mock-version');
+        assert.equal(result.lifecycle.version_observations_match, true);
+        if (['success', 'reported-ready'].includes(mode)) {
+          assert.equal(result.lifecycle.native_qualified, false, 'files must not imply discovery');
+          assert.equal(result.lifecycle.installation_id, 'verified-id');
+          assert.equal(result.lifecycle.remove.exit_code, 0);
+        } else assert.ok(result.lifecycle.error);
+      }
+    } finally { rmSync(root, { recursive: true, force: true }); }
+  });
+}
+
+test('GitHub Skill source classification validates exact HTTPS host, not substrings', () => {
+  for (const source of [
+    'https://github.com/anthropics/skills',
+    'https://raw.githubusercontent.com/anthropics/skills/main/SKILL.md',
+  ]) assert.equal(isGitHubSkillSource(source), true, source);
+  for (const source of [
+    'https://github.com.evil.example/anthropics/skills',
+    'https://evil.example/github.com/anthropics/skills',
+    'https://raw.githubusercontent.com.evil.example/anthropics/skills',
+    'https://example.com/?next=https://github.com/anthropics/skills',
+    'https://uizze.com',
+    'http://github.com/anthropics/skills',
+    'https://user:pass@github.com/anthropics/skills',
+    'not a URL',
+  ]) assert.equal(isGitHubSkillSource(source), false, source);
+});
