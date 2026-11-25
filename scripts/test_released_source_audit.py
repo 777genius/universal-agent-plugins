@@ -1233,14 +1233,18 @@ class PiClosureNativeTests(unittest.TestCase):
         self.selected.mkdir()
         self.oracle = audit.PiProjectTrustOracle(self.root, native)
         self.case = {"client": "pi", "scope": "project"}
-        self.closure = SimpleNamespace(checked_playwright_runtime=mock.Mock())
+        self.closure = audit.module("source_closure_pi_fixture", "released_source_closure.py")
+        runtime_patch = mock.patch.object(self.closure, "checked_playwright_runtime")
+        self.runtime_mock = runtime_patch.start()
+        self.addCleanup(runtime_patch.stop)
         self.owners = {}
         self.entries = {
             audit.FOREIGN_NATIVE_MCP: {"url": "https://foreign.invalid/mcp", "enabled": False},
             "notion": {"url": "https://mcp.notion.com/mcp"},
             "hubspot-crm": {"url": "https://mcp.hubspot.com"}}
         for alias in audit.live.MARKETING_KIT_DISTRIBUTIONS:
-            physical = alias + "-owner"
+            installation_id = "installation-" + alias
+            physical = alias + "-" + audit.hashlib.sha256(installation_id.encode()).hexdigest()[:12]
             locator = self.selected / "extensions" / physical
             locator.mkdir(parents=True)
             (locator / "plugin.json").write_text("{}", encoding="utf-8")
@@ -1271,10 +1275,28 @@ class PiClosureNativeTests(unittest.TestCase):
             binding = {"client_binding_id": alias, "physical_artifact_id": physical,
                        "native_objects": [package, member], "receipts": [{"phase": "committed",
                        "client_binding_id": alias, "active_path": str(locator), "after_digest": package["managed_digest"]}]}
-            self.owners[alias] = {"binding": binding, "locator": locator}
+            self.owners[alias] = {"binding": binding, "locator": locator,
+                                  "installation": {"declared_name": alias, "installation_id": installation_id}}
         locator = self.owners["playwright"]["locator"]
+        owner = self.owners["playwright"]
+        installation_id = owner["installation"]["installation_id"]
+        physical = owner["binding"]["physical_artifact_id"]
+        data = self.root / "project/.uap/plugin-data" / physical
+        data.mkdir(parents=True, mode=0o700)
+        data.chmod(0o700)
+        receipt_id = "data_" + audit.hashlib.sha256(
+            (installation_id + "\0" + physical + "\0project").encode()).hexdigest()[:24]
+        receipt = {"data_receipt_id": receipt_id, "physical_backend_id": physical,
+                   "scope": "project", "locator": str(data), "state": "owned",
+                   "ownership_digest": "sha256:" + audit.hashlib.sha256(
+                       ("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + str(data)).encode()).hexdigest()}
+        owner["installation"]["data_receipts"] = {receipt_id: receipt}
+        owner["binding"]["data_receipt_id"] = receipt_id
+        (data / ".agentplugins-data-owner.json").write_text(json.dumps(receipt), encoding="utf-8")
+        (data / ".agentplugins-data-owner.json").chmod(0o600)
         self.entries["playwright"] = {"command": "node", "args": [
-            str(locator / "io.github.777genius.agentplugins/runtime/launcher.mjs")]}
+            str(locator) + "/io.github.777genius.agentplugins/runtime/launcher.mjs"],
+            "env": {"PLUGIN_ROOT": str(locator), "PLUGIN_DATA": str(data)}, "cwd": str(locator)}
         self.config()
 
     def config(self):
@@ -1290,7 +1312,7 @@ class PiClosureNativeTests(unittest.TestCase):
         self.assertEqual(set(proofs["marketing-kit"]["trust_owner"]["skills"]), {"campaign-planning"})
         for alias in ("notion", "hubspot-crm", "playwright"):
             self.assertEqual(set(proofs[alias]["trust_owner"]["mcp_servers"]), {alias})
-        self.closure.checked_playwright_runtime.assert_called_once()
+        self.runtime_mock.assert_called_once()
 
     def test_wrong_transport_and_extra_native_server_are_refused(self):
         self.entries["playwright"]["args"].append("--evil")
@@ -1301,6 +1323,33 @@ class PiClosureNativeTests(unittest.TestCase):
         self.config()
         with self.assertRaisesRegex(ValueError, "transport"):
             self.check("notion")
+
+    def test_complete_playwright_transport_refuses_missing_extra_and_changed_fields(self):
+        original = copy.deepcopy(self.entries["playwright"])
+        for fault in ("missing-env", "missing-root", "missing-data", "extra-env", "wrong-root",
+                      "wrong-data", "missing-cwd", "wrong-cwd", "extra-field", "extra-arg"):
+            with self.subTest(fault=fault):
+                entry = copy.deepcopy(original)
+                if fault == "missing-env":
+                    del entry["env"]
+                elif fault in ("missing-root", "missing-data"):
+                    del entry["env"]["PLUGIN_ROOT" if fault == "missing-root" else "PLUGIN_DATA"]
+                elif fault == "extra-env":
+                    entry["env"]["FOREIGN"] = "extra"
+                elif fault in ("wrong-root", "wrong-data"):
+                    entry["env"]["PLUGIN_ROOT" if fault == "wrong-root" else "PLUGIN_DATA"] += "-foreign"
+                elif fault == "missing-cwd":
+                    del entry["cwd"]
+                elif fault == "wrong-cwd":
+                    entry["cwd"] += "-foreign"
+                elif fault == "extra-field":
+                    entry["enabled"] = True
+                else:
+                    entry["args"].append("--evil")
+                self.entries["playwright"] = entry
+                self.config()
+                with self.assertRaisesRegex(ValueError, "transport"):
+                    self.check("playwright")
 
     def test_extra_native_object_wrong_scope_or_missing_receipt_are_refused(self):
         binding = self.owners["notion"]["binding"]
@@ -1334,7 +1383,7 @@ class PiClosureNativeTests(unittest.TestCase):
             self.check("notion")
 
     def test_playwright_source_oracle_failure_prevents_native_proof(self):
-        self.closure.checked_playwright_runtime.side_effect = ValueError("forged source")
+        self.runtime_mock.side_effect = ValueError("forged source")
         with self.assertRaisesRegex(ValueError, "forged source"):
             self.check("playwright")
 
@@ -1348,7 +1397,7 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
                 "revision": pin["resolved_revision"], "path": pin["package_path"]},
                 "tree_digest": pin["tree_digest"], "manifest_digest": pin["manifest_digest"]}
 
-    def exercise(self, *, policy="eligible", error=None, retain_child=False, missing_native=False, partial_saved=False, malformed_operation=None, malformed_result=None):
+    def exercise(self, *, policy="eligible", error=None, retain_child=False, missing_native=False, partial_saved=False, malformed_operation=None, malformed_result=None, retained_mutation=None):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name).resolve() / "case"
@@ -1356,6 +1405,19 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
         selected = self.selected()
         helper = SimpleNamespace()
         real_closure = audit.module("real_cleanup_contract", "released_source_closure.py")
+        def retain_data(record, physical):
+            directory = root / "uap-data/plugin-data" / physical
+            directory.mkdir(parents=True, mode=0o700, exist_ok=True)
+            receipt_id = "data_" + audit.hashlib.sha256(
+                (record["installation_id"] + "\0" + physical + "\0user").encode()).hexdigest()[:24]
+            receipt = {"data_receipt_id": receipt_id, "physical_backend_id": physical,
+                       "scope": "user", "locator": str(directory), "state": "owned",
+                       "ownership_digest": audit.digest(("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + str(directory)).encode())}
+            record["data_receipts"] = {receipt_id: receipt}
+            marker = directory / ".agentplugins-data-owner.json"
+            marker.write_bytes(json.dumps(receipt).encode() + b"\n")
+            marker.chmod(0o600)
+            return receipt_id, directory
         def authorize(api, context, case_root, case, stage):
             stages.append(stage)
             events.append(("authorize", stage))
@@ -1383,12 +1445,17 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
                     audit.FOREIGN_NATIVE_MCP: {"command": "echo", "args": ["unrelated-native-audit"]},
                     "notion": {}, "hubspot-crm": {}, "playwright": {}}}), encoding="utf-8")
                 for alias in audit.live.MARKETING_KIT_DISTRIBUTIONS:
-                    locator = root / "home/.hermes/plugins" / alias
+                    physical = alias + "-" + audit.hashlib.sha256(alias.encode()).hexdigest()[:12]
+                    locator = root / "home/.hermes/plugins" / physical
                     locator.mkdir(parents=True)
                     (locator / "plugin.json").write_text("{}", encoding="utf-8")
-                    owners[alias] = {"installation": {"installation_id": alias},
-                        "binding": {"client_binding_id": alias, "physical_artifact_id": alias},
+                    owners[alias] = {"installation": {"installation_id": alias, "declared_name": alias},
+                        "binding": {"client_binding_id": alias, "physical_artifact_id": physical},
                         "locator": locator}
+                    if alias == "playwright":
+                        receipt_id, directory = retain_data(owners[alias]["installation"], physical)
+                        owners[alias]["binding"]["data_receipt_id"] = receipt_id
+                        (directory / "retained.txt").write_bytes(b"persistent caller data\n")
                 (data / "uap.toml").write_text('schema_version=1\n[dependencies]\nmarketing-kit="github:fixture"\n[targets]\nhermes=["marketing-kit"]\n', encoding="utf-8")
                 packages = [{"alias": alias, "source_key": selected["selector"] if alias == "marketing-kit"
                              else "directory:" + distribution}
@@ -1408,7 +1475,33 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
                 self.assertEqual(len(retained), 1 if retain_child else 0)
                 (data / "uap.toml").write_text('schema_version=1\n[dependencies]\n[targets]\n', encoding="utf-8")
                 (data / "uap.lock").write_text(json.dumps({"lock_version": 1, "packages": retained}), encoding="utf-8")
-                (data / "state-v2.json").write_text('{"schema_version":5,"installations":[],"environment_receipts":[]}', encoding="utf-8")
+                records = []
+                for alias, owner in owners.items():
+                    record = copy.deepcopy(owner["installation"])
+                    if not record.get("data_receipts"):
+                        retain_data(record, owner["binding"]["physical_artifact_id"])
+                    record.update(clients={}, data_retained=True)
+                    records.append(record)
+                if retained_mutation == "missing":
+                    records.pop()
+                elif retained_mutation == "extra":
+                    records.append(copy.deepcopy(records[0]))
+                elif retained_mutation == "binding":
+                    records[0]["clients"] = {"foreign": {"materialization": "materialized"}}
+                elif retained_mutation == "flag":
+                    records[0]["data_retained"] = False
+                elif retained_mutation == "source":
+                    records[0]["source"] = {"repository": "foreign"}
+                elif retained_mutation == "receipt":
+                    next(iter(records[0]["data_receipts"].values()))["locator"] = str(root / "foreign")
+                elif retained_mutation == "data_bytes":
+                    receipt = next(iter(owners["playwright"]["installation"]["data_receipts"].values()))
+                    (Path(receipt["locator"]) / "retained.txt").write_bytes(b"changed\n")
+                elif retained_mutation == "new_data_file":
+                    receipt = next(iter(records[0]["data_receipts"].values()))
+                    (Path(receipt["locator"]) / "foreign.txt").write_bytes(b"unreviewed\n")
+                (data / "state-v2.json").write_text(json.dumps({"schema_version": 5,
+                    "installations": records}), encoding="utf-8")
             refused = operation == "add" and policy == "ineligible"
             if refused and partial_saved:
                 (data / "uap.toml").write_text('schema_version=1\n', encoding="utf-8")
@@ -1426,6 +1519,7 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
         helper.checked_closure = join
         helper.checked_native = native
         helper.checked_cleanup = real_closure.checked_cleanup
+        helper.data_custody = real_closure.data_custody
         helper.checked_member_native = lambda *args: {"content_verified": True}
         helper.checked_namespace = real_closure.checked_namespace
         helper.held_read = lambda api, path, case_root: path.read_bytes()
@@ -1451,7 +1545,17 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
         self.assertIn(("update", "marketing-kit"), calls)
         self.assertIn(("repair", "marketing-kit"), calls)
         self.assertIn(("remove", "marketing-kit"), calls)
+        self.assertEqual(outcome["native_cleanup"], "all-four-native-owners-absent")
+        self.assertEqual(set(outcome["retained_data"]), set(audit.live.MARKETING_KIT_DISTRIBUTIONS))
+        self.assertTrue(all(value["state"] == "owned" for value in outcome["retained_data"].values()))
         self.assertFalse(outcome["runtime_qualified"])
+
+    def test_remove_requires_exact_retained_owners_and_preserves_existing_data(self):
+        for mutation in ("missing", "extra", "binding", "flag", "source", "receipt", "data_bytes", "new_data_file"):
+            with self.subTest(mutation=mutation):
+                outcome, _, _ = self.exercise(retained_mutation=mutation)
+                self.assertEqual(outcome["status"], "failed")
+                self.assertIn("retained data" if mutation != "receipt" else "data state receipt", outcome["reason"])
 
     def test_authentication_missing_native_and_retained_child_lock_fail_closed(self):
         for kwargs, reason in (({"error": "bad signature"}, "bad signature"),

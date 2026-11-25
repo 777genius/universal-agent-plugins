@@ -374,6 +374,77 @@ def checked_antigravity_inventory(audit, locator, root, alias):
                 "closure native inventory changed during held reads")
 
 
+def checked_owned_data(audit, case, root, alias, owner, *, bound=True):
+    """Join frozen identity/layout, held state receipt and private owner marker."""
+    installation, binding = owner["installation"], owner["binding"]
+    iid = installation.get("installation_id")
+    require(alias in audit.live.MARKETING_KIT_DISTRIBUTIONS and type(iid) is str and iid,
+            "closure data installation identity differs")
+    physical = alias + "-" + audit.hashlib.sha256(iid.encode()).hexdigest()[:12]
+    require(binding.get("physical_artifact_id") == physical,
+            "closure data physical identity differs")
+    scope = case["scope"]
+    require(scope in ("user", "project"), "closure data scope differs")
+    state_root = root / ("uap-data" if scope == "user" else "project/.uap")
+    path = audit.in_case(state_root / "plugin-data" / physical, root)
+    receipt_id = "data_" + audit.hashlib.sha256("\0".join((iid, physical, scope)).encode()).hexdigest()[:24]
+    core = {"data_receipt_id": receipt_id, "physical_backend_id": physical, "scope": scope,
+            "locator": str(path), "state": "owned",
+            "ownership_digest": audit.digest(("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + str(path)).encode())}
+    recorded = installation.get("data_receipts")
+    require(type(recorded) is dict and set(recorded) == {receipt_id},
+            "closure data receipt inventory differs")
+    allowed = set(core) | {"created_at", "updated_at"}
+    def exact(value):
+        return (type(value) is dict and set(core) <= set(value) <= allowed
+                and all(value.get(key) == expected for key, expected in core.items())
+                and all(type(value[key]) is str for key in set(value) - set(core)))
+    require(exact(recorded[receipt_id]), "closure data state receipt differs")
+    binding_id = binding.get("data_receipt_id")
+    require(binding_id == receipt_id if bound else binding_id in (None, "", receipt_id),
+            "closure data binding receipt differs")
+    # in_case and held_read retain the existing no-follow ancestor/handle proof.
+    directory = path.lstat()
+    require(stat.S_ISDIR(directory.st_mode) and not path.is_symlink()
+            and (os.name == "nt" or stat.S_IMODE(directory.st_mode) == 0o700)
+            and (not hasattr(directory, "st_uid") or directory.st_uid == root.lstat().st_uid),
+            "closure data directory is not private and owned")
+    marker = path / ".agentplugins-data-owner.json"
+    before = marker.lstat()
+    require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+            and (os.name == "nt" or stat.S_IMODE(before.st_mode) == 0o600)
+            and (not hasattr(before, "st_uid") or before.st_uid == directory.st_uid),
+            "closure data marker is not private and owned")
+    value = json.loads(held_read(audit, marker, root), object_pairs_hook=audit.live._unique_json_object,
+                       parse_constant=reject_constant)
+    require(exact(value), "closure data marker differs")
+    final_marker = marker.lstat()
+    require(os.path.samestat(before, final_marker) and all(getattr(before, key) == getattr(final_marker, key)
+            for key in ("st_mode", "st_nlink", "st_uid", "st_gid", "st_size", "st_mtime_ns", "st_ctime_ns")),
+            "closure data marker changed during held read")
+    after = path.lstat()
+    require(os.path.samestat(directory, after) and all(getattr(directory, key) == getattr(after, key)
+            for key in ("st_mode", "st_uid", "st_gid", "st_mtime_ns", "st_ctime_ns")),
+            "closure data directory changed during held read")
+    return {"path": path, "receipt": core}
+
+
+def checked_playwright_transport(audit, case, root, owner):
+    """Exact frozen producer expansion; native values never supply authority."""
+    locator = audit.in_case(owner["locator"], root)
+    checked_playwright_runtime(audit, locator, root)
+    data = checked_owned_data(audit, case, root, "playwright", owner)["path"]
+    require(case["client"] in ("pi", "antigravity", "hermes")
+            and (case["client"] != "hermes" or case["scope"] == "user"),
+            "closure stdio transport tuple differs")
+    # Frozen strings.NewReplacer preserves the authored slash suffix on Windows.
+    entry = {"command": "node", "args": [str(locator) + "/io.github.777genius.agentplugins/runtime/launcher.mjs"],
+             "env": {"PLUGIN_ROOT": str(locator), "PLUGIN_DATA": str(data)}, "cwd": str(locator)}
+    if case["client"] == "antigravity":
+        entry["env"] = {}
+    return entry
+
+
 def checked_member_native(audit, case, root, selected_root, alias, owner):
     """Exact Hermes/Antigravity physical content; Pi needs its trust oracle too."""
     client = case["client"]
@@ -426,8 +497,7 @@ def checked_member_native(audit, case, root, selected_root, alias, owner):
         entry = {"url": "https://mcp.hubspot.com"}
     else:
         require(alias == "playwright", "unknown closure MCP member")
-        checked_playwright_runtime(audit, locator, root)
-        entry = {"command": "node", "args": [str(locator / "io.github.777genius.agentplugins/runtime/launcher.mjs")]}
+        entry = checked_playwright_transport(audit, case, root, owner)
     if client == "antigravity":
         path, collection = locator / "mcp_config.json", "mcpServers"
         if "url" in entry:
@@ -444,7 +514,7 @@ def checked_member_native(audit, case, root, selected_root, alias, owner):
     document = (audit.strict_native_yaml(body) if client == "hermes"
                 else json.loads(body, object_pairs_hook=audit.live._unique_json_object))
     require(isinstance(document, dict) and isinstance(document.get(collection), dict)
-            and document[collection].get(alias) == entry, "closure native MCP content mismatch")
+            and document[collection].get(alias) == entry, "closure native MCP content mismatch: " + alias)
     if client == "antigravity":
         require(document[collection] == {alias: entry}, "closure plugin contains unreviewed MCP entries")
     return {"content_verified": True, "path": str(path.relative_to(root)), "config_sha256": audit.digest(body)}
@@ -526,6 +596,17 @@ def checked_inert_lock(audit, path, root):
     require(body == b"" and mode == (0o666 if os.name == "nt" else 0o600), "native config lock is not inert")
 
 
+def data_custody(audit, case, root, owners):
+    """Preserve existing data bytes and identities through the whole lifecycle."""
+    result = {}
+    for alias, owner in owners.items():
+        if owner["installation"].get("data_receipts"):
+            data = checked_owned_data(audit, case, root, alias, owner)
+            result[alias] = {"receipt": data["receipt"],
+                             "snapshot": audit.live.scoped_snapshot([data["path"]])}
+    return result
+
+
 def checked_cleanup(audit, owners, selected_root, case, root, documents=None):
     for alias, owner in owners.items():
         require(not owner["locator"].exists() and not owner["locator"].is_symlink(), "closure retained managed package")
@@ -534,7 +615,31 @@ def checked_cleanup(audit, owners, selected_root, case, root, documents=None):
     state_path = root / ("uap-data" if case["scope"] == "user" else "project/.uap") / "state-v2.json"
     state = json.loads(held_read(audit, state_path, root), object_pairs_hook=audit.live._unique_json_object, parse_constant=reject_constant)
     require(isinstance(state, dict) and type(state.get("schema_version")) is int and state["schema_version"] == 5
-            and state.get("installations") == [] and state.get("environment_receipts") == [], "closure retained saved owners")
+            and state.get("environment_receipts", []) == [], "closure retained saved owners")
+    # Ordinary remove preserves persistent data. Frozen remove_prepare.go also
+    # creates a retained receipt for a removed package that had no stdio data.
+    records = state.get("installations")
+    require(type(records) is list and len(records) == len(owners)
+            and all(type(record) is dict for record in records)
+            and {record.get("installation_id") for record in records}
+                == {owner["installation"]["installation_id"] for owner in owners.values()},
+            "closure retained data owner inventory differs")
+    retained = {}
+    for alias, owner in owners.items():
+        original = owner["installation"]
+        record = next(record for record in records if record["installation_id"] == original["installation_id"])
+        require(record.get("clients") == {} and record.get("data_retained") is True
+                and all(record.get(key) == original.get(key) for key in
+                        ("declared_name", "source", "package", "origin_mode", "directory")),
+                "closure retained data identity or binding differs")
+        data = checked_owned_data(audit, case, root, alias,
+                                  {**owner, "installation": record}, bound=False)
+        if not original.get("data_receipts"):
+            require(set(islice(data["path"].iterdir(), 2)) == {data["path"] / ".agentplugins-data-owner.json"},
+                    "closure newly retained data contains unreviewed entries")
+        retained[alias] = {"data_receipt_id": data["receipt"]["data_receipt_id"],
+                           "path": data["path"].relative_to(root).as_posix(),
+                           "ownership_digest": data["receipt"]["ownership_digest"], "state": "owned"}
     if documents is None:
         saved = root / ("uap-data" if case["scope"] == "user" else "project")
         documents = [saved / "uap.toml", saved / "uap.lock"]
@@ -546,3 +651,4 @@ def checked_cleanup(audit, owners, selected_root, case, root, documents=None):
     require(type(locked.get("lock_version")) is int and locked["lock_version"] == 1
             and locked.get("packages") == [], "closure retained locked child or dependency edge")
     checked_namespace(audit, case, root, selected_root, owners, removed=True)
+    return retained

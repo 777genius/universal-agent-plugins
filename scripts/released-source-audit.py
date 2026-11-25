@@ -859,13 +859,12 @@ def checked_pi_closure_native(oracle, closure, case, selected_root, alias, owner
             entry = {"url": {"notion": "https://mcp.notion.com/mcp", "hubspot-crm": "https://mcp.hubspot.com"}[alias]}
         else:
             require(alias == "playwright", "unknown Pi closure member")
-            closure.checked_playwright_runtime(SimpleNamespace(**globals()), locator, oracle.root)
-            entry = {"command": "node", "args": [str(locator / "io.github.777genius.agentplugins/runtime/launcher.mjs")]}
+            entry = closure.checked_playwright_transport(SimpleNamespace(**globals()), case, oracle.root, owner)
         document = json.loads(oracle.read(path), object_pairs_hook=live._unique_json_object)
         require(type(document) is dict and type(document.get("mcpServers")) is dict
                 and set(document) == {"mcpServers"}
                 and set(document["mcpServers"]) == {FOREIGN_NATIVE_MCP, "notion", "hubspot-crm", "playwright"}
-                and document["mcpServers"].get(alias) == entry, "Pi closure MCP transport differs")
+                and document["mcpServers"].get(alias) == entry, "Pi closure MCP transport differs: " + alias)
         trust["mcp_servers"][alias] = oracle.value_digest(entry)
     require(member.get("protection_class") == "managed" and not member.get("user_modified")
             and re.fullmatch(r"sha256:[0-9a-f]{64}", member.get("managed_digest", "")),
@@ -921,7 +920,7 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
     documents = [saved_root / "uap.toml", saved_root / "uap.lock"]
     closure = None
     closure_state = {"authorities": {}, "owners": None, "proofs": None, "identity": None,
-                     "native_baseline": None, "removed": False}
+                     "native_baseline": None, "data_baseline": None, "removed": False}
     pi_native = None
 
     def refresh_closure(stage, result):
@@ -946,6 +945,7 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
         closure_state.update(owners=owners, proofs=proofs, identity=identity)
         if stage == "add":
             closure_state["native_baseline"] = live.snapshot([selected_root], include_directories=True)
+            closure_state["data_baseline"] = closure.data_custody(api, case, root, owners)
 
     def verified_pi_owners(oracle, selected_case):
         require(selected_case == case and closure_state["owners"] is not None
@@ -978,6 +978,10 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
                 and not closure_state["removed"]):
             require(live.snapshot([selected_root], include_directories=True) == closure_state["native_baseline"],
                     "closure operation changed native resources")
+        if (case["expected"] == "dependency-closure" and closure_state["data_baseline"] is not None
+                and operation in ("info", "list", "update", "repair", "remove")):
+            require(closure.data_custody(SimpleNamespace(**globals()), case, root, closure_state["owners"])
+                    == closure_state["data_baseline"], "closure operation changed retained data")
         current = protected_scope_snapshot(root, case["scope"], protected_root)
         if pi_trust is not None and result.get("exit_code") == 0:
             current = pi_trust.observe(operation, result, current, case)
@@ -1040,11 +1044,13 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
                 run("remove", "marketing-kit")
                 listed, _ = run("list")
                 require(listed.get("data", {}).get("installations") == [], "removed closure is still listed")
-                closure.checked_cleanup(SimpleNamespace(**globals()), installed_owners, selected_root, case, root, documents)
+                retained_data = closure.checked_cleanup(SimpleNamespace(**globals()), installed_owners,
+                                                       selected_root, case, root, documents)
                 outcome = {"status": "materialized-closure-lifecycle-passed", "native_content": proofs,
                            "authenticated_policy": closure_state["authorities"],
                            "owned_aliases": sorted(installed_owners), "update": "immutable-no-change",
-                           "repair": "healthy-repair", "native_cleanup": "all-four-owners-absent"}
+                           "repair": "healthy-repair", "native_cleanup": "all-four-native-owners-absent",
+                           "retained_data": retained_data}
         elif case["expected"] == "dependency-refusal":
             if type(added.get("exit_code")) is int and added["exit_code"] == 0 and added.get("timeout") is False:
                 raise ValueError("successful closure is inconclusive: runtime signed policy and full owned lifecycle are unverified")

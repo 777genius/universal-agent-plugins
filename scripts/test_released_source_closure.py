@@ -263,11 +263,27 @@ class ClosureTests(unittest.TestCase):
         plugins = selected / "plugins"
         plugins.mkdir()
         (selected / "foreign.txt").write_bytes(b"unmanaged source audit neighbor\n")
+        records = []
         for alias, owner in owners.items():
             owner["locator"].rmdir()
-            owner["locator"] = plugins / alias
+            iid = owner["installation"]["installation_id"]
+            physical = alias + "-" + audit.hashlib.sha256(iid.encode()).hexdigest()[:12]
+            owner["binding"]["physical_artifact_id"] = physical
+            owner["locator"] = plugins / physical
+            directory = self.data / "plugin-data" / physical
+            directory.mkdir(parents=True, mode=0o700)
+            receipt_id = "data_" + audit.hashlib.sha256((iid + "\0" + physical + "\0user").encode()).hexdigest()[:24]
+            receipt = {"data_receipt_id": receipt_id, "physical_backend_id": physical,
+                "scope": "user", "locator": str(directory), "state": "owned",
+                "ownership_digest": audit.digest(("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + str(directory)).encode())}
+            marker = directory / ".agentplugins-data-owner.json"
+            marker.write_bytes(json.dumps(receipt).encode() + b"\n")
+            marker.chmod(0o600)
+            record = copy.deepcopy(owner["installation"])
+            record.update(clients={}, data_retained=True, data_receipts={receipt_id: receipt})
+            records.append(record)
         (self.data / "state-v2.json").write_text(json.dumps({
-            "schema_version": 5, "installations": [], "environment_receipts": []}))
+            "schema_version": 5, "installations": records}))
         self.documents[0].write_text("schema_version = 1\n[dependencies]\n[targets]\n")
         self.documents[1].write_text(json.dumps({"lock_version": 1, "packages": []}))
         return owners, selected
@@ -275,7 +291,29 @@ class ClosureTests(unittest.TestCase):
     def test_complete_removed_closure_passes_cleanup(self):
         owners, selected = self.removed_closure_fixture()
         with mock.patch.object(audit, "checked_native_cleanup", return_value={}):
-            closure.checked_cleanup(audit, owners, selected, self.case, self.root, self.documents)
+            retained = closure.checked_cleanup(audit, owners, selected, self.case, self.root, self.documents)
+        self.assertEqual(set(retained), set(self.pins))
+        self.assertTrue(all(value["state"] == "owned" for value in retained.values()))
+
+    def test_remove_cannot_erase_retained_data_owners(self):
+        owners, selected = self.removed_closure_fixture()
+        (self.data / "state-v2.json").write_text(json.dumps({
+            "schema_version": 5, "installations": [], "environment_receipts": []}))
+        with mock.patch.object(audit, "checked_native_cleanup", return_value={}):
+            with self.assertRaisesRegex(ValueError, "retained data owner inventory"):
+                closure.checked_cleanup(audit, owners, selected, self.case, self.root, self.documents)
+
+    def test_remove_refuses_remaining_or_null_environment_receipts(self):
+        owners, selected = self.removed_closure_fixture()
+        path = self.data / "state-v2.json"
+        state = json.loads(path.read_text())
+        for receipts in ([{"phase": "committed"}], None):
+            with self.subTest(receipts=receipts):
+                state["environment_receipts"] = receipts
+                path.write_text(json.dumps(state))
+                with mock.patch.object(audit, "checked_native_cleanup", return_value={}):
+                    with self.assertRaisesRegex(ValueError, "closure retained saved owners"):
+                        closure.checked_cleanup(audit, owners, selected, self.case, self.root, self.documents)
 
     def test_retained_locked_child_after_remove_refused(self):
         owners, selected = self.removed_closure_fixture()
