@@ -652,7 +652,7 @@ func TestPhysicalProfileUpdateCompatibilityForwarding(t *testing.T) {
 		}
 	}
 	// A boundary clone must not alias the Store.Load result.
-	check, err := e.compatibilityBindingCheck(cursorBefore, cursorRoot, req.ClientExecutable, usecase.AddInput{Client: h.client})
+	check, err := e.compatibilityBindingCheck(cursorBefore, TargetFacts{ClientID: cursorBefore.ClientID, ConfigRoot: cursorRoot, Executable: req.ClientExecutable}, usecase.AddInput{Client: h.client})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -663,7 +663,7 @@ func TestPhysicalProfileUpdateCompatibilityForwarding(t *testing.T) {
 	if !ok {
 		t.Fatal("selected binding missing")
 	}
-	check, err = e.compatibilityBindingCheck(codexBefore, req.ClientConfigRoot, req.ClientExecutable, usecase.AddInput{Client: h.client})
+	check, err = e.compatibilityBindingCheck(codexBefore, TargetFacts{ClientID: codexBefore.ClientID, ConfigRoot: req.ClientConfigRoot, Executable: req.ClientExecutable}, usecase.AddInput{Client: h.client})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -688,7 +688,7 @@ func TestPhysicalProfileUpdateCompatibilityForwarding(t *testing.T) {
 
 func TestPhysicalProfileCompatibilityLegacyNil(t *testing.T) {
 	e, req := physicalEngine(t)
-	check, err := e.compatibilityBindingCheck(domain.ClientBinding{ClientID: "codex"}, req.ClientConfigRoot, req.ClientExecutable, usecase.AddInput{})
+	check, err := e.compatibilityBindingCheck(domain.ClientBinding{ClientID: "codex"}, TargetFacts{ClientID: "codex", ConfigRoot: req.ClientConfigRoot, Executable: req.ClientExecutable}, usecase.AddInput{})
 	if err != nil {
 		t.Fatal(err)
 	}

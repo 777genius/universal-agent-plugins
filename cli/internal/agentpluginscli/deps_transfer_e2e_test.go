@@ -191,7 +191,7 @@ func (graph transferGraph) previews(t *testing.T) {
 		case "human":
 			out := dependencyRun(t, preview.cliFixture, "deps", "import", "--install", "--dry-run")
 			for _, alias := range []string{"a", "b", "c"} {
-				if !strings.Contains(out, "install "+alias+"/codex") {
+				if !strings.Contains(out, "Install "+alias+" for OpenAI Codex") {
 					t.Fatalf("human dry-run omitted planned installation %s: %s", alias, out)
 				}
 			}
