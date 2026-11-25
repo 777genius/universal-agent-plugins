@@ -12,6 +12,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
 
 func TestSavedDirectoryDerivedAliasPreservesResolverPriority(t *testing.T) {
@@ -85,17 +87,9 @@ func TestSavedGitDerivedAliasPreservesResolverPriority(t *testing.T) {
 			savedJourneyGit(t, repo, "commit", "-m", "test: different declared package name")
 			otherRevision := savedJourneyGit(t, repo, "rev-parse", "HEAD")
 			j := newSavedJourney(t, repo)
-			clients, err := j.cli.app.Detector.Detect(t.Context())
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, client := range clients {
-				if client.ClientID == domain.ClientClaude {
-					// The existing runner handles native calls; trusted-path validation
-					// still requires the disposable executable to exist.
-					dependencyWrite(t, client.ExecutablePath, "fixture executable, never launched")
-				}
-			}
+			// Saved and --no-save installs use different activation paths. Share
+			// the same native fixture and call counter across both paths.
+			j.cli.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: j.runner})
 			alias := "different"
 			if claimed {
 				alias = "demo"
