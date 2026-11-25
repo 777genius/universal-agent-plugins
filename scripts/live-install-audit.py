@@ -2266,6 +2266,44 @@ def kimi_log_fact(facts, reason, changed=None):
     return None
 
 
+def kimi_workspace_lock_capture(home, case_root, scope):
+    """Bind the native empty coordination target to the held scoped snapshot."""
+    relative = ".kimi-code/.projects-write-lock"
+    path = home / relative
+    metadata_key = "metadata:0:" + relative
+    content_key = home.name + "/" + relative
+    # proper-lockfile's live companion must not survive native completion.
+    if "metadata:0:" + relative + ".lock" in scope:
+        raise ValueError("Kimi workspace coordinator remains locked")
+    try:
+        initial = path.lstat()
+    except FileNotFoundError:
+        if metadata_key in scope or content_key in scope:
+            raise ValueError("Kimi workspace coordinator disappeared")
+        return None
+    fields = ("st_dev", "st_mode", "st_nlink", "st_size",
+              "st_uid", "st_gid", "st_ino", "st_mtime_ns")
+    identity = tuple(getattr(initial, field) for field in fields)
+    if (not stat.S_ISREG(initial.st_mode) or stat.S_IMODE(initial.st_mode) != 0o600
+            or initial.st_nlink != 1 or initial.st_size != 0
+            or initial.st_uid != home.lstat().st_uid):
+        raise ValueError("Kimi workspace coordinator is not private and empty")
+    body, error = copilot_settings_read(path, case_root)
+    if (error is not None or body != ""
+            or identity != tuple(getattr(path.lstat(), field) for field in fields)
+            or scope.get(metadata_key) != (initial.st_mode, initial.st_dev,
+                                           initial.st_ino, initial.st_mtime_ns)
+            or scope.get(content_key) != hashlib.sha256(b"").hexdigest()):
+        raise ValueError("Kimi workspace coordinator changed during capture")
+    try:
+        path.with_name(path.name + ".lock").lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        raise ValueError("Kimi workspace coordinator remains locked")
+    return identity
+
+
 def kimi_repeat_log_capture(home, project, case_root, facts=None):
     """Private bounded bytes; only hashes leave the isolated audit case."""
     path = home / ".kimi-code/logs/kimi-code.log"
@@ -2294,6 +2332,7 @@ def kimi_repeat_log_capture(home, project, case_root, facts=None):
         body = body.encode("utf-8")
         if scope.get(log_key) != hashlib.sha256(body).hexdigest():
             return kimi_log_fact(facts, "log-hash-mismatch")
+        workspace_lock = kimi_workspace_lock_capture(home, case_root, scope)
         if identity != tuple(getattr(path.lstat(), key) for key in fields):
             return kimi_log_fact(facts, "log-identity-after-scope-changed")
         if before_parents != parent_facts():
@@ -2307,7 +2346,8 @@ def kimi_repeat_log_capture(home, project, case_root, facts=None):
         if isinstance(facts, dict):
             facts["log_bytes"] = len(body)
         return {"body": body, "identity": identity, "native": native,
-                "parents": before_parents, "scope": scope, "log_key": log_key}
+                "parents": before_parents, "scope": scope, "log_key": log_key,
+                "workspace_lock": workspace_lock}
     except OSError:
         return kimi_log_fact(facts, "filesystem-read-refused")
     except ValueError:
@@ -2380,6 +2420,13 @@ def kimi_repeat_log_append(before, after, listed, added, repeated, command, nati
     if len(after["body"]) <= len(before["body"]):
         return kimi_log_fact(facts, "log-not-append")
     ignored = {before["log_key"], "metadata:0:.kimi-code/logs/kimi-code.log"}
+    left, right = before["workspace_lock"], after["workspace_lock"]
+    if ((left is None) != (right is None)
+            or left is not None and left[:6] != right[:6]):
+        return kimi_log_fact(facts, "workspace-lock-authority-changed")
+    if left is not None:
+        # Native 2.5.2 atomically rewrites this empty target before taking its lock.
+        ignored.add("metadata:0:.kimi-code/.projects-write-lock")
     original = {key: value for key, value in before["scope"].items() if key not in ignored}
     current = {key: value for key, value in after["scope"].items() if key not in ignored}
     if original != current:
@@ -2393,7 +2440,8 @@ def kimi_repeat_log_append(before, after, listed, added, repeated, command, nati
             "before_sha256": hashlib.sha256(before["body"]).hexdigest(),
             "after_sha256": hashlib.sha256(after["body"]).hexdigest(),
             "append_sha256": hashlib.sha256(after["body"][len(before["body"]):]).hexdigest(),
-            "same_inode_mode_parents": True, "post_list_unchanged": True}
+            "same_inode_mode_parents": True, "post_list_unchanged": True,
+            **({"workspace_lock": "verified-empty-native-coordinator"} if left is not None else {})}
 
 
 def copilot_settings_sanitized_shape(home, case_root, identity):

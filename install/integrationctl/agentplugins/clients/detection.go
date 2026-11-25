@@ -99,6 +99,15 @@ type DisposableVersionProbeProfile interface {
 	RequiresDisposableVersionProbeProfile() bool
 }
 
+// AliasedVersionProbeProfile permits a disposable version probe when the
+// selected config root resolves through a symlink. This does not authorize
+// mutations through that path; the detector still checks the physical root
+// against the private temporary directory. Clients without this opt-in retain
+// the existing no-alias rule.
+type AliasedVersionProbeProfile interface {
+	AllowsAliasedVersionProbeProfile() bool
+}
+
 // ProjectVersionRequirement identifies an adapter's selected hosts that need
 // an observed version before project mutation. It is a pure eligibility check;
 // the caller retains selection, execution and version-admission authority.
