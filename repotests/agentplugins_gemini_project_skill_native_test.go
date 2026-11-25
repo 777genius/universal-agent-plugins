@@ -4,7 +4,6 @@ package pluginkitairepo_test
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -35,8 +34,6 @@ func TestAgentpluginsGeminiNativeProjectSkillReady(t *testing.T) {
 		t.Skip("opt-in genuine hosted Gemini pure Skill lifecycle")
 	}
 	f := newGeminiProjectAttempt(t)
-	f.cancel()
-	f.ctx, f.cancel = context.WithDeadline(context.Background(), f.started.Add(60*time.Second))
 	defer f.cancel()
 	p := &geminiPureSkillFixture{f: f,
 		skillPath: filepath.Join(f.base.Project, ".gemini", "skills", geminiPureSkillName, "SKILL.md"),
