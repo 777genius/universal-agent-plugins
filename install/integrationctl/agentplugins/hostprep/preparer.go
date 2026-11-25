@@ -35,7 +35,7 @@ func New(registry *clients.Registry, probe Probe, environment []string) (*Prepar
 		return nil, clients.ErrRegistryRequired
 	}
 	if probe == nil {
-		probe = clientdetect.ProbeOpenCodeTarget
+		probe = clientdetect.ProbeIsolatedOpenCodeTarget
 	}
 	if environment == nil {
 		environment = clientdetect.OpenCodeProbeEnvironment()

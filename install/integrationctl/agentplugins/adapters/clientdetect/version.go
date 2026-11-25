@@ -7,10 +7,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients/shared"
 )
 
 const maximumVersionOutput = 4096
@@ -85,39 +86,11 @@ func runIsolatedOpenCodeVersion(ctx context.Context, executable string, environm
 	if err != nil {
 		return "", "", err
 	}
-	env := append([]string{}, environment...)
-	for _, root := range []struct{ key, directory string }{
-		{"HOME", "home"},
-		{"XDG_CONFIG_HOME", "config"},
-		{"XDG_CACHE_HOME", "cache"},
-		{"XDG_DATA_HOME", "data"},
-		{"XDG_STATE_HOME", "state"},
-		{"XDG_RUNTIME_DIR", "runtime"},
-		{"TMPDIR", "tmp"},
-	} {
-		path := filepath.Join(isolatedDir, root.directory)
-		if err := os.Mkdir(path, 0700); err != nil {
-			return "", "", err
-		}
-		env = append(env, root.key+"="+path)
-	}
-	env = append(env, "TMP="+filepath.Join(isolatedDir, "tmp"), "TEMP="+filepath.Join(isolatedDir, "tmp"))
-	if runtime.GOOS == "windows" {
-		env = append(env,
-			"USERPROFILE="+filepath.Join(isolatedDir, "home"),
-			"APPDATA="+filepath.Join(isolatedDir, "config"),
-			"LOCALAPPDATA="+filepath.Join(isolatedDir, "data"))
-	}
-	config := filepath.Join(isolatedDir, "opencode.json")
-	if err := os.WriteFile(config, []byte("{}\n"), 0600); err != nil {
+	profile, err := shared.PrepareOpenCodeVersionProbeEnvironment(isolatedDir)
+	if err != nil {
 		return "", "", err
 	}
-	// OpenCode v2.0.21 server-process.ts and services/updater.ts accept these
-	// flags; the CLI config overlay is read by config/config.ts at startup.
-	env = append(env, "OPENCODE_CONFIG="+config,
-		"OPENCODE_CONFIG_CONTENT={}", "OPENCODE_CLI_CONFIG_CONTENT={}",
-		"OPENCODE_DISABLE_PROJECT_CONFIG=1",
-		"OPENCODE_DISABLE_MODELS_FETCH=1", "OPENCODE_DISABLE_AUTOUPDATE=1")
+	env := append(append([]string{}, environment...), profile...)
 	return runVersionProcessInDirectory(ctx, executable, env, isolatedDir)
 }
 
