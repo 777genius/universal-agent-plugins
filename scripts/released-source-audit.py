@@ -449,6 +449,9 @@ def checked_native_materialization(selected_root, locator, case, binding, root):
             and Path(binding["target_locator"]) == locator, "native proof differs from the selected binding")
     in_case(selected_root, root)
     in_case(locator, root)
+    if client == "pi":
+        closure = module("source_pi_native_inventory", "released_source_closure.py")
+        closure.checked_native_inventory(SimpleNamespace(**globals()), locator, root, "notion", client="pi")
     objects = binding.get("native_objects", [])
     require(isinstance(objects, list) and all(isinstance(item, dict) for item in objects),
             "native ownership is malformed")
@@ -659,7 +662,7 @@ class PiProjectTrustOracle:
         self.root, self.native = root, native_root
         self.project = root / "project"
         self.hook = native_root / "extensions/agentplugins-project-trust"
-        self.phase, self.installed = "fresh", None
+        self.phase, self.installed, self.validated_hook = "fresh", None, None
         self.owner_verifier = verified_owners
         self.directories = (native_root / "extensions", self.hook)
         self.files = tuple(self.hook / name for name in
@@ -766,6 +769,7 @@ class PiProjectTrustOracle:
         require(len(hook) == 9078 and hashlib.sha256(hook).hexdigest() ==
                 "eb4fa44cb880e1df05e42356f7e4bef9efef4abad82495cdfc87867b76b90a73",
                 "Pi trust hook differs from frozen release")
+        return hook
 
     def allowed_image(self, removed=False):
         paths = (*self.directories, *self.files)
@@ -796,12 +800,30 @@ class PiProjectTrustOracle:
     def project_snapshot(self, current):
         # Remove only exact validated owned keys; every sibling and all saved
         # User state remain in the original full protected snapshot.
+        require(self.installed is not None and self.phase in ("installed", "removed"),
+                "Pi trust snapshot has no admitted image")
         result = {"files": current["files"], "directories": dict(current["directories"])}
         for path in (*self.directories, *self.files):
             relative = path.relative_to(self.native)
-            for key in (self.native.name + "/" + str(relative),
-                        "directory:0:" + relative.as_posix(),
-                        "metadata:0:" + relative.as_posix()):
+            content, directory, metadata = (self.native.name + "/" + str(relative),
+                                           "directory:0:" + relative.as_posix(),
+                                           "metadata:0:" + relative.as_posix())
+            if self.phase == "removed" and path in self.files[:2]:
+                require(all(key not in result["directories"] for key in (content, directory, metadata)),
+                        "Pi trust removed file appeared in the observed snapshot")
+            else:
+                image = self.installed[path]
+                expected_metadata = image[:3] if path in self.directories else image[:4]
+                require(result["directories"].get(metadata) == expected_metadata,
+                        "Pi trust snapshot metadata differs from the admitted image")
+                if path in self.directories:
+                    require(result["directories"].get(directory) == "present" and content not in result["directories"],
+                            "Pi trust snapshot directory differs from the admitted image")
+                else:
+                    require(result["directories"].get(content) == hashlib.sha256(image[-1]).hexdigest()
+                            and directory not in result["directories"],
+                            "Pi trust snapshot bytes differ from the admitted image")
+            for key in (content, directory, metadata):
                 result["directories"].pop(key, None)
         return result
 
@@ -810,13 +832,16 @@ class PiProjectTrustOracle:
                 and result.get("timeout") is False, "Pi trust transition requires successful operation")
         if self.phase == "fresh":
             require(operation == "add", "Pi trust appeared outside confirmed add")
-            self.validate_installed(case)
+            hook = self.validate_installed(case)
             image = self.allowed_image()
-            self.installed, self.phase = image, "installed"
+            require(image[self.files[0]][-1] == hook, "Pi trust admitted hook differs from validated bytes")
+            self.installed, self.phase, self.validated_hook = image, "installed", hook
         elif self.phase == "installed":
             require(operation in ("info", "list", "update", "repair", "remove"),
                     "unexpected Pi trust phase")
             if operation == "remove":
+                require(self.installed[self.files[0]][-1] == self.validated_hook,
+                        "Pi trust admitted hook differs from validated bytes")
                 image = self.allowed_image(removed=True)
                 require(all(value == self.installed[path] for path, value in image.items()),
                         "Pi trust cleanup changed retained identities")
@@ -844,6 +869,7 @@ def checked_pi_closure_native(oracle, closure, case, selected_root, alias, owner
     require(not any((locator / name).exists() or (locator / name).is_symlink()
                     for name in ("index.ts", "index.js", ".agentplugins-pi.json", "package.json")),
             "Pi closure package acquired an unowned native entrypoint")
+    closure.checked_native_inventory(SimpleNamespace(**globals()), locator, oracle.root, alias, client="pi")
     objects = binding.get("native_objects")
     require(type(objects) is list and len(objects) == 2 and all(type(v) is dict for v in objects),
             "Pi closure native ownership inventory differs")
@@ -916,6 +942,36 @@ def prepare_policy_context(directory, evidence_dir, target):
     context = closure.prepare(SimpleNamespace(**globals()), directory, evidence_dir)
     context["target"] = target
     return context
+
+
+def cleanup_policy_context(context):
+    module("source_closure", "released_source_closure.py").cleanup(SimpleNamespace(**globals()), context)
+
+
+def failure_scope_changes(root, case, protected_root, protected, pi_trust):
+    """Retain scope evidence after an earlier oracle failure, without admission."""
+    current = protected_scope_snapshot(root, case["scope"], protected_root)
+    if pi_trust is not None and pi_trust.installed is not None:
+        try:
+            # Only a previously admitted, still-identical owned image may be
+            # excluded. A fresh or changed hook remains in the full snapshot.
+            if pi_trust.phase == "installed":
+                pi_trust.validate_installed(case)
+                require(pi_trust.allowed_image() == pi_trust.installed,
+                        "Pi trust changed before failure observation")
+            else:
+                require(pi_trust.phase == "removed", "Pi trust ownership is unverified")
+                image = pi_trust.allowed_image(removed=True)
+                require(all(value == pi_trust.installed[path] for path, value in image.items()),
+                        "Pi trust residue changed before failure observation")
+            require(pi_trust.installed[pi_trust.files[0]][-1] == pi_trust.validated_hook,
+                    "Pi trust admitted hook differs from validated bytes")
+            current = pi_trust.project_snapshot(current)
+        except Exception:
+            pass  # Unverified entries remain visible; the original error wins.
+    if current != protected:
+        return protected_scope_changes(protected, current, root, case["scope"], protected_root)
+    return None
 
 
 def run_case(binary, case, root, executable, policy_context=None, command_env=None):
@@ -1154,6 +1210,12 @@ def run_case(binary, case, root, executable, policy_context=None, command_env=No
         outcome = {**case, "status": "failed", "reason": str(error), "trace": trace,
                    "activation_qualified": False, "runtime_qualified": False,
                    **bounded_failure_location(error, trace)}
+        if scope_changes is None:
+            try:
+                scope_changes = failure_scope_changes(root, case, protected_root, protected, pi_trust)
+            except Exception as scope_error:
+                outcome["protected_scope_observation"] = {
+                    "status": "failed", **bounded_failure_location(scope_error)}
         if scope_changes is not None:
             outcome["protected_scope_changes"] = scope_changes
         if (case.get("expected") in ("dependency-refusal", "dependency-closure") and case.get("name") == "marketing-kit"
@@ -1188,28 +1250,62 @@ def main():
             snapshot = authenticated_snapshot(directory)
             binary, report["installer"] = native.provision_release(ROOT, directory, args.target, RELEASE_TAG, RELEASE_COMMIT, REPOSITORY)
             executable, report["native_client"] = provision_native(args.client, args.target, directory, args.native_bin)
-            policy_context = prepare_policy_context(directory, args.report_dir / "verified-public-policy", args.target)
-            scopes = ("user",) if args.client == "hermes" else ("user", "project")
-            for channel in ("binary", "npm"):
-                command, command_env = binary, None
-                if channel == "npm":
-                    # Retain the independently verified binary results even if
-                    # the required public npm acquisition cannot complete.
-                    npm = module("source_public_npm", "released_source_npm.py").provision(
-                        SimpleNamespace(**globals()), directory, args.target,
-                        release_context={"binary": binary, "proof": report["installer"]})
-                    report["npm"] = npm["proof"]
-                    command, command_env = npm["command"], npm.get("env")
-                for scope in scopes:
-                    for distribution, refusal in (("777genius/notion", False), ("777genius/marketing-kit", True)):
-                        case = source_case(snapshot, distribution, 1, args.client, scope, refusal)
-                        case["channel"] = channel
-                        if case["name"] == "marketing-kit":
-                            case["expected"] = "dependency-closure"
-                        report["cases"].append(run_case(command, case, directory / f'{channel}-{case["name"]}-{scope}', executable,
-                                                        policy_context=policy_context, command_env=command_env))
-            require(all(case["status"] != "failed" for case in report["cases"]), "some exact-source lifecycle cases failed")
-            report["status"] = "passed"
+            policy_context, policy_failure = None, None
+            try:
+                policy_context = prepare_policy_context(directory, args.report_dir / "verified-public-policy", args.target)
+            except Exception as error:
+                policy_failure = {"status": "failed", "prerequisite": "frozen-closure-policy",
+                                  "reason": str(error), **bounded_failure_location(error)}
+                report["policy_prerequisite"] = policy_failure.copy()
+                # prepare preserves the original build error when its own
+                # worktree cleanup also fails. Retain bounded notes only in the
+                # full receipt, outside case summaries and compact stdout.
+                notes = getattr(error, "__notes__", ())
+                if type(notes) in (list, tuple):
+                    retained = [note[:2048] for note in notes[:4] if type(note) is str]
+                    if retained:
+                        report["policy_prerequisite"]["notes"] = retained
+            body_failed = False
+            try:
+                scopes = ("user",) if args.client == "hermes" else ("user", "project")
+                for channel in ("binary", "npm"):
+                    command, command_env = binary, None
+                    if channel == "npm":
+                        # Retain the independently verified binary results even if
+                        # the required public npm acquisition cannot complete.
+                        npm = module("source_public_npm", "released_source_npm.py").provision(
+                            SimpleNamespace(**globals()), directory, args.target,
+                            release_context={"binary": binary, "proof": report["installer"]})
+                        report["npm"] = npm["proof"]
+                        command, command_env = npm["command"], npm.get("env")
+                    for scope in scopes:
+                        for distribution, refusal in (("777genius/notion", False), ("777genius/marketing-kit", True)):
+                            case = source_case(snapshot, distribution, 1, args.client, scope, refusal)
+                            case["channel"] = channel
+                            if case["name"] == "marketing-kit":
+                                case["expected"] = "dependency-closure"
+                            if case["name"] == "marketing-kit" and policy_failure is not None:
+                                report["cases"].append({**case, **policy_failure, "trace": [],
+                                                        "activation_qualified": False, "runtime_qualified": False})
+                                continue
+                            report["cases"].append(run_case(command, case, directory / f'{channel}-{case["name"]}-{scope}', executable,
+                                                            policy_context=policy_context, command_env=command_env))
+                require(all(case["status"] != "failed" for case in report["cases"]), "some exact-source lifecycle cases failed")
+                report["status"] = "passed"
+            except BaseException:
+                body_failed = True
+                raise
+            finally:
+                if policy_context is not None:
+                    try:
+                        cleanup_policy_context(policy_context)
+                    except Exception as error:
+                        report["policy_cleanup"] = {"status": "failed", "reason": str(error),
+                                                    **bounded_failure_location(error)}
+                        report["status"] = "failed"
+                        if not body_failed:
+                            raise
+
     except Exception as error:
         report["reason"] = str(error)
         report.update(bounded_failure_location(error))

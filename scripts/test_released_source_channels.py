@@ -63,15 +63,18 @@ class ChannelFailureTests(unittest.TestCase):
     def test_complete_output_never_bypasses_windows_owner_refusal(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
-            with mock.patch.object(audit.live.sys, "platform", "win32"), \
-                 mock.patch.object(audit.live, "_windows_file_call", side_effect=OSError("owned descendants remained")) as owned, \
-                 mock.patch.object(audit.live.subprocess, "run", side_effect=AssertionError("unowned fallback")):
-                result = audit.live.call(["inert-command"], {"TEMP": str(root)}, root,
-                                         capture_files=True, capture_full=True)
-            owned.assert_called_once()
-            self.assertIsNone(result["exit_code"])
-            self.assertIsNone(result.get("_json"))
-            self.assertIn("owned descendants remained", result["stderr_tail"])
+            for capture_files in (True, False):
+                with self.subTest(capture_files=capture_files), \
+                     mock.patch.object(audit.live.sys, "platform", "win32"), \
+                     mock.patch.object(audit.live, "_windows_file_call", side_effect=OSError("owned descendants remained")) as owned, \
+                     mock.patch.object(audit.live.subprocess, "run", side_effect=AssertionError("unowned fallback")) as fallback:
+                    result = audit.live.call(["inert-command"], {"TEMP": str(root)}, root,
+                                             capture_files=capture_files, capture_full=True)
+                owned.assert_called_once()
+                fallback.assert_not_called()
+                self.assertIsNone(result["exit_code"])
+                self.assertIsNone(result.get("_json"))
+                self.assertIn("owned descendants remained", result["stderr_tail"])
 
 
 if __name__ == "__main__":

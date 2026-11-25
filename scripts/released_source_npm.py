@@ -10,6 +10,11 @@ from pathlib import Path
 import shutil
 import stat
 import subprocess
+import threading
+import time
+import re
+import sys
+from runpy import run_path
 
 VERSION = "0.1.116"
 COMMIT = "4858d973afcf6cf31b49bba98bdf06482dce6226"
@@ -23,18 +28,123 @@ def require(value, message):
         raise ValueError(message)
 
 
+OUTPUT_LIMIT = 4 << 20
+PROCESS_TIMEOUT = 300
+DIAGNOSTIC_CODE_LIMIT = 16
+
+
+def capture(command, *, cwd, env):
+    """Drain both pipes concurrently with fixed memory budgets on every OS."""
+    argv = [str(part) for part in command]
+    streams = [bytearray(), bytearray()]
+    overflow, read_error = threading.Event(), threading.Event()
+    scripts = Path(__file__).resolve().parent
+    job, live = None, None
+    if os.name == "nt":
+        live = run_path(str(scripts / "live-install-audit.py"))
+        WindowsJob = run_path(str(scripts / "windows_owned_job.py"))["WindowsJob"]
+        # The existing bootstrap blocks before spawning the verifier. Assign
+        # its job before releasing the gate, so every descendant is owned.
+        process = subprocess.Popen(
+            [sys.executable, str(scripts / "live-install-audit.py"),
+             "--windows-owned-file-command", json.dumps(argv)], cwd=cwd, env=env,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
+    else:
+        kill_group = run_path(str(scripts / "native_client_research.py"))["kill_group"]
+        process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+
+    def drain(pipe, body):
+        try:
+            with pipe:
+                while True:
+                    chunk = pipe.read1(min(64 << 10, OUTPUT_LIMIT + 1 - len(body)))
+                    if not chunk:
+                        return
+                    if len(body) + len(chunk) > OUTPUT_LIMIT:
+                        overflow.set()
+                        return
+                    body.extend(chunk)
+        except OSError:
+            read_error.set()
+
+    readers = [threading.Thread(target=drain, args=(pipe, body), daemon=True)
+               for pipe, body in zip((process.stdout, process.stderr), streams)]
+    deadline = time.monotonic() + PROCESS_TIMEOUT
+    failure = None
+    try:
+        if live is not None:
+            job = WindowsJob(process)
+            process.stdin.write(b"!")
+            process.stdin.close()
+        for reader in readers:
+            reader.start()
+        while process.poll() is None or any(reader.is_alive() for reader in readers):
+            if overflow.is_set():
+                failure = "npm verification output exceeds bound"
+                break
+            if read_error.is_set():
+                failure = "npm verification output capture failed"
+                break
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                failure = "npm verification subprocess timed out"
+                break
+            overflow.wait(min(0.01, remaining))
+    finally:
+        cleanup_failure = None
+        try:
+            if live is not None:
+                if not process.stdin.closed:
+                    process.stdin.close()
+                if job is not None:
+                    leader_done = process.poll() is not None
+                    retained = live["_windows_file_close"](job, time.monotonic() + 5)
+                    if leader_done and retained and failure is None:
+                        cleanup_failure = "npm verification retained owned descendants"
+                elif process.poll() is None:
+                    process.kill()  # Unreleased bootstrap cannot have descendants.
+            else:
+                if process.poll() is not None and failure is None:
+                    try:
+                        os.killpg(process.pid, 0)
+                    except ProcessLookupError:
+                        pass
+                    else:
+                        cleanup_failure = "npm verification retained owned descendants"
+                kill_group(process)
+        except Exception:
+            cleanup_failure = "npm verification owned process cleanup failed"
+        finally:
+            process.wait(timeout=5)
+            for reader, pipe in zip(readers, (process.stdout, process.stderr)):
+                if reader.ident is not None:
+                    reader.join(timeout=5)
+                else:
+                    pipe.close()
+            if any(reader.is_alive() for reader in readers):
+                cleanup_failure = "npm verification output readers did not stop"
+        require(cleanup_failure is None, cleanup_failure)
+    require(not failure, failure)
+    require(not overflow.is_set(), "npm verification output exceeds bound")
+    require(not read_error.is_set(), "npm verification output capture failed")
+    return process.returncode, bytes(streams[0]), bytes(streams[1])
+
+
 def run(command, *, cwd, env):
-    result = subprocess.run([str(part) for part in command], cwd=cwd, env=env,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=300)
-    if result.returncode:
-        # Only diagnostic codes cross into receipts. npm stderr can echo a
-        # remote URL, local paths or config; never forward its raw contents.
-        import re
-        codes = re.findall(rb"(?m)^npm (?:error|ERR!) code ([A-Z][A-Z0-9_]{1,63})\s*$", result.stderr)
-        details = ",".join(sorted({code.decode("ascii") for code in codes})) or "no-safe-code"
-        raise ValueError(f"public npm subprocess failed: exit={result.returncode}; codes={details}")
-    require(len(result.stdout) <= 4 << 20, "npm verification output exceeds bound")
-    return result.stdout
+    returncode, stdout, stderr = capture(command, cwd=cwd, env=env)
+    if returncode:
+        # Only a bounded set of diagnostic codes crosses into receipts. Never
+        # forward npm's raw output, URLs, paths, config or token-bearing text.
+        codes = set()
+        for match in re.finditer(rb"(?m)^npm (?:error|ERR!) code ([A-Z][A-Z0-9_]{1,63})\s*$", stderr):
+            codes.add(match.group(1).decode("ascii"))
+            if len(codes) == DIAGNOSTIC_CODE_LIMIT:
+                break
+        details = ",".join(sorted(codes)) or "no-safe-code"
+        raise ValueError(f"public npm subprocess failed: exit={returncode}; codes={details}")
+    return stdout
 
 
 def tools():

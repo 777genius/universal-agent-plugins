@@ -129,7 +129,7 @@ def checked_refusal_authority(audit, case, authority, refusal):
 def prepare(audit, directory, evidence_dir):
     """Build only this adapter against detached, unmodified released Go sources.
 
-    Caller owns directory lifetime (a TemporaryDirectory). No product rebuild
+    Caller calls cleanup before ending directory lifetime. No product rebuild
     or released binary substitution occurs; only the policy adapter is built.
     """
     require(audit.RELEASE_COMMIT == PRODUCER, "policy adapter is not bound to the selected released CLI")
@@ -141,14 +141,28 @@ def prepare(audit, directory, evidence_dir):
                    check=True, timeout=180)
     subprocess.run([git, "worktree", "add", "--detach", str(frozen), PRODUCER], cwd=audit.ROOT,
                    check=True, timeout=60)
-    head = subprocess.check_output([git, "rev-parse", "HEAD"], cwd=frozen, text=True).strip()
-    status = subprocess.check_output([git, "status", "--porcelain", "--untracked-files=all", "--ignored"], cwd=frozen, text=True)
-    require(head == PRODUCER and not status.strip(), "frozen policy source differs")
-    env = dict(os.environ)
-    env.update({"GOWORK": str(frozen / "go.work"), "GOTOOLCHAIN": "local", "GOFLAGS": "", "CGO_ENABLED": "0"})
-    subprocess.run(["go", "build", "-o", str(helper), str(audit.ROOT / "scripts/released-source-policy.go")],
-                   cwd=frozen / "cli", env=env, check=True, timeout=240)
-    return {"helper": helper, "frozen": frozen, "evidence_dir": evidence_dir, "git": git}
+    context = {"helper": helper, "frozen": frozen, "evidence_dir": evidence_dir, "git": git}
+    try:
+        head = subprocess.check_output([git, "rev-parse", "HEAD"], cwd=frozen, text=True).strip()
+        status = subprocess.check_output([git, "status", "--porcelain", "--untracked-files=all", "--ignored"], cwd=frozen, text=True)
+        require(head == PRODUCER and not status.strip(), "frozen policy source differs")
+        env = dict(os.environ)
+        env.update({"GOWORK": str(frozen / "go.work"), "GOTOOLCHAIN": "local", "GOFLAGS": "", "CGO_ENABLED": "0"})
+        subprocess.run(["go", "build", "-o", str(helper), str(audit.ROOT / "scripts/released-source-policy.go")],
+                       cwd=frozen / "cli", env=env, check=True, timeout=240)
+        return context
+    except BaseException as error:
+        try:
+            cleanup(audit, context)
+        except BaseException as cleanup_error:
+            error.add_note("frozen policy worktree cleanup failed: " + str(cleanup_error))
+        raise
+
+
+def cleanup(audit, context):
+    """Remove the disposable linked worktree before its temporary parent exits."""
+    subprocess.run([context["git"], "worktree", "remove", str(context["frozen"])],
+                   cwd=audit.ROOT, check=True, timeout=60)
 
 
 def authorize(audit, context, root, case, stage):
@@ -235,6 +249,7 @@ def checked_closure(audit, case, root, documents, authority):
             and isinstance(receipts, list) and len(receipts) == 4
             and all(isinstance(r, dict) for r in receipts), "closure owner inventory differs")
     owners, ids, binding_ids, receipt_ids, physical_ids = {}, set(), set(), set(), set()
+    locators, directory_ids = set(), set()
     for alias, pin in pins.items():
         package = next(p for p in packages if p["alias"] == alias)
         record = next(r for r in records if r["declared_name"] == alias)
@@ -266,7 +281,15 @@ def checked_closure(audit, case, root, documents, authority):
                     "closure owner identity absent or duplicated")
             seen.add(value)
         locator = audit.in_case(Path(binding.get("target_locator", "")), root)
-        require(locator.is_absolute() and locator.is_dir(), "closure managed package missing")
+        info = locator.lstat()
+        require(locator.is_absolute() and stat.S_ISDIR(info.st_mode) and not locator.is_symlink(),
+                "closure managed package missing")
+        resolved = audit.in_case(locator.resolve(strict=True), root)
+        directory_id = (info.st_dev, info.st_ino)
+        require(resolved not in locators and directory_id not in directory_ids,
+                "closure native package locator or directory identity duplicated")
+        locators.add(resolved)
+        directory_ids.add(directory_id)
         owners[alias] = {"installation": record, "binding": binding, "receipt": receipt, "locator": locator}
     return owners
 
@@ -327,26 +350,28 @@ def checked_native(audit, owners, verifier):
     return proofs
 
 
-def checked_antigravity_inventory(audit, locator, root, alias):
-    """Closed native projection of the four immutable source pins above.
+def checked_native_inventory(audit, locator, root, alias, client="antigravity"):
+    """Closed AGY/Pi native projection of the four immutable source pins above.
 
     Frozen antigravity/project.go rewrites plugin.json, removes mcp.json and
     adds mcp_config.json for MCP members. Locked npm dependencies live under
     PLUGIN_DATA, never in this native plugin tree.
     """
+    require(client in ("antigravity", "pi"), "unreviewed native inventory client")
+    mcp = "mcp_config.json" if client == "antigravity" else "mcp.json"
     source_files = {
         # registry c5bcedd4, plugins/marketing-kit
         "marketing-kit": {"README.md", "SOURCES.md", "plugin.json", "uap.toml",
                           "skills/campaign-planning/SKILL.md"},
         # product 2ddbb99d, plugins/notion and plugins/hubspot-crm
-        "notion": {"README.md", "plugin.json", "mcp_config.json"},
-        "hubspot-crm": {"README.md", "plugin.json", "mcp_config.json"},
+        "notion": {"README.md", "plugin.json", mcp},
+        "hubspot-crm": {"README.md", "plugin.json", mcp},
         # registry d9c8d778, plugins/playwright
-        "playwright": {"NOTICE", "README.md", "plugin.json", "mcp_config.json",
+        "playwright": {"NOTICE", "README.md", "plugin.json", mcp,
             *("io.github.777genius.agentplugins/runtime/" + name for name in
               ("launcher.mjs", "package.json", "package-lock.json", "runtime.json"))},
     }
-    require(alias in source_files, "unreviewed Antigravity closure member")
+    require(alias in source_files, "unreviewed native closure member")
     files = {Path(name) for name in source_files[alias]}
     directories = {Path(".")}
     for path in files:
@@ -464,7 +489,7 @@ def checked_member_native(audit, case, root, selected_root, alias, owner):
             and not packages[0].get("user_modified"), "closure physical package ownership mismatch")
     if client == "antigravity":
         require(not members and locator.parent == selected_root / "plugins", "closure plugin escaped selected scope")
-        checked_antigravity_inventory(audit, locator, root, alias)
+        checked_native_inventory(audit, locator, root, alias)
         body = held_read(audit, locator / "plugin.json", root)
         require(body is not None, "closure native manifest absent")
         manifest = json.loads(body, object_pairs_hook=audit.live._unique_json_object)
@@ -671,7 +696,7 @@ def checked_cleanup(audit, owners, selected_root, case, root, documents=None, st
             and {record.get("installation_id") for record in records}
                 == {owner["installation"]["installation_id"] for owner in owners.values()},
             "closure retained data owner inventory differs")
-    retained = {}
+    retained, data_paths = {}, set()
     for alias, owner in owners.items():
         original = owner["installation"]
         record = next(record for record in records if record["installation_id"] == original["installation_id"])
@@ -681,12 +706,14 @@ def checked_cleanup(audit, owners, selected_root, case, root, documents=None, st
                 "closure retained data identity or binding differs")
         data = checked_owned_data(audit, case, root, alias,
                                   {**owner, "installation": record}, bound=False)
+        data_paths.add(data["path"])
         if not original.get("data_receipts"):
             require(set(islice(data["path"].iterdir(), 2)) == {data["path"] / ".agentplugins-data-owner.json"},
                     "closure newly retained data contains unreviewed entries")
         retained[alias] = {"data_receipt_id": data["receipt"]["data_receipt_id"],
                            "path": data["path"].relative_to(root).as_posix(),
                            "ownership_digest": data["receipt"]["ownership_digest"], "state": "owned"}
+    checked_directory_namespace(audit, state_path.parent / "plugin-data", root, data_paths)
     if documents is None:
         saved = root / ("uap-data" if case["scope"] == "user" else "project")
         documents = [saved / "uap.toml", saved / "uap.lock"]

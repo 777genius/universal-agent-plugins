@@ -290,6 +290,9 @@ class SemanticProofTests(unittest.TestCase):
         locator = native_root / "plugins/notion" if client == "antigravity" else self.root / (client + "-managed-" + scope)
         locator.mkdir(parents=True, exist_ok=True)
         native_root.mkdir(exist_ok=True)
+        if client == "pi":
+            for name in ("README.md", "plugin.json", "mcp.json"):
+                (locator / name).write_text("{}", encoding="utf-8")
         binding = {"client_id": client, "scope": scope, "target_locator": str(locator), "physical_artifact_id": "notion-physical",
                    "native_objects": [{"object_id": "package:" + client + ":notion-physical", "kind": "managed_package_directory",
                         "logical_name": "notion", "path": str(locator), "protection_class": "managed", "managed_digest": "sha256:" + "d" * 64}]}
@@ -419,6 +422,27 @@ class SemanticProofTests(unittest.TestCase):
             binding = {**args[3], "scope": "project"}
             with self.assertRaises(ValueError):
                 audit.checked_native_materialization(*args[:3], binding, self.root)
+
+    def test_direct_pi_user_and_project_require_reviewed_package_inventory(self):
+        for scope in ("user", "project"):
+            with self.subTest(scope=scope):
+                args, _, _, _ = self.native("pi", scope)
+                audit.checked_native_materialization(*args)
+                extra = args[1] / "skills/extra/SKILL.md"
+                extra.parent.mkdir(parents=True)
+                extra.write_text("inert unreviewed Skill", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    audit.checked_native_materialization(*args)
+                extra.unlink()
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    audit.checked_native_materialization(*args)
+                extra.parent.rmdir()
+                extra.parent.parent.rmdir()
+                audit.checked_native_materialization(*args)
+                reviewed = args[1] / "README.md"
+                reviewed.unlink()
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    audit.checked_native_materialization(*args)
 
     def test_antigravity_manifest_default_load_contract_is_required(self):
         args, _, _, _ = self.native("antigravity")
@@ -777,7 +801,7 @@ class RuntimeLineageDiagnosticTests(unittest.TestCase):
                 self.path.write_text(body, encoding="utf-8")
                 self.assertEqual(self.observe(), {"status": "unresolved", "reason": "state_unavailable_or_invalid"})
 
-    def test_symlink_and_hardlink_state_are_unresolved(self):
+    def test_symlink_state_is_unresolved(self):
         outside = self.root / "outside-state.json"
         outside.write_text(json.dumps(self.make_state()), encoding="utf-8")
         try:
@@ -785,7 +809,10 @@ class RuntimeLineageDiagnosticTests(unittest.TestCase):
         except OSError as error:
             self.skipTest(str(error))
         self.assertEqual(self.observe()["reason"], "state_unavailable_or_invalid")
-        self.path.unlink()
+
+    def test_hardlink_state_is_unresolved(self):
+        outside = self.root / "outside-state.json"
+        outside.write_text(json.dumps(self.make_state()), encoding="utf-8")
         try:
             os.link(outside, self.path)
         except OSError as error:
@@ -900,6 +927,21 @@ class RuntimeLineageDiagnosticTests(unittest.TestCase):
 
 
 class ProtectedScopeDiagnosticTests(unittest.TestCase):
+    def test_unreadable_failure_observation_preserves_original_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "case"
+            before = {"directories": {}, "files": {}}
+            with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+                 mock.patch.object(audit.live, "call", side_effect=ValueError("original command failure")), \
+                 mock.patch.object(audit, "protected_scope_snapshot", side_effect=[
+                     before, ValueError("unreadable private scope " + temporary)]):
+                receipt = audit.run_case(Path("/test-only-cli"), case(), root, None)
+            self.assertEqual(receipt["status"], "failed")
+            self.assertEqual(receipt["reason"], "original command failure")
+            self.assertEqual(receipt["protected_scope_observation"]["status"], "failed")
+            self.assertNotIn("protected_scope_changes", receipt)
+            assert_no_private_path(self, receipt["protected_scope_observation"], temporary)
+
     def test_bounded_paths_redact_values_and_distinguish_metadata(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -976,6 +1018,31 @@ class ProtectedScopeDiagnosticTests(unittest.TestCase):
             self.assertEqual(receipt["status"], "expected-dependency-refusal")
             self.assertEqual(receipt["refusal"]["distribution"], "777genius/notion")
             self.assertNotIn("protected_scope_changes", receipt)
+
+    def test_exact_refusal_with_changed_protected_scope_is_a_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "case"
+            selected = {**case(), "expected": "dependency-refusal", "name": "marketing-kit",
+                        "distribution": "777genius/marketing-kit"}
+            message = "agentplugins: dependency conflict for directory:777genius/notion: marketing-kit version 0.1.0"
+            result = {"exit_code": 1, "timeout": False, "_json": None, "stdout_full": "",
+                      "stderr_full": message, "stdout_tail": "", "stderr_tail": message}
+            before = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 4)}, "files": {}}
+            after = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 5)}, "files": {}}
+            observations = []
+            def snapshot(*args):
+                observations.append(None)
+                return before if len(observations) == 1 else after
+            with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+                 mock.patch.object(audit.live, "call", return_value=result), \
+                 mock.patch.object(audit, "protected_scope_snapshot", side_effect=snapshot):
+                receipt = audit.run_case(Path("/test-only-cli"), selected, root, None)
+            self.assertEqual(receipt["status"], "failed")
+            self.assertEqual(receipt["reason"], "add changed the other scope")
+            self.assertEqual(receipt["trace"][-1]["exit_code"], 1)
+            self.assertEqual(receipt["protected_scope_changes"]["entries"][0]["changed_fields"], ["mtime"])
+            self.assertFalse(receipt["activation_qualified"])
+            assert_no_private_path(self, receipt["protected_scope_changes"], temporary)
 
 
 class NativeExtractionTests(unittest.TestCase):
@@ -1177,6 +1244,84 @@ class PiProjectTrustTests(unittest.TestCase):
         self.assertEqual(self.observe("list"), self.original)
         self.assertEqual(self.oracle.phase, "removed")
 
+    def test_failure_scope_diagnostic_filters_only_unchanged_admitted_hook(self):
+        self.install()
+        self.observe()
+        changed = self.root / "uap-data/uap.toml"
+        changed.parent.mkdir()
+        changed.write_text("private contents", encoding="utf-8")
+        result = audit.failure_scope_changes(
+            self.root, self.case, self.native, self.original, self.oracle)
+        self.assertEqual([entry["path"] for entry in result["entries"]], ["uap-data/uap.toml"])
+        self.assertEqual(self.oracle.phase, "installed")
+        self.assertNotIn("private contents", json.dumps(result))
+        changed.unlink()
+        for path in self.oracle.files[:2]:
+            path.unlink()
+        self.observe("remove")
+        self.assertIsNone(audit.failure_scope_changes(
+            self.root, self.case, self.native, self.original, self.oracle))
+        self.assertEqual(self.oracle.phase, "removed")
+
+    def test_failure_scope_diagnostic_retains_unverified_or_changed_hook(self):
+        self.install()
+        fresh = audit.failure_scope_changes(
+            self.root, self.case, self.native, self.original, self.oracle)
+        self.assertTrue(any(entry["path"].endswith("/index.ts") for entry in fresh["entries"]))
+        self.assertEqual(self.oracle.phase, "fresh")
+        self.observe()
+        self.oracle.files[0].write_bytes(b"unverified replacement")
+        changed = audit.failure_scope_changes(
+            self.root, self.case, self.native, self.original, self.oracle)
+        self.assertTrue(any(entry["path"].endswith("/index.ts") for entry in changed["entries"]))
+        self.assertEqual(self.oracle.phase, "installed")
+
+    def test_observed_changed_hook_cannot_be_hidden_by_restoring_before_validation(self):
+        self.install()
+        self.observe()
+        hook = self.oracle.files[0]
+        original_snapshot = audit.protected_scope_snapshot
+        def changed_then_restored(*args):
+            stamp = hook.stat()
+            hook.write_bytes(b"observed unreviewed hook")
+            changed = original_snapshot(*args)
+            hook.write_bytes(self.HOOK)
+            os.utime(hook, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+            return changed
+        with mock.patch.object(audit, "protected_scope_snapshot", side_effect=changed_then_restored):
+            changes = audit.failure_scope_changes(
+                self.root, self.case, self.native, self.original, self.oracle)
+        self.assertTrue(any(entry["path"].endswith("/index.ts") for entry in changes["entries"]))
+        self.assertEqual(self.oracle.phase, "installed")
+        captured = changed_then_restored(self.root, "project", self.native)
+        with self.assertRaisesRegex(ValueError, "snapshot (bytes|metadata) differs"):
+            self.oracle.observe("info", self.success, captured, self.case)
+
+    def test_hook_replacement_between_validation_and_image_is_refused_before_admission(self):
+        self.install()
+        original = self.oracle.allowed_image
+        def replaced_image(*args, **kwargs):
+            self.oracle.files[0].write_bytes(b"inert unvalidated hook")
+            return original(*args, **kwargs)
+        with mock.patch.object(self.oracle, "allowed_image", side_effect=replaced_image):
+            with self.assertRaisesRegex(ValueError, "admitted hook differs"):
+                self.observe()
+        self.assertEqual(self.oracle.phase, "fresh")
+        self.assertIsNone(self.oracle.installed)
+        self.assertIsNone(self.oracle.validated_hook)
+
+    def test_remove_refuses_stored_hook_bytes_that_were_not_validated(self):
+        self.install()
+        self.observe()
+        hook = self.oracle.files[0]
+        stamp = self.oracle.installed[hook]
+        self.oracle.installed[hook] = (*stamp[:-1], b"inert unvalidated hook")
+        for path in self.oracle.files[:2]:
+            path.unlink()
+        with self.assertRaisesRegex(ValueError, "admitted hook differs"):
+            self.observe("remove")
+        self.assertEqual(self.oracle.phase, "installed")
+
     def test_forged_hook_marker_is_not_ownership(self):
         self.install()
         self.oracle.files[0].write_bytes(self.HOOK.replace(b"node:crypto", b"evil:crypto"))
@@ -1297,6 +1442,18 @@ class PiProjectTrustTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate"):
             self.observe()
 
+    def test_valid_trust_owner_with_additional_foreign_owner_is_refused_from_fresh_phase(self):
+        self.install()
+        owners = self.record["projects"][str(self.project)]
+        owners["foreign-owner"] = copy.deepcopy(owners["notion-owner"])
+        self.assertIn("notion-owner", owners)
+        self.assertEqual(self.oracle.phase, "fresh")
+        self.rewrite_record()
+        with self.assertRaisesRegex(ValueError, "verified project ownership"):
+            self.observe()
+        self.assertEqual(self.oracle.phase, "fresh")
+        self.assertIsNone(self.oracle.installed)
+
     @unittest.skipIf(os.name == "nt", "POSIX hardlink fixture")
     def test_hardlinked_hook_is_refused(self):
         self.install()
@@ -1344,6 +1501,18 @@ class PiClosureNativeTests(unittest.TestCase):
             locator = self.selected / "extensions" / physical
             locator.mkdir(parents=True)
             (locator / "plugin.json").write_text("{}", encoding="utf-8")
+            (locator / "README.md").write_text("inert reviewed file", encoding="utf-8")
+            if alias == "marketing-kit":
+                for name in ("SOURCES.md", "uap.toml"):
+                    (locator / name).write_text("inert reviewed file", encoding="utf-8")
+            else:
+                (locator / "mcp.json").write_text("{}", encoding="utf-8")
+            if alias == "playwright":
+                (locator / "NOTICE").write_text("inert reviewed file", encoding="utf-8")
+                runtime = locator / "io.github.777genius.agentplugins/runtime"
+                runtime.mkdir(parents=True)
+                for name in ("launcher.mjs", "package.json", "package-lock.json", "runtime.json"):
+                    (runtime / name).write_text("inert reviewed runtime", encoding="utf-8")
             package = {"object_id": "package:pi:" + physical, "kind": "managed_package_directory",
                        "logical_name": alias, "path": str(locator), "protection_class": "managed",
                        "managed_digest": "sha256:" + "a" * 64}
@@ -1478,6 +1647,34 @@ class PiClosureNativeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "entrypoint"):
             self.check("notion")
 
+    def test_each_reviewed_package_inventory_refuses_extra_skill_and_empty_directory(self):
+        for alias, owner in self.owners.items():
+            with self.subTest(alias=alias):
+                self.check(alias)
+                extra = owner["locator"] / "skills/extra/SKILL.md"
+                extra.parent.mkdir(parents=True)
+                extra.write_text("inert unreviewed Skill", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    self.check(alias)
+                extra.unlink()
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    self.check(alias)
+                extra.parent.rmdir()
+                if alias != "marketing-kit":
+                    extra.parent.parent.rmdir()
+                self.check(alias)
+
+    def test_missing_reviewed_package_file_is_refused(self):
+        for alias, owner in self.owners.items():
+            with self.subTest(alias=alias):
+                path = owner["locator"] / "README.md"
+                body = path.read_bytes()
+                path.unlink()
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    self.check(alias)
+                path.write_bytes(body)
+                self.check(alias)
+
     def test_playwright_source_oracle_failure_prevents_native_proof(self):
         self.runtime_mock.side_effect = ValueError("forged source")
         with self.assertRaisesRegex(ValueError, "forged source"):
@@ -1493,7 +1690,7 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
                 "revision": pin["resolved_revision"], "path": pin["package_path"]},
                 "tree_digest": pin["tree_digest"], "manifest_digest": pin["manifest_digest"]}
 
-    def exercise(self, *, policy="eligible", error=None, retain_child=False, missing_native=False, partial_saved=False, malformed_operation=None, malformed_result=None, retained_mutation=None):
+    def exercise(self, *, policy="eligible", error=None, retain_child=False, missing_native=False, partial_saved=False, malformed_operation=None, malformed_result=None, retained_mutation=None, native_error_stage=None, protected_mutation_stage=None):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name).resolve() / "case"
@@ -1524,7 +1721,7 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
         def join(*args):
             return owners
         def native(api, joined, verifier):
-            if missing_native:
+            if missing_native or native_error_stage is not None and stages[-1] == native_error_stage:
                 raise ValueError("native content incomplete")
             return {alias: {"content_verified": True} for alias in joined}
         def cli(argv, env, project, *args, **kwargs):
@@ -1557,6 +1754,12 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
                              else "directory:" + distribution}
                             for alias, distribution in audit.live.MARKETING_KIT_DISTRIBUTIONS.items()]
                 (data / "uap.lock").write_text(json.dumps({"lock_version": 1, "packages": packages}), encoding="utf-8")
+            if operation == protected_mutation_stage:
+                (root / "project/uap.toml").write_text("unexpected protected state", encoding="utf-8")
+                config = root / "home/.hermes/config.yaml"
+                value = audit.yaml.safe_load(config.read_text(encoding="utf-8"))
+                value["mcp_servers"]["notion"] = {"url": "https://unreviewed.invalid"}
+                config.write_text(audit.yaml.safe_dump(value), encoding="utf-8")
             if operation == "remove":
                 native = root / "home/.hermes"
                 (native / "skills/campaign-planning/SKILL.md").unlink()
@@ -1665,6 +1868,17 @@ class ClosureLifecycleIntegrationTests(unittest.TestCase):
                 self.assertEqual(outcome["status"], "failed")
                 self.assertIn(reason, outcome["reason"])
 
+    def test_native_failure_keeps_simultaneous_protected_scope_changes(self):
+        outcome, calls, _ = self.exercise(native_error_stage="update", protected_mutation_stage="update")
+        self.assertEqual(outcome["status"], "failed")
+        self.assertEqual(outcome["reason"], "native content incomplete")
+        self.assertEqual(calls[-1], ("update", "marketing-kit"))
+        self.assertEqual(outcome["last_operation"], "update")
+        self.assertEqual([entry["path"] for entry in outcome["protected_scope_changes"]["entries"]],
+                         ["project/uap.toml"])
+        self.assertFalse(outcome["activation_qualified"])
+        self.assertFalse(outcome["runtime_qualified"])
+
     def test_authenticated_ineligible_refusal_has_no_effects(self):
         outcome, calls, stages = self.exercise(policy="ineligible")
         self.assertEqual(outcome["status"], "expected-dependency-refusal", outcome.get("reason"))
@@ -1737,6 +1951,7 @@ class PairedChannelTests(unittest.TestCase):
                  mock.patch.object(audit, "authenticated_snapshot", return_value={}), \
                  mock.patch.object(audit, "provision_native", return_value=(native, {"verified": True})), \
                  mock.patch.object(audit, "prepare_policy_context", return_value=context) as prepare, \
+                 mock.patch.object(audit, "cleanup_policy_context") as cleanup, \
                  mock.patch.object(audit, "module", return_value=npm), \
                  mock.patch.object(audit, "source_case", side_effect=selected), \
                  mock.patch.object(audit, "run_case", side_effect=run), \
@@ -1744,15 +1959,121 @@ class PairedChannelTests(unittest.TestCase):
                  mock.patch.dict(os.environ, {"RUNNER_TEMP": str(base)}):
                 self.assertEqual(audit.main(), 0)
             prepare.assert_called_once()
+            cleanup.assert_called_once_with(context)
             npm.provision.assert_called_once()
             self.assertEqual(len(calls), 4)
             self.assertEqual({c[2].name for c in calls}, {"binary-notion-user", "binary-marketing-kit-user",
                                                         "npm-notion-user", "npm-marketing-kit-user"})
             self.assertTrue(all(c[3] is context for c in calls))
             self.assertTrue(all(c[0] == prefix for c in calls if c[1]["channel"] == "npm"))
+            self.assertTrue(all(c[4] == {"PATH": str(base)} for c in calls if c[1]["channel"] == "npm"))
+            self.assertTrue(all(c[4] is None for c in calls if c[1]["channel"] == "binary"))
             self.assertTrue(all(c[1]["expected"] == "dependency-closure" for c in calls if c[1]["name"] == "marketing-kit"))
             receipt = json.loads((args.report_dir / "receipt.json").read_text())
             self.assertEqual({c["channel"] for c in receipt["cases"]}, {"binary", "npm"})
+
+    def main_prerequisite_fixture(self, client, *, prepare_error=None, npm_error=None, cleanup_error=None):
+        from contextlib import ExitStack
+        with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
+            base = Path(temporary)
+            native = base / "native"
+            native.write_text("fixture")
+            args = SimpleNamespace(client=client, target="linux-amd64", native_bin=native, report_dir=base / "receipt")
+            context, calls, events = {"frozen": "verified"}, [], []
+            def selected(snapshot, distribution, sequence, client, scope, refusal):
+                return {"name": distribution.split("/")[-1], "client": client, "scope": scope,
+                        "expected": "dependency-refusal" if refusal else "materialized-lifecycle"}
+            def run(command, case, root, executable, **kwargs):
+                self.assertTrue(root.parent.is_dir())
+                calls.append(case.copy())
+                events.append("case")
+                return {**case, "status": "materialized-lifecycle-passed"}
+            def cleanup(context):
+                directory = prepare.call_args.args[0]
+                self.assertTrue(directory.is_dir(), "cleanup must precede temporary directory removal")
+                events.append("cleanup")
+                if cleanup_error:
+                    raise cleanup_error
+            npm = SimpleNamespace(provision=mock.Mock(side_effect=npm_error,
+                return_value={"command": ["node", "wrapper.js"], "proof": {}, "env": {}}))
+            patches = [mock.patch.object(audit.argparse.ArgumentParser, "parse_args", return_value=args),
+                       mock.patch.object(audit.native, "require_hosted"),
+                       mock.patch.object(audit.native, "provision_release", return_value=(base / "binary", {})),
+                       mock.patch.object(audit, "authenticated_snapshot", return_value={}),
+                       mock.patch.object(audit, "provision_native", return_value=(native, {})),
+                       mock.patch.object(audit, "module", return_value=npm),
+                       mock.patch.object(audit, "source_case", side_effect=selected),
+                       mock.patch.object(audit, "run_case", side_effect=run),
+                       mock.patch("sys.stdout", new_callable=io.StringIO),
+                       mock.patch.dict(os.environ, {"RUNNER_TEMP": str(base)})]
+            for patch in patches:
+                stack.enter_context(patch)
+            prepare = stack.enter_context(mock.patch.object(audit, "prepare_policy_context", return_value=context,
+                                                             side_effect=prepare_error))
+            cleaned = stack.enter_context(mock.patch.object(audit, "cleanup_policy_context", side_effect=cleanup))
+            code = audit.main()
+            receipt = json.loads((args.report_dir / "receipt.json").read_text())
+            directory = prepare.call_args.args[0]
+            self.assertFalse(directory.exists())
+            return code, receipt, calls, events, cleaned.call_count
+
+    def test_main_policy_failure_keeps_independent_notion_cases_for_every_scope_and_channel(self):
+        for client in audit.CLIENTS:
+            with self.subTest(client=client):
+                code, receipt, calls, events, cleaned = self.main_prerequisite_fixture(
+                    client, prepare_error=ValueError("frozen build timed out"))
+                scopes = {"user"} if client == "hermes" else {"user", "project"}
+                expected = {(channel, scope) for channel in ("binary", "npm") for scope in scopes}
+                self.assertEqual(code, 1)
+                self.assertEqual(receipt["status"], "failed")
+                self.assertEqual({(c["channel"], c["scope"]) for c in calls}, expected)
+                self.assertTrue(all(c["name"] == "notion" for c in calls))
+                marketing = [c for c in receipt["cases"] if c["name"] == "marketing-kit"]
+                self.assertEqual({(c["channel"], c["scope"]) for c in marketing}, expected)
+                for case in marketing:
+                    self.assertEqual(case["status"], "failed")
+                    self.assertEqual(case["reason"], "frozen build timed out")
+                    self.assertEqual(case["prerequisite"], "frozen-closure-policy")
+                    self.assertEqual(case["trace"], [])
+                    self.assertFalse(case["activation_qualified"])
+                    self.assertFalse(case["runtime_qualified"])
+                self.assertEqual(cleaned, 0)
+
+    def test_main_policy_prepare_retains_bounded_cleanup_notes_and_original_reason(self):
+        failure = ValueError("original frozen build timed out")
+        failure.add_note("frozen policy worktree cleanup failed: retained linked worktree")
+        for index in range(8):
+            failure.add_note(str(index) + "x" * 4096)
+        code, receipt, calls, events, cleaned = self.main_prerequisite_fixture("pi", prepare_error=failure)
+        self.assertEqual(code, 1)
+        prerequisite = receipt["policy_prerequisite"]
+        self.assertEqual(prerequisite["reason"], "original frozen build timed out")
+        self.assertEqual(len(prerequisite["notes"]), 4)
+        self.assertTrue(all(len(note) <= 2048 for note in prerequisite["notes"]))
+        self.assertIn("cleanup failed", prerequisite["notes"][0])
+        self.assertTrue(all("notes" not in case for case in receipt["cases"]))
+        self.assertNotIn("notes", json.dumps(audit.compact_report(receipt)))
+        self.assertEqual(cleaned, 0)
+
+    def test_main_policy_cleanup_precedes_temp_removal_on_success_and_failure(self):
+        for failure in (None, ValueError("original npm acquisition failed")):
+            with self.subTest(failure=failure):
+                code, receipt, calls, events, cleaned = self.main_prerequisite_fixture("pi", npm_error=failure)
+                self.assertEqual(cleaned, 1)
+                self.assertEqual(events[-1], "cleanup")
+                self.assertEqual(code, 1 if failure else 0)
+                if failure:
+                    self.assertEqual(receipt["reason"], str(failure))
+
+    def test_main_cleanup_failure_reports_failure_and_preserves_original_error(self):
+        for failure in (None, ValueError("original npm acquisition failed")):
+            with self.subTest(failure=failure):
+                code, receipt, calls, events, cleaned = self.main_prerequisite_fixture(
+                    "pi", npm_error=failure, cleanup_error=ValueError("cleanup failed"))
+                self.assertEqual(code, 1)
+                self.assertEqual(cleaned, 1)
+                self.assertEqual(receipt["reason"], str(failure) if failure else "cleanup failed")
+                self.assertEqual(receipt["policy_cleanup"]["reason"], "cleanup failed")
 
     def test_npm_env_cannot_replace_case_home(self):
         with tempfile.TemporaryDirectory() as temporary:

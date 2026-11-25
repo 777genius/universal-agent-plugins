@@ -4,6 +4,9 @@ import base64
 import importlib.util
 import json
 import os
+import shutil
+import subprocess
+from types import SimpleNamespace
 from pathlib import Path
 import tempfile
 import unittest
@@ -139,8 +142,30 @@ class ClosureTests(unittest.TestCase):
 
     def test_same_path_changed_between_held_observations_refused(self):
         self.documents[1].write_text(json.dumps(self.lock))
-        with mock.patch.object(audit.live, "copilot_settings_read", side_effect=[("first", None), ("second", None)]):
-            with self.assertRaises(ValueError): closure.held_read(audit, self.documents[1], self.root)
+        original = self.documents[1].read_text()
+        with mock.patch.object(audit.live, "copilot_settings_read",
+                               side_effect=[(original, None), (original + " ", None)]) as reader:
+            with self.assertRaisesRegex(ValueError, "document changed during held read"):
+                closure.held_read(audit, self.documents[1], self.root)
+        self.assertEqual(reader.call_count, 2)
+
+    def test_distinct_owner_ids_cannot_share_one_native_package(self):
+        notion = next(record for record in self.state["installations"] if record["declared_name"] == "notion")
+        hubspot = next(record for record in self.state["installations"] if record["declared_name"] == "hubspot-crm")
+        hubspot["clients"]["hubspot-crm"]["target_locator"] = notion["clients"]["notion"]["target_locator"]
+        with self.assertRaisesRegex(ValueError, "locator or directory identity duplicated"):
+            self.check()
+
+    def test_distinct_paths_cannot_hide_the_same_directory_identity(self):
+        original = Path.lstat
+        physical = (self.root / "managed/notion").stat()
+        def repeated_identity(path):
+            if path == self.root / "managed/hubspot-crm":
+                return physical
+            return original(path)
+        with mock.patch.object(Path, "lstat", repeated_identity):
+            with self.assertRaisesRegex(ValueError, "locator or directory identity duplicated"):
+                self.check()
 
     def test_hermes_wrong_native_skill_owner_is_not_admitted(self):
         owner = self.check()["marketing-kit"]
@@ -205,19 +230,23 @@ class ClosureTests(unittest.TestCase):
                 "io.github.777genius.agentplugins/runtime/package-lock.json",
                 "io.github.777genius.agentplugins/runtime/runtime.json"],
         }
-        for alias, files in fixtures.items():
-            with self.subTest(alias=alias):
-                locator = self.root / ("native-" + alias)
+        for client, alias, files in ((client, alias, files) for client in ("antigravity", "pi")
+                                     for alias, files in fixtures.items()):
+            with self.subTest(client=client, alias=alias):
+                locator = self.root / ("native-" + client + "-" + alias)
                 locator.mkdir()
                 for relative in files:
+                    if client == "pi": relative = relative.replace("mcp_config.json", "mcp.json")
                     path = locator / relative
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text("reviewed inventory fixture\n")
-                closure.checked_antigravity_inventory(audit, locator, self.root, alias)
+                closure.checked_native_inventory(audit, locator, self.root, alias, client=client)
                 extra = locator / ("skills" if alias != "marketing-kit" else "skills/unreviewed-empty")
                 extra.mkdir(parents=True)
                 with self.assertRaisesRegex(ValueError, "native inventory differs"):
-                    closure.checked_antigravity_inventory(audit, locator, self.root, alias)
+                    closure.checked_native_inventory(audit, locator, self.root, alias, client=client)
+        with self.assertRaisesRegex(ValueError, "unreviewed native inventory client"):
+            closure.checked_native_inventory(audit, locator, self.root, "notion", client="hermes")
 
     def test_antigravity_inventory_rechecks_directories_after_held_reads(self):
         locator = self.root / "replaced-plugin"
@@ -234,7 +263,7 @@ class ClosureTests(unittest.TestCase):
             return body
         with mock.patch.object(closure, "held_read", side_effect=read_then_add):
             with self.assertRaisesRegex(ValueError, "native inventory changed during held reads"):
-                closure.checked_antigravity_inventory(audit, locator, self.root, "notion")
+                closure.checked_native_inventory(audit, locator, self.root, "notion")
         self.assertEqual(changed, [True])
 
     def test_version_edge_and_release_pin_are_distinct(self):
@@ -295,6 +324,20 @@ class ClosureTests(unittest.TestCase):
             retained = closure.checked_cleanup(audit, owners, selected, self.case, self.root, self.documents)
         self.assertEqual(set(retained), set(self.pins))
         self.assertTrue(all(value["state"] == "owned" for value in retained.values()))
+
+    def test_extra_retained_data_sibling_cannot_hide_beside_four_valid_owners(self):
+        owners, selected = self.removed_closure_fixture()
+        with mock.patch.object(audit, "checked_native_cleanup", return_value={}):
+            closure.checked_cleanup(audit, owners, selected, self.case, self.root, self.documents)
+            for directory in (False, True):
+                with self.subTest(directory=directory):
+                    extra = self.data / "plugin-data/foreign-extra"
+                    if directory: extra.mkdir()
+                    else: extra.write_bytes(b"foreign")
+                    with self.assertRaisesRegex(ValueError, "namespace has unowned entries"):
+                        closure.checked_cleanup(audit, owners, selected, self.case, self.root, self.documents)
+                    if directory: extra.rmdir()
+                    else: extra.unlink()
 
     def test_remove_cannot_erase_retained_data_owners(self):
         owners, selected = self.removed_closure_fixture()
@@ -408,6 +451,67 @@ class ClosureTests(unittest.TestCase):
         case = {**self.case, "client": "hermes"}
         with self.assertRaisesRegex(ValueError, "unowned MCP"):
             closure.checked_namespace(audit, case, self.root, selected, owners, removed=True)
+
+
+class FrozenProducerWorktreeTests(unittest.TestCase):
+    def setUp(self):
+        self.git = shutil.which("git")
+        if not self.git: self.skipTest("git prerequisite unavailable")
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.repo = self.root / "repo"
+        self.repo.mkdir()
+        self.command("init", "--quiet")
+        (self.repo / "cli").mkdir()
+        (self.repo / "cli/fixture").write_text("immutable source\n")
+        self.command("add", ".")
+        self.command("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+                     "commit", "--quiet", "-m", "fixture")
+        self.producer = self.command("rev-parse", "HEAD").strip()
+        self.api = SimpleNamespace(ROOT=self.repo, RELEASE_COMMIT=self.producer,
+                                   live=SimpleNamespace(GIT_EXECUTABLE=self.git))
+        self.directory = self.root / "temporary"
+        self.directory.mkdir()
+
+    def command(self, *args):
+        return subprocess.check_output([self.git, *args], cwd=self.repo, text=True)
+
+    def build(self, *, fail=False):
+        original = subprocess.run
+        def run(argv, **kwargs):
+            if argv[1] == "fetch":
+                return subprocess.CompletedProcess(argv, 0)
+            if argv[:2] == ["go", "build"]:
+                if fail: raise subprocess.CalledProcessError(2, argv)
+                Path(argv[3]).write_bytes(b"adapter fixture")
+                return subprocess.CompletedProcess(argv, 0)
+            return original(argv, **kwargs)
+        with mock.patch.object(closure, "PRODUCER", self.producer), mock.patch.object(subprocess, "run", side_effect=run):
+            return closure.prepare(self.api, self.directory, self.root / "evidence")
+
+    def assert_removed(self):
+        frozen = self.directory / "policy-producer"
+        self.assertFalse(frozen.exists())
+        self.assertNotIn(str(frozen), self.command("worktree", "list", "--porcelain"))
+
+    def test_success_cleanup_removes_real_git_registration(self):
+        context = self.build()
+        self.assertIn(str(context["frozen"]), self.command("worktree", "list", "--porcelain"))
+        closure.cleanup(self.api, context)
+        self.assert_removed()
+
+    def test_build_failure_removes_real_git_registration(self):
+        with self.assertRaises(subprocess.CalledProcessError): self.build(fail=True)
+        self.assert_removed()
+
+    def test_cleanup_failure_preserves_original_build_error(self):
+        with mock.patch.object(closure, "cleanup", side_effect=RuntimeError("cleanup fixture refusal")):
+            with self.assertRaises(subprocess.CalledProcessError) as failed:
+                self.build(fail=True)
+        self.assertTrue(any("cleanup fixture refusal" in note for note in failed.exception.__notes__))
+        closure.cleanup(self.api, {"git": self.git, "frozen": self.directory / "policy-producer"})
+        self.assert_removed()
 
 
 class PiStartupStoreTests(unittest.TestCase):
