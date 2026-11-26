@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"unicode"
 
@@ -30,18 +31,22 @@ func renderSkillsDryRun(cmd *cobra.Command, review skillspicker.Plan) error {
 	return json.NewEncoder(cmd.OutOrStdout()).Encode(output)
 }
 func renderHumanSkillsReview(cmd *cobra.Command, review skillspicker.Plan) error {
+	return renderHumanSkillsReviewTo(cmd.OutOrStdout(), review)
+}
+func renderHumanSkillsReviewTo(output io.Writer, review skillspicker.Plan) error {
+	writer := &planWriter{writer: output}
 	for _, action := range review.Actions {
-		if _, err := fmt.Fprintln(cmd.OutOrStdout(), skillsActionDetail(action)); err != nil {
+		if _, err := fmt.Fprintln(writer, strings.Join(skillsActionDetails(action), "\n")); err != nil {
 			return err
 		}
 	}
 	for _, warning := range review.Warnings {
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Warning: %s\n", prompt.SafeText(warning.Message)); err != nil {
+		if _, err := fmt.Fprintf(writer, "Warning: %s\n", prompt.SafeText(warning.Message)); err != nil {
 			return err
 		}
 	}
 	for _, conflict := range review.Conflicts {
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Conflict: %s\n", prompt.SafeText(conflict.Message)); err != nil {
+		if _, err := fmt.Fprintf(writer, "Conflict: %s\n", prompt.SafeText(conflict.Message)); err != nil {
 			return err
 		}
 	}
@@ -74,7 +79,7 @@ func skillsReviewConfirmation(review skillspicker.Plan) prompt.ConfirmationReque
 			order = append(order, kind)
 		}
 		counts[kind]++
-		req.Details = append(req.Details, skillsActionDetail(action))
+		req.Details = append(req.Details, skillsActionDetails(action)...)
 	}
 	req.Summary = append(req.Summary, fmt.Sprintf("%d Skills · %d agents · %d bindings", len(aliases), len(agents), len(review.Actions)))
 	changes := make([]string, 0, len(order))
@@ -96,11 +101,25 @@ func skillsReviewConfirmation(review skillspicker.Plan) prompt.ConfirmationReque
 
 func skillsActionDetail(action skillspicker.Action) string {
 	// Paths are authority: sanitize control sequences without shortening them.
-	path := strings.Map(func(r rune) rune {
+	path := skillsAuthorityPath(action.DestinationPath)
+	return fmt.Sprintf("%s %s → %s (%s)", prompt.SafeText(string(action.Action)), prompt.SafeText(action.Alias), prompt.SafeText(reviewClientName(domain.ClientID(action.TargetId))), path)
+}
+
+func skillsActionDetails(action skillspicker.Action) []string {
+	lines := []string{skillsActionDetail(action)}
+	if action.SourceMoved != nil {
+		lines = append(lines, "  Source moved: "+skillsAuthorityPath(action.SourceMoved.From)+" → "+skillsAuthorityPath(action.SourceMoved.To))
+	}
+	if len(action.ReasonCodes) > 0 {
+		lines = append(lines, "  Reasons: "+prompt.SafeText(strings.Join(action.ReasonCodes, ", ")))
+	}
+	return lines
+}
+func skillsAuthorityPath(path string) string {
+	return strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) || unicode.In(r, unicode.Cf) {
 			return -1
 		}
 		return r
-	}, action.DestinationPath)
-	return fmt.Sprintf("%s %s → %s (%s)", prompt.SafeText(string(action.Action)), prompt.SafeText(action.Alias), prompt.SafeText(reviewClientName(domain.ClientID(action.TargetId))), path)
+	}, path)
 }

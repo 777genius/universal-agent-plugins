@@ -24,11 +24,7 @@ func (p HuhPrompter) SelectSkills(ctx context.Context, request prompt.SkillsSele
 	for i, choice := range request.Choices {
 		id := fmt.Sprintf("skill-%d", i+1)
 		ids[id] = choice.ID
-		label := []rune(prompt.SafeText(choice.Label))
-		if len(label) > 128 {
-			label = append(label[:127], '…')
-		}
-		req.Options = append(req.Options, installerui.Option{ID: id, Label: string(label)})
+		req.Options = append(req.Options, installerui.Option{ID: id, Label: prompt.SkillNavigationLabel(choice.Label)})
 	}
 	selected, err := terminal.SelectMany(ctx, req)
 	if err != nil {

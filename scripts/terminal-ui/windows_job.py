@@ -8,6 +8,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
+import time
 from contextlib import ExitStack
 
 
@@ -27,6 +28,7 @@ class ConsoleOwner:
             'CloseHandle': ([W.HANDLE], W.BOOL),
             'GetConsoleMode': ([W.HANDLE, ctypes.POINTER(W.DWORD)], W.BOOL),
             'GetConsoleCursorInfo': ([W.HANDLE, ctypes.POINTER(CursorInfo)], W.BOOL),
+            'SetConsoleCtrlHandler': ([W.LPVOID, W.BOOL], W.BOOL),
         }
         for name, (args, result) in signatures.items():
             function = getattr(self.k, name)
@@ -37,6 +39,7 @@ class ConsoleOwner:
         count = self.k.GetConsoleProcessList(pids, len(pids))
         self.ok(count, 'GetConsoleProcessList')
         self.require_private_console(list(pids[:min(count, len(pids))]), count, os.getpid())
+        self.private_console_pid = os.getpid()
         self.initial = [self.k.GetStdHandle(i & 0xffffffff) for i in (-10, -11, -12)]
         self.initial_modes = []
         for handle in self.initial:
@@ -95,9 +98,41 @@ class ConsoleOwner:
         return dict(handles=handles, modes=modes, cursor=dict(size=cursor.size, visible=bool(cursor.visible)))
 
 
+    def restore_ctrl_c_processing(self):
+        if self.private_console_pid != os.getpid():
+            raise AssertionError('CTRL+C processing requires this admitted private console owner')
+        # Python's callable handler and the inherited Win32 ignore attribute
+        # are separate. Normalize only this admitted owner before child spawn.
+        self.ok(self.k.SetConsoleCtrlHandler(None, False), 'SetConsoleCtrlHandler(NULL, FALSE)')
+        return dict(owner_pid=self.private_console_pid, reset_checked=True,
+                    prior_ignore_state='unknown')
+
+
+def probe_ctrl_c_input(console, state, publish):
+    """Observe one real ETX control event without reading console input."""
+    if type(state['owner_ctrl_c_events']) is not int or state['owner_ctrl_c_events'] != 0:
+        raise AssertionError('CTRL+C probe already observed an unrelated control event')
+    state['phase'] = 'interrupt-probe'
+    publish('CTRL_C_INPUT_READY_')
+    deadline = time.monotonic() + 5
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise AssertionError('actual ETX did not reach the private owner CTRL+C handler')
+        if state['owner_ctrl_c_events']:
+            break
+        time.sleep(min(0.02, remaining))
+    if type(state['owner_ctrl_c_events']) is not int or state['owner_ctrl_c_events'] != 1:
+        raise AssertionError('CTRL+C input probe requires exactly one observed control event')
+    if console.snapshot() != state['owner_before']:
+        raise AssertionError('CTRL+C input probe changed private console handles, modes or cursor')
+    state['ctrl_c_probe'] = dict(observed_events=1, owner_console_unchanged=True)
+    publish('CTRL_C_INPUT_OK_')
+
+
 def main():
     config = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
-    state = {'phase': 'bootstrap'}
+    state = dict(phase='bootstrap', nonce=config['nonce'], owner_ctrl_c_events=0)
 
     def save():
         path = Path(config['status'])
@@ -105,19 +140,26 @@ def main():
         temporary.write_text(json.dumps(state), encoding='utf-8')
         temporary.replace(path)
 
+    def publish(prefix):
+        save()
+        print(prefix + config['nonce'], file=console.stdout, flush=True)
+
     try:
         with ExitStack() as stack:
             console = ConsoleOwner(stack)
-            # A callable handler survives Ctrl+C without the inheritable ignore
-            # flag installed by SIG_IGN, which would disable the CLI's Ctrl+C.
-            signal.signal(signal.SIGINT, lambda *_: None)
+            def interrupted(*_args):
+                state['owner_ctrl_c_events'] += 1
+            signal.signal(signal.SIGINT, interrupted)
             before = console.snapshot()
             if not before['cursor']['visible']:
                 raise AssertionError('owner cursor hidden before CLI launch')
-            state.update(phase='owner-ready', initial_std_handles=console.initial,
-                         initial_std_modes=console.initial_modes, owner_before=before)
-            save()
-            print('OWNER_READY_' + config['nonce'], file=console.stdout, flush=True)
+            state.update(initial_std_handles=console.initial,
+                         initial_std_modes=console.initial_modes, owner_before=before,
+                         ctrl_c_processing=console.restore_ctrl_c_processing())
+            if config.get('ctrl_c_probe'):
+                probe_ctrl_c_input(console, state, publish)
+            state['phase'] = 'owner-ready'
+            publish('OWNER_READY_')
             # Explicit streams make CPython pass valid inherited console handles
             # even if its original CRT standard streams referenced runner pipes.
             child = subprocess.Popen(config['argv'], cwd=config['cwd'], stdin=console.stdin,

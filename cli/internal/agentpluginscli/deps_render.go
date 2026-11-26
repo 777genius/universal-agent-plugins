@@ -43,13 +43,16 @@ func dependencyActionOutput(actions []dependencyAction, support map[string][]dom
 }
 
 type dependencyResultDTO struct {
-	InstallationID string                    `json:"installation_id,omitempty"`
-	ClientID       string                    `json:"client_id,omitempty"`
-	Operation      string                    `json:"operation"`
-	Outcome        string                    `json:"outcome"`
-	Reason         string                    `json:"reason,omitempty"`
-	ManualActions  []string                  `json:"manual_actions,omitempty"`
-	NextActions    []dependencyNextActionDTO `json:"next_actions,omitempty"`
+	InstallationID  string                    `json:"installation_id,omitempty"`
+	ClientID        string                    `json:"client_id,omitempty"`
+	Operation       string                    `json:"operation"`
+	Outcome         string                    `json:"outcome"`
+	Reason          string                    `json:"reason,omitempty"`
+	ManualActions   []string                  `json:"manual_actions,omitempty"`
+	NextActions     []dependencyNextActionDTO `json:"next_actions,omitempty"`
+	bindingStatus   environment.BindingStatus
+	bindingFailure  *installFailure
+	bindingObserved bool
 }
 type dependencyNextActionDTO struct {
 	Kind   string `json:"kind"`
@@ -57,42 +60,75 @@ type dependencyNextActionDTO struct {
 }
 
 func renderDependencyResults(cmd *cobra.Command, opts *options, actions []dependencyAction, results []installer.Result, applyErr error) error {
-	out := dependencyResultOutput(results)
-	outcome := "completed"
-	if applyErr != nil {
-		outcome = "partial"
-	}
+	return renderDependencyResultOutput(cmd, opts, actions, dependencyResultOutput(results), applyErr)
+}
+
+// Observed bindings retain their authority through human projection, including
+// results whose native IDs are absent or identical to another binding's DTO.
+func renderDependencyBindingResults(cmd *cobra.Command, opts *options, actions []dependencyAction, outcomes []environment.BindingOutcome, applyErr error) error {
+	return renderDependencyResultOutput(cmd, opts, actions, dependencyBindingResultOutput(outcomes), applyErr)
+}
+
+func renderDependencyResultOutput(cmd *cobra.Command, opts *options, actions []dependencyAction, out []dependencyResultDTO, applyErr error) error {
 	if opts.format == "json" {
-		status := outputResultSuccess
-		if applyErr != nil {
-			status = outputResultFailure
-		}
-		data := map[string]any{"schema_version": outputSchemaVersion, "command": cmd.CommandPath(), "result": status, "outcome": outcome, "actions": dependencyActionOutput(actions, opts.dependencyComponents), "results": out, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts)}
-		var foreign *environment.ForeignBindingError
-		if errors.As(applyErr, &foreign) {
-			data["error"] = classifyAgentFailure(applyErr)
-		}
-		if opts.installResult != nil && len(opts.installResult.failedAgents()) > 0 {
-			// Per-binding detail is added only when something failed, so a
-			// successful result keeps its established shape.
-			data["bindings"] = opts.installResult.bindingsJSON()
-			if opts.installResult.LogFile != "" {
-				data["log_file"] = opts.installResult.LogFile
-			}
-		}
-		if opts.installSelection != nil {
-			data["selection"] = opts.installSelection
-		}
-		if opts.environmentOutput != nil {
-			data["environment"] = opts.environmentOutput
-			return writeJSONResult(cmd.OutOrStdout(), "add", status, data)
-		}
-		return renderJSON(cmd.OutOrStdout(), data)
+		return installOutputError(renderDependencyJSONResults(cmd, opts, actions, out, applyErr))
 	}
 	if err := renderDependencyHumanResults(cmd, opts, actions, out); err != nil {
 		return err
 	}
 	return renderInstallAttention(cmd, opts)
+}
+
+func renderDependencyJSONResults(cmd *cobra.Command, opts *options, actions []dependencyAction, out []dependencyResultDTO, applyErr error) error {
+	writer := &planWriter{writer: cmd.OutOrStdout()}
+	outcome := "completed"
+	status := outputResultSuccess
+	if applyErr != nil {
+		outcome = "partial"
+		status = outputResultFailure
+	}
+	actionOutput := dependencyActionOutput(actions, opts.dependencyComponents)
+	repairs := consumeDeclaredRepairPresentation(opts)
+	if repairs != nil {
+		actionOutput = append(append([]dependencyActionDTO(nil), repairs.actions...), actionOutput...)
+		out = append(append([]dependencyResultDTO(nil), repairs.results...), out...)
+	}
+	data := map[string]any{"schema_version": outputSchemaVersion, "command": cmd.CommandPath(), "result": status, "outcome": outcome, "actions": actionOutput, "results": out, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts)}
+	var foreign *environment.ForeignBindingError
+	if errors.As(applyErr, &foreign) || repairs != nil && applyErr != nil {
+		data["error"] = classifyAgentFailure(applyErr)
+	}
+	if opts.installResult != nil && len(opts.installResult.failedAgents()) > 0 {
+		// Per-binding detail is added only when something failed, so a
+		// successful result keeps its established shape.
+		data["bindings"] = opts.installResult.bindingsJSON()
+		if opts.installResult.LogFile != "" {
+			data["log_file"] = opts.installResult.LogFile
+		}
+	}
+	if opts.installSelection != nil {
+		data["selection"] = opts.installSelection
+	}
+	if opts.environmentOutput != nil {
+		data["environment"] = opts.environmentOutput
+		return writeJSONResult(writer, "add", status, data)
+	}
+	return renderJSON(writer, data)
+}
+
+func dependencyBindingResultOutput(outcomes []environment.BindingOutcome) []dependencyResultDTO {
+	out := dependencyResultOutput(environment.Results(outcomes))
+	index := 0
+	for _, binding := range outcomes {
+		if binding.Result == nil {
+			continue
+		}
+		out[index].bindingStatus = binding.Status
+		out[index].bindingFailure = describeBindingFailure(binding)
+		out[index].bindingObserved = true
+		index++
+	}
+	return out
 }
 
 // renderInstallAttention explains agents that did not succeed in plain words.
@@ -102,7 +138,13 @@ func renderInstallAttention(cmd *cobra.Command, opts *options) error {
 	if result == nil || len(result.failedAgents()) == 0 {
 		return nil
 	}
-	return renderAgentAttention(cmd.OutOrStdout(), result.Agents, result.LogFile, retryHintFor(cmd, result.Agents))
+	if err := renderAgentAttention(cmd.OutOrStdout(), result.Agents, result.LogFile, retryHintFor(cmd, result.Agents)); err != nil {
+		return err
+	}
+	if result.LogFile == "" {
+		return renderInstallDiagnostic(cmd.OutOrStdout(), installDiagnostic{WriteErr: result.logWriteErr}, result.Agents)
+	}
+	return nil
 }
 
 func renderDependencyHumanResults(cmd *cobra.Command, opts *options, actions []dependencyAction, out []dependencyResultDTO) error {
@@ -116,6 +158,7 @@ func renderDependencyHumanResults(cmd *cobra.Command, opts *options, actions []d
 		return err
 	}
 	for _, result := range out {
+		result = dependencyHumanResult(opts, result)
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s for %s: %s %s\n", humanDependencyVerb(result.Operation),
 			prompt.SafeText(dependencyResultAlias(opts.installResult, result)), prompt.SafeText(reviewClientName(domain.ClientID(result.ClientID))), result.Outcome, result.Reason); err != nil {
 			return err
