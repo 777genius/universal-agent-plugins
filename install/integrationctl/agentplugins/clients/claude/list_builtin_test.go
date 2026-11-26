@@ -143,3 +143,48 @@ func TestProjectListingAllowsUnrelatedProjectRows(t *testing.T) {
 		t.Fatalf("duplicate local row classified as %+v", got)
 	}
 }
+
+func TestClaude21332NativeListingWithDisabledAndEnabledManagedPlugin(t *testing.T) {
+	// Regresses the complete list shape reported for agent-notify activation:
+	// builtin rows without installPath, several per-project local rows, a
+	// project-scoped plugin from another repository and a synced plugin.
+	root := t.TempDir()
+	active := filepath.Join(root, ".claude", "skills", "agent-notify")
+	managed := map[string]any{
+		"id": "agent-notify@skills-dir", "version": "unknown",
+		"scope": "user", "enabled": false, "installPath": active,
+	}
+	rows := append(claudeBuiltinRows(), managed)
+	cache := filepath.Join(t.TempDir(), "plugins", "comfy")
+	for i := 0; i < 6; i++ {
+		rows = append(rows, map[string]any{
+			"id": "comfy@comfyui-mcp", "scope": "local", "enabled": true,
+			"installPath": cache, "projectPath": filepath.Join(t.TempDir(), "project"),
+		})
+	}
+	rows = append(rows, map[string]any{
+		"id": "jdtls-lsp@claude-plugins-official", "scope": "project", "enabled": true,
+		"installPath": filepath.Join(t.TempDir(), "jdtls"),
+		"projectPath": filepath.Join(t.TempDir(), "unrelated-repo"),
+	})
+	rows = append(rows, map[string]any{
+		"id": "pdf-viewer@synced", "scope": "synced", "enabled": true,
+		"installPath": filepath.Join(t.TempDir(), "synced", "pdf-viewer"),
+	})
+	for _, tc := range []struct {
+		enabled bool
+		want    ListStatus
+	}{
+		{false, StatusAbsent},
+		{true, StatusInstalled},
+	} {
+		managed["enabled"] = tc.enabled
+		body, err := json.Marshal(rows)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := PluginStatusFromList(body, "agent-notify", active); got != tc.want {
+			t.Fatalf("managed enabled=%v: status=%v want=%v", tc.enabled, got, tc.want)
+		}
+	}
+}
