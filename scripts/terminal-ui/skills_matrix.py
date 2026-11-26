@@ -52,8 +52,16 @@ class WindowsSession:
         self.terminal = ConPTY(
             [sys.executable, '-I', str(Path(__file__).with_name('windows_job.py').resolve()),
              str(config_path)], env, fixture.project, timeout, evidence=evidence)
-        self.terminal.status_path = self.status_path
-        self.terminal.wait('OWNER_READY_' + self.nonce)
+        try:
+            self.terminal.status_path = self.status_path
+            self.terminal.wait('OWNER_READY_' + self.nonce)
+        except BaseException as primary:
+            try:
+                self.terminal.close()
+            except Exception as cleanup_error:
+                raise RuntimeError(repr(primary) + '; readiness cleanup: ' +
+                                   repr(cleanup_error)) from primary
+            raise
 
     @property
     def raw(self):
@@ -726,7 +734,8 @@ def harness_checkout():
         head = subprocess.check_output(
             ['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True, env=env).strip()
         dirty = bool(subprocess.check_output(
-            ['git', '-C', str(checkout), 'status', '--porcelain'], text=True, env=env))
+            ['git', '-C', str(checkout), '--work-tree=' + str(checkout),
+             'status', '--porcelain', '--untracked-files=normal'], text=True, env=env))
     except (OSError, subprocess.CalledProcessError):
         head, dirty = None, None
     return checkout, head, dirty

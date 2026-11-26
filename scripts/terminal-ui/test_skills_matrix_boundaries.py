@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -65,6 +66,67 @@ class ProvenanceEnvironmentTests(unittest.TestCase):
         for call in git.call_args_list:
             self.assertEqual(call.kwargs['env'], preserved)
             self.assertEqual(call.args[0][1], '-C')
+
+
+@unittest.skipUnless(shutil.which('git'), 'real Git is required')
+class RealGitProvenanceTests(unittest.TestCase):
+    """Use actual local repositories; no command/output mocks qualify these cases."""
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        self.checkout = self.root / 'checkout'
+        self.checkout.mkdir()
+        self.environment = matrix.harness_git_environment()
+        self.environment.update(GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_GLOBAL=os.devnull,
+                                GIT_CONFIG_SYSTEM=os.devnull, GIT_TERMINAL_PROMPT='0')
+        self.git('init', '-q', str(self.checkout))
+        self.git('-C', str(self.checkout), 'config', 'user.name', 'Provenance Fixture')
+        self.git('-C', str(self.checkout), 'config', 'user.email', 'fixture@example.invalid')
+        self.script = self.checkout / 'scripts' / 'terminal-ui' / 'skills_matrix.py'
+        self.script.parent.mkdir(parents=True)
+        self.script.write_text('# tracked harness fixture\n', encoding='utf-8')
+        (self.checkout / 'tracked.txt').write_text('committed bytes\n', encoding='utf-8')
+        self.git('-C', str(self.checkout), 'add', '.')
+        self.git('-C', str(self.checkout), 'commit', '-qm', 'local fixture')
+        self.commit = self.git('-C', str(self.checkout), 'rev-parse', 'HEAD').strip()
+
+    def git(self, *args):
+        return subprocess.check_output(['git', *args], env=self.environment,
+            text=True, stderr=subprocess.STDOUT, timeout=5)
+
+    def observe(self, script=None):
+        with patch.object(matrix, '__file__', str(script or self.script)), \
+                patch.dict(matrix.os.environ, self.environment, clear=True):
+            checkout, head, dirty = matrix.harness_checkout()
+        self.assertEqual(head, self.commit)
+        return checkout, dirty
+
+    def test_config_cannot_hide_new_untracked_harness_files(self):
+        self.git('-C', str(self.checkout), 'config', 'status.showUntrackedFiles', 'no')
+        self.assertEqual(self.observe(), (self.checkout, False))
+        (self.script.parent / 'untracked-fixture.py').write_text('# untracked evidence code\n')
+        # Control: the inherited repository policy really conceals this file.
+        self.assertEqual(self.git('-C', str(self.checkout), 'status', '--porcelain'), '')
+        self.assertEqual(self.observe(), (self.checkout, True))
+
+    def test_config_cannot_substitute_clean_alternate_tracked_tree(self):
+        alternate = self.root / 'alternate'
+        shutil.copytree(self.checkout, alternate, ignore=shutil.ignore_patterns('.git'))
+        (self.checkout / 'tracked.txt').write_text('dirty actual harness tree\n')
+        self.git('-C', str(self.checkout), 'config', 'core.worktree', str(alternate))
+        # Control: -C alone observes the clean configured copy, not this harness.
+        self.assertEqual(self.git('-C', str(self.checkout), 'status', '--porcelain'), '')
+        self.assertEqual(self.observe(), (self.checkout, True))
+
+    def test_linked_worktree_keeps_own_head_and_dirty_state(self):
+        linked = self.root / 'linked'
+        self.git('-C', str(self.checkout), 'worktree', 'add', '--detach', str(linked), self.commit)
+        linked_script = linked / self.script.relative_to(self.checkout)
+        self.assertEqual(self.observe(linked_script), (linked, False))
+        (linked / 'tracked.txt').write_text('dirty linked worktree\n')
+        self.assertEqual(self.observe(linked_script), (linked, True))
+        self.assertEqual(self.observe(), (self.checkout, False))
 
 
 class ExecutableBoundaryTests(unittest.TestCase):
