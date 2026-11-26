@@ -462,6 +462,21 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     subject.finish(cleanup, self.scan(f), lambda: self.scan(f))
                 self.assertEqual(subject.fds, [])
 
+    def test_unowned_residual_failure_retains_bounded_private_diagnostic(self):
+        with self.fixture() as f:
+            subject = self.capture(f)
+            self.retire(f)
+            unsafe = "../private-secret\n" + "x" * 300
+            residuals = self.scan(f) | {".claude/marketing-kit.json", unsafe}
+            with self.assertRaisesRegex(ValueError, "unowned native residuals") as failure:
+                subject.finish(f["cleanup"], residuals, lambda: residuals)
+            text = str(failure.exception)
+            self.assertIn('"changed_key_count": 2', text)
+            self.assertIn('"key": ".claude/marketing-kit.json"', text)
+            self.assertNotIn("private-secret", text)
+            self.assertNotIn(unsafe, text)
+            self.assertEqual(subject.fds, [])
+
     def test_foreign_native_registry_rows_and_unowned_residuals_never_qualify(self):
         for mutation in ("installed_foreign", "market_foreign", "active_registration", "extra_residual", "extra_quarantine", "marker", "retired_bytes", "retired_replaced", "parent_replaced", "project_replaced"):
             with self.subTest(mutation=mutation), self.fixture() as f:

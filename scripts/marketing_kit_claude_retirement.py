@@ -453,7 +453,12 @@ class SignedClosureRetirement:
                         and result["outcome"] == "completed")
                 observed.add(owner["alias"])
             allowed = set().union(*(self.retired(owner) for owner in self.owners))
-            require(set(residuals) <= allowed)
+            unexpected = set(residuals) - allowed
+            if unexpected:
+                diagnostic = self.audit["copilot_snapshot_delta"]({}, {
+                    key: "unexpected_native_residual" for key in unexpected})
+                raise ValueError("Claude retirement has unowned native residuals: "
+                                 + json.dumps(diagnostic, sort_keys=True))
             self.registries_removed()
             require(set(rescan()) == set(residuals))
             self.recheck()
