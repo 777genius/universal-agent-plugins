@@ -3,6 +3,7 @@ package sourceacquisition
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -25,6 +26,13 @@ func (acquirer Acquirer) AcquireGitSkill(ctx context.Context, source sourcespec.
 	}
 	snapshot, err := acquirer.acquireGitTransport(ctx, acquirer.directEndpoint(endpoint, repository), endpoint, commit, source.Path, true, false)
 	if err != nil {
+		if ctx.Err() != nil {
+			return domain.PackageSnapshot{}, ctx.Err()
+		}
+		var selected *gitPackagePathError
+		if errors.As(err, &selected) {
+			return domain.PackageSnapshot{}, fmt.Errorf("acquire raw Git Skill: source path %q: %s", source.Path, selected.reason)
+		}
 		return domain.PackageSnapshot{}, ctxOrError(ctx, gitFailure(err, "acquire raw Git Skill failed; verify native Git credentials, repository access and complete Skill resources"))
 	}
 	if expectedTreeDigest != "" {

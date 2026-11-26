@@ -239,7 +239,7 @@ func (acquirer Acquirer) resolveBrowserGit(ctx context.Context, source sourcespe
 	}
 	var candidates []candidate
 	for _, ref := range parseRefs(output) {
-		name := strings.TrimPrefix(strings.TrimPrefix(ref.name, "refs/heads/"), "refs/tags/")
+		name := shortGitRef(ref.name)
 		if suffix != name && !strings.HasPrefix(suffix, name+"/") {
 			continue
 		}

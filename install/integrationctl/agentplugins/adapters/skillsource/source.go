@@ -139,6 +139,9 @@ func (a Acquirer) resolveURLSource(ctx context.Context, request sourceRequest, e
 	if !a.NativeGit {
 		resolved, p, err := a.ResolveGitHubURLPath(ctx, source.Repository, tail, explicitRef)
 		source.RequestedSelector, source.RequestedPath, source.Commit = resolved.RequestedRef, p, resolved.Commit
+		if resolved.ResolvedRef != "" {
+			source.RequestedSelector = resolved.ResolvedRef
+		}
 		return source, err
 	}
 	resolved, err := a.resolveNativeSource(ctx, git, explicitRef)

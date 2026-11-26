@@ -43,7 +43,10 @@ func (a Acquirer) resolveNativeSource(ctx context.Context, git sourcespec.Git, e
 			return source, fmt.Errorf("source selector conflicts with --ref")
 		}
 		if git.Browser != nil {
-			short := strings.TrimPrefix(strings.TrimPrefix(explicitRef, "refs/heads/"), "refs/tags/")
+			short := strings.TrimPrefix(explicitRef, "refs/heads/")
+			if short == explicitRef {
+				short = strings.TrimPrefix(explicitRef, "refs/tags/")
+			}
 			tail := git.Browser.Suffix
 			if tail != short && !strings.HasPrefix(tail, short+"/") {
 				return source, fmt.Errorf("URL does not match explicit ref")

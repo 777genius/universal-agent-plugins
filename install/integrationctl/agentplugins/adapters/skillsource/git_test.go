@@ -1,6 +1,12 @@
 package skillsource
 
-import "testing"
+import (
+	"context"
+	"strings"
+	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+)
 
 func TestNativeSkillSourceGrammar(t *testing.T) {
 	for _, input := range []string{
@@ -37,6 +43,40 @@ func TestNativeRootSkillNamesAndLocations(t *testing.T) {
 	} {
 		if sourceRootName(source) != "pdf" || source.Location() == "" {
 			t.Fatalf("root Skill name or display identity lost: %+v", source)
+		}
+	}
+}
+
+type skillRefRunner struct{ remote string }
+
+func (runner skillRefRunner) Run(_ context.Context, command sourceacquisition.Command) ([]byte, error) {
+	args := command.Args
+	if len(args) > 2 && args[0] == "-C" {
+		args = args[2:]
+	}
+	if len(args) > 0 && args[0] == "ls-remote" {
+		return []byte(runner.remote), nil
+	}
+	return nil, nil
+}
+
+func TestSkillURLKeepsExactAnonymousAndNativeRefNames(t *testing.T) {
+	commit := strings.Repeat("1", 40)
+	for _, native := range []bool{false, true} {
+		for _, ref := range []string{"main", "refs/tags/topic"} {
+			fullRef := "refs/heads/" + ref
+			a := Acquirer{Acquirer: sourceacquisition.Acquirer{TempRoot: t.TempDir(), Runner: skillRefRunner{commit + "\t" + fullRef + "\n"}}, NativeGit: native}
+			input := "https://github.com/acme/tools/tree/" + ref + "/skills/pdf"
+			source, err := a.Resolve(t.Context(), input, fullRef)
+			if err != nil || source.RequestedSelector != fullRef || source.RequestedPath != "skills/pdf" || source.Commit != commit {
+				t.Fatalf("exact ref changed native=%v: %+v %v", native, source, err)
+			}
+			if native {
+				source, err = a.Resolve(t.Context(), input, "")
+				if err != nil || source.RequestedSelector != fullRef || source.RequestedPath != "skills/pdf" {
+					t.Fatalf("native branch namespace stripped twice: %+v %v", source, err)
+				}
+			}
 		}
 	}
 }
