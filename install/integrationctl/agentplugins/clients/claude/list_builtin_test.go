@@ -245,7 +245,7 @@ func TestProjectMetadataMustBeCanonicalOnEverySupportedScope(t *testing.T) {
 			} else {
 				row[field] = fixture.root
 			}
-			body, err := json.Marshal([]map[string]any{fixture.selected, row})
+			body, err := json.Marshal(append(claudeBuiltinRows(), fixture.selected, row))
 			if err != nil {
 				t.Fatal(err)
 			}
