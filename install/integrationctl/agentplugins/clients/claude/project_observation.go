@@ -243,8 +243,7 @@ func validProjectListMetadata(entry map[string]any, project string) bool {
 		}
 	}
 	if path, exists := entry["projectPath"]; exists {
-		scope, _ := entry["scope"].(string)
-		if text, ok := path.(string); !ok || !exactAbsolute(text) || (scope != "local" && scope != "project") || (project != "" && text != project) {
+		if text, ok := path.(string); !ok || !exactAbsolute(text) || (project != "" && text != project) {
 			return false
 		}
 	}
