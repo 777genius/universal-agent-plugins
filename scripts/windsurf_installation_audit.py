@@ -22,7 +22,7 @@ from codex_plugin_retention_audit import HeldTree
 from uuid import UUID
 
 from windsurf_global_skill_audit import (CASES as GLOBAL_SKILL_CASES, frame_changes,
-    frame, member, read_file, strict_json, managed_digest, immutable_source_digest, content, compact, sha)
+    frame, member, read_file, strict_json, managed_digest, immutable_source_digest, content, compact, sha, same)
 
 ACCEPTANCE = "windsurf-global-installation"
 PREPARED = {"materialization": "materialized", "activation": "prepared",
@@ -438,7 +438,7 @@ class WindsurfInstallationAudit:
         expected_runtime = {"schema_version": 1, "lock_digest": "sha256:" + lock_key,
                             **{key: config[key] for key in ("package", "version", "entrypoint")},
                             "omit_optional": config.get("omit_optional", False)}
-        require(strict_json(read_file(data_fd, runtime + "/.agentplugins-runtime.json")[0]) == expected_runtime)
+        require(same(strict_json(read_file(data_fd, runtime + "/.agentplugins-runtime.json")[0]), expected_runtime))
         return runtime
 
     def data_frame(self, data_fd, state):

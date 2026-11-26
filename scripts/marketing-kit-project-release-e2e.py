@@ -973,9 +973,14 @@ def check_refusal_data_unchanged(data, before, observed, *, store_pins=(), diagn
                 raise AssertionError("corrupt restore created invalid Directory cache lock")
             allowed.update((key, digest_key))
         else:
-            raise AssertionError("corrupt restore created unexpected cache/data entry")
-    if (observed.keys() - previous.keys()) - allowed:
-        raise AssertionError("corrupt restore created unexpected data state")
+            diagnostic = audit["copilot_snapshot_delta"]({}, {key: observed[key]})
+            raise AssertionError("corrupt restore created unexpected cache/data entry: "
+                                 + json.dumps(diagnostic, sort_keys=True))
+    unexpected = (observed.keys() - previous.keys()) - allowed
+    if unexpected:
+        diagnostic = audit["copilot_snapshot_delta"]({}, {key: observed[key] for key in unexpected})
+        raise AssertionError("corrupt restore created unexpected data state: "
+                             + json.dumps(diagnostic, sort_keys=True))
 
 
 def copilot_refusal_diagnostic_files(data, before, observed, document):

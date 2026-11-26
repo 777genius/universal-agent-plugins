@@ -386,7 +386,8 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
 
     def test_owned_locked_npm_bin_links_remain_in_saved_data_custody(self):
         variants = (None, "receipt", "marker", "lock", "runtime-marker", "outside-runtime",
-                    "outside-data", "chain", "hardlink", "elsewhere", "late-rewrite")
+                    "outside-data", "chain", "hardlink", "elsewhere", "late-rewrite",
+                    "runtime-boolean-schema", "runtime-numeric-optional")
         source, _ = selected(self.fixtures, 0)
         prefix = "io.github.777genius.agentplugins/runtime/"
         package = b'{"private":true,"dependencies":{"example":"1.2.3"}}'
@@ -431,6 +432,10 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 elif variant == "marker": (namespace / ".agentplugins-data-owner.json").write_text("{}")
                 elif variant == "lock": (runtime / "package-lock.json").write_bytes(b"different lock")
                 elif variant == "runtime-marker": (runtime / ".agentplugins-runtime.json").write_text("{}")
+                elif variant in ("runtime-boolean-schema", "runtime-numeric-optional"):
+                    malformed = {**marker, **({"schema_version": True} if variant == "runtime-boolean-schema"
+                                             else {"omit_optional": 0})}
+                    (runtime / ".agentplugins-runtime.json").write_text(json.dumps(malformed))
                 elif variant in ("outside-runtime", "outside-data", "chain"):
                     link.unlink()
                     if variant == "outside-runtime":

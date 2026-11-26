@@ -3197,7 +3197,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     if variant is None:
                         self.assertEqual(verify("unused", env, project)["result"], "expected_refusal")
                     else:
-                        with self.assertRaises(AssertionError): verify("unused", env, project)
+                        with self.assertRaises(AssertionError) as failure: verify("unused", env, project)
+                        self.assertNotIn("private provider text", str(failure.exception))
+                        if variant in ("unreported", "extra-file"):
+                            self.assertIn("key_sha256", str(failure.exception))
 
     def test_marketing_kit_cold_copilot_cache_allowance_is_exact_and_source_bound(self):
         mutations = (None, "source-bytes", "metadata", "executables", "state-in-entry", "unknown-entry",
