@@ -1,0 +1,233 @@
+package agentpluginscli
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
+)
+
+// Plan-only executable research: CLI and installer transactions are real;
+// native host responses and security scanner are the existing harness fixtures.
+func spikeCommand(t *testing.T, f cliFixture, args ...string) (string, error) {
+	t.Helper()
+	out, stderr, err := f.execute(false, args...)
+	t.Logf("COMMAND %q\nERROR %v\nSTDOUT %s\nSTDERR %s", args, err, out, stderr)
+	return out, err
+}
+
+func spikeState(t *testing.T, f cliFixture, label string) domain.StateFileV2 {
+	t.Helper()
+	state, err := f.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("STATE %s %s", label, body)
+	view, err := f.app.Installer.Inspect(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, i := range view.Installations {
+		t.Logf("IDENTITY %s installation=%s SourceKey=%q", label, i.InstallationID, i.SourceKey)
+	}
+	return state
+}
+
+func TestPlanStateSpikeRetainedInstallation(t *testing.T) {
+	for _, change := range []string{"same pin and digest", "new commit same digest", "new commit new digest"} {
+		t.Run(change, func(t *testing.T) {
+			repo := dependencyRepo(t)
+			sha := savedJourneyGit(t, repo, "rev-parse", "HEAD")
+			f, acquisition, _ := dependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientGemini})
+			// Existing direct Git runner executes genuine disposable Git transport;
+			// this restricted host cannot qualify OSRunner containment support.
+			acquisition.Runner = directGitTestRunner{}
+			source := githubIdentity("acme/demo", sha, "")
+			actualDirect, err := acquisition.AcquireGitHub(context.Background(), "acme/demo", sha, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = packagedigest.Remove(actualDirect) })
+			t.Logf("ACTUAL DIRECT source=%+v digest=%s computed_binding_id=%s", actualDirect.Source, actualDirect.TreeDigest, domain.ComputeSourceBindingID(actualDirect.Source))
+			if _, err := spikeCommand(t, f, "add", source, "--no-save", "--target", "gemini", "--format", "json"); err != nil {
+				t.Fatal(err)
+			}
+			before := spikeState(t, f, "unmanaged")
+			if len(before.Installations) != 1 || len(before.EnvironmentReceipts) != 0 {
+				t.Fatalf("not unmanaged: %+v", before)
+			}
+			original := before.Installations[0]
+			if actualDirect.TreeDigest != original.Source.TreeDigest || domain.ComputeSourceBindingID(actualDirect.Source) != original.Source.SourceBindingID {
+				t.Fatal("actual Git snapshot does not match installed identity")
+			}
+			mp, lp := f.app.dependencyPaths()
+			beforeForeign := freshRestoreFiles(t, mp, lp, f.store.Path)
+			if _, err := spikeCommand(t, f, "add", source, "--target", "gemini", "--format", "json"); err == nil || !strings.Contains(err.Error(), "has an unmanaged binding") {
+				t.Fatalf("expected live unmanaged refusal: %v", err)
+			}
+			if !reflect.DeepEqual(beforeForeign, freshRestoreFiles(t, mp, lp, f.store.Path)) {
+				t.Fatal("foreign refusal changed agreement/state")
+			}
+			var marker string
+			for _, receipt := range original.DataReceipts {
+				marker = filepath.Join(receipt.Locator, "plan-spike-sentinel")
+				dependencyWrite(t, marker, "preserved user data\n")
+				break
+			}
+			if marker == "" {
+				t.Fatal("fixture did not allocate PLUGIN_DATA")
+			}
+			if _, err := spikeCommand(t, f, "remove", original.InstallationID, "--target", "gemini", "--format", "json"); err != nil {
+				t.Fatal(err)
+			}
+			removed := spikeState(t, f, "removed all bindings")
+			if len(removed.Installations) != 1 || len(removed.Installations[0].Clients) != 0 || !removed.Installations[0].DataRetained {
+				t.Fatalf("expected retained empty installation: %+v", removed)
+			}
+			if dependencyRead(t, marker) != "preserved user data\n" {
+				t.Fatal("remove lost data")
+			}
+			if change != "same pin and digest" {
+				if change == "new commit new digest" {
+					dependencyWrite(t, filepath.Join(repo, "payload.txt"), "new package content\n")
+					savedJourneyGit(t, repo, "add", ".")
+				}
+				savedJourneyGit(t, repo, "commit", "--allow-empty", "-m", change)
+				sha = savedJourneyGit(t, repo, "rev-parse", "HEAD")
+			}
+			desired := githubIdentity("acme/demo", sha, "")
+			envSnapshot, err := snapshotEnvironmentContext(context.Background(), f.app)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, candidate, err := resolveSavedAddContext(context.Background(), f.app, &options{scope: "user", format: "json"}, desired, []domain.ClientID{domain.ClientGemini}, exactGitPattern.FindStringSubmatch(desired), envSnapshot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			candidateIdentity := identityFromLocked(candidate)
+			t.Logf("ACTUAL SAVED CANDIDATE pin=%+v source=%+v computed_binding_id=%s", candidate, candidateIdentity, domain.ComputeSourceBindingID(candidateIdentity))
+			if candidate.SourceKey != "github:acme/demo:" || candidateIdentity.Repository != original.Source.Repository || candidateIdentity.PackageSubpath != original.Source.PackageSubpath || candidateIdentity.SourceKind != original.Source.SourceKind {
+				t.Fatal("candidate changed logical source coordinates")
+			}
+			if domain.ComputeSourceBindingID(candidateIdentity) == original.Source.SourceBindingID {
+				t.Fatal("expected legacy imperative/dependency binding identity mismatch")
+			}
+			if change == "new commit new digest" {
+				if candidate.TreeDigest == original.Source.TreeDigest {
+					t.Fatal("changed bytes did not change digest")
+				}
+			} else if candidate.TreeDigest != original.Source.TreeDigest {
+				t.Fatal("same bytes candidate digest differs")
+			}
+			if change == "same pin and digest" && candidate.Revision() != original.Source.ResolvedRevision {
+				t.Fatal("same-pin candidate revision differs")
+			}
+			if change != "same pin and digest" && candidate.Revision() == original.Source.ResolvedRevision {
+				t.Fatal("new-commit candidate revision unchanged")
+			}
+			beforeRefusal := freshRestoreFiles(t, mp, lp, f.store.Path, marker)
+			_, err = spikeCommand(t, f, "add", desired, "--target", "gemini", "--format", "json")
+			after := spikeState(t, f, "saved add result")
+			if raw, readErr := os.ReadFile(lp); readErr == nil {
+				t.Logf("LOCK %s", raw)
+			}
+			if dependencyRead(t, marker) != "preserved user data\n" {
+				t.Fatal("saved add lost retained data")
+			}
+			if !errors.Is(err, installer.ErrUpdateRequired) || !strings.Contains(err.Error(), "is sticky to") || !strings.Contains(err.Error(), "use switch to change source") {
+				t.Fatalf("expected precise sticky source refusal, got %v", err)
+			}
+			if !reflect.DeepEqual(removed, after) || !reflect.DeepEqual(beforeRefusal, freshRestoreFiles(t, mp, lp, f.store.Path, marker)) {
+				t.Fatal("sticky refusal changed manifest/lock/state/data bytes or metadata")
+			}
+			t.Log("ASSERT unchanged manifest/lock/state/data bytes and metadata; PLUGIN_DATA sentinel survives; zero environment receipts")
+		})
+	}
+}
+
+func TestPlanStateSpikeRootDependenciesNoSave(t *testing.T) {
+	f := newCLIFixture(t, []domain.DetectedClient{fixtureClient(t, domain.ClientCursor)})
+	root := writeCLIPlugin(t)
+	dependencyWrite(t, filepath.Join(root, "uap.toml"), "schema_version = 1\n[dependencies]\n\"acme/context\" = '^2.0'\n")
+	before, err := f.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = spikeCommand(t, f, "add", root, "--no-save", "--target", "cursor", "--format", "json")
+	if err == nil || !strings.Contains(err.Error(), "managed saved") {
+		t.Fatalf("expected dependency refusal: %v", err)
+	}
+	after, err := f.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("no-save refusal changed installer state")
+	}
+}
+
+func TestPlanStateSpikeUnrelatedUnmanagedSync(t *testing.T) {
+	repo := dependencyRepo(t)
+	sha := savedJourneyGit(t, repo, "rev-parse", "HEAD")
+	f, acquisition, _ := dependencySpecHarness(t, repo, dependencyClientSpec{id: domain.ClientGemini})
+	acquisition.Runner = directGitTestRunner{}
+	if _, err := spikeCommand(t, f, "add", githubIdentity("acme/unrelated", sha, ""), "--no-save", "--target", "gemini", "--format", "json"); err != nil {
+		t.Fatal(err)
+	}
+	before := spikeState(t, f, "unrelated unmanaged")
+	// The logical saved source and package identity are distinct. Acquisition uses
+	// the same disposable Git URL, which is the existing harness transport seam.
+	dependencyWrite(t, filepath.Join(repo, "plugin.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json","name":"selected","version":"1.0.0","description":"Selected distinct package"}`)
+	dependencyWrite(t, filepath.Join(repo, "mcp.json"), `{"$schema":"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json","mcpServers":{"selected":{"type":"stdio","command":"go","args":["version"],"env":{"DATA":"${PLUGIN_DATA}"}}}}`)
+	if err := os.Rename(filepath.Join(repo, "skills", "demo"), filepath.Join(repo, "skills", "selected")); err != nil {
+		t.Fatal(err)
+	}
+	dependencyWrite(t, filepath.Join(repo, "skills", "selected", "SKILL.md"), "---\nname: selected\ndescription: Distinct selected skill\n---\nSelected instructions.\n")
+	savedJourneyGit(t, repo, "add", ".")
+	savedJourneyGit(t, repo, "commit", "-m", "distinct saved package")
+	sha = savedJourneyGit(t, repo, "rev-parse", "HEAD")
+	mp, _ := f.app.dependencyPaths()
+	dependencyWrite(t, mp, fmt.Sprintf("schema_version = 1\n[dependencies.selected]\ngit = \"acme/selected\"\ncommit = %q\n[targets]\ngemini = [\"selected\"]\n", sha))
+	if _, err := spikeCommand(t, f, "deps", "lock", "--format", "json"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := spikeCommand(t, f, "deps", "sync", "--locked", "--yes", "--format", "json"); err != nil {
+		t.Fatal(err)
+	}
+	after := spikeState(t, f, "selected sync complete")
+	if len(after.Installations) != 2 || len(after.EnvironmentReceipts) != 1 {
+		t.Fatalf("expected unmanaged plus managed: %+v", after)
+	}
+	foundOriginal := false
+	for _, i := range after.Installations {
+		if i.InstallationID == before.Installations[0].InstallationID {
+			foundOriginal = true
+			if !reflect.DeepEqual(i, before.Installations[0]) {
+				t.Fatal("sync changed unrelated unmanaged installation")
+			}
+		}
+	}
+	if !foundOriginal {
+		t.Fatal("sync removed unrelated unmanaged installation")
+	}
+	beforeOwnedRefusal := freshRestoreFiles(t, mp, f.store.Path)
+	if _, err := spikeCommand(t, f, "add", githubIdentity("acme/selected", sha, ""), "--no-save", "--target", "gemini", "--format", "json"); err == nil || !strings.Contains(err.Error(), "source belongs to saved dependency selected") {
+		t.Fatalf("expected owned diagnostic: %v", err)
+	}
+	if !reflect.DeepEqual(beforeOwnedRefusal, freshRestoreFiles(t, mp, f.store.Path)) {
+		t.Fatal("owned refusal changed manifest/state")
+	}
+}

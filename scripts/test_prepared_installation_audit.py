@@ -103,6 +103,7 @@ def report(kind, target="cursor"):
                "native_component_candidates": [], "native_residuals": [], "post_removal_leftovers": [],
                "post_skill_tree_delta": [], "post_removal_skill": None, "post_lock_pinned": False,
                "repeat_project_unchanged": True if target == "grok" else None,
+               "cursor_repeat_project_unchanged": True if target == "cursor" else None,
                "retained_passive_native_files": [], "signed_release_observation": [],
                "skill_path": f".cursor/skills/{identity}/SKILL.md" if kind == "skill" else None}
         if target == "grok":
@@ -138,6 +139,19 @@ def report(kind, target="cursor"):
 
 
 class PreparedInstallationTest(unittest.TestCase):
+    def test_cursor_skill_summary_requires_exact_project_repeat_custody(self):
+        for value in (None, False, True, 1, "true", "missing"):
+            with self.subTest(value=value):
+                document = report("skill")
+                row = document["results"][0]
+                self.assertIs(row["repeat_verified"], True)
+                if value == "missing":
+                    row.pop("cursor_repeat_project_unchanged")
+                else:
+                    row["cursor_repeat_project_unchanged"] = value
+                result = self.summary(document)
+                self.assertIs(result["installation_acceptance_passed"], value is True)
+
     def summary(self, value):
         mode = ("grok-prepared-skills-installation" if value["target"] == "grok" else
                 "cursor-prepared-skills-installation" if value["kind"] == "skill" else "cursor-prepared-installation")
@@ -336,6 +350,158 @@ class PreparedInstallationTest(unittest.TestCase):
                 self.assertEqual(value, before)
                 self.assertEqual(value["passed"], 0)
 
+    def test_grok_failed_first_add_preserves_original_result_without_repeat(self):
+        runner = run_path(str(ROOT / "scripts/live-install-audit.py"))
+        do_case = runner["do_case"]
+        item = deepcopy(FIXTURES["skills"][0])
+        calls = []
+
+        def failed_install(argv, env, cwd, timeout=105, **options):
+            calls.append(list(argv))
+            self.assertTrue(options.get("capture_full"))
+            if argv[1:3] == ["skills", "add"]:
+                self.assertEqual(len(calls), 1)
+                return {"exit_code": 1, "timeout": False, "stdout_tail": "",
+                        "stderr_tail": "source refused\n", "stdout_full": "",
+                        "stderr_full": "source refused\n", "_json": None}
+            self.assertEqual(argv[1], "list")
+            self.assertEqual(len(calls), 2)
+            document = {"schema_version": 1, "command": "list", "result": "success",
+                        "data": {"installations": []}}
+            output = json.dumps(document)
+            return {"exit_code": 0, "timeout": False, "stdout_tail": output,
+                    "stderr_tail": "", "stdout_full": output, "stderr_full": "",
+                    "_json": document}
+
+        with tempfile.TemporaryDirectory() as temp, mock.patch.dict(do_case.__globals__, {
+                "call": failed_install, "initialize_project_skill_git_root": mock.Mock()}), \
+                mock.patch.object(runner["subprocess"], "run", side_effect=AssertionError("unexpected child")):
+            row = do_case("/fixture/agentplugins", "grok", "skill", item, 0,
+                          Path(temp).resolve() / "run", {}, {},
+                          installation_audit="grok-prepared-skills-installation")
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(row["status"], "install-failed")
+        self.assertEqual(row["install"]["exit_code"], 1)
+        self.assertEqual(row["grok_preparation_envelopes"], {"status": "unqualified"})
+        self.assertEqual(row["repeat_installation_ids"], [])
+        self.assertIsNone(row["repeat_add"])
+        self.assertIsNone(row["cleanup"])
+        self.assertTrue(row["sentinels_preserved"])
+
+    def test_cursor_repeat_skill_tree_changes_refuse_proof_and_still_remove(self):
+        runner = run_path(str(ROOT / "scripts/live-install-audit.py"))
+        do_case = runner["do_case"]
+        item = deepcopy(FIXTURES["skills"][0])
+        body = ("---\nname: " + item["name"] + "\ndescription: Inert immutable upstream fixture\n---\nPinned test bytes.\n").encode()
+        item["skill_md_git_blob_sha1"] = hashlib.sha1(
+            b"blob " + str(len(body)).encode() + b"\0" + body).hexdigest()
+        for mutation in (None, "initial-list", "repeat-add", "repeat-list", "rewrite-restore",
+                         "empty-repeat-add", "empty-repeat-list", "unavailable-repeat-add"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temp:
+                calls = []
+                def invoke(argv, env, cwd, timeout=105, **options):
+                    phase = AUDIT["COMMANDS"][len(calls)]
+                    calls.append(phase)
+                    documents = envelopes("skill", item["name"], "cursor", item, cwd)
+                    for inventory in ("list", "repeat_list"):
+                        documents[inventory]["data"]["installations"][0]["source"] = item["repo"] + "/skills/" + item["folder"]
+                    skill = cwd / ".cursor/skills" / item["name"] / "SKILL.md"
+                    extra = cwd / ".cursor/skills/unknown-empty"
+                    if phase == "install":
+                        skill.parent.mkdir(); skill.write_bytes(body)
+                        (cwd / "uap.toml").write_text("# inert saved agreement\n")
+                        (cwd / "uap.lock").write_text(json.dumps({"packages": [{
+                            "alias": item["name"], "targets": ["cursor"],
+                            "tree_digest": "sha256:" + "a" * 64, "manifest_digest": "sha256:" + "b" * 64,
+                            "source": {"git": {"kind": "skill", "skill": item["name"],
+                                "repository": item["repo"], "commit": item["ref"],
+                                "path": "skills/" + item["folder"]}}}]}))
+                    if ((phase == "list" and mutation == "initial-list")
+                            or (phase == "repeat_add" and mutation in ("repeat-add", "rewrite-restore"))
+                            or (phase == "repeat_list" and mutation == "repeat-list")):
+                        skill.write_bytes(b"rewritten project Skill\n")
+                    if ((phase == "repeat_add" and mutation == "initial-list")
+                            or (phase == "repeat_list" and mutation == "rewrite-restore")):
+                        skill.write_bytes(body)
+                    if ((phase == "repeat_add" and mutation == "empty-repeat-add")
+                            or (phase == "repeat_list" and mutation == "empty-repeat-list")):
+                        extra.mkdir()
+                    if phase == "repeat_list" and mutation == "empty-repeat-add": extra.rmdir()
+                    if phase == "cleanup":
+                        self.assertEqual(argv[1:3], ["remove", item["name"]])
+                        skill.unlink(); skill.parent.rmdir()
+                        if extra.exists(): extra.rmdir()
+                        (cwd / "uap.lock").unlink()
+                    document = documents[phase]
+                    output = json.dumps(document)
+                    return {"exit_code": 0, "timeout": False, "stdout_tail": output[-1800:],
+                            "stderr_tail": "", "stdout_full": output, "stderr_full": "", "_json": document}
+                original_snapshot = runner["scoped_snapshot"]
+                def skill_snapshot(roots):
+                    if mutation == "unavailable-repeat-add" and calls[-1] == "repeat_add":
+                        raise AssertionError("injected unavailable Skill-tree comparison")
+                    return original_snapshot(roots)
+                with mock.patch.dict(do_case.__globals__, {"call": invoke, "AGENT_BINARIES": {},
+                        "scoped_snapshot": skill_snapshot,
+                        "initialize_project_skill_git_root": mock.Mock()}), \
+                     mock.patch.object(runner["subprocess"], "run", side_effect=AssertionError("unexpected child")):
+                    row = do_case("/fixture/agentplugins", "cursor", "skill", item, 0,
+                                  Path(temp).resolve() / "run", {}, {},
+                                  installation_audit="cursor-prepared-skills-installation")
+                self.assertEqual(calls, list(AUDIT["COMMANDS"]))
+                self.assertTrue(row["skill_bytes_match"])
+                self.assertTrue(row["repeat_native_unchanged"])
+                self.assertTrue(row["repeat_lock_unchanged"])
+                self.assertTrue(row["removal_verified"])
+                self.assertEqual(row["post_skill_tree_delta"], [])
+                self.assertIsNone(row["repeat_project_unchanged"])
+                self.assertEqual(row["cursor_preparation_envelopes"]["status"], "verified")
+                self.assertIs(row["cursor_repeat_project_unchanged"], mutation is None)
+                self.assertIs(row["repeat_verified"], mutation is None)
+                self.assertEqual(row["status"], "incomplete-native-proof" if mutation is None else "repeat-add-unqualified")
+                value = report("skill")
+                value["results"][0] = row
+                self.assertIs(self.summary(value)["installation_acceptance_passed"], mutation is None)
+
+    def test_main_reports_resolved_executed_cli_and_keeps_unexecuted_input(self):
+        main = run_path(str(ROOT / "scripts/live-install-audit.py"))["main"]
+        windsurf = main.__globals__["WINDSURF_INSTALLATION"]
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            cli = root / "agentplugins"; cli.write_text("inert test artifact; never executed")
+            for spelling, bootstrap in (("agentplugins", True), (str(cli), True), ("missing-relative-cli", False)):
+                with self.subTest(cli=spelling, bootstrap=bootstrap):
+                    calls, probes = [], []
+                    destination = root / ("relative" if spelling == "agentplugins" else "absolute" if bootstrap else "blocked")
+                    def case(*args, **kwargs):
+                        calls.append(args[0])
+                        return {"index": args[4], "target": "windsurf", "kind": "plugin",
+                                "source": args[3], "status": "incomplete-native-proof"}
+                    def version(argv, *_):
+                        probes.append(argv)
+                        return {"status": "reported", "exit_code": 0,
+                                "value": windsurf["CLI_VERSION"] if argv[1] == "version" else windsurf["CLIENT_VERSION"]}
+                    substitutions = {"do_case": case, "vendor_bootstrap_attested": lambda: bootstrap,
+                        "version_evidence": version, "AGENT_BINARIES": {"devin": "/fixture/devin"},
+                        "isolated_client_env": lambda *args: {}, "published_audit_temp_parent": lambda: None}
+                    argv = ["audit", "--cli", spelling, "--kind", "plugin", "--target", "windsurf",
+                            "--limit", "30", "--report-dir", str(destination), "--acceptance", windsurf["ACCEPTANCE"]]
+                    with mock.patch.dict(main.__globals__, substitutions), mock.patch("sys.argv", argv), \
+                         mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="x86_64"), \
+                         contextlib.chdir(root), contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                        self.assertEqual(main(), 1 if bootstrap else 2)
+                    written = json.loads((destination / "windsurf-plugin.json").read_text())
+                    self.assertFalse(written["installation_acceptance_passed"])
+                    if bootstrap:
+                        self.assertEqual(calls, [str(cli)] * 30)
+                        self.assertEqual(probes[0][0], str(cli))
+                        self.assertEqual(written["cli"], str(cli))
+                        self.assertEqual(written["passed"], 0)
+                    else:
+                        self.assertEqual(written["cli"], spelling)
+                        self.assertEqual(written["cli_version"], {"status": "not-probed"})
+                        self.assertEqual(calls, []); self.assertEqual(probes, [])
+
     def test_grok_explicit_main_mode_keeps_default_failure_and_original_prepared_rows(self):
         main = run_path(str(ROOT / "scripts/live-install-audit.py"))["main"]
         value = report("skill", "grok")
@@ -431,6 +597,20 @@ class PreparedInstallationTest(unittest.TestCase):
             value = report("skill"); value["results"][0][field] = wrong
             self.assertFalse(self.summary(value)["installation_acceptance_passed"])
 
+    def test_marketing_repeat_ids_remain_bound_to_their_original_aliases(self):
+        good = envelopes("plugin", "marketing-kit")
+        self.assertEqual(observe("plugin", "marketing-kit", good)["status"], "verified")
+        changed = deepcopy(good)
+        actions = changed["repeat_add"]["data"]["actions"]
+        actions[0]["installation_id"], actions[1]["installation_id"] = (
+            actions[1]["installation_id"], actions[0]["installation_id"])
+        self.assertEqual(observe("plugin", "marketing-kit", changed)["status"], "unqualified")
+        changed = deepcopy(good)
+        rows = changed["repeat_list"]["data"]["installations"]
+        rows[1]["installation_id"], rows[2]["installation_id"] = (
+            rows[2]["installation_id"], rows[1]["installation_id"])
+        self.assertEqual(observe("plugin", "marketing-kit", changed)["status"], "unqualified")
+
     def test_complete_raw_envelopes_and_full_marketing_closure_are_required(self):
         for kind, identity in (("skill", "frontend-design"), ("plugin", "atlassian"), ("plugin", "marketing-kit")):
             good = envelopes(kind, identity)
@@ -500,39 +680,6 @@ class PreparedInstallationTest(unittest.TestCase):
             with self.subTest(kind=kind):
                 self.check_explicit_cursor_mode(main, kind, executable, acceptance)
 
-    def check_explicit_cursor_mode(self, main, kind, executable, acceptance):
-        value = report(kind)
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp).resolve()
-            cli = root / "agentplugins"; cli.write_text("fixture")
-            def version(argv, *_):
-                return deepcopy(value["cli_version"] if argv[1] == "version" else value["client_version"])
-            calls = []
-            def case(*args, **kwargs):
-                calls.append(kwargs)
-                return deepcopy(value["results"][args[4]])
-            substitutions = {"do_case": case,
-                             "version_evidence": version, "vendor_bootstrap_attested": lambda: True,
-                             "AGENT_BINARIES": {executable: "/fixture/" + executable},
-                             "isolated_client_env": lambda *args: {}, "published_audit_temp_parent": lambda: None}
-            for mode, expected_code in (("native", 1), (acceptance, 0)):
-                calls.clear()
-                argv = ["audit", "--cli", str(cli), "--kind", kind, "--target", "cursor",
-                        "--limit", "30", "--report-dir", str(root / mode), "--acceptance", mode]
-                with mock.patch.dict(main.__globals__, substitutions), mock.patch("sys.argv", argv), \
-                     mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="x86_64"), \
-                     contextlib.redirect_stdout(io.StringIO()):
-                    self.assertEqual(main(), expected_code)
-                written = json.loads((root / mode / f"cursor-{kind}.json").read_text())
-                self.assertEqual(written["passed"], 0)
-                self.assertEqual(len(calls), 30)
-                self.assertTrue(all(call == ({} if mode == "native" else {"installation_audit": mode}) for call in calls))
-                self.assertEqual(written["results"], value["results"])
-                self.assertEqual(written["prepared_lifecycle_passed"], value["prepared_lifecycle_passed"])
-                if mode != "native":
-                    self.assertTrue(written["installation_acceptance_passed"])
-                    self.assertFalse(written["native_activation_qualified"])
-
     def test_explicit_main_mode_rejects_wrong_route_before_any_execution(self):
         main = run_path(str(ROOT / "scripts/live-install-audit.py"))["main"]
         for target, kind, limit, host, arch in (("qoder", "skill", 30, "linux", "x86_64"),
@@ -568,6 +715,39 @@ class PreparedInstallationTest(unittest.TestCase):
                           env, root, 30, capture_full=True)
             self.assertIsNone(result["_json"])
             self.assertIsNone(result["exit_code"])
+
+    def check_explicit_cursor_mode(self, main, kind, executable, acceptance):
+        value = report(kind)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            cli = root / "agentplugins"; cli.write_text("fixture")
+            def version(argv, *_):
+                return deepcopy(value["cli_version"] if argv[1] == "version" else value["client_version"])
+            calls = []
+            def case(*args, **kwargs):
+                calls.append(kwargs)
+                return deepcopy(value["results"][args[4]])
+            substitutions = {"do_case": case,
+                             "version_evidence": version, "vendor_bootstrap_attested": lambda: True,
+                             "AGENT_BINARIES": {executable: "/fixture/" + executable},
+                             "isolated_client_env": lambda *args: {}, "published_audit_temp_parent": lambda: None}
+            for mode, expected_code in (("native", 1), (acceptance, 0)):
+                calls.clear()
+                argv = ["audit", "--cli", str(cli), "--kind", kind, "--target", "cursor",
+                        "--limit", "30", "--report-dir", str(root / mode), "--acceptance", mode]
+                with mock.patch.dict(main.__globals__, substitutions), mock.patch("sys.argv", argv), \
+                     mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="x86_64"), \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(main(), expected_code)
+                written = json.loads((root / mode / f"cursor-{kind}.json").read_text())
+                self.assertEqual(written["passed"], 0)
+                self.assertEqual(len(calls), 30)
+                self.assertTrue(all(call == ({} if mode == "native" else {"installation_audit": mode}) for call in calls))
+                self.assertEqual(written["results"], value["results"])
+                self.assertEqual(written["prepared_lifecycle_passed"], value["prepared_lifecycle_passed"])
+                if mode != "native":
+                    self.assertTrue(written["installation_acceptance_passed"])
+                    self.assertFalse(written["native_activation_qualified"])
 
 
 if __name__ == "__main__":

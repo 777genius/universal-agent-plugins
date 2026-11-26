@@ -52,3 +52,25 @@ and foreign-state mutation. Estimated addition: 200–300 audit LOC and 100–18
 focused test LOC; complexity 4/10, expected reliability 8/10, confidence 7/10
 before genuine execution. Reuse successful evidence for unchanged source, verify
 the prospective merge with current main, then ordinary guarded merge and postmerge.
+
+## Integration with main `61542d3e`
+
+The shared audit merge preserves main's source and saved-state custody checks,
+Cursor Skill tree identity checks, Claude removal discovery, and Windsurf's
+independent projection oracle and four-case native gate. It also retains this
+branch's stricter unchanged-file identity checks, guarded Codex initialization,
+Pi registration-only observations and historical Codex verdicts. Reconcile the
+fixtures with those combined contracts; do not choose one parent's audit wholesale.
+
+The Cursor production implementation is unchanged by this integration. Its pinned
+native evidence remains tied to `9c009d86`; current shared-harness contract checks
+are additional evidence, not a new genuine native run. Likewise, the local real
+Pi inventory experiment covers one representative source, not the complete
+30-source signed catalog or authenticated MCP calls.
+
+Merged local verification: 398 common-audit tests passed with 12 platform skips;
+Prepared 21, Kiro 31, Windsurf 48, Pi registration 10 and Windsurf cycle 26 passed.
+CI path-policy checks and the affected Marketing Kit regression contracts passed.
+Independent review found no lost gates in the resolved audit unions. A resource
+termination during the common suite was handled by running only its unfinished
+tests in bounded processes; that interrupted process itself is not recorded as PASS.

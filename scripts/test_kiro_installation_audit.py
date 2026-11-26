@@ -1,6 +1,7 @@
 """Inert filesystem/public-call tests; no Kiro discovery or runtime claim."""
 from copy import deepcopy
 from contextlib import ExitStack, redirect_stdout, redirect_stderr
+import base64
 import hashlib
 import io
 import json
@@ -8,8 +9,10 @@ import os
 from pathlib import Path
 from runpy import run_path
 import shutil
+import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from unittest.mock import patch
 import uuid
@@ -73,11 +76,11 @@ def raw(kind, index, project):
             for result in data["results"]:
                 result.update(client_id="kiro", installation_id=node["installation_id"])
     state = prepared.expected_state(kind, "kiro")
+    if kind == "plugin":
+        state["install_intent"] = "automatic" if index in prepared.KIRO_ACTIVE else "prepare"
     if kind == "plugin" and index in prepared.KIRO_ACTIVE:
         state.update(activation="active", verification="installation_verified")
     node["clients"][0].update(client_id="kiro", **state)
-    if kind == "plugin" and index not in prepared.KIRO_ACTIVE:
-        node["clients"][0]["install_intent"] = "prepare"
     value["repeat_list"] = deepcopy(value["list"])
     for field in ("actions", "results"):
         for row in value["cleanup"][field]:
@@ -150,14 +153,16 @@ class KiroInstallationTests(unittest.TestCase):
     def setUpClass(cls):
         cls.audit = run_path(str(ROOT / "scripts/live-install-audit.py"))
 
-    def fixture(self, root, kind):
+    def fixture(self, root, kind, resources, seed=None):
         case = root / "case"
         for relative in ("home/.config", "home/.cache", "home/.local/share", "project", "uap-data"):
             (case / relative).mkdir(parents=True)
         env = self.audit["isolated_client_env"](case / "home", case, case / "uap-data")
+        if seed is not None:
+            seed(case)
         with patch.object(sys, "platform", "darwin"):
             observer = prepared.KiroInstallationAudit("/fixture/agentplugins", env, case / "project", case, self.audit, kind)
-        self.addCleanup(observer.close)
+        resources.callback(observer.close)
         return observer
 
     @staticmethod
@@ -233,96 +238,26 @@ class KiroInstallationTests(unittest.TestCase):
         item = FIXTURES["skills" if kind == "skill" else "plugin_aliases"][index]
         return observer.finish(row, item, index, FIXTURES), row
 
-    @unittest.skipUnless(hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"), "POSIX FIFO control")
-    def test_unprotected_state_and_projection_fifos_refuse_before_blocking_open(self):
-        for kind in ("plugin", "skill"):
-            for role in ("state", "projection"):
-                with self.subTest(kind=kind, role=role), tempfile.TemporaryDirectory() as temporary:
-                    observer = self.fixture(Path(temporary).resolve(), kind)
-                    state_root = observer.data if kind == "plugin" else observer.project / ".uap"
-                    path = state_root / ("state-v2.json" if role == "state" else "managed/mcp.json")
-                    path.parent.mkdir(parents=True, exist_ok=True)
-                    os.mkfifo(path, 0o600)
-                    # Neither native snapshot root contains this authority file.
-                    observer.image()
-                    original_open = os.open
-                    opened = []
-
-                    def nonblocking_open(candidate, flags, *args, **kwargs):
-                        if Path(candidate) == path:
-                            self.assertTrue(flags & os.O_NOFOLLOW)
-                            self.assertTrue(flags & os.O_NONBLOCK)
-                            opened.append(Path(candidate))
-                        return original_open(candidate, flags, *args, **kwargs)
-
-                    with patch.object(prepared.os, "open", side_effect=nonblocking_open):
-                        with self.assertRaises(ValueError):
-                            observer.read_document(path)
-                    self.assertEqual(opened, [path])
-                    self.assertTrue(path.is_fifo())
-                    observer.guard()
-
-    @unittest.skipUnless(hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"), "POSIX FIFO control")
-    def test_held_nonregular_file_refuses_before_any_read(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            path = Path(temporary) / "fifo"
-            os.mkfifo(path, 0o600)
-            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-            try:
-                with patch.object(prepared.os, "pread", side_effect=AssertionError("nonregular read attempted")):
-                    with self.assertRaises(ValueError):
-                        prepared.KiroInstallationAudit.held_bytes(descriptor)
-            finally:
-                os.close(descriptor)
-
-    @unittest.skipUnless(hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"), "POSIX FIFO control")
-    def test_constructor_fifo_refusal_closes_all_acquired_descriptors(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            case = Path(temporary).resolve() / "case"
-            for relative in ("home/.config", "home/.cache", "home/.local/share", "project", "uap-data"):
-                (case / relative).mkdir(parents=True)
-            env = self.audit["isolated_client_env"](case / "home", case, case / "uap-data")
-            fifo = case / "home/unowned-fifo"
-            os.mkfifo(fifo, 0o600)
-            original_open = os.open
-            descriptors = []
-
-            def nonblocking_open(path, flags, *args, **kwargs):
-                if Path(path) == fifo:
-                    self.assertTrue(flags & os.O_NOFOLLOW)
-                    self.assertTrue(flags & os.O_NONBLOCK)
-                descriptor = original_open(path, flags, *args, **kwargs)
-                descriptors.append(descriptor)
-                return descriptor
-
-            with patch.object(sys, "platform", "darwin"), \
-                    patch.object(prepared.os, "open", side_effect=nonblocking_open):
-                with self.assertRaises(ValueError):
-                    prepared.KiroInstallationAudit("/fixture/agentplugins", env,
-                        case / "project", case, self.audit, "plugin")
-            self.assertTrue(descriptors)
-            for descriptor in descriptors:
-                with self.assertRaises(OSError):
-                    os.fstat(descriptor)
-            self.assertTrue(fifo.is_fifo())
-
     def test_all_sources_keep_exact_states_and_complete_six_envelopes(self):
         for kind in ("plugin", "skill"):
             for index in range(30):
                 if kind == "plugin" and index == 13:
                     continue
-                with self.subTest(kind=kind, index=index), tempfile.TemporaryDirectory() as directory:
-                    observer = self.fixture(Path(directory).resolve(), kind)
+                with self.subTest(kind=kind, index=index), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                    observer = self.fixture(Path(directory).resolve(), kind, case_resources)
                     documents = raw(kind, index, observer.project)
-                    proof, row = self.finish(observer, kind, index, documents)
+                    row = self.row(kind, index, documents)
+                    original_status = row["status"]
+                    proof, row = self.finish(observer, kind, index, documents, row)
                     self.assertEqual(proof["status"], "verified-installation-lifecycle")
+                    self.assertEqual(row["status"], original_status)
                     self.assertEqual(len(proof["observations"]), 6)
                     self.assertFalse(proof["native_runtime_qualified"])
                     self.assertEqual(row["public_target_states"]["after-add"]["states"], [proof["public_state"]])
 
     def test_exact_signed_marketing_refusal_only(self):
-        with tempfile.TemporaryDirectory() as directory:
-            observer = self.fixture(Path(directory).resolve(), "plugin")
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+            observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
             diagnostic = ('agentplugins: no eligible directory release for "marketing-kit": '
                           '777genius/marketing-kit: release does not support complete target set; missing kiro\n')
             add = [observer.cli, "add", "marketing-kit", "--target", "kiro", "--scope", "user", "--format", "json"]
@@ -337,41 +272,201 @@ class KiroInstallationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 observer.finish(row, "marketing-kit", 13, FIXTURES)
 
-    def test_prepared_user_intent_is_required_in_both_inventories(self):
-        for index in (0, 21):
-            for phases in (("list",), ("repeat_list",), ("list", "repeat_list")):
-                for intent in (None, "automatic"):
-                    with self.subTest(index=index, phases=phases, intent=intent), tempfile.TemporaryDirectory() as directory:
-                        observer = self.fixture(Path(directory).resolve(), "plugin")
-                        documents = raw("plugin", index, observer.project)
-                        for phase in phases:
-                            client = documents[phase]["data"]["installations"][0]["clients"][0]
-                            if intent is None:
-                                client.pop("install_intent")
+    def test_removed_saved_authorities_are_empty_at_remove_and_final_list(self):
+        for kind in ("plugin", "skill"):
+            for phase in (4, 5):
+                for residue in ("dependency", "dev-dependency", "target", "package", "malformed", "symlink", "empty"):
+                    with self.subTest(kind=kind, phase=phase, residue=residue), tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                        observer = self.fixture(Path(directory).resolve(), kind, resources)
+                        documents = raw(kind, 0, observer.project)
+                        saved = observer.project if kind == "skill" else observer.data
+                        original = observer.observe
+                        def observe_saved(argv, outcome):
+                            if len(observer.observations) == phase:
+                                manifest = 'schema_version = 1\n'
+                                if residue in ("dependency", "dev-dependency"):
+                                    section = "dependencies" if residue == "dependency" else "dev-dependencies"
+                                    manifest += f'[{section}]\nowned = "*"\n'
+                                if residue == "target":
+                                    manifest += '[targets]\nkiro = ["owned"]\n'
+                                (saved / "uap.toml").write_text(manifest)
+                                (saved / "uap.lock").write_text(json.dumps({"lock_version": 1, "packages":
+                                    [{"alias": "owned"}] if residue == "package" else []}))
+                                if residue == "malformed":
+                                    (saved / "uap.lock").write_text('{"lock_version":1,"packages":[]')
+                                if residue == "symlink":
+                                    (saved / "uap.lock").unlink()
+                                    (saved / "uap.lock").symlink_to(observer.mcp)
+                            return original(argv, outcome)
+                        with patch.object(observer, "observe", observe_saved):
+                            if residue == "empty":
+                                proof, _ = self.finish(observer, kind, 0, documents)
+                                self.assertEqual(proof["status"], "verified-installation-lifecycle")
                             else:
-                                client["install_intent"] = intent
-                        with self.assertRaises(ValueError):
-                            self.finish(observer, "plugin", index, documents)
+                                with self.assertRaises((ValueError, OSError)):
+                                    self.finish(observer, kind, 0, documents)
 
-    def test_direct_prepared_source_match_is_explicit_and_pinned(self):
+    def test_marketing_refusal_protects_saved_state_managed_and_foreign_data_at_both_calls(self):
+        for phase in (0, 1):
+            for relative in ("uap.toml", "uap.lock", "state-v2.json", "managed/clients/kiro/orphan/payload", "foreign-data", "security/assessment"):
+                with self.subTest(phase=phase, relative=relative), tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                    observer = self.fixture(Path(directory).resolve(), "plugin", resources)
+                    add = [observer.cli, "add", "marketing-kit", "--target", "kiro", "--scope", "user", "--format", "json"]
+                    listed = [observer.cli, "list", "--target", "kiro", "--scope", "user", "--format", "json"]
+                    refusal = self.outcome(None, 1, 'agentplugins: no eligible directory release for "marketing-kit": '
+                        '777genius/marketing-kit: release does not support complete target set; missing kiro\n')
+                    inventory = self.outcome({"schema_version": 1, "command": "list", "result": "success", "data": {"installations": []}})
+                    if phase:
+                        observer.observe(add, refusal)
+                    path = observer.data / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("forbidden mutation")
+                    with self.assertRaises(ValueError):
+                        observer.observe(listed if phase else add, inventory if phase else refusal)
+
+    def test_marketing_refusal_allows_exact_cache_producer_files(self):
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+            observer = self.fixture(Path(directory).resolve(), "plugin", resources)
+            inputs = ROOT / "cli/cmd/agentplugins/directory_bootstrap_inputs"
+            snapshot = (inputs / "snapshot.json").read_bytes()
+            cache = {"schema_version": 1, "sequence": json.loads(snapshot)["sequence"],
+                     "snapshot": base64.b64encode(snapshot).decode(),
+                     "envelope": base64.b64encode((inputs / "envelope.json").read_bytes()).decode()}
+            diagnostic = ('agentplugins: no eligible directory release for "marketing-kit": '
+                          '777genius/marketing-kit: release does not support complete target set; missing kiro\n')
+            for argv, outcome in (
+                    ([observer.cli, "add", "marketing-kit", "--target", "kiro", "--scope", "user", "--format", "json"], self.outcome(None, 1, diagnostic)),
+                    ([observer.cli, "list", "--target", "kiro", "--scope", "user", "--format", "json"], self.outcome({"schema_version": 1, "command": "list", "result": "success", "data": {"installations": []}}))):
+                path = observer.data / "directory-v1-cache.json"
+                temporary = observer.data / ".directory-v1-cache.fixture.tmp"
+                # JSON whitespace preserves the real signed artifacts and
+                # yields a valid producer record beyond the default 1 MiB.
+                temporary.write_text(json.dumps(cache) + "\n" + " " * (1 << 20))
+                self.assertGreater(temporary.stat().st_size, 1 << 20)
+                temporary.chmod(0o600)
+                temporary.replace(path)
+                lock = observer.data / "directory-v1-cache.json.lock"
+                lock.touch(mode=0o600, exist_ok=True)
+                observer.observe(argv, outcome)
+            row = {"index": 13, "identity": "marketing-kit", "source": "marketing-kit", "target": "kiro", "kind": "plugin",
+                   "status": "documented-or-source-unsupported", "sentinels_preserved": True, "native_residuals": [],
+                   **{k: False for k in ("listed_identity", "failed_install_registered", "failed_install_residue", "post_remove_identity_registered")}}
+            self.assertEqual(observer.finish(row, "marketing-kit", 13, FIXTURES)["status"], "verified-installation-negative")
+
+    def test_refusal_preserves_preexisting_data_bytes_identity_and_links(self):
+        for mutation in ("bytes", "replacement", "hardlink", "attach-unlink", "symlink", "mode", "lock-bytes"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                def seed(case):
+                    path = case / "uap-data/foreign-file"
+                    path.write_bytes(b"foreign bytes")
+                observer = self.fixture(Path(directory).resolve(), "plugin", resources, seed)
+                path = observer.data / "foreign-file"
+                if mutation == "bytes": path.write_bytes(b"changed")
+                elif mutation == "replacement":
+                    temporary = path.with_suffix(".new"); temporary.write_bytes(path.read_bytes()); temporary.replace(path)
+                elif mutation == "hardlink": os.link(path, observer.case / "hardlink")
+                elif mutation == "attach-unlink":
+                    alias = observer.case / "hardlink"
+                    os.link(path, alias); alias.unlink()
+                elif mutation == "symlink": path.unlink(); path.symlink_to(observer.mcp)
+                elif mutation == "mode": path.chmod(0o600)
+                else:
+                    lock = observer.data / "directory-v1-cache.json.lock"
+                    lock.write_bytes(b"intent hidden in cache lock"); lock.chmod(0o600)
+                with self.assertRaises(ValueError):
+                    observer.observe([observer.cli, "add", "marketing-kit"], self.outcome(None, 1))
+
+    def test_refusal_cache_reads_use_producer_bounds_without_widening_foreign_files(self):
+        encoded = lambda length: 4 * ((length + 2) // 3)
+        limits = {"directory-v1-cache.json": encoded(4 << 20) + encoded(16 << 10) + 4096,
+                  "discovery-v1-cache.json": encoded((16 << 10) + (16 << 20) + (16 << 10) + (10 << 20)) + 4096,
+                  "foreign-file": 1 << 20}
+        for name, limit in limits.items():
+            for size in ((1 << 20) + 128, limit + 1):
+                with self.subTest(name=name, size=size), tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                    observer = self.fixture(Path(directory).resolve(), "plugin", resources)
+                    path = observer.data / name
+                    # These are inert complete cache-shaped JSON records. Trust
+                    # verification remains the producer's job; this tests its
+                    # permitted wire size without adding a second cache engine.
+                    body = {"schema_version": 1, "sequence": 1, "snapshot": "e30=", "envelope": "e30="}
+                    if name.startswith("discovery"):
+                        body.update(pointer="e30=", search="e30=")
+                    with path.open("wb") as stream:
+                        stream.write(json.dumps(body).encode())
+                        stream.write(b" " * (size - stream.tell()))
+                    path.chmod(0o600)
+                    if name != "foreign-file" and size <= limit:
+                        self.assertEqual(observer.refusal_image(), observer.refusal_initial)
+                    else:
+                        with self.assertRaises(ValueError): observer.refusal_image()
+
+    def test_removal_preserves_unrelated_saved_entries(self):
+        for kind in ("plugin", "skill"):
+            for mutate in (False, True):
+                with self.subTest(kind=kind, mutate=mutate), tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                    def seed(case):
+                        saved = case / ("project" if kind == "skill" else "uap-data")
+                        (saved / "uap.toml").write_text('schema_version = 1\n[dependencies]\nforeign = "1.0.0"\n[targets]\nclaude = ["foreign"]\n')
+                        (saved / "uap.lock").write_text('{"lock_version":1,"packages":[{"alias":"foreign","version":"1.0.0"}]}')
+                    observer = self.fixture(Path(directory).resolve(), kind, resources, seed)
+                    original = observer.observe
+                    def observe_saved(argv, outcome):
+                        if mutate and len(observer.observations) == 4:
+                            saved = observer.project if kind == "skill" else observer.data
+                            (saved / "uap.lock").write_text('{"lock_version":1,"packages":[]}')
+                        return original(argv, outcome)
+                    with patch.object(observer, "observe", observe_saved):
+                        if mutate:
+                            with self.assertRaises(ValueError):
+                                self.finish(observer, kind, 0, raw(kind, 0, observer.project))
+                        else:
+                            proof, _ = self.finish(observer, kind, 0, raw(kind, 0, observer.project))
+                            self.assertEqual(proof["status"], "verified-installation-lifecycle")
+
+    def test_direct_prepared_source_match_preserves_default_pinned_lifecycle(self):
         item = FIXTURES["plugin_aliases"][21]
         documents = raw("plugin", 21, Path("/fixture/project"))
         match = self.audit["matching_installations"]
-        self.assertEqual(match(documents["list"], "sanity", "kiro", "plugin", item),
-                         documents["list"]["data"]["installations"])
-        self.assertEqual(len(match(documents["list"], "sanity", "kiro", "plugin", item, kiro_prepared=True)), 1)
+        self.assertEqual(len(match(documents["list"], "sanity", "kiro", "plugin", item)), 1)
         for key, value in (("source", "other/repo"), ("installation_id", "not-uuid")):
             changed = deepcopy(documents["list"]); changed["data"]["installations"][0][key] = value
-            self.assertEqual(match(changed, "sanity", "kiro", "plugin", item, kiro_prepared=True), [])
+            self.assertEqual(match(changed, "sanity", "kiro", "plugin", item), [])
         for key in ("resolved_revision", "tree_digest", "manifest_digest"):
             changed = deepcopy(documents["list"]); changed["data"]["installations"][0]["clients"][0]["package_revision"][key] = "invalid"
-            self.assertEqual(match(changed, "sanity", "kiro", "plugin", item, kiro_prepared=True), [])
+            self.assertEqual(match(changed, "sanity", "kiro", "plugin", item), [])
+
+    def test_installation_admission_does_not_reclassify_or_trust_native_status(self):
+        for status in ("package-installed-native-unqualified", "installation-lifecycle-observed",
+                       "passed", "incomplete-native-proof"):
+            with self.subTest(status=status), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
+                documents = raw("plugin", 22, observer.project)
+                row = self.row("plugin", 22, documents)
+                row["status"] = status
+                if status == "installation-lifecycle-observed":
+                    proof, _ = self.finish(observer, "plugin", 22, documents, row)
+                    self.assertEqual(proof["status"], "verified-installation-lifecycle")
+                    self.assertIs(proof["native_runtime_qualified"], False)
+                else:
+                    with self.assertRaises(ValueError):
+                        self.finish(observer, "plugin", 22, documents, row)
+                self.assertEqual(row["status"], status)
+        # The normal raw-Skill status is also insufficient without the six
+        # actual public observations and held source/ownership projections.
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+            observer = self.fixture(Path(directory).resolve(), "skill", case_resources)
+            documents = raw("skill", 0, observer.project)
+            row = self.row("skill", 0, documents)
+            self.assertEqual(row["status"], "incomplete-native-proof")
+            with self.assertRaises(ValueError):
+                observer.finish(row, FIXTURES["skills"][0], 0, FIXTURES)
 
     def test_unknown_cache_foreign_bytes_mode_hardlink_and_parent_changes_refuse(self):
         for change in ("cache", "foreign", "mode", "hardlink", "symlink", "parent",
                        "data-mode", "data-parent", "wrong-scope"):
-            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "plugin")
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
                 documents = raw("plugin", 0, observer.project)
                 if change == "cache":
                     (observer.home / "unknown-native-cache").write_text("leftover")
@@ -396,8 +491,8 @@ class KiroInstallationTests(unittest.TestCase):
                     self.finish(observer, "plugin", 0, documents)
 
     def test_atomic_shared_replacement_requires_exact_returned_bytes_and_held_original(self):
-        with tempfile.TemporaryDirectory() as directory:
-            observer = self.fixture(Path(directory).resolve(), "plugin")
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+            observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
             documents = raw("plugin", 0, observer.project)
             row = self.row("plugin", 0, documents)
             sequence = self.sequence(observer, "plugin", 0, documents)
@@ -424,18 +519,18 @@ class KiroInstallationTests(unittest.TestCase):
                      lambda d: d["cleanup"]["results"][0].update(installation_id="reminted"),
                      lambda d: d["post_remove_list"]["data"]["installations"].append({"foreign": True})]
         for mutate in mutations:
-            with self.subTest(mutation=mutate), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "skill")
+            with self.subTest(mutation=mutate), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "skill", case_resources)
                 documents = raw("skill", 0, observer.project); mutate(documents)
                 with self.assertRaises(ValueError): self.finish(observer, "skill", 0, documents)
 
     def test_owned_skill_bytes_and_shared_foreign_member_are_checked_in_held_reads(self):
-        with tempfile.TemporaryDirectory() as directory:
-            observer = self.fixture(Path(directory).resolve(), "skill")
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+            observer = self.fixture(Path(directory).resolve(), "skill", case_resources)
             with patch(__name__ + ".skill_body", return_value=b"wrong upstream bytes"), self.assertRaises(ValueError):
                 self.finish(observer, "skill", 0, raw("skill", 0, observer.project))
-        with tempfile.TemporaryDirectory() as directory:
-            observer = self.fixture(Path(directory).resolve(), "plugin")
+        with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+            observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
             documents = raw("plugin", 0, observer.project)
             row = self.row("plugin", 0, documents)
             # Full successful envelopes without any actual owned native image
@@ -464,8 +559,8 @@ class KiroInstallationTests(unittest.TestCase):
 
     def test_reviewed_transient_native_projection_iid_and_foreign_alias_attacks_are_rejected(self):
         for mutation in ("top-level-member", "transient-cache", "wrong-mcp-value", "fresh-iid", "foreign-hardlink"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "plugin")
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
                 documents = raw("plugin", 0, observer.project)
                 if mutation == "fresh-iid":
                     documents["install"]["data"]["actions"][0]["installation_id"] = "11111111-1111-4111-8111-111111111111"
@@ -493,8 +588,8 @@ class KiroInstallationTests(unittest.TestCase):
     def test_source_bound_private_receipt_and_projection_cannot_be_substituted(self):
         for mutation in ("receipt-source", "receipt-id", "receipt-profile", "receipt-user-profile",
                          "receipt-null-profile", "receipt-locator", "projection", "extra-object"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "plugin")
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
                 documents = raw("plugin", 0, observer.project)
                 original = observer.observe
                 positions = []
@@ -520,8 +615,8 @@ class KiroInstallationTests(unittest.TestCase):
 
     def test_project_private_profile_cannot_use_unbound_user_semantics(self):
         for mutation in ("missing", "empty", "user"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "skill")
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "skill", case_resources)
                 documents = raw("skill", 0, observer.project)
                 original = observer.observe
                 def adversarial(argv, outcome):
@@ -538,8 +633,8 @@ class KiroInstallationTests(unittest.TestCase):
 
     def test_native_writer_lock_is_held_before_calls_and_immutable_afterward(self):
         for mutation in (None, "bytes", "mode", "replace", "hardlink", "symlink", "remove"):
-            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), "plugin")
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
                 lock = observer.mcp.with_name(observer.mcp.name + ".agentplugins.lock")
                 self.assertIn(lock, observer.initial_paths)
                 self.assertIn(lock, observer.protected_files)
@@ -562,8 +657,8 @@ class KiroInstallationTests(unittest.TestCase):
     def test_owned_active_root_cleanup_and_deterministic_private_physical_identity(self):
         for kind in ("plugin", "skill"):
             for mutation in ("retained-active", "reminted-private", "late-receipt-change"):
-                with self.subTest(kind=kind, mutation=mutation), tempfile.TemporaryDirectory() as directory:
-                    observer = self.fixture(Path(directory).resolve(), kind)
+                with self.subTest(kind=kind, mutation=mutation), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                    observer = self.fixture(Path(directory).resolve(), kind, case_resources)
                     documents = raw(kind, 0, observer.project)
                     original, calls, active = observer.observe, [], []
                     def adversarial(argv, outcome):
@@ -592,10 +687,60 @@ class KiroInstallationTests(unittest.TestCase):
                     observer.observe = adversarial
                     with self.assertRaises(ValueError): self.finish(observer, kind, 0, documents)
 
+    def test_fixture_closes_custody_before_directory_cleanup_even_on_failure(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail), tempfile.TemporaryDirectory() as directory:
+                try:
+                    with ExitStack() as resources:
+                        observer = self.fixture(Path(directory).resolve(), "plugin", resources)
+                        descriptors = [observer.mcp_fd, *(entry[0] for entry in observer.protected_files.values())]
+                        if fail:
+                            raise AssertionError("controlled fixture failure")
+                except AssertionError as error:
+                    self.assertTrue(fail)
+                    self.assertEqual(str(error), "controlled fixture failure")
+                self.assertTrue(Path(directory).is_dir())
+                self.assertIsNone(observer.mcp_fd)
+                self.assertFalse(observer.protected_files)
+                for fd in descriptors:
+                    with self.assertRaises(OSError):
+                        os.fstat(fd)
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "POSIX FIFO evidence fixture")
+    def test_evidence_fifo_refuses_without_waiting_for_writer(self):
+        program = textwrap.dedent('''
+            from contextlib import ExitStack
+            from pathlib import Path
+            import os
+            import tempfile
+            from test_kiro_installation_audit import KiroInstallationTests
+
+            KiroInstallationTests.setUpClass()
+            fixture = KiroInstallationTests()
+            with tempfile.TemporaryDirectory() as directory, ExitStack() as resources:
+                observer = fixture.fixture(Path(directory).resolve(), "plugin", resources)
+                ordinary = observer.data / "ordinary.json"
+                ordinary.write_bytes(b'{"ordinary":true}')
+                assert observer.read_bytes(ordinary) == b'{"ordinary":true}'
+                fifo = observer.data / "state-v2.json"
+                os.mkfifo(fifo, 0o600)
+                try:
+                    observer.read_document(fifo)
+                except ValueError:
+                    pass
+                else:
+                    raise AssertionError("non-regular evidence was accepted")
+            print("ordinary-read-and-fifo-refusal-confirmed")
+        ''')
+        result = subprocess.run([sys.executable, "-c", program], cwd=ROOT / "scripts",
+                                capture_output=True, text=True, timeout=10, check=False)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "ordinary-read-and-fifo-refusal-confirmed")
+
     def test_constructor_closes_every_opened_descriptor_on_stat_or_held_read_failure(self):
         original_open, original_read, original_stat = os.open, os.pread, os.fstat
         for failure in ("read", "stat"):
-            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
                 opened, reads, failures = [], [], []
                 def tracked_open(*args, **kwargs):
                     fd = original_open(*args, **kwargs); opened.append(fd); return fd
@@ -609,7 +754,7 @@ class KiroInstallationTests(unittest.TestCase):
                     return original_stat(fd)
                 with patch.object(os, "open", tracked_open), patch.object(os, "pread", read), \
                      patch.object(os, "fstat", descriptor_stat), self.assertRaises(OSError):
-                    self.fixture(Path(directory).resolve(), "plugin")
+                    self.fixture(Path(directory).resolve(), "plugin", case_resources)
                 self.assertEqual(len(opened), 2)
                 for fd in opened:
                     with self.assertRaises(OSError): original_stat(fd)
@@ -664,6 +809,8 @@ class KiroInstallationTests(unittest.TestCase):
                         self.assertEqual(argv[2], documents["list"]["data"]["installations"][0]["installation_id"])
                         if kind == "skill":
                             shutil.rmtree(skill.parent)
+                            (project / "uap.toml").write_text("schema_version = 1\n")
+                            (project / "uap.lock").write_text('{"lock_version":1,"packages":[]}')
                         else:
                             if index in prepared.KIRO_ACTIVE:
                                 shutil.rmtree(mcp.parent.parent / "skills" / identity)
@@ -683,7 +830,7 @@ class KiroInstallationTests(unittest.TestCase):
                 self.assertEqual(len(calls), 2 if index == 13 else 6)
                 self.assertEqual(row["kiro_installation_custody"]["status"],
                                  "verified-installation-negative" if index == 13 else "verified-installation-lifecycle")
-                if kind == "plugin" and index not in prepared.KIRO_ACTIVE and index != 13:
+                if kind == "plugin" and index not in (*prepared.KIRO_ACTIVE, 13):
                     self.assertEqual(row["status"], "incomplete-native-proof")
                     self.assertIs(row["kiro_prepared_lifecycle_verified"], True)
                 serialized = json.dumps(row)
@@ -699,8 +846,8 @@ class KiroInstallationTests(unittest.TestCase):
     def complete_report(self, kind):
         rows = []
         for index in range(30):
-            with tempfile.TemporaryDirectory() as directory:
-                observer = self.fixture(Path(directory).resolve(), kind)
+            with tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                observer = self.fixture(Path(directory).resolve(), kind, case_resources)
                 if kind == "plugin" and index == 13:
                     row = {"index": 13, "identity": "marketing-kit", "source": "marketing-kit", "target": "kiro", "kind": kind,
                            "status": "documented-or-source-unsupported", "native_file_delta": 0,
@@ -739,17 +886,25 @@ class KiroInstallationTests(unittest.TestCase):
                    lambda r: r["results"][0]["public_target_states"]["after-add"]["states"][0].update(authentication="authenticated")]
         for kind in ("skill", "plugin"):
             good = self.complete_report(kind)
+            original = deepcopy(good)
             mode = "kiro-skills-installation" if kind == "skill" else "kiro-installation"
             result = prepared.kiro_summary(good, FIXTURES, mode)
             self.assertTrue(result["installation_acceptance_passed"])
             self.assertEqual(result["installation_passed"], 30 if kind == "skill" else 29)
             self.assertEqual(result["installation_verified_negative_coverage"], int(kind == "plugin"))
             self.assertTrue(all(value is False for key, value in result.items() if key.endswith("_qualified")))
+            self.assertEqual(good, original)
             for mutate in changes:
                 with self.subTest(kind=kind, mutation=mutate):
                     value = deepcopy(good); mutate(value)
                     self.assertFalse(prepared.kiro_summary(value, FIXTURES, mode)["installation_acceptance_passed"])
             if kind == "plugin":
+                for index, marker in ((0, False), (0, None), (22, True)):
+                    changed = deepcopy(good); changed["results"][index]["kiro_prepared_lifecycle_verified"] = marker
+                    self.assertFalse(prepared.kiro_summary(changed, FIXTURES, mode)["installation_acceptance_passed"])
+                for status in ("package-installed-native-unqualified", "passed", "incomplete-native-proof"):
+                    changed = deepcopy(good); changed["results"][22]["status"] = status
+                    self.assertFalse(prepared.kiro_summary(changed, FIXTURES, mode)["installation_acceptance_passed"])
                 for key, value in (("native_residuals", ["unknown"]), ("status", "passed"), ("sentinels_preserved", False)):
                     changed = deepcopy(good); changed["results"][13][key] = value
                     self.assertFalse(prepared.kiro_summary(changed, FIXTURES, mode)["installation_acceptance_passed"])
@@ -785,6 +940,92 @@ class KiroInstallationTests(unittest.TestCase):
                     expected = {} if mode == "native" else {"installation_audit": mode, "installation_fixtures": FIXTURES}
                     self.assertTrue(all(call == expected for call in calls))
                     if mode != "native": self.assertTrue(written["installation_acceptance_passed"])
+
+    def test_unprotected_state_and_projection_fifos_refuse_before_blocking_open(self):
+        for kind in ("plugin", "skill"):
+            for role in ("state", "projection"):
+                with self.subTest(kind=kind, role=role), tempfile.TemporaryDirectory() as temporary, ExitStack() as case_resources:
+                    observer = self.fixture(Path(temporary).resolve(), kind, case_resources)
+                    state_root = observer.data if kind == "plugin" else observer.project / ".uap"
+                    path = state_root / ("state-v2.json" if role == "state" else "managed/mcp.json")
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    os.mkfifo(path, 0o600)
+                    # Neither native snapshot root contains this authority file.
+                    observer.image()
+                    original_open = os.open
+                    opened = []
+
+                    def nonblocking_open(candidate, flags, *args, **kwargs):
+                        if Path(candidate) == path:
+                            self.assertTrue(flags & os.O_NOFOLLOW)
+                            self.assertTrue(flags & os.O_NONBLOCK)
+                            opened.append(Path(candidate))
+                        return original_open(candidate, flags, *args, **kwargs)
+
+                    with patch.object(prepared.os, "open", side_effect=nonblocking_open):
+                        with self.assertRaises(ValueError):
+                            observer.read_document(path)
+                    self.assertEqual(opened, [path])
+                    self.assertTrue(path.is_fifo())
+                    observer.guard()
+
+    def test_held_nonregular_file_refuses_before_any_read(self):
+        with tempfile.TemporaryDirectory() as temporary, ExitStack() as case_resources:
+            path = Path(temporary) / "fifo"
+            os.mkfifo(path, 0o600)
+            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                with patch.object(prepared.os, "pread", side_effect=AssertionError("nonregular read attempted")):
+                    with self.assertRaises(ValueError):
+                        prepared.KiroInstallationAudit.held_bytes(descriptor)
+            finally:
+                os.close(descriptor)
+
+    def test_constructor_fifo_refusal_closes_all_acquired_descriptors(self):
+        with tempfile.TemporaryDirectory() as temporary, ExitStack() as case_resources:
+            case = Path(temporary).resolve() / "case"
+            for relative in ("home/.config", "home/.cache", "home/.local/share", "project", "uap-data"):
+                (case / relative).mkdir(parents=True)
+            env = self.audit["isolated_client_env"](case / "home", case, case / "uap-data")
+            fifo = case / "home/unowned-fifo"
+            os.mkfifo(fifo, 0o600)
+            original_open = os.open
+            descriptors = []
+
+            def nonblocking_open(path, flags, *args, **kwargs):
+                if Path(path) == fifo:
+                    self.assertTrue(flags & os.O_NOFOLLOW)
+                    self.assertTrue(flags & os.O_NONBLOCK)
+                descriptor = original_open(path, flags, *args, **kwargs)
+                descriptors.append(descriptor)
+                return descriptor
+
+            with patch.object(sys, "platform", "darwin"), \
+                    patch.object(prepared.os, "open", side_effect=nonblocking_open):
+                with self.assertRaises(ValueError):
+                    prepared.KiroInstallationAudit("/fixture/agentplugins", env,
+                        case / "project", case, self.audit, "plugin")
+            self.assertTrue(descriptors)
+            for descriptor in descriptors:
+                with self.assertRaises(OSError):
+                    os.fstat(descriptor)
+            self.assertTrue(fifo.is_fifo())
+
+    def test_prepared_user_intent_is_required_in_both_inventories(self):
+        for index in (0, 21):
+            for phases in (("list",), ("repeat_list",), ("list", "repeat_list")):
+                for intent in (None, "automatic"):
+                    with self.subTest(index=index, phases=phases, intent=intent), tempfile.TemporaryDirectory() as directory, ExitStack() as case_resources:
+                        observer = self.fixture(Path(directory).resolve(), "plugin", case_resources)
+                        documents = raw("plugin", index, observer.project)
+                        for phase in phases:
+                            client = documents[phase]["data"]["installations"][0]["clients"][0]
+                            if intent is None:
+                                client.pop("install_intent")
+                            else:
+                                client["install_intent"] = intent
+                        with self.assertRaises(ValueError):
+                            self.finish(observer, "plugin", index, documents)
 
 
 if __name__ == "__main__":

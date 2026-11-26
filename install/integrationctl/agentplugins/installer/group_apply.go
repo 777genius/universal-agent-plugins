@@ -104,7 +104,7 @@ func failedGroupResult(result Result, err error) (Result, error) {
 		result.Outcome = OutcomeConflict
 		result.Reason = "plan_changed"
 	}
-	if strings.Contains(err.Error(), "run update separately") || errors.Is(err, usecase.ErrProjectionRefreshRequired) {
+	if strings.Contains(err.Error(), "run update separately") || errors.Is(err, usecase.ErrProjectionRefreshRequired) || errors.Is(err, domain.ErrRetainedRevisionChange) {
 		result.Outcome = OutcomeConflict
 		result.Reason = "update_required"
 	}

@@ -156,6 +156,19 @@ def times(value,start,end):
     return all(start <= value[k][0]*10**9+value[k][1] <= end for k in ("Modified","Changed"))
 
 
+def verified_mutation_lock_time(stage, raw, recorded, previous, root, start, end):
+    """Permit the exact retained lock only on a verified no-op phase."""
+    try:
+        body = load(raw)
+    except ValueError:
+        return False
+    if start <= stamp(body["acquired_at"]) <= end and times(recorded, start, end):
+        return True
+    return (stage in NOOPS and previous is not None
+            and raw == stream(previous["mutation_lock"])
+            and same(previous["frames"][root]["mutation.lock"], recorded))
+
+
 def selected_parent_times(old,now,start,end):
     # processlock can advance ctime without advancing mtime; unchanged stamps
     # remain the exact original values, every changed stamp belongs to the call.
@@ -284,10 +297,8 @@ def installation(value,paths,previous,stage,cmd):
                    and same(previous["frames"][root]["mutation.lock"],lock_record))
     if stage=="repeat-remove-a":
         require(retained_lock and same(frames,previous["frames"]))
-    elif stage not in NOOPS or not retained_lock:
-        # Early unchanged reconciliation may preserve the exact prior lock.
-        # Every rewritten lock still belongs to this command's time window.
-        require(start<=stamp(lock["acquired_at"])<=end and times(lock_record,start,end))
+    elif not verified_mutation_lock_time(stage, lock_raw, lock_record, previous, root, start, end):
+        raise ValueError("Windsurf mutation.lock timing outside selected public phase: " + stage)
     if previous is not None:
         require(authority(previous["frames"][root]["mutation.lock"],lock_record))
     payload(current,paths)

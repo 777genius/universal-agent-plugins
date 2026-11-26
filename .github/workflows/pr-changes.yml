@@ -131,14 +131,14 @@ jobs:
             esac
             case "$path" in
               scripts/prepare-codex-linux-sandbox.sh|scripts/run-native-client-matrix.py|scripts/codex_plugin_retention_audit.py|scripts/test_codex_plugin_retention_audit.py) remaining_chatgpt=true ;;
-              scripts/devin_project_auto_install_e2e.py|scripts/test_devin_project_auto_install_e2e.py|scripts/devin_structured_inventory_admission.py|scripts/test_devin_structured_inventory_admission.py) remaining_windsurf=true ;;
+              scripts/devin_project_auto_install_e2e.py|scripts/test_devin_project_auto_install_e2e.py|scripts/devin_structured_inventory_admission.py|scripts/test_devin_structured_inventory_admission.py|scripts/testdata/windsurf_projection_oracle/*) remaining_windsurf=true ;;
               scripts/project_native_cursor_acquisition.py) remaining_cursor=true ;;
               scripts/claude_darwin_metadata.py|scripts/test_claude_darwin_metadata.py) remaining_kiro=true ;;
-              .github/workflows/live-install-remaining-clients.yml|.github/workflows/pr-changes.yml|scripts/live-install-audit.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|tests/live-install/fixtures.json|scripts/native_client_research.py|scripts/project_native_research.py|scripts/native_client_draft.py|cli/cmd/agentplugins/*|cli/internal/agentpluginscli/*|install/integrationctl/agentplugins/*) remaining_full=true ;;
+              .github/workflows/live-install-remaining-clients.yml|.github/workflows/pr-changes.yml|scripts/live-install-audit.py|scripts/prepared_installation_audit.py|scripts/test_prepared_installation_audit.py|scripts/test_kiro_installation_audit.py|scripts/windsurf_global_skill_audit.py|scripts/windsurf_installation_audit.py|scripts/test_windsurf_global_skill_audit.py|scripts/test_windsurf_installation_audit.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|tests/live-install/fixtures.json|scripts/native_client_research.py|scripts/project_native_research.py|scripts/native_client_draft.py|cli/cmd/agentplugins/*|cli/internal/agentpluginscli/*|install/integrationctl/agentplugins/*) remaining_full=true ;;
             esac
             case "$path" in
               scripts/prepare-codex-linux-sandbox.sh|scripts/published_codex_baseline.py|scripts/test_published_codex_baseline.py|scripts/codex_runtime_audit.py|scripts/test_codex_runtime_audit.py|scripts/codex_plugin_retention_audit.py|scripts/test_codex_plugin_retention_audit.py) live_codex=true ;;
-              scripts/claude_cache_retirement_audit.py) live_claude=true ;;
+              scripts/claude_cache_retirement_audit.py|scripts/marketing_kit_claude_retirement.py|scripts/marketing_kit_claude_discovery.py|scripts/test_marketing_kit_claude_retirement.py|scripts/test_marketing_kit_claude_discovery.py) live_claude=true ;;
               scripts/opencode_bootstrap_audit.py|scripts/test_opencode_bootstrap_audit.py|scripts/test_live_install_audit_opencode_negative.py) live_opencode=true ;;
               scripts/gemini_runtime_audit.py|scripts/gemini_windows_custody.py|scripts/test_gemini_windows_runtime_audit.py) live_gemini=true ;;
               scripts/qoder_prepared_skill_audit.py|scripts/test_qoder_prepared_skill_audit.py) live_qoder=true ;;

@@ -8,6 +8,9 @@ on:
       - 'scripts/marketing-kit-project-release-e2e.py'
       - 'scripts/marketing-kit-published-launcher-abort.js'
       - 'scripts/marketing_kit_claude_retirement.py'
+      - 'scripts/marketing_kit_claude_discovery.py'
+      - 'scripts/test_marketing_kit_claude_discovery.py'
+      - 'scripts/test_marketing_kit_codex_sqlite.py'
       - 'scripts/marketing_kit_codex_profile.py'
       - 'scripts/test_marketing_kit_claude_retirement.py'
       - 'scripts/test_marketing_kit_codex_profile.py'
@@ -26,11 +29,6 @@ on:
       - 'scripts/test_windsurf_installation_audit.py'
       - 'scripts/published_codex_baseline.py'
       - 'scripts/test_published_codex_baseline.py'
-      - 'scripts/codex_runtime_audit.py'
-      - 'scripts/marketing_kit_claude_retirement.py'
-      - 'scripts/test_marketing_kit_claude_retirement.py'
-      - 'scripts/claude_cache_retirement_audit.py'
-      - 'scripts/native_client_project_artifacts.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   push:
     branches: [main]
@@ -39,6 +37,9 @@ on:
       - 'scripts/marketing-kit-project-release-e2e.py'
       - 'scripts/marketing-kit-published-launcher-abort.js'
       - 'scripts/marketing_kit_claude_retirement.py'
+      - 'scripts/marketing_kit_claude_discovery.py'
+      - 'scripts/test_marketing_kit_claude_discovery.py'
+      - 'scripts/test_marketing_kit_codex_sqlite.py'
       - 'scripts/marketing_kit_codex_profile.py'
       - 'scripts/test_marketing_kit_claude_retirement.py'
       - 'scripts/test_marketing_kit_codex_profile.py'
@@ -57,11 +58,6 @@ on:
       - 'scripts/test_windsurf_installation_audit.py'
       - 'scripts/published_codex_baseline.py'
       - 'scripts/test_published_codex_baseline.py'
-      - 'scripts/codex_runtime_audit.py'
-      - 'scripts/marketing_kit_claude_retirement.py'
-      - 'scripts/test_marketing_kit_claude_retirement.py'
-      - 'scripts/claude_cache_retirement_audit.py'
-      - 'scripts/native_client_project_artifacts.py'
       - '.github/workflows/marketing-kit-project-release-e2e.yml'
   workflow_dispatch:
 
@@ -74,7 +70,7 @@ concurrency:
 
 jobs:
   marketing-kit-project:
-    name: npm 0.1.115 / ${{ matrix.target }} / real Project lifecycle
+    name: npm 0.1.116 / ${{ matrix.target }} / real Project lifecycle
     if: ${{ github.event_name != 'pull_request' || (github.event.action != 'labeled' || (github.event.label.name == 'ci:full' && github.event.pull_request.draft == true)) && (github.event.pull_request.draft == false || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -110,7 +106,7 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           set -euo pipefail
-          npm install --global universal-agent-plugins@0.1.115
+          npm install --global universal-agent-plugins@0.1.116
           if [[ "$TARGET" == cursor ]]; then
             curl --fail --show-error --silent --location --retry 2 \
               'https://downloads.cursor.com/lab/2026.10.22-27dcf5f/linux/x64/agent-cli-package.tar.gz' \
@@ -160,7 +156,7 @@ jobs:
           else
             npm install --global "$NATIVE_PACKAGE"
           fi
-          # The immutable npm launcher fetches the exact 0.1.115 GitHub binary
+          # The immutable npm launcher fetches the exact 0.1.116 GitHub binary
           # on first use. A transient release-asset HTTP 504 must not turn all
           # six genuine lifecycle lanes into unexecuted noise. Never fall back
           # to latest, skip version validation or accept a different version.
@@ -181,14 +177,14 @@ jobs:
             try {
               const release = await ensureBinary({ packageRoot, signal: abort.signal });
               if (abort.signal.aborted) throw new Error("pinned launcher acquisition timed out");
-              if (release.version !== "0.1.115") {
+              if (release.version !== "0.1.116") {
                 throw Object.assign(new Error("unexpected pinned release version"), { noRetry: true });
               }
               const result = spawnSync("agentplugins", ["version"], { encoding: "utf8", timeout: 15_000 });
               if (result.error || result.signal || result.status !== 0) {
                 throw new Error("published agentplugins version probe failed");
               }
-              if (result.stdout.replace(/\n+$/, "") !== "agentplugins 0.1.115") {
+              if (result.stdout.replace(/\n+$/, "") !== "agentplugins 0.1.116") {
                 throw Object.assign(new Error("wrong published agentplugins version"), { noRetry: true });
               }
             } finally {
@@ -210,18 +206,19 @@ jobs:
               fi
             fi
             if (( attempt == 3 )); then
-              echo 'exact agentplugins 0.1.115 unavailable after three attempts' >&2
+              echo 'exact agentplugins 0.1.116 unavailable after three attempts' >&2
               exit 1
             fi
             sleep "$((attempt * 5))"
           done
-      - name: Verify published launcher abort cleanup
+      - name: Verify historical npm 0.1.115 launcher abort cleanup
         if: matrix.target == 'codex'
         run: |
           set -euo pipefail
-          # Real pinned npm 0.1.115 module, with only the HTTPS request stalled.
-          # A mock transport here proves cleanup, not a native-client tools/call.
-          UAP_GLOBAL_NPM_ROOT="$(npm root -g)" timeout 20s node scripts/marketing-kit-published-launcher-abort.js
+          # Historical npm 0.1.115 launcher, separate from the 0.1.116 lifecycle.
+          # Mock transport proves cleanup only, never native tools/call.
+          npm install --prefix "$RUNNER_TEMP/uap-legacy" --no-audit --no-fund universal-agent-plugins@0.1.115
+          UAP_GLOBAL_NPM_ROOT="$RUNNER_TEMP/uap-legacy/node_modules" timeout 20s node scripts/marketing-kit-published-launcher-abort.js
       - name: Verify published ChatGPT target safety fences
         if: matrix.target == 'codex'
         run: |
@@ -257,16 +254,19 @@ jobs:
           set -o pipefail
           python3 -m unittest discover -s scripts -p test_marketing_kit_claude_retirement.py -v 2>&1 | tee "$RUNNER_TEMP/marketing-kit-project/claude-retirement-regressions.log"
           python3 -m unittest scripts/test_live_install_audit_env.py -k marketing_kit_ 2>&1 | tee "$RUNNER_TEMP/marketing-kit-project/regressions.log"
-          python3 -m unittest discover -s scripts -p 'test_marketing_kit_claude_retirement.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
+          python3 -m unittest scripts/test_marketing_kit_codex_sqlite.py 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
+          if [[ "$TARGET" == claude ]]; then
+            python3 -m unittest discover -s scripts -p 'test_marketing_kit_claude_*.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
+          fi
           python3 -m unittest discover -s scripts -p 'test_marketing_kit_codex_profile.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 -m unittest discover -s scripts -p 'test_marketing_kit_policy_boundary.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 -m unittest discover -s scripts -p 'test_marketing_kit_peer_initialization.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
-          python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)"             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
+          python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)" --cli-version 0.1.116             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
       - name: Preserve factual outcomes including failures
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: marketing-kit-0.1.115-${{ matrix.target }}
+          name: marketing-kit-0.1.116-${{ matrix.target }}
           path: ${{ runner.temp }}/marketing-kit-project/
           if-no-files-found: warn
           retention-days: 14
