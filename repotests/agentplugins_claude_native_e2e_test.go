@@ -21,7 +21,12 @@ import (
 	"time"
 )
 
-const claudeNativeCommandTimeout = 30 * time.Second
+const (
+	claudeNativeCommandTimeout = 30 * time.Second
+	// Installation includes acquisition and a scanner with its own 30-second
+	// deadline; allow the product to complete and report its structured result.
+	claudeNativeInstallerTimeout = 90 * time.Second
+)
 
 type claudeNativeStage struct {
 	Status string `json:"status"`
@@ -119,24 +124,28 @@ func (f *claudeNativeFixture) record(t *testing.T, label string, out []byte) {
 
 func claudeRunInstaller(t *testing.T, f *claudeNativeFixture, installer, clientDir, label string, args ...string) map[string]any {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), claudeNativeCommandTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), claudeNativeInstallerTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, installer, append(args, "--format", "json")...)
 	cmd.Env = f.env(clientDir)
 	cmd.Dir = f.Root
 	out, err := cmd.CombinedOutput()
 	f.record(t, label, out)
+	if ctx.Err() != nil {
+		t.Fatalf("run installer %s %v: %v (process error: %v)\n%s", label, args, ctx.Err(), err, out)
+	}
 	if err != nil {
 		if _, isExit := err.(*exec.ExitError); !isExit {
 			t.Fatalf("run installer %v: %v\n%s", args, err, out)
 		}
 	}
 	line := lastJSONLine(out)
+	if line == "" {
+		t.Fatalf("installer %s %v returned no JSON object (process error: %v)\n%s", label, args, err, out)
+	}
 	var decoded map[string]any
-	if line != "" {
-		if jsonErr := json.Unmarshal([]byte(line), &decoded); jsonErr != nil {
-			t.Fatalf("decode installer output for %v: %v\n%s", args, jsonErr, out)
-		}
+	if jsonErr := json.Unmarshal([]byte(line), &decoded); jsonErr != nil || decoded == nil {
+		t.Fatalf("decode installer output for %s %v: expected a non-null JSON object: %v\n%s", label, args, jsonErr, out)
 	}
 	if runtime.GOOS == "windows" && len(args) > 0 && (args[0] == "add" || args[0] == "update" || args[0] == "repair") {
 		// Both fixture families use a fixed, explicit stdio inventory.
@@ -157,13 +166,16 @@ func claudeRunInstaller(t *testing.T, f *claudeNativeFixture, installer, clientD
 // JSON decoding since these calls exercise the plain-text refusal path.
 func claudeRunInstallerExpectError(t *testing.T, f *claudeNativeFixture, installer, clientDir, label string, args ...string) (string, error) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), claudeNativeCommandTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), claudeNativeInstallerTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, installer, append(args, "--format", "json")...)
 	cmd.Env = f.env(clientDir)
 	cmd.Dir = f.Root
 	out, err := cmd.CombinedOutput()
 	f.record(t, label, out)
+	if ctx.Err() != nil {
+		t.Fatalf("run installer %s %v: %v (process error: %v)\n%s", label, args, ctx.Err(), err, out)
+	}
 	return string(out), err
 }
 

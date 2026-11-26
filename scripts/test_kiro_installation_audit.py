@@ -76,6 +76,8 @@ def raw(kind, index, project):
             for result in data["results"]:
                 result.update(client_id="kiro", installation_id=node["installation_id"])
     state = prepared.expected_state(kind, "kiro")
+    if kind == "plugin":
+        state["install_intent"] = "automatic" if index in prepared.KIRO_ACTIVE else "prepare"
     if kind == "plugin" and index in prepared.KIRO_ACTIVE:
         state.update(activation="active", verification="installation_verified")
     node["clients"][0].update(client_id="kiro", **state)
@@ -176,9 +178,10 @@ class KiroInstallationTests(unittest.TestCase):
         identity = item["name"] if kind == "skill" else FIXTURES["plugin_declared_names"].get(item, item)
         row = {"index": index, "target": "kiro", "kind": kind, "source": item["source"] if kind == "skill" else item,
                "identity": identity, "status": "incomplete-native-proof" if kind == "skill" else
-                   "package-installed-native-unqualified" if index in prepared.KIRO_ACTIVE else "prepared-lifecycle-passed",
+                   "package-installed-native-unqualified" if index in prepared.KIRO_ACTIVE else "incomplete-native-proof",
                "matched_installation_ids": [node["installation_id"]], "repeat_installation_ids": [node["installation_id"]],
                "prepared_binding": kind == "plugin" and index not in prepared.KIRO_ACTIVE,
+               "kiro_prepared_lifecycle_verified": kind == "plugin" and index not in prepared.KIRO_ACTIVE,
                "prepared_components_only": False, "public_skill_ready": {"after-add": False, "repeat-add": False} if kind == "skill" else None,
                "native_file_delta": 0 if kind == "skill" else 1, "native_identity_files": [] if kind == "skill" else [".kiro/skills/owned/SKILL.md"],
                "native_component_candidates": [], "signed_release_observation": [], "native_residuals": [],
@@ -827,6 +830,9 @@ class KiroInstallationTests(unittest.TestCase):
                 self.assertEqual(len(calls), 2 if index == 13 else 6)
                 self.assertEqual(row["kiro_installation_custody"]["status"],
                                  "verified-installation-negative" if index == 13 else "verified-installation-lifecycle")
+                if kind == "plugin" and index not in (*prepared.KIRO_ACTIVE, 13):
+                    self.assertEqual(row["status"], "incomplete-native-proof")
+                    self.assertIs(row["kiro_prepared_lifecycle_verified"], True)
                 serialized = json.dumps(row)
                 for field in ('"_json"', '"stdout_full"', '"stderr_full"'):
                     self.assertNotIn(field, serialized)
@@ -893,6 +899,9 @@ class KiroInstallationTests(unittest.TestCase):
                     value = deepcopy(good); mutate(value)
                     self.assertFalse(prepared.kiro_summary(value, FIXTURES, mode)["installation_acceptance_passed"])
             if kind == "plugin":
+                for index, marker in ((0, False), (0, None), (22, True)):
+                    changed = deepcopy(good); changed["results"][index]["kiro_prepared_lifecycle_verified"] = marker
+                    self.assertFalse(prepared.kiro_summary(changed, FIXTURES, mode)["installation_acceptance_passed"])
                 for status in ("installation-lifecycle-observed", "passed", "incomplete-native-proof"):
                     changed = deepcopy(good); changed["results"][22]["status"] = status
                     self.assertFalse(prepared.kiro_summary(changed, FIXTURES, mode)["installation_acceptance_passed"])

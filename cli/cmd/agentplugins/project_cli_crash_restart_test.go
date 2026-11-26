@@ -145,6 +145,10 @@ func TestPublicCLICrashAfterDurablePhaseRecovery(t *testing.T) {
 	if !status() {
 		t.Fatal("cold public CLI did not report pending recovery after real crash")
 	}
+	assertPublicSyncRefusesPendingCrash(t, exe, journey)
+	if !status() {
+		t.Fatal("refused public sync silently recovered or cleared the pending operation")
+	}
 	run("deps", "recover", "--yes")
 	if status() {
 		t.Fatal("second cold public CLI still reports pending recovery")
@@ -166,5 +170,35 @@ func TestPublicCLICrashAfterDurablePhaseRecovery(t *testing.T) {
 	}
 	if projectJourneyRead(t, filepath.Join(staging, "unpublished.txt")) != "unpublished caller bytes\n" {
 		t.Fatal("cold CLI recovery adopted caller staging")
+	}
+}
+
+// The ordinary mutation must stop at the real durable journal. Preserve the
+// legacy empty-stdout refusal contract rather than manufacturing a JSON code.
+func assertPublicSyncRefusesPendingCrash(t *testing.T, executable string, journey projectJourney) {
+	t.Helper()
+	roots := map[string]string{"project": journey.a, "other-project": journey.b, "user": journey.home}
+	before := make(map[string]map[string]string, len(roots))
+	for name, root := range roots {
+		before[name] = securityFixtureTree(t, root)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
+	defer cancel()
+	command := exec.CommandContext(ctx, executable, "deps", "sync", "--yes", "--scope", "project",
+		"--project-root", journey.a, "--format", "json")
+	command.Env = projectCrashTestEnv(journey.home, journey.cache, "")
+	command.Dir = journey.a
+	stdout, err := command.Output()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+		t.Fatalf("public sync did not refuse the pending durable operation: %v, stdout=%q", err, stdout)
+	}
+	if len(stdout) != 0 || strings.TrimSpace(string(exit.Stderr)) != "agentplugins: installer recovery required" {
+		t.Fatalf("public recovery refusal changed its stdout/stderr contract: stdout=%q stderr=%q", stdout, exit.Stderr)
+	}
+	for name, root := range roots {
+		if !reflect.DeepEqual(before[name], securityFixtureTree(t, root)) {
+			t.Errorf("refused public sync changed %s state, journal, intent, staging or native/foreign bytes", name)
+		}
 	}
 }

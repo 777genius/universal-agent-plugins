@@ -12,6 +12,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providers"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/providerstest"
 )
 
 func TestSavedDirectoryDerivedAliasPreservesResolverPriority(t *testing.T) {
@@ -63,6 +65,51 @@ func TestSavedDirectoryDerivedAliasPreservesResolverPriority(t *testing.T) {
 			}
 			if directory.acquirer.verifiedCalls <= beforeAcquisitions {
 				t.Fatal("test did not exercise acquired Directory identity")
+			}
+			if j.runner.calls != beforeNative || !reflect.DeepEqual(beforeState, j.state(t)) || dependencyRead(t, manifest) != beforeManifest || dependencyRead(t, lock) != beforeLock {
+				t.Fatal("refusal changed saved state or executed a native client")
+			}
+		})
+	}
+}
+
+func TestSavedGitDerivedAliasPreservesResolverPriority(t *testing.T) {
+	for _, claimed := range []bool{true, false} {
+		t.Run(map[bool]string{true: "claimed", false: "unclaimed"}[claimed], func(t *testing.T) {
+			repo, revision := savedJourneyRepository(t)
+			manifestPath := filepath.Join(repo, "plugin.json")
+			body, err := os.ReadFile(manifestPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dependencyWrite(t, manifestPath, strings.Replace(string(body), `"name": "demo"`, `"name": "other"`, 1))
+			savedJourneyGit(t, repo, "add", ".")
+			savedJourneyGit(t, repo, "commit", "-m", "test: different declared package name")
+			otherRevision := savedJourneyGit(t, repo, "rev-parse", "HEAD")
+			j := newSavedJourney(t, repo)
+			// Saved and --no-save installs use different activation paths. Share
+			// the same native fixture and call counter across both paths.
+			j.cli.app.Lifecycle.Activator = providerstest.NewActivator(providers.Activator{Runner: j.runner})
+			alias := "different"
+			if claimed {
+				alias = "demo"
+			}
+			j.run(t, "add", githubIdentity("acme/other", otherRevision, ""), "--alias", alias, "--target", "codex", "--format", "json")
+			source := githubIdentity("acme/demo", revision, "")
+			j.run(t, "add", source, "--no-save", "--target", "claude", "--yes", "--format", "json")
+			beforeState := j.state(t)
+			manifest, lock := j.cli.app.dependencyPaths()
+			beforeManifest, beforeLock := dependencyRead(t, manifest), dependencyRead(t, lock)
+			beforeNative := j.runner.calls
+
+			_, stderr, err := j.cli.execute(false, "add", source, "--target", "claude", "--yes", "--format", "json")
+			var foreign *environment.ForeignBindingError
+			if claimed {
+				if err == nil || errors.As(err, &foreign) || !strings.Contains(err.Error(), "alias already belongs to another source; use --alias") {
+					t.Fatalf("derived Git alias refusal lost priority: err=%v stderr=%s", err, stderr)
+				}
+			} else if !errors.As(err, &foreign) || !ShouldWriteAgentFailure(err) || foreign.SourceKey != "github:acme/demo:" {
+				t.Fatalf("unclaimed Git alias lost ownership refusal: err=%v stderr=%s", err, stderr)
 			}
 			if j.runner.calls != beforeNative || !reflect.DeepEqual(beforeState, j.state(t)) || dependencyRead(t, manifest) != beforeManifest || dependencyRead(t, lock) != beforeLock {
 				t.Fatal("refusal changed saved state or executed a native client")

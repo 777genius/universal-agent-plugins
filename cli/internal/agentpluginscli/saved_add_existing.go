@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
@@ -21,6 +22,12 @@ func inspectSavedAddRoot(ctx context.Context, app App, opts *options, source str
 	snapshot, err := snapshotEnvironmentContext(ctx, app, false)
 	if err != nil {
 		return err
+	}
+	// A direct source key cannot reveal its manifest-derived alias. Existing
+	// declarations may claim that alias, so let acquisition and resolution run
+	// before reporting ownership of the requested source.
+	if len(snapshot.Requirements.Dependencies) > 0 {
+		return nil
 	}
 	key := savedDirectSourceKey(source)
 	if match := exactGitPattern.FindStringSubmatch(source); match != nil {
@@ -55,15 +62,23 @@ func canPreviewSavedAddOwnership(snapshot environmentSnapshot, alias, derivedAli
 // refusals remain with the authoritative resolver. Product identity alone is
 // insufficient to diagnose ownership of an unselected Directory distribution.
 func inspectSavedAddSelection(ctx context.Context, app App, opts *options, source string, loaded *loadedPackage) (map[domain.ClientID]prompt.TargetChoice, error) {
-	if app.Installer == nil || loaded == nil || explicitLocalPath(source) || localArchiveInput(source) {
+	if app.Installer == nil || explicitLocalPath(source) || localArchiveInput(source) {
 		return nil, nil
 	}
-	key := savedDirectSourceKey(source)
-	if loaded.directorySelection != nil {
-		key = "directory:" + loaded.directorySelection.DistributionID
+	if loaded == nil {
+		// A retained Directory binding can exclude every candidate before
+		// package acquisition. Preserve the verified-feed ownership diagnostic.
+		// Explicit aliases still belong to the authoritative alias resolver.
+		if opts.alias != "" {
+			return nil, nil
+		}
+		return nil, earlyForeignBinding(app, inspectSavedDirectoryOwnership(ctx, app, source))
 	}
-	if key == "" {
-		return nil, nil
+	// Resolve the same canonical SourceKey as the saved dependency resolver.
+	// A non-direct source can receive its immutable identity only after acquisition.
+	key, err := savedSelectionSourceKey(source, *loaded)
+	if err != nil {
+		return nil, err
 	}
 	alias := dependencyManifestAlias(loaded.envelope.Manifest.Name)
 	snapshot, err := snapshotEnvironmentContext(ctx, app, false)
@@ -90,4 +105,19 @@ func inspectSavedAddSelection(ctx context.Context, app App, opts *options, sourc
 		}
 	}
 	return annotations, nil
+}
+
+func savedSelectionSourceKey(source string, loaded loadedPackage) (string, error) {
+	requirement := environment.Requirement{Alias: "candidate"}
+	if selection := loaded.directorySelection; selection != nil {
+		requirement.Registry = &environment.RegistrySource{Distribution: selection.DistributionID,
+			Selector: environment.Selector{Kind: environment.SelectorRelease, Value: fmt.Sprint(selection.ReleaseSequence)}}
+	} else if key := savedDirectSourceKey(source); key != "" {
+		return key, nil
+	} else {
+		identity := loaded.envelope.Source
+		requirement.Git = &environment.GitSource{Repository: identity.Repository, Path: identity.PackageSubpath,
+			Selector: environment.Selector{Kind: environment.SelectorCommit, Value: identity.ResolvedRevision}}
+	}
+	return requirement.SourceKey()
 }

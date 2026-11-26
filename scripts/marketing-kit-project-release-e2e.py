@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Actual pinned published npm CLI and signed Marketing Kit Project lifecycle, no mocks."""
 import argparse
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 import hashlib
 import json
@@ -1904,6 +1904,15 @@ def verify_final_production_observation(cli, env, project, target, expected_poli
             raise failures[0]
 
 
+@contextmanager
+def unchanged_profile(env, project, stage):
+    before = settled_profile_snapshot(env, project)
+    try:
+        yield before
+    finally:
+        check_profile_unchanged(env, project, before, stage)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", required=True, choices=["codex", "cursor", "claude", "gemini", "opencode", "copilot"])
@@ -2209,7 +2218,6 @@ def main():
             env_b, project_b, foreign_b, project_foreign_b, native_foreign_b = run_case(options.cli, options.target, root, "B", project_a)
             claude_profiles.append((env_b, project_b))
             bind_pinned_launcher_cache(env_b, launcher_cache, root)
-            claude_profiles.append((env_b, project_b))
             foreign_b_files = pin_foreign([(foreign_b, "unmanaged user data\n"),
                                            (project_foreign_b, "unmanaged project data\n"),
                                            *native_foreign_b], root)
@@ -2336,14 +2344,14 @@ def main():
 
             # Project B has previously installed packages; a true cold User
             # restore needs a third HOME with no prior installs or native state.
-            # Pin A before any C preparation/native execution, so a peer write
-            # cannot become part of the accepted full-profile baseline.
-            user_a_native_before_c = settled_profile_snapshot(env, project_a)
-            env_c, project_c, foreign_c, project_foreign_c, native_foreign_c = (
-                run_case(options.cli, options.target, root, "C"))
-            claude_profiles.append((env_c, project_c))
-            bind_pinned_launcher_cache(env_c, launcher_cache, root)
-            prepare_codex(env_c, project_c)
+            # Keep the baseline for subsequent User C operations, and check
+            # initialization in finally so a failed peer cannot rebaseline A.
+            with unchanged_profile(env, project_a, "User C initialization") as user_a_native_before_c:
+                env_c, project_c, foreign_c, project_foreign_c, native_foreign_c = (
+                    run_case(options.cli, options.target, root, "C"))
+                claude_profiles.append((env_c, project_c))
+                bind_pinned_launcher_cache(env_c, launcher_cache, root)
+                prepare_codex(env_c, project_c)
             # User operations must not mutate their own working Project C.
             protected_c_project = scoped_snapshot([project_c])
             foreign_files.extend(pin_foreign([(foreign_c, "unmanaged user data\n"),

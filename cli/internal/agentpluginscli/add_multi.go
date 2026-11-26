@@ -320,13 +320,13 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			if !cleanupUnconfirmed {
 				setPreflightNextActions(combined.Targets)
 			}
-			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
+			err = errors.Join(err, installOutputError(renderAddMultiResult(cmd, opts, combined, loaded.envelope)))
 			return fmt.Errorf("group apply preflight failed; no target was changed (selected targets: %v): %w%s", targets, err, addGroupNextAction(combined.Targets))
 		}
 		if applied.Phase == usecase.GroupPhasePreparationFailed && !applied.Mutated {
 			combined.Status, combined.Failed, combined.Succeeded, combined.ActionRequired = "preparation_failed", len(inputs), 0, 0
 			combined.markPreparationNotAttempted(err, cleanupUnconfirmed)
-			_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
+			err = errors.Join(err, installOutputError(renderAddMultiResult(cmd, opts, combined, loaded.envelope)))
 			return fmt.Errorf("group preparation failed before client changes (selected targets: %v): %w; no selected client was changed", targets, err)
 		}
 		combined.Status = groupFailureStatus(applied.Phase)
@@ -334,12 +334,12 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 		if deferredChatGPT {
 			appendDeferredChatGPT(&combined, cmd, loaded)
 		}
-		_ = renderAddMultiResult(cmd, opts, combined, loaded.envelope)
+		err = errors.Join(err, installOutputError(renderAddMultiResult(cmd, opts, combined, loaded.envelope)))
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return err
 		}
 		if applied.Phase == usecase.GroupPhaseManagedActivationFailed || applied.Phase == usecase.GroupPhaseExternalPartialFailure {
-			return retainUnclosedInstallCause(batchActivationAggregateError(combined), err)
+			return retainGroupApplyCause(batchActivationAggregateError(combined), err)
 		}
 		return err
 	}

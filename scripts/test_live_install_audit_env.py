@@ -2725,10 +2725,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             return {"status": "installed" if owners else "absent", "managed_count": len(owners),
                     "profile": str(Path(env["HOME"]).resolve()), "owners": owners}
 
-        def initialize_sqlite(env, project):
+        def codex_profile(audit, root, env, project):
             if codex_initializer is not None:
                 return codex_initializer(runner, env, project)
-            return SimpleNamespace(checkpoint=lambda *_: None, evidence=lambda: {})
+            return FakeCodexProfile(audit, root, env, project)
 
         # These are inert scope/report controls, like the existing public/native
         # substitutes above. Real cache custody and native-output validation
@@ -2772,7 +2772,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
                     "execute": execute, "invoke": cold_consent, "verify_pinned_launcher": lambda *_: None,
-                    "CodexProfile": FakeCodexProfile, "SignedClosureRetirement": FakeRetirement,
+                    "CodexProfile": codex_profile, "SignedClosureRetirement": FakeRetirement,
                     "prepare_copilot_project_b_trust": prepare_trust,
                     "profile_snapshot": profile, "check_foreign": foreign,
                     "check_user_project_unchanged": project_check,
@@ -2788,10 +2788,6 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "verify_fixed_vscode_user_policy_refusal": lambda *_: self.fail("historical45 is not a current gate"),
                     "verify_current_vscode_user_boundary": boundary,
                     "observe_production_policy": observe,
-                    # This shared scope/report fixture already replaces public
-                    # and native operations; SQLite semantics have their own
-                    # real-database Marketing Kit regression tests.
-                    "initialize_codex_sqlite": initialize_sqlite,
                     "RemovalDiscovery": ClaudeDiscovery,
                     "codex_user_native_remove_attestation": lambda *_: ("--external-uninstalled",),
                     # Patch the runner binding, preserving tempfile for setup helpers.
@@ -2804,16 +2800,19 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                                "--report", str(report_path)]), \
                     patch.object(sys, "stdout", StringIO()), patch.object(sys, "stderr", StringIO()):
                 code = main()
-            if target == "codex":
+            if target == "codex" and codex_initializer is None:
                 self.assertEqual(len(codex_profiles),
                                  ("A", "B", "C").index(codex_constructor_error)
                                  if codex_constructor_error is not None else 3)
                 self.assertTrue(all(profile.checkpoints for profile in codex_profiles))
             if target == "claude":
-                self.assertTrue(retirements)
                 self.assertTrue(all(retirement.closed for retirement in retirements))
-                self.assertTrue(all(retirement.finished for retirement in retirements)
-                                if project_remove_error not in ("remove A", "remove B") else not retirements[-1].finished)
+                # A refused native preflight may stop before capture; a failed
+                # postflight must close custody without qualifying retirement.
+                if claude_native_mutation is None:
+                    self.assertTrue(retirements)
+                    self.assertTrue(all(retirement.finished for retirement in retirements)
+                                    if project_remove_error not in ("remove A", "remove B") else not retirements[-1].finished)
             return code, json.loads(report_path.read_text()), phases
 
     def _marketing_kit_copilot_consent_response(self, runner, project):
@@ -4259,8 +4258,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertIn('--cli-version 0.1.116', workflow)
         self.assertIn('release.version !== "0.1.116"', workflow)
         self.assertIn('result.stdout.replace(/\\n+$/, "") !== "agentplugins 0.1.116"', workflow)
-        historical = workflow.split("      - name: Verify historical npm 0.1.104 launcher abort cleanup", 1)[1].split("      - name:", 1)[0]
-        self.assertIn('npm install --prefix "$RUNNER_TEMP/uap-legacy" --no-audit --no-fund universal-agent-plugins@0.1.104', historical)
+        historical = workflow.split("      - name: Verify historical npm 0.1.115 launcher abort cleanup", 1)[1].split("      - name:", 1)[0]
+        self.assertIn('npm install --prefix "$RUNNER_TEMP/uap-legacy" --no-audit --no-fund universal-agent-plugins@0.1.115', historical)
         self.assertIn('UAP_GLOBAL_NPM_ROOT="$RUNNER_TEMP/uap-legacy/node_modules"', historical)
         self.assertIn('timeout 20s node scripts/marketing-kit-published-launcher-abort.js', historical)
         self.assertNotIn('continue-on-error', historical)
@@ -13644,6 +13643,51 @@ class WindsurfPreparedAcceptanceContracts(unittest.TestCase):
         self.assertEqual((original['passed'], original['prepared_lifecycle_passed'],
                           original['verified_negative_coverage']), (0, 25, 1))
 
+    def test_actual_prepared_cases_keep_six_calls_without_global_native_observer(self):
+        import copy
+        audit = load_audit()
+        report = self.original()
+        fixtures = json.loads(audit.FIXTURES.read_text())
+        phases = ('install', 'list', 'repeat_add', 'repeat_list', 'cleanup', 'post_remove_list')
+        # Only subprocess transport is inert. Exercise real case setup,
+        # source matching, repeat/remove and the unchanged legacy summary.
+        for index in (22, 25, 26, 29):
+            with self.subTest(index=index), TemporaryDirectory() as temporary:
+                retained = copy.deepcopy(report['results'][index])
+                commands = []
+                def invoke(argv, env, cwd, timeout=105, **options):
+                    phase = phases[len(commands)]
+                    self.assertEqual(argv, retained['windsurf_public_commands'][len(commands)])
+                    self.assertTrue(options['capture_full'])
+                    self.assertTrue((Path(env['HOME']) / '.config/devin/foreign-neighbor.txt').is_file())
+                    commands.append(list(argv))
+                    if phase in ('install', 'repeat_add'):
+                        document = {'schema_version': 1, 'command': 'add', 'result': 'success',
+                                    'data': {'actions': [{'alias': retained['identity'], 'client_id': 'windsurf',
+                                        'component_support': [{'kind': 'skill', 'name': 'inert', 'support': 'prepared'}]}]}}
+                        body = json.dumps(document)
+                    else:
+                        body = retained[phase]['stdout_tail']
+                        document = json.loads(body)
+                    return {'exit_code': 0, 'timeout': False, 'stdout_tail': body[-1800:],
+                            'stderr_tail': '', 'stdout_full': body, 'stderr_full': '', '_json': document}
+                with patch.object(audit, 'call', side_effect=invoke), patch.dict(
+                        audit.WINDSURF_GLOBAL_AUDIT, {'WindsurfGlobalSkillAudit': lambda *a, **k:
+                            self.fail('explicit Prepared acceptance invoked the native observer')}):
+                    row = audit.do_case(report['cli'], 'windsurf', 'plugin', retained['source'], index,
+                        Path(temporary), fixtures['plugin_declared_names'], fixtures['signed_release_pins'],
+                        installation_audit='windsurf-prepared-installation')
+                self.assertEqual(row['status'], 'prepared-lifecycle-passed')
+                self.assertEqual(row['windsurf_public_commands'], commands)
+                self.assertEqual(len(commands), 6)
+                self.assertNotIn('windsurf_global_native_proof', row)
+                self.assertTrue(all('stdout_full' not in row[phase] and 'stderr_full' not in row[phase]
+                                    for phase in phases))
+                report['results'][index] = row
+        accepted = audit.prepared_installation_summary(report, fixtures, 'windsurf-prepared-installation')
+        self.assertEqual((accepted['installation_passed'], accepted['installation_verified_negative_coverage'],
+                          accepted['installation_acceptance_passed']), (25, 5, True))
+
 
     def test_original_provenance_effects_and_nullable_refusals_are_required(self):
         import copy
@@ -13737,6 +13781,9 @@ class WindsurfPreparedAcceptanceContracts(unittest.TestCase):
         for row in rows:
             for command in row['windsurf_public_commands']:
                 command[0] = cli
+        def next_case(*args, **kwargs):
+            self.assertEqual(kwargs.get('installation_audit'), acceptance)
+            return rows[args[4]]
         with TemporaryDirectory() as temporary:
             argv = ['live-install-audit', '--cli', cli, '--target', target, '--kind', kind,
                     '--limit', str(limit), '--report-dir', temporary]
@@ -13747,7 +13794,7 @@ class WindsurfPreparedAcceptanceContracts(unittest.TestCase):
                   patch.object(audit, 'vendor_bootstrap_attested', return_value=True),
                   patch.dict(audit.AGENT_BINARIES, {'devin': cli, 'windsurf': cli}, clear=True),
                   patch.object(audit, 'version_evidence', return_value=original['client_version']) as version,
-                  patch.object(audit, 'do_case', side_effect=rows) as cases,
+                  patch.object(audit, 'do_case', side_effect=next_case) as cases,
                   redirect_stdout(StringIO()), redirect_stderr(StringIO())):
                 try:
                     code = audit.main()

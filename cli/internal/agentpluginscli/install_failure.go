@@ -225,7 +225,7 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 	case failureProcessCleanup:
 		return "The agent's process cleanup could not be confirmed.", "Confirm the agent's processes have stopped before starting another installation.", false
 	case failureRecovery:
-		return "An earlier installation was interrupted and needs recovery first.", "Run `agentplugins doctor`, follow its steps, then try again.", false
+		return "The installation needs recovery before more changes.", "Run `agentplugins doctor`, follow its steps, then try again.", false
 	case failureSecurityBlocked:
 		return "The automated security check blocked this item.", "Review the findings before installing it.", false
 	case failureForeignTarget:
@@ -257,7 +257,7 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 	case failureSkipped:
 		return "Not attempted because an earlier problem stopped the installation.", "Retry this agent once the earlier problem is resolved.", true
 	}
-	return "The installation did not complete for this agent.", "Retry, or hand the technical log to an agent to diagnose.", true
+	return "The installation did not complete for this agent.", "Retry, or ask an agent to diagnose the per-agent results and failure codes.", true
 }
 
 // installFailureWithCause keeps a classifiable cause without putting its

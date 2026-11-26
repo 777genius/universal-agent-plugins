@@ -9,7 +9,7 @@ import (
 )
 
 func renderDependencyAppliedResults(cmd *cobra.Command, app App, opts *options, request dependencySyncRequest, applied environmentapp.Result, applyErr error) error {
-	if err := renderDependencyResults(cmd, opts, request.prepared, applied.Results(), applyErr); err != nil {
+	if err := renderDependencyBindingResults(cmd, opts, request.prepared, applied.Outcomes, applyErr); err != nil {
 		return err
 	}
 	if applyErr == nil || opts.format != "human" {

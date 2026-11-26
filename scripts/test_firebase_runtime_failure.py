@@ -11,12 +11,19 @@ from unittest.mock import patch
 
 class FirebaseRuntimeFailureTest(unittest.TestCase):
     def test_owned_stage_facts_and_all_or_refusal(self):
-        collect = run_path(str(Path(__file__).with_name("firebase_runtime_failure.py")))["collect"]
-        for mutation in (None, "link", "foreign", "large", "unknown", "extra-log",
+        self.check_owned_stage_facts((None, "link", "foreign", "large", "unknown", "extra-log",
                          "missing-owner", "owner-state", "owner-digest", "owner-id", "owner-shape", "data-extra",
                          "parent-link", "parent-replacement", "large-log", "package", "lock", "source-shape",
                          "source-staging", "stage-data", "stage-root", "stage-manifest",
-                         "stage-duplicate", "stage-link", "stage-name", "stage-owner"):
+                         "stage-duplicate", "stage-link", "stage-name", "stage-owner"))
+
+    @unittest.skipUnless(os.name == "nt", "Windows short TEMP spelling")
+    def test_windows_short_case_spelling_preserves_custody(self):
+        self.check_owned_stage_facts(("stage-short-case", "stage-short-case-link"))
+
+    def check_owned_stage_facts(self, mutations):
+        collect = run_path(str(Path(__file__).with_name("firebase_runtime_failure.py")))["collect"]
+        for mutation in mutations:
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
                 case = Path(temporary).resolve() / "plugin-06"
                 backend = case / "uap-data/plugin-data/firebase-123456789abc"
@@ -121,14 +128,32 @@ class FirebaseRuntimeFailureTest(unittest.TestCase):
                         stage.rename(stage.with_name(stage.name + "-old"))
                         stage.mkdir()
                     return fd
+                collect_case = case
+                if mutation in ("stage-short-case", "stage-short-case-link"):
+                    import ctypes
+                    short = ctypes.create_unicode_buffer(32768)
+                    get_short = ctypes.windll.kernel32.GetShortPathNameW
+                    get_short.argtypes = (ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint)
+                    get_short.restype = ctypes.c_uint
+                    length = get_short(str(case.parent), short, len(short))
+                    if not 0 < length < len(short) or Path(short.value) == case.parent:
+                        self.skipTest("Windows short directory names unavailable")
+                    collect_case = Path(short.value) / case.name
+                    if mutation == "stage-short-case-link":
+                        old_case = case.with_name("owned-original")
+                        case.rename(old_case)
+                        try:
+                            case.symlink_to(old_case, target_is_directory=True)
+                        except OSError as error:
+                            self.skipTest(str(error))
                 with patch.dict(files, {"open_member": replacing_open}):
-                    result = collect(case)
+                    result = collect(collect_case)
                 self.assertIs(result["qualified"], False)
                 self.assertNotIn("PRIVATE", json.dumps(result))
                 self.assertNotIn("secret.invalid", json.dumps(result))
                 self.assertNotIn(str(case), json.dumps(result))
                 self.assertEqual(foreign.read_bytes(), b"foreign untouched")
-                if mutation in (None, "large-log", "source-staging"):
+                if mutation in (None, "large-log", "source-staging", "stage-short-case"):
                     self.assertEqual(result["status"], "observed-unqualified")
                     self.assertEqual(result["facts"][0]["staging"][0]["package_sha256"],
                                      hashlib.sha256(package).hexdigest())

@@ -180,8 +180,15 @@ class ClaudeRemovalDiscoveryContracts(unittest.TestCase):
         for mutation in (("after", "B", "B", False), ("after", "A", "A", False),
                          ("before", "B", "A", False), ("after", "B", "A", True)):
             with self.subTest(mutation=mutation):
-                code, report, _ = fixture._exercise_marketing_kit_scope_report(
+                code, report, phases = fixture._exercise_marketing_kit_scope_report(
                     "claude", claude_native_mutation=mutation)
+                phase, case, _, _ = mutation
+                if phase == "before":
+                    self.assertNotIn("claude-capture:" + case, phases)
+                else:
+                    self.assertIn("claude-capture:" + case, phases)
+                    self.assertNotIn("claude-finish:" + case, phases)
+                    self.assertIn("claude-close:" + case, phases)
                 self.assertEqual(code, 1)
                 self.assertFalse(report["two_scope_lifecycle_qualified"])
                 self.assertIn("Claude native", report["failure"])

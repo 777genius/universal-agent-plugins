@@ -22,7 +22,7 @@ type OpenCodeClientPreparation struct {
 }
 
 func NewOpenCodeClientPreparation(registry *clients.Registry) *OpenCodeClientPreparation {
-	return &OpenCodeClientPreparation{registry: registry, environment: clientdetect.OpenCodeProbeEnvironment(), probe: clientdetect.ProbeOpenCodeTarget}
+	return &OpenCodeClientPreparation{registry: registry, environment: clientdetect.OpenCodeProbeEnvironment(), probe: clientdetect.ProbeIsolatedOpenCodeTarget}
 }
 
 type preparedOpenCodeClient struct {

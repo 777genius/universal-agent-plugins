@@ -364,6 +364,9 @@ func TestDependencyResultsJSONAddsBindingsOnlyOnFailure(t *testing.T) {
 	if _, present := render(ok)["bindings"]; present {
 		t.Fatal("a successful result must keep its established shape")
 	}
+	if _, present := render(ok)["error"]; present {
+		t.Fatal("a successful result must not add an error")
+	}
 	failed := &installOutcome{LogFile: "/logs/x.jsonl", Items: []agentItem{failedItem("demo", "codex", errors.New("boom"))}}
 	failed.Agents = reportByAgent(failed.Items)
 	data := render(failed)

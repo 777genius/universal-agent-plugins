@@ -99,7 +99,7 @@ NATIVE_ROOTS = {
     "vscode": [".vscode", ".config/Code"], "kiro": [".kiro"],
     "claude": [".claude"], "gemini": [".gemini"],
     "opencode": [".config/opencode", ".opencode"], "cline": [".cline"],
-    "windsurf": [".windsurf", ".devin", ".codeium", ".config/devin"],
+    "windsurf": [".windsurf", ".devin", ".codeium"],
     "grok": [".grok"],
     "kimi": [".kimi-code", ".kimi"], "qoder": [".qoder"],
     "pi": [".pi"],
@@ -1807,6 +1807,10 @@ def matching_installations(response, identity, target, kind, item, signed_releas
             continue
         prepared_kiro = (kiro_prepared_user_client(clients)
                          if target == "kiro" and kind == "plugin" else None)
+        if prepared_kiro is not None and isinstance(item, str) and item.startswith("github:"):
+            # Direct Prepared Kiro sources must satisfy the stricter identity
+            # predicate above; do not fall back after its UUID/digest refusal.
+            continue
         verified_clients = [
             client for client in clients
             if isinstance(client, dict) and client.get("client_id") == target and
@@ -2333,6 +2337,44 @@ def kimi_log_fact(facts, reason, changed=None):
     return None
 
 
+def kimi_workspace_lock_capture(home, case_root, scope):
+    """Bind the native empty coordination target to the held scoped snapshot."""
+    relative = ".kimi-code/.projects-write-lock"
+    path = home / relative
+    metadata_key = "metadata:0:" + relative
+    content_key = home.name + "/" + relative
+    # proper-lockfile's live companion must not survive native completion.
+    if "metadata:0:" + relative + ".lock" in scope:
+        raise ValueError("Kimi workspace coordinator remains locked")
+    try:
+        initial = path.lstat()
+    except FileNotFoundError:
+        if metadata_key in scope or content_key in scope:
+            raise ValueError("Kimi workspace coordinator disappeared")
+        return None
+    fields = ("st_dev", "st_mode", "st_nlink", "st_size",
+              "st_uid", "st_gid", "st_ino", "st_mtime_ns")
+    identity = tuple(getattr(initial, field) for field in fields)
+    if (not stat.S_ISREG(initial.st_mode) or stat.S_IMODE(initial.st_mode) != 0o600
+            or initial.st_nlink != 1 or initial.st_size != 0
+            or initial.st_uid != home.lstat().st_uid):
+        raise ValueError("Kimi workspace coordinator is not private and empty")
+    body, error = copilot_settings_read(path, case_root)
+    if (error is not None or body != ""
+            or identity != tuple(getattr(path.lstat(), field) for field in fields)
+            or scope.get(metadata_key) != (initial.st_mode, initial.st_dev,
+                                           initial.st_ino, initial.st_mtime_ns)
+            or scope.get(content_key) != hashlib.sha256(b"").hexdigest()):
+        raise ValueError("Kimi workspace coordinator changed during capture")
+    try:
+        path.with_name(path.name + ".lock").lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        raise ValueError("Kimi workspace coordinator remains locked")
+    return identity
+
+
 def kimi_repeat_log_capture(home, project, case_root, facts=None):
     """Private bounded bytes; only hashes leave the isolated audit case."""
     path = home / ".kimi-code/logs/kimi-code.log"
@@ -2361,6 +2403,7 @@ def kimi_repeat_log_capture(home, project, case_root, facts=None):
         body = body.encode("utf-8")
         if scope.get(log_key) != hashlib.sha256(body).hexdigest():
             return kimi_log_fact(facts, "log-hash-mismatch")
+        workspace_lock = kimi_workspace_lock_capture(home, case_root, scope)
         if identity != tuple(getattr(path.lstat(), key) for key in fields):
             return kimi_log_fact(facts, "log-identity-after-scope-changed")
         if before_parents != parent_facts():
@@ -2374,7 +2417,8 @@ def kimi_repeat_log_capture(home, project, case_root, facts=None):
         if isinstance(facts, dict):
             facts["log_bytes"] = len(body)
         return {"body": body, "identity": identity, "native": native,
-                "parents": before_parents, "scope": scope, "log_key": log_key}
+                "parents": before_parents, "scope": scope, "log_key": log_key,
+                "workspace_lock": workspace_lock}
     except OSError:
         return kimi_log_fact(facts, "filesystem-read-refused")
     except ValueError:
@@ -2455,6 +2499,13 @@ def kimi_repeat_log_append(before, after, listed, added, repeated, command, nati
     if len(after["body"]) <= len(before["body"]):
         return kimi_log_fact(facts, "log-not-append")
     ignored = {before["log_key"], "metadata:0:.kimi-code/logs/kimi-code.log"}
+    left, right = before["workspace_lock"], after["workspace_lock"]
+    if ((left is None) != (right is None)
+            or left is not None and left[:6] != right[:6]):
+        return kimi_log_fact(facts, "workspace-lock-authority-changed")
+    if left is not None:
+        # Native 2.5.2 atomically rewrites this empty target before taking its lock.
+        ignored.add("metadata:0:.kimi-code/.projects-write-lock")
     original = {key: value for key, value in before["scope"].items() if key not in ignored}
     current = {key: value for key, value in after["scope"].items() if key not in ignored}
     if original != current:
@@ -2468,7 +2519,8 @@ def kimi_repeat_log_append(before, after, listed, added, repeated, command, nati
             "before_sha256": hashlib.sha256(before["body"]).hexdigest(),
             "after_sha256": hashlib.sha256(after["body"]).hexdigest(),
             "append_sha256": hashlib.sha256(after["body"][len(before["body"]):]).hexdigest(),
-            "same_inode_mode_parents": True, "post_list_unchanged": True}
+            "same_inode_mode_parents": True, "post_list_unchanged": True,
+            **({"workspace_lock": "verified-empty-native-coordinator"} if left is not None else {})}
 
 
 def copilot_settings_sanitized_shape(home, case_root, identity):
@@ -3076,6 +3128,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         installation_routes = dict(PREPARED_INSTALLATION["ROUTES"])
         installation_routes.update(PREPARED_INSTALLATION["KIRO_ROUTES"])
         installation_routes[WINDSURF_INSTALLATION["ACCEPTANCE"]] = ("windsurf", "plugin")
+        installation_routes["windsurf-prepared-installation"] = ("windsurf", "plugin")
         if (installation_routes.get(installation_audit) != (target, kind)
                 or historical_baseline or historical_plugin_archive):
             raise ValueError("installation audit does not match selected client and scope")
@@ -3083,7 +3136,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         raise ValueError("installation custody requires the validated complete fixture set")
     windsurf_global_case = ((target, kind, sys.platform, platform.machine(), historical_baseline)
                             == ("windsurf", "plugin", "linux", "x86_64", False)
+                            and installation_audit != "windsurf-prepared-installation"
                             and isinstance(item, str) and item in WINDSURF_GLOBAL_AUDIT["CASES"])
+    windsurf_binary = (client_binary if client_binary is not None else next(
+        (AGENT_BINARIES[name] for name in EXECUTABLE["windsurf"] if AGENT_BINARIES.get(name)), None))
     native_target = audit_client_id(target, kind)
     case_root = runroot / f"{kind}-{index:02d}"
     home = case_root / "home"
@@ -3158,7 +3214,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     if native_target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
     windsurf_fixture = (windsurf_plugin_profile(home, case_root)
-                        if target == "windsurf" and kind == "plugin" else [])
+                        if target == "windsurf" and kind == "plugin"
+                        and not windsurf_global_case and not windsurf_installation_case else [])
     windsurf_commands = []
     env = isolated_client_env(home, case_root, data)
     kiro_installation = None
@@ -5184,7 +5241,8 @@ def main():
                                         and isinstance(item, str) and item in WINDSURF_GLOBAL_AUDIT["CASES"]) else {}),
                                  **({"historical_baseline": True} if historical_baseline else {}),
                                  **({"historical_plugin_archive": True} if historical_plugin_archive else {}),
-                                 **({"installation_audit": args.acceptance} if prepared_installation else {}),
+                                 **({"installation_audit": args.acceptance}
+                                    if prepared_installation or args.acceptance == "windsurf-prepared-installation" else {}),
                                  **({"installation_audit": args.acceptance, "installation_fixtures": doc}
                                     if kiro_installation or windsurf_installation else {}),
                                  **({"client_binary": report["client_binary"]}

@@ -248,3 +248,27 @@ Landing/Terminal/Hermes corrections повторно используют соо
 ### 12.3 Контракт Ready-события в обязательных тестах
 
 [Required на `603f619`](https://github.com/777genius/universal-agent-plugins/actions/runs/45062942945/job/137332697156) завершился одним Node assertion failure: golden строки Authoring Milestone A workflow не содержал принятую в main строку `types: [opened, synchronize, reopened, ready_for_review]`. Исправляется только ожидаемая строка существующего теста. Workflow, path exclusions, secretless/pin/timeout/failure assertions и upstream Ready policy сохраняются; целиком выполняется соответствующий test file.
+
+## 26 November reconciliation and completion boundary
+
+The current `main` at `4903e6794f29ce7f2c39bfd054bf37c5bf654f79` already
+contains this plan's production ownership, retained-release, recovery and retry
+changes, together with subsequent installer diagnostics fixes. The reconciliation
+keeps `cli/` and `install/` byte-for-byte equal to that main; it does not replay
+older product code over those fixes. The remaining PR delta is test/audit
+qualification and this historical plan/evidence.
+
+Completion work is limited to repairing the two failing workflow families:
+
+- Marketing: use the existing `CodexProfile` authority, retain the peer-profile
+  `finally` guard, and align the historical npm launcher check on `0.1.115` while
+  keeping the signed lifecycle pinned to `0.1.116`.
+- Remaining clients: restore Windsurf executable selection and observer-owned
+  profile setup; preserve the legacy prepared route; describe Kiro Prepared
+  installation truthfully and reject malformed direct-source identities without
+  falling back to the less specific matcher.
+
+Local Python regression results and the real public npm abort/lock check qualify
+the corrected harness boundaries. They do not claim a new authenticated native
+model run. Current-head hosted native outcomes remain separately observable in
+the workflows; historical success, queued work and skips are not new-head PASS.

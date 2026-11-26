@@ -927,7 +927,10 @@ class KiroInstallationAudit:
             else:
                 # Installation admission preserves the native audit's status;
                 # active public state alone does not qualify native discovery.
+                prepared_user = self.audit["kiro_prepared_user_client"](public["clients"]) is not None
+                kiro_require(row.get("kiro_prepared_lifecycle_verified") is prepared_user)
                 kiro_require(row.get("status") == ("package-installed-native-unqualified" if index in KIRO_ACTIVE
+                                                  else "incomplete-native-proof" if prepared_user
                                                   else "prepared-lifecycle-passed")
                              and bool(selected[0]) and selected[0][0].get("name") == identity)
                 revision = selected[0][0]["clients"][0]["package_revision"]
@@ -1025,7 +1028,11 @@ def kiro_summary(report, fixtures, acceptance):
                 or not public_states(row, kind, "kiro", kiro_active=index in KIRO_ACTIVE)
                 or (kind == "skill" and not skill_preparation(row, item, "kiro"))
                 or (kind == "skill" and proof.get("upstream_skill_blob_sha1") != item.get("skill_md_git_blob_sha1"))
-                or (kind == "plugin" and row.get("status") != ("package-installed-native-unqualified" if index in KIRO_ACTIVE else "prepared-lifecycle-passed"))):
+                or (kind == "plugin" and (type(row.get("kiro_prepared_lifecycle_verified")) is not bool
+                    or (index in KIRO_ACTIVE and row["kiro_prepared_lifecycle_verified"])
+                    or row.get("status") != ("package-installed-native-unqualified" if index in KIRO_ACTIVE
+                        else "incomplete-native-proof" if row["kiro_prepared_lifecycle_verified"]
+                        else "prepared-lifecycle-passed")))):
             return result
         result["installation_passed"] += 1
     result["installation_acceptance_passed"] = (result["installation_passed"], result["installation_verified_negative_coverage"]) == ((29, 1) if kind == "plugin" else (30, 0))

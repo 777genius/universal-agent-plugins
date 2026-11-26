@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -82,23 +83,56 @@ func TestForeignBindingHumanGuidancePreservesScopeWithoutUnsafeCommand(t *testin
 
 func TestLateForeignBindingKeepsSingleApplyResult(t *testing.T) {
 	refusal := foreignBindingFixture()
-	var out bytes.Buffer
-	cmd := &cobra.Command{Use: "add"}
-	cmd.SetOut(&out)
-	opts := &options{format: "json", environmentOutput: map[string]any{"saved": true}}
-	if err := renderDependencyResults(cmd, opts, nil, nil, refusal); err != nil {
-		t.Fatal(err)
+	wantConflicts := []foreignBindingConflict{
+		{Reason: "unmanaged_binding", Alias: "child", SourceKey: refusal.SourceKey, InstallationID: "a", ClientIDs: []string{"chatgpt", "codex"}, RootAlias: "root"},
+		{Reason: "foreign_environment", Alias: "child", SourceKey: refusal.SourceKey, InstallationID: "b", ClientIDs: []string{"gemini"}, RootAlias: "root", OwnerEnvironmentID: "project:other"},
 	}
-	if ShouldWriteAgentFailure(refusal) {
-		t.Fatal("late refusal would cause a second machine envelope")
-	}
-	decoder := json.NewDecoder(&out)
-	var document map[string]any
-	if err := decoder.Decode(&document); err != nil || document["result"] != "failure" {
-		t.Fatalf("missing original failure result: %v %+v", err, document)
-	}
-	if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
-		t.Fatalf("more than one document: %v", err)
+	for _, scenario := range []struct {
+		name  string
+		saved bool
+		err   error
+	}{
+		{name: "saved", saved: true, err: refusal},
+		{name: "saved wrapped", saved: true, err: fmt.Errorf("private transport detail: %w", refusal)},
+		{name: "deps", err: refusal},
+		{name: "deps wrapped", err: fmt.Errorf("private transport detail: %w", refusal)},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			var out bytes.Buffer
+			cmd := &cobra.Command{Use: "add"}
+			cmd.SetOut(&out)
+			opts := &options{format: "json"}
+			if scenario.saved {
+				opts.environmentOutput = map[string]any{"saved": true}
+			}
+			if err := renderDependencyResults(cmd, opts, nil, nil, scenario.err); err != nil {
+				t.Fatal(err)
+			}
+			if ShouldWriteAgentFailure(scenario.err) || strings.Contains(out.String(), "private transport detail") {
+				t.Fatalf("late refusal must keep one sanitized result: %s", out.String())
+			}
+			decoder := json.NewDecoder(&out)
+			var document struct {
+				Result string       `json:"result"`
+				Error  AgentFailure `json:"error"`
+				Data   struct {
+					Error AgentFailure `json:"error"`
+				} `json:"data"`
+			}
+			if err := decoder.Decode(&document); err != nil || document.Result != "failure" {
+				t.Fatalf("missing original failure result: %v %+v", err, document)
+			}
+			failure := document.Error
+			if scenario.saved {
+				failure = document.Data.Error
+			}
+			if failure.Code != "FOREIGN_BINDING" || failure.Retryable || !reflect.DeepEqual(failure.Conflicts, wantConflicts) {
+				t.Fatalf("late refusal lost ownership details: %+v", failure)
+			}
+			if err := decoder.Decode(new(any)); !errors.Is(err, io.EOF) {
+				t.Fatalf("more than one document: %v", err)
+			}
+		})
 	}
 }
 

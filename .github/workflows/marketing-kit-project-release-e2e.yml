@@ -15,6 +15,7 @@ on:
       - 'scripts/test_marketing_kit_claude_retirement.py'
       - 'scripts/test_marketing_kit_codex_profile.py'
       - 'scripts/test_marketing_kit_policy_boundary.py'
+      - 'scripts/test_marketing_kit_peer_initialization.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/claude_cache_retirement_audit.py'
       - 'scripts/native_client_project_artifacts.py'
@@ -37,6 +38,7 @@ on:
       - 'scripts/test_marketing_kit_claude_retirement.py'
       - 'scripts/test_marketing_kit_codex_profile.py'
       - 'scripts/test_marketing_kit_policy_boundary.py'
+      - 'scripts/test_marketing_kit_peer_initialization.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/claude_cache_retirement_audit.py'
       - 'scripts/native_client_project_artifacts.py'
@@ -197,13 +199,13 @@ jobs:
             fi
             sleep "$((attempt * 5))"
           done
-      - name: Verify historical npm 0.1.104 launcher abort cleanup
+      - name: Verify historical npm 0.1.115 launcher abort cleanup
         if: matrix.target == 'codex'
         run: |
           set -euo pipefail
-          # Historical npm 0.1.104 launcher, separate from the 0.1.116 lifecycle.
+          # Historical npm 0.1.115 launcher, separate from the 0.1.116 lifecycle.
           # Mock transport proves cleanup only, never native tools/call.
-          npm install --prefix "$RUNNER_TEMP/uap-legacy" --no-audit --no-fund universal-agent-plugins@0.1.104
+          npm install --prefix "$RUNNER_TEMP/uap-legacy" --no-audit --no-fund universal-agent-plugins@0.1.115
           UAP_GLOBAL_NPM_ROOT="$RUNNER_TEMP/uap-legacy/node_modules" timeout 20s node scripts/marketing-kit-published-launcher-abort.js
       - name: Verify published ChatGPT target safety fences
         if: matrix.target == 'codex'
@@ -245,6 +247,7 @@ jobs:
           fi
           python3 -m unittest discover -s scripts -p 'test_marketing_kit_codex_profile.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 -m unittest discover -s scripts -p 'test_marketing_kit_policy_boundary.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
+          python3 -m unittest discover -s scripts -p 'test_marketing_kit_peer_initialization.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)" --cli-version 0.1.116             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
       - name: Preserve factual outcomes including failures
         if: always()

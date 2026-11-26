@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -95,9 +96,9 @@ func applyPlannedAdd(ctx context.Context, cmd *cobra.Command, app App, opts *opt
 	input.Confirmed = true
 	input.InstallationID = planned.InstallationID
 	result, err := service.Add(ctx, input)
-	app.recordSingleAdd(cmd, opts, input.Client.ClientID, loaded.envelope.Manifest.Name, err)
-	if renderErr := renderAddResultErrorWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, result, false, err); renderErr != nil && err == nil {
-		err = renderErr
+	err = app.recordSingleAdd(cmd, opts, input.Client.ClientID, loaded.envelope.Manifest.Name, err)
+	if renderErr := renderAddResultErrorWithSecurity(cmd.OutOrStdout(), opts.format, loaded.envelope, loaded.security, result, false, err); renderErr != nil {
+		err = errors.Join(err, installOutputError(renderErr))
 	}
 	if err == nil && freshInstall && opts.format == "human" && app.Terminal && !opts.yes {
 		return resumeInteractiveLifecycle(ctx, cmd, service, input, loaded.envelope, result)

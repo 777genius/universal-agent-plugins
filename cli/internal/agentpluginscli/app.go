@@ -127,6 +127,8 @@ type options struct {
 	// interactive retries of the same command.
 	installResult *installOutcome
 	retryAttempt  int
+	// Successful declared repairs join the final JSON result of this attempt.
+	declaredRepairs *declaredRepairPresentation
 	// unresolved names agents from earlier attempts that still need attention.
 	unresolved []string
 	// firstTreeDigest is the package digest of the first attempt; a retry must
