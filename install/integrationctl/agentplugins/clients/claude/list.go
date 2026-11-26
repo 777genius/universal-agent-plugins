@@ -131,8 +131,8 @@ func claudeBuiltinListID(entry map[string]any) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	name, builtin := strings.CutSuffix(id, "@builtin")
-	return id, builtin && name != ""
+	_, builtin := strings.CutSuffix(id, "@builtin")
+	return id, builtin
 }
 
 // Claude Code lists its bundled "<name>@builtin" plugins without installPath.
