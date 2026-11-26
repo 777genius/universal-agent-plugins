@@ -95,6 +95,13 @@ configured MCP server, authentication, or live model behavior. Production scanne
 execution is proved only by the dedicated unchanged-executable phase; fixture
 security responses cannot supply that evidence.
 
+The installation cases `update-all-security-batch-preflight` and
+`update-all-security-mixed-saved-preflight` inject a blocking security assessment
+to verify complete-batch authorization before imperative or saved effects. They
+exercise preview, refusal, explicit risk acceptance and owned cleanup through
+the production composer; production scanner execution remains qualified by the
+separate unchanged-executable phase above.
+
 The suite preserves UAP's current dependency rules:
 
 - One selected version per canonical source within an environment; compatible

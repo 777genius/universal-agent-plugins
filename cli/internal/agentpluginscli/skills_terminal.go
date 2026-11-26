@@ -149,12 +149,12 @@ func skillsTerminalTargets(cmd *cobra.Command, app App, opts *options, interacti
 	if err != nil {
 		return nil, err
 	}
-	request := prompt.TargetSelectionRequest{}
-	for _, target := range choices {
-		if target.Available {
-			request.Choices = append(request.Choices, prompt.TargetChoice{ID: domain.ClientID(target.Id), Label: target.Label})
-			request.DefaultIDs = append(request.DefaultIDs, domain.ClientID(target.Id))
+	request := skillsTargetSelectionRequest(choices)
+	if len(request.Choices) == 0 {
+		if _, err := fmt.Fprint(&planWriter{writer: reviewWriter(cmd, app)}, prompt.SkippedClientsNotice(request.Skipped)); err != nil {
+			return nil, err
 		}
+		return nil, errors.New("no eligible detected agent; install or configure a supported agent, then retry with --target <agent>")
 	}
 	selected, err := app.Prompter.SelectTargets(cmd.Context(), request)
 	if err != nil {
@@ -168,21 +168,16 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 	if opts.format == "json" && opts.dryRun {
 		return renderSkillsDryRun(cmd, review)
 	}
-	if confirm {
+	if confirm && !opts.dryRun {
 		var err error
 		app, err = withPrompter(cmd, app, opts)
 		if err != nil {
 			return err
 		}
 	}
-	richReview := false
-	if rich, ok := app.Prompter.(interface{ RichReview() bool }); ok {
-		richReview = confirm && !opts.plain && opts.format == "human" && rich.RichReview()
-	}
-	if opts.format != "json" && !richReview {
-		if err := renderHumanSkillsReview(cmd, review); err != nil {
-			return err
-		}
+	richReview := skillsUsesRichReview(app, opts, confirm)
+	if err := renderSkillsTerminalReview(cmd, app, opts, review, confirm, richReview); err != nil {
+		return err
 	}
 	if opts.dryRun {
 		return nil
@@ -193,17 +188,39 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 			return err
 		}
 		if !accepted {
-			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Installation canceled. No changes applied.")
+			_, err = fmt.Fprintln(&planWriter{writer: reviewWriter(cmd, app)}, "Installation canceled. No changes applied.")
 			return err
 		}
 		if opts.format == "human" {
-			if _, err := fmt.Fprintln(&planWriter{writer: cmd.OutOrStdout()}, "\nSkills installation confirmed."); err != nil {
+			if _, err := fmt.Fprintln(&planWriter{writer: reviewWriter(cmd, app)}, "\nSkills installation confirmed."); err != nil {
 				return err
 			}
 		}
 	}
 	return applySkillsWithRecovery(cmd, app, opts, prepared, confirm && opts.format != "json")
 }
+
+// Rich review is a consent surface. Dry runs always render their plan data to
+// stdout, even when a rich interaction host was resolved for earlier choices.
+func skillsUsesRichReview(app App, opts *options, confirm bool) bool {
+	if !confirm || opts.dryRun || opts.plain || opts.format != "human" {
+		return false
+	}
+	rich, ok := app.Prompter.(interface{ RichReview() bool })
+	return ok && rich.RichReview()
+}
+
+func renderSkillsTerminalReview(cmd *cobra.Command, app App, opts *options, review skillspicker.Plan, confirm, rich bool) error {
+	if opts.format == "json" || rich {
+		return nil
+	}
+	writer := cmd.OutOrStdout()
+	if confirm && !opts.dryRun {
+		writer = reviewWriter(cmd, app)
+	}
+	return renderHumanSkillsReviewTo(writer, review)
+}
+
 func confirmSkillsReview(cmd *cobra.Command, app App, review skillspicker.Plan, rich bool) (bool, error) {
 	request := prompt.ConfirmationRequest{Title: "Install these Skills?", Default: true}
 	if rich {
@@ -211,7 +228,7 @@ func confirmSkillsReview(cmd *cobra.Command, app App, review skillspicker.Plan, 
 	}
 	answer, err := app.Prompter.Confirm(cmd.Context(), request)
 	if errors.Is(err, prompt.ErrReviewTooLarge) {
-		if err := renderHumanSkillsReview(cmd, review); err != nil {
+		if err := renderHumanSkillsReviewTo(reviewWriter(cmd, app), review); err != nil {
 			return false, err
 		}
 		answer, err = app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Install the reviewed Skills?", Default: true})

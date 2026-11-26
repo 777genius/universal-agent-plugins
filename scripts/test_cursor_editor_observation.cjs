@@ -40,10 +40,13 @@ test('blocking login/trust/import policy refuses without treating a sign-in butt
   for (const [text, expected] of [
     ['Sign in to continue', 'login-gate'],
     ['Log in to continue', 'login-gate'],
+    ['Cursor’s AI features require you to be logged in', 'login-gate'],
+    ["Cursor's AI features require you to be logged in", 'login-gate'],
     ['Do you trust the authors of these files?', 'trust-gate'],
     ['Local plugin imports are disabled', 'import-policy-gate'],
     ['Blocked by your administrator', 'import-policy-gate'],
     ['Sign in\nCustomize\nSkills', ''],
+    ['Log In\nSign Up\nCustomize\nSkills', ''],
     ['Project\nCustomize\nSkills\nPlugins', ''],
   ]) assert.equal(gate(text), expected);
 });
@@ -283,6 +286,24 @@ function controlPage(states, afterCount) {
 }
 
 const blankControl = { text: '', count: 0, visible: false };
+test('observed mandatory Cursor login sentence refuses body and shadow text before click', async () => {
+  const ready = { text: 'Customize', count: 1, visible: true };
+  for (const sentence of ['Cursor’s AI features require you to be logged in',
+    "Cursor's AI features require you to be logged in"]) {
+    for (const shadow of [false, true]) {
+      const gated = shadow ? { ...ready, locatorText: sentence } : { ...ready, text: sentence };
+      for (const afterCount of [false, true]) {
+        const { page, events } = controlPage(afterCount ? [ready] : [blankControl, gated],
+          afterCount ? gated : undefined);
+        await assert.rejects(clickNamed(page, 'Customize'), /login-gate/u);
+        assert.equal(events.includes('click'), false);
+        assert.equal(events.includes('deadline'), false);
+        assert.equal(events.includes('count'), afterCount);
+      }
+    }
+  }
+});
+
 test('control click waits for delayed visible rendering and rechecks gates before acting', async () => {
   const { page, events } = controlPage([blankControl,
     { text: 'Customize', count: 1, visible: true }]);

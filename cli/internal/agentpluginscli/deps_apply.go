@@ -218,14 +218,13 @@ func applyDependencySync(cmd *cobra.Command, app App, opts *options, request dep
 	}
 	applied, applyErr := applyPreparedDependencies(cmd.Context(), app, &request, adapter, checked)
 	stop()
-	app.finishInstall(opts, cmd.CommandPath(), outcomeAgentItems(applied.Outcomes))
-	if renderErr := renderDependencyAppliedResults(cmd, app, opts, request, applied, applyErr); renderErr != nil && applyErr == nil {
-		return renderErr
-	}
+	app.finishInstall(opts, cmd.CommandPath(), appliedAgentItems(prepared, applied.Outcomes, applyErr))
+	renderErr := renderDependencyAppliedResults(cmd, app, opts, request, applied, applyErr)
 	if applyErr != nil {
-		return fmt.Errorf("dependency sync stopped; inspect binding results and next actions: %w", applyErr)
+		cause := fmt.Errorf("dependency sync stopped; inspect binding results and next actions: %w", applyErr)
+		return errors.Join(humanInstallApplyError(opts.format, opts.installResult, cause), installOutputError(renderErr))
 	}
-	return nil
+	return renderErr
 }
 
 func detectDependencyClients(ctx context.Context, app App) (map[domain.ClientID]domain.DetectedClient, error) {

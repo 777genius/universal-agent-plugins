@@ -21,7 +21,7 @@ function isolationArguments(help, directories) {
 }
 
 const gateRules = [
-  [/sign in to (?:continue|use cursor)|log in to continue/iu, 'login-gate'],
+  [/sign in to (?:continue|use cursor)|log in to continue|Cursor['’]s AI features require you to be logged in/iu, 'login-gate'],
   [/do you trust the authors|trust this (?:workspace|project)/iu, 'trust-gate'],
   [/local plugin imports (?:are )?(?:disabled|not allowed)|blocked by (?:your )?(?:organization|administrator)/iu, 'import-policy-gate'],
 ];
