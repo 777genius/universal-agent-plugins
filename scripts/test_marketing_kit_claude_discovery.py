@@ -195,5 +195,240 @@ class ClaudeRemovalDiscoveryContracts(unittest.TestCase):
                 self.assertFalse(report["native_removal_qualification"]["full_native_removal_qualified"])
 
 
+
+# Immutable published lock bytes are fixture input, not generated npm state.
+PLAYWRIGHT_LOCK = '''{
+  "name": "agentplugins-runtime-playwright",
+  "version": "1.0.0",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "agentplugins-runtime-playwright",
+      "version": "1.0.0",
+      "dependencies": {
+        "@playwright/mcp": "0.0.80"
+      }
+    },
+    "node_modules/@playwright/mcp": {
+      "version": "0.0.80",
+      "resolved": "https://registry.npmjs.org/@playwright/mcp/-/mcp-0.0.80.tgz",
+      "integrity": "sha512-FOPXHm2SvFhAQylm10jMZ35B/SR2TaMLVkavAlwoG4N2qCb5RqbvhQYcu3zmXNyxR2DW0Ooxe+9XPVt5UjKRCQ==",
+      "license": "Apache-2.0",
+      "dependencies": {
+        "playwright": "1.63.0-alpha-2026-08-31",
+        "playwright-core": "1.63.0-alpha-2026-08-31"
+      },
+      "bin": {
+        "playwright-mcp": "cli.js"
+      },
+      "engines": {
+        "node": ">=18"
+      }
+    },
+    "node_modules/playwright": {
+      "version": "1.63.0-alpha-2026-08-31",
+      "resolved": "https://registry.npmjs.org/playwright/-/playwright-1.63.0-alpha-2026-08-31.tgz",
+      "integrity": "sha512-3XAsuznfu8jBVJ4QxdGvBkt0+b8ZFwuwJYyOfiIw5ZjUOrNLNRhKxzLzLuydou3gJ9c6eMwVqgzdiOwhy54Kzw==",
+      "license": "Apache-2.0",
+      "dependencies": {
+        "playwright-core": "1.63.0-alpha-2026-08-31"
+      },
+      "bin": {
+        "playwright": "cli.js"
+      },
+      "engines": {
+        "node": ">=20"
+      }
+    },
+    "node_modules/playwright-core": {
+      "version": "1.63.0-alpha-2026-08-31",
+      "resolved": "https://registry.npmjs.org/playwright-core/-/playwright-core-1.63.0-alpha-2026-08-31.tgz",
+      "integrity": "sha512-1ek0Lyr12h6jcs/WTcNoVtzZkQp7D/90PsMuBW/Rm6h3AsWAbzpqj0geMv8+8Tzzr9CSUYvg9kznrVZINQMXXw==",
+      "license": "Apache-2.0",
+      "bin": {
+        "playwright-core": "cli.js"
+      },
+      "engines": {
+        "node": ">=20"
+      }
+    }
+  }
+}
+'''
+
+
+class ClaudeOwnedRuntimeLinkContracts(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from runpy import run_path
+        cls.runner = run_path(str(Path(__file__).with_name("marketing-kit-project-release-e2e.py")))
+
+    def install_runtime(self, runner, env, project, scope, *, retained=False):
+        import hashlib
+        anchor = project / ".uap" if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
+        physical = "playwright-01aeb6209cf5"
+        data = anchor / "plugin-data" / physical
+        runtime = data / "npm-runtime" / discovery.PLAYWRIGHT_LOCK_SHA256
+        bins = runtime / "node_modules/.bin"
+        bins.mkdir(parents=True)
+        links, targets = {}, {}
+        for name, relative in discovery.PLAYWRIGHT_BIN_LINKS.items():
+            target = runtime / "node_modules" / relative.removeprefix("../")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("inert npm entrypoint fixture; never executed\n")
+            link = bins / name
+            link.symlink_to(relative)
+            links[name], targets[name] = link, target
+        (runtime / "package-lock.json").write_text(PLAYWRIGHT_LOCK)
+        installation = scope + "-playwright-installation"
+        receipt_id = "data_" + hashlib.sha256(
+            "\0".join((installation, physical, scope)).encode()).hexdigest()[:24]
+        receipt = {"data_receipt_id": receipt_id, "physical_backend_id": physical,
+                   "scope": scope, "locator": str(data), "state": "owned",
+                   "ownership_digest": "sha256:" + hashlib.sha256(
+                       ("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + str(data)).encode()).hexdigest()}
+        owner = data / ".agentplugins-data-owner.json"
+        owner.write_text(json.dumps(receipt))
+        pin = runner["FIXED_SIGNED_CLOSURE"]["777genius/playwright-bridge"]
+        record = {"installation_id": installation, "declared_name": "playwright", "origin_mode": "directory",
+                  "directory": {"distribution_id": "777genius/playwright-bridge",
+                                "desired_release_sequence": pin["release_sequence"]},
+                  "source": {key: pin[field] for key, field in (
+                      ("repository", "repository"), ("package_subpath", "package_path"),
+                      ("resolved_revision", "resolved_revision"), ("tree_digest", "tree_digest"))},
+                  "package": {"version": pin["package_version"], "manifest_digest": pin["manifest_digest"]},
+                  "data_receipts": {receipt_id: receipt}, "data_retained": retained,
+                  "clients": {} if retained else {"claude": {
+                      "client_id": "claude", "scope": scope, "physical_artifact_id": physical,
+                      "data_receipt_id": receipt_id}}}
+        state = anchor / "state-v2.json"
+        state.write_text(json.dumps({"schema_version": 5, "installations": [record]}))
+        return {"runtime": runtime, "links": links, "targets": targets, "owner": owner,
+                "state": state, "record": record, "receipt": receipt}
+
+    def fixture(self, case, scopes=("project",)):
+        home, data, project = (case / name for name in ("home", "data", "project"))
+        for path in (home, data, project):
+            path.mkdir()
+        env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+        installed = {scope: self.install_runtime(self.runner, env, project, scope,
+                     retained=scope == "project") for scope in scopes}
+        return env, project, installed
+
+    def snapshot(self, env, project, case):
+        return self.runner["claude_observation_snapshot"](env, project, case)
+
+    def test_signed_project_and_user_bin_links_remain_in_complete_snapshot(self):
+        import hashlib
+        self.assertEqual(hashlib.sha256(PLAYWRIGHT_LOCK.encode()).hexdigest(), discovery.PLAYWRIGHT_LOCK_SHA256)
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            env, project, installed = self.fixture(case, ("project", "user"))
+            before = self.snapshot(env, project, case)
+            self.assertEqual(before, self.runner["profile_snapshot"](env, project))
+            self.assertEqual(sum(key.startswith("link:") for key in before), 6)
+            self.assertEqual(sum(value == "symlink" for value in before.values()), 6)
+            for scope, paths in installed.items():
+                root = project if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
+                for target in paths["targets"].values():
+                    self.assertIn(root.name + "/" + target.relative_to(root).as_posix(), before)
+
+    def test_foreign_redirected_or_unowned_links_fail_before_observation(self):
+        mutations = ("absolute", "redirected", "escape", "unknown-bin", "dangling", "target-link",
+                     "target-hardlink", "target-parent", "bin-parent", "runtime-parent", "foreign-home",
+                     "foreign-namespace", "state-link", "owner-link", "owner-mismatch", "source-mismatch",
+                     "lock-mismatch", "retained-mismatch")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                case = Path(temporary).resolve()
+                env, project, installed = self.fixture(case)
+                item = installed["project"]
+                link, target = item["links"]["playwright"], item["targets"]["playwright"]
+                outside = case / "unowned"
+                outside.write_text("foreign bytes must not become runtime authority")
+                if mutation in ("absolute", "redirected", "escape"):
+                    link.unlink()
+                    link.symlink_to(str(target) if mutation == "absolute" else
+                                    "../playwright-core/cli.js" if mutation == "redirected" else
+                                    "../../../../../../../../unowned")
+                elif mutation == "unknown-bin":
+                    (link.parent / "foreign").symlink_to("../playwright/cli.js")
+                elif mutation == "dangling":
+                    target.unlink()
+                elif mutation in ("target-link", "target-hardlink"):
+                    target.unlink()
+                    target.symlink_to(outside) if mutation == "target-link" else os.link(outside, target)
+                elif mutation in ("target-parent", "bin-parent", "runtime-parent"):
+                    parent = target.parent if mutation == "target-parent" else link.parent if mutation == "bin-parent" else item["runtime"]
+                    moved = case / "moved"
+                    parent.rename(moved)
+                    parent.symlink_to(moved, target_is_directory=True)
+                elif mutation == "foreign-home":
+                    (Path(env["HOME"]) / "foreign").symlink_to(target)
+                elif mutation == "foreign-namespace":
+                    foreign = project / ".uap/plugin-data/foreign/npm-runtime" / discovery.PLAYWRIGHT_LOCK_SHA256 / "node_modules/.bin/playwright"
+                    foreign.parent.mkdir(parents=True)
+                    foreign.symlink_to("../playwright/cli.js")
+                elif mutation in ("state-link", "owner-link"):
+                    path = item["state"] if mutation == "state-link" else item["owner"]
+                    moved = case / "moved"
+                    path.rename(moved)
+                    path.symlink_to(moved)
+                elif mutation == "owner-mismatch":
+                    item["owner"].write_text(json.dumps({**item["receipt"], "locator": str(case)}))
+                elif mutation == "lock-mismatch":
+                    (item["runtime"] / "package-lock.json").write_text(PLAYWRIGHT_LOCK + "\n")
+                else:
+                    record = item["record"]
+                    if mutation == "source-mismatch":
+                        record["source"]["resolved_revision"] = "0" * 40
+                    else:
+                        record["data_retained"] = False
+                    item["state"].write_text(json.dumps({"schema_version": 5, "installations": [record]}))
+                with self.assertRaises((AssertionError, ValueError)):
+                    self.snapshot(env, project, case)
+
+    def test_native_mutations_of_admitted_links_and_targets_fail_even_on_action_error(self):
+        for mutation in ("target-bytes", "target-inode", "link-text", "link-inode"):
+            for action_error in (False, True):
+                with self.subTest(mutation=mutation, action_error=action_error), TemporaryDirectory() as temporary:
+                    case = Path(temporary).resolve()
+                    env, project, installed = self.fixture(case, ("project", "user"))
+                    item = installed["user"]
+                    link, target = item["links"]["playwright"], item["targets"]["playwright"]
+                    before = self.snapshot(env, project, case)
+                    def action():
+                        if mutation == "target-bytes":
+                            target.write_text("changed by native action")
+                        elif mutation == "target-inode":
+                            body = target.read_bytes()
+                            target.rename(case / "saved-target")
+                            target.write_bytes(body)
+                        elif mutation == "link-text":
+                            link.unlink()
+                            link.symlink_to("../playwright-core/cli.js")
+                        else:
+                            link.rename(case / "saved-link")
+                            link.symlink_to("../playwright/cli.js")
+                        if action_error:
+                            raise RuntimeError("injected native action failure")
+                    with self.assertRaisesRegex(AssertionError, "Claude native observation"):
+                        self.runner["guarded_native_attestation"](action, (
+                            lambda: self.runner["check_profile_unchanged"](
+                                env, project, before, "Claude native observation"),))
+
+    def test_main_lifecycle_accepts_owned_runtime_without_dropping_snapshot_guards(self):
+        from test_live_install_audit_env import IsolatedClientEnvironmentTest
+        def install(runner, env, project, label):
+            if label in ("add", "cold locked restore", "User add", "User cold locked restore C"):
+                self.install_runtime(runner, env, project, "user" if label.startswith("User ") else "project")
+        code, report, phases = IsolatedClientEnvironmentTest()._exercise_marketing_kit_scope_report(
+            "claude", claude_runtime_fixture=install)
+        self.assertEqual(code, 0, report.get("failure"))
+        self.assertTrue(report["two_scope_lifecycle_qualified"])
+        self.assertIn("claude-after:User A remove", phases)
+
+
 if __name__ == "__main__":
     unittest.main()

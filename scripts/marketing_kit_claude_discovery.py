@@ -19,6 +19,107 @@ INITIALIZE_ARGS = ("-p", "--input-format", "stream-json", "--output-format", "st
                   "--verbose", "--permission-mode", "dontAsk", "--strict-mcp-config",
                   "--mcp-config", '{"mcpServers":{}}')
 
+# Exact package-lock.json in the signed Playwright 0.0.80 package, revision
+# d9c8d778200d51ae941d86bb69af23534cd1c8f7, io.github.777genius.agentplugins/runtime.
+# npm ci creates these three relative bin links before any native observation.
+PLAYWRIGHT_LOCK_SHA256 = "1c10c6b0e0c7009fdc88fff6d4e295293d1f4f99c4b38bb7412a37504bf4ab7c"
+PLAYWRIGHT_BIN_LINKS = {"playwright": "../playwright/cli.js",
+                        "playwright-core": "../playwright-core/cli.js",
+                        "playwright-mcp": "../@playwright/mcp/cli.js"}
+
+
+def runtime_document(audit, case, path):
+    body, error = audit["copilot_settings_read"](path, case)
+    require(error is None and type(body) is str)
+    return decode(body.encode()), body
+
+
+def owned_playwright_data(audit, case, anchor, scope, physical, pins):
+    """Bind retained data to its signed installation and existing owner receipt."""
+    state, _ = runtime_document(audit, case, anchor / "state-v2.json")
+    require(type(state) is dict and type(state.get("schema_version")) is int
+            and state["schema_version"] == 5 and type(state.get("installations")) is list)
+    distribution = "777genius/playwright-bridge"
+    pin = pins[distribution]
+    rows = [row for row in state["installations"] if type(row) is dict
+            and type(row.get("directory")) is dict
+            and row["directory"].get("distribution_id") == distribution]
+    require(len(rows) == 1)
+    row = rows[0]
+    require(row.get("origin_mode") == "directory" and row.get("declared_name") == "playwright"
+            and type(row["directory"].get("desired_release_sequence")) is int
+            and row["directory"].get("desired_release_sequence") == pin["release_sequence"]
+            and row.get("package", {}).get("version") == pin["package_version"]
+            and row["package"].get("manifest_digest") == pin["manifest_digest"]
+            and all(row.get("source", {}).get(key) == pin[field] for key, field in (
+                ("repository", "repository"), ("package_subpath", "package_path"),
+                ("resolved_revision", "resolved_revision"), ("tree_digest", "tree_digest"))))
+    require(type(row.get("installation_id")) is str and bool(row["installation_id"]))
+    receipt_id = "data_" + hashlib.sha256(
+        "\0".join((row["installation_id"], physical, scope)).encode()).hexdigest()[:24]
+    data = anchor / "plugin-data" / physical
+    expected = {"data_receipt_id": receipt_id, "physical_backend_id": physical,
+                "scope": scope, "locator": str(data), "state": "owned",
+                "ownership_digest": "sha256:" + hashlib.sha256(
+                    ("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + str(data)).encode()).hexdigest()}
+    receipt = row.get("data_receipts", {}).get(receipt_id)
+    marker, _ = runtime_document(audit, case, data / ".agentplugins-data-owner.json")
+    require(type(receipt) is dict and type(marker) is dict
+            and all(receipt.get(key) == marker.get(key) == value for key, value in expected.items()))
+    clients = row.get("clients")
+    require(type(clients) is dict and (
+        not clients and row.get("data_retained") is True
+        or any(type(binding) is dict and binding.get("client_id") == "claude"
+               and binding.get("scope") == scope and binding.get("physical_artifact_id") == physical
+               and binding.get("data_receipt_id") == receipt_id for binding in clients.values())))
+    return data
+
+
+def owned_runtime_link_entries(audit, env, project, case, complete, pins):
+    """Admit finite owned npm links; keep every entry in the protected snapshot."""
+    allowed, checked = set(), set()
+    roots = (Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"]), project)
+    for key, value in complete.items():
+        if not key.startswith("link:"):
+            continue
+        _, index, relative = key.split(":", 2)
+        if index not in ("1", "2"):
+            continue
+        index = int(index)
+        parts = Path(relative).parts
+        prefix = (".uap", "plugin-data") if index == 2 else ("plugin-data",)
+        tail = parts[len(prefix):]
+        if (parts[:len(prefix)] != prefix or len(tail) != 6
+                or tail[1:5] != ("npm-runtime", PLAYWRIGHT_LOCK_SHA256, "node_modules", ".bin")
+                or tail[5] not in PLAYWRIGHT_BIN_LINKS
+                or value != PLAYWRIGHT_BIN_LINKS[tail[5]]):
+            continue
+        physical = tail[0]
+        require(physical not in ("", ".", ".."))
+        anchor = project / ".uap" if index == 2 else roots[1]
+        runtime = anchor / "plugin-data" / physical / "npm-runtime" / PLAYWRIGHT_LOCK_SHA256
+        link = roots[index] / relative
+        # No candidate path is resolved through its link. The shared reader
+        # walks ordinary ancestors through descriptors and opens without follow.
+        require(audit["path_inside_case"](link.parent, case)
+                and stat.S_ISDIR(link.parent.lstat().st_mode))
+        if runtime not in checked:
+            owned_playwright_data(audit, case, anchor, "project" if index == 2 else "user", physical, pins)
+            _, body = runtime_document(audit, case, runtime / "package-lock.json")
+            require(hashlib.sha256(body.encode()).hexdigest() == PLAYWRIGHT_LOCK_SHA256)
+            require({entry.name for entry in link.parent.iterdir()} == set(PLAYWRIGHT_BIN_LINKS))
+            checked.add(runtime)
+        target = runtime / "node_modules" / value.removeprefix("../")
+        _, error = audit["copilot_settings_read"](target, case)
+        identity = link.lstat()
+        require(error is None and stat.S_ISLNK(identity.st_mode) and os.readlink(link) == value
+                and complete.get(f"metadata:{index}:{relative}")
+                    == (identity.st_mode, identity.st_dev, identity.st_ino))
+        entry = f"{roots[index].name}/{relative}"
+        require(complete.get(entry) == "symlink")
+        allowed.update((key, entry))
+    return allowed
+
 
 def require(value):
     if not value:

@@ -2534,7 +2534,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                               copilot_fixture_failure=None, claude_retained_scan_error=False,
                                               temporary_root_alias=False, real_codex=False, codex_capture_failure=False,
                                               codex_initializer=None, copilot_refusal_mutation=None,
-                                              copilot_add_failure=False, claude_native_mutation=None):
+                                              copilot_add_failure=False, claude_native_mutation=None,
+                                              claude_runtime_fixture=None):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2808,6 +2809,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                       "installation_id": row["installation_id"], "outcome": "completed"}
                                      for row in actions]}
                     installed[key] = {}
+                if claude_runtime_fixture is not None:
+                    claude_runtime_fixture(runner, env, project, label)
             finally:
                 checkpoint("after-public-mutation-" + label)
             if capture is not None and removal_receipt is not None:
