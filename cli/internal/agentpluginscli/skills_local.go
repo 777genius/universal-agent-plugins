@@ -49,3 +49,13 @@ func (selection *skillsAddOptions) runLocal(cmd *cobra.Command, app App, opts *o
 	defer prepared.Close()
 	return runSkillsReviewedPlan(cmd, app, opts, prepared, interactive && !selection.yes)
 }
+
+func validateLocalSkillSelection(selection SkillsSelection) error {
+	if selection.LocalPath == "" {
+		return nil
+	}
+	if selection.Repository != "" || selection.Website != "" || selection.Path != "" || selection.Commit != "" || selection.Selector.Kind != "" || selection.ExpectedIndexSHA256 != "" || selection.ExpectedRawTreeDigest != "" {
+		return errors.New("local Skill selection cannot contain remote source fields")
+	}
+	return nil
+}

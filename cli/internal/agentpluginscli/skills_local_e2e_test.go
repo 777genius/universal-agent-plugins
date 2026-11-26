@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -124,6 +125,11 @@ func TestLocalSkillColdReplayVerifiesRawAndNormalizedBytes(t *testing.T) {
 	}
 	if _, err := materializeLockedPackage(context.Background(), j.cli.app, pin, false, nil); err == nil || !strings.Contains(err.Error(), "changed since uap.lock") {
 		t.Fatalf("changed cold source did not refuse: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := j.cli.app.acquireLockedLocalSkill(ctx, pin); !errors.Is(err, context.Canceled) {
+		t.Fatalf("local acquisition hid cancellation: %v", err)
 	}
 }
 

@@ -50,6 +50,11 @@ func validateAcquiredSource(acquired *domain.AcquiredSnapshot, portable bool) (s
 		}
 		return acquiredLocalSkillSourceKey(source, portable)
 	}
+	return validateAcquiredRemoteSource(acquired, portable)
+}
+
+func validateAcquiredRemoteSource(acquired *domain.AcquiredSnapshot, portable bool) (string, error) {
+	source := acquired.Source
 	if source.SourceKind == "https-skill" || source.WebSkill != nil || source.SourceBindingHint == "uap-dependency-web-skill" {
 		if acquired.OriginMode != domain.OriginModeDirect {
 			return "", ErrInvalidRequest

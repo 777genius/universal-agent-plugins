@@ -1,6 +1,8 @@
 package installer
 
 import (
+	"path"
+
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
@@ -10,7 +12,7 @@ func acquiredLocalSkillSourceKey(source domain.SourceIdentity, portable bool) (s
 	if !portable || facts == nil || source.WebSkill != nil || source.SourceKind != sourcespec.LocalSkillKind || source.SourceBindingHint != "uap-dependency-local-skill" || source.Repository != "" || source.PackageSubpath != "" || source.ArchiveSHA256 != "" {
 		return "", ErrInvalidRequest
 	}
-	if sourcespec.ValidateLocalSkillPath(source.SourceURL) != nil || !domain.ValidSkillName(facts.Name) || facts.RequestedPath != "" || facts.ResolvedPath != "" || facts.Normalizer != "agent-skill-package/v1" || !validSkillRawDigest(facts.RawTreeDigest) {
+	if sourcespec.ValidateLocalSkillPath(source.SourceURL) != nil || !domain.ValidSkillName(facts.Name) || path.Base(source.SourceURL) != facts.Name || facts.RequestedPath != "" || facts.ResolvedPath != "" || facts.Normalizer != "agent-skill-package/v1" || !validSkillRawDigest(facts.RawTreeDigest) {
 		return "", ErrInvalidRequest
 	}
 	key := sourcespec.LocalSkillKey(source.SourceURL, facts.Name)

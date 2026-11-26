@@ -111,8 +111,8 @@ func (candidate *skillsBatchCandidate) selectSkill(ctx context.Context, app App,
 }
 
 func skillSelectionRequirement(wanted environment.Requirements, selection SkillsSelection) (environment.Requirement, error) {
-	if selection.LocalPath != "" && (selection.Repository != "" || selection.Website != "" || selection.Path != "" || selection.Commit != "" || selection.Selector.Kind != "" || selection.ExpectedIndexSHA256 != "" || selection.ExpectedRawTreeDigest != "") {
-		return environment.Requirement{}, errors.New("local Skill selection cannot contain remote source fields")
+	if err := validateLocalSkillSelection(selection); err != nil {
+		return environment.Requirement{}, err
 	}
 	selector := selection.Selector
 	if selector.Kind == "" {

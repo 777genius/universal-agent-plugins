@@ -26,11 +26,7 @@ func nativeLocalSkillPath(serialized string) (string, error) {
 }
 
 func (resolver dependencyResolver) resolveLocalSkill(ctx context.Context, req environment.Requirement, targets []string) (environment.LockedPackage, error) {
-	root, err := nativeLocalSkillPath(req.Local.Path)
-	if err != nil {
-		return environment.LockedPackage{}, err
-	}
-	raw, err := resolver.app.SourceAcquirer.AcquireLocal(ctx, root)
+	raw, err := resolver.app.acquireLocalSkillRaw(ctx, req.Local.Path)
 	if err != nil {
 		return environment.LockedPackage{}, err
 	}
@@ -59,12 +55,11 @@ func (app App) acquireLockedLocalSkill(ctx context.Context, pin environment.Lock
 	if source.Normalizer != environment.SkillNormalizerV1 {
 		return domain.PackageSnapshot{}, errors.New("unsupported locked local Skill normalizer")
 	}
-	root, err := nativeLocalSkillPath(source.Path)
+	raw, err := app.acquireLocalSkillRaw(ctx, source.Path)
 	if err != nil {
-		return domain.PackageSnapshot{}, err
-	}
-	raw, err := app.SourceAcquirer.AcquireLocal(ctx, root)
-	if err != nil {
+		if ctx.Err() != nil {
+			return domain.PackageSnapshot{}, ctx.Err()
+		}
 		return domain.PackageSnapshot{}, errors.New("locked local Skill source is unavailable; restore its verified store content or recover the original source")
 	}
 	defer func() { _ = packagedigest.Remove(raw) }()
@@ -81,4 +76,19 @@ func (app App) acquireLockedLocalSkill(ctx context.Context, pin environment.Lock
 	}
 	snapshot.Source = localSkillSnapshotSource(pin)
 	return snapshot, nil
+}
+
+func (app App) acquireLocalSkillRaw(ctx context.Context, serialized string) (domain.PackageSnapshot, error) {
+	root, err := nativeLocalSkillPath(serialized)
+	if err != nil {
+		return domain.PackageSnapshot{}, err
+	}
+	if app.SourceAcquirer == nil {
+		return domain.PackageSnapshot{}, errors.New("local Skill acquisition unavailable")
+	}
+	raw, err := app.SourceAcquirer.AcquireLocal(ctx, root)
+	if err != nil && ctx.Err() != nil {
+		return domain.PackageSnapshot{}, ctx.Err()
+	}
+	return raw, err
 }
