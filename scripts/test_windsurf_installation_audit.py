@@ -16,6 +16,7 @@ from unittest.mock import patch
 from types import SimpleNamespace
 
 import windsurf_installation_audit as installation
+import codex_plugin_retention_audit as retention
 
 from windsurf_installation_audit import (ACTIVE_SLOTS, ACTIVE_SKILLS, CLIENT_VERSION, CLI_VERSION,
     COMPONENT_REFUSALS, PREPARED, WindsurfInstallationAudit, selected, summary,
@@ -382,6 +383,90 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             with patch.object(installation, "INSTALLATION_GIT_PINS", {}):
                 with self.assertRaises(ValueError):
                     installation.independent_source_pin(self.fixtures, source)
+
+    def test_owned_locked_npm_bin_links_remain_in_saved_data_custody(self):
+        variants = (None, "receipt", "marker", "lock", "runtime-marker", "outside-runtime",
+                    "outside-data", "chain", "hardlink", "elsewhere", "late-rewrite")
+        source, _ = selected(self.fixtures, 0)
+        prefix = "io.github.777genius.agentplugins/runtime/"
+        package = b'{"private":true,"dependencies":{"example":"1.2.3"}}'
+        lock = b'{"lockfileVersion":3,"packages":{}}'
+        lock_key = hashlib.sha256(lock).hexdigest()
+        config = {"schema_version": 1, "package": "example", "version": "1.2.3",
+                  "entrypoint": "node_modules/example/cli.js", "package_lock_sha256": "sha256:" + lock_key,
+                  "omit_optional": False}
+        self.sources[source].update({prefix + "runtime.json": json.dumps(config).encode(),
+            prefix + "package.json": package, prefix + "package-lock.json": lock,
+            prefix + "launcher.mjs": b"// inert fixture, never executed\n",
+            "mcp.json": json.dumps({"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+                "mcpServers": {"unit-server": {"type": "stdio", "command": "node",
+                "args": ["${PLUGIN_ROOT}/" + prefix + "launcher.mjs"]}}}).encode()})
+        self.pins[source].update(source_pin(self.sources[source]))
+        self.fixtures["signed_release_pins"][source].update(self.pins[source])
+        for variant in variants:
+            with self.subTest(variant=variant), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                cli = root / "agentplugins"
+                cli.write_bytes(b"#!/bin/sh\nexit 0\n"); cli.chmod(0o700)
+                observer, _ = self.fixture(root, str(cli))
+                self.author_saved(observer, self.row(0), 0)
+                state_file = observer.data / "state-v2.json"
+                state = json.loads(state_file.read_text())
+                record = state["installations"][0]
+                receipt = next(iter(record["data_receipts"].values()))
+                namespace = Path(receipt["locator"])
+                runtime = namespace / "npm-runtime" / lock_key
+                bin_root = runtime / "node_modules/.bin"
+                bin_root.mkdir(parents=True)
+                target = runtime / "node_modules/example/cli.js"
+                target.parent.mkdir(); target.write_bytes(b"inert owned script")
+                link = bin_root / "example"
+                link.symlink_to("../example/cli.js")
+                (runtime / "package.json").write_bytes(package)
+                (runtime / "package-lock.json").write_bytes(lock)
+                marker = {"schema_version": 1, "lock_digest": "sha256:" + lock_key,
+                          **{key: config[key] for key in ("package", "version", "entrypoint", "omit_optional")}}
+                (runtime / ".agentplugins-runtime.json").write_text(json.dumps(marker))
+                if variant == "receipt": record["data_receipts"] = {}; state_file.write_text(json.dumps(state))
+                elif variant == "marker": (namespace / ".agentplugins-data-owner.json").write_text("{}")
+                elif variant == "lock": (runtime / "package-lock.json").write_bytes(b"different lock")
+                elif variant == "runtime-marker": (runtime / ".agentplugins-runtime.json").write_text("{}")
+                elif variant in ("outside-runtime", "outside-data", "chain"):
+                    link.unlink()
+                    if variant == "outside-runtime":
+                        (observer.data / "foreign").write_bytes(b"unrelated"); link.symlink_to("../../../../../foreign")
+                    elif variant == "outside-data": link.symlink_to(str(observer.project / "foreign.txt"))
+                    else:
+                        (bin_root / "second").symlink_to("../example/cli.js"); link.symlink_to("second")
+                elif variant == "hardlink": os.link(target, observer.project / "hardlink")
+                elif variant == "elsewhere": (namespace / "unowned-link").symlink_to("npm-runtime/" + lock_key + "/node_modules/example/cli.js")
+                globals_ = retention.HeldTree.verify.__globals__
+                original = globals_["_read_regular"]
+                changed = [False]
+                def read(*args, **kwargs):
+                    result = original(*args, **kwargs)
+                    if (variant == "late-rewrite" and not changed[0]
+                            and os.path.samestat(os.fstat(args[0]), target.lstat())):
+                        changed[0] = True; target.write_bytes(b"changed bytes")
+                    return result
+                with patch.dict(globals_, {"_read_regular": read}):
+                    if variant is None:
+                        saved = observer.saved_image()
+                        relative = str(link.relative_to(observer.data))
+                        self.assertEqual(saved["ancillary"][relative][:2], ("link", "../example/cli.js"))
+                        self.assertEqual(saved, observer.saved_image())
+                        # Removal retains the same owned data under its existing
+                        # receipt; no active client binding is invented afterward.
+                        for binding in record["clients"].values():
+                            shutil.rmtree(binding["target_locator"])
+                        record["clients"], record["data_retained"] = {}, True
+                        state_file.write_text(json.dumps(state))
+                        retained = observer.saved_image()
+                        self.assertEqual(retained["ancillary"][relative], saved["ancillary"][relative])
+                        record["data_retained"] = False; state_file.write_text(json.dumps(state))
+                        with self.assertRaises(ValueError): observer.saved_image()
+                    else:
+                        with self.assertRaises((ValueError, OSError)): observer.saved_image()
 
     def test_all_exact_slots_preserve_prepared_active_and_five_negatives(self):
         proofs = []
