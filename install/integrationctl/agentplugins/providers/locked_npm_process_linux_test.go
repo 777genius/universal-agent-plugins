@@ -244,9 +244,19 @@ func listenLockedNPMFixture(t *testing.T) *net.UnixConn {
 func receiveLockedNPMFixturePIDFD(t *testing.T, socket *net.UnixConn) (string, int) {
 	t.Helper()
 	body, control := make([]byte, 16), make([]byte, unix.CmsgSpace(4))
-	n, controlN, flags, _, err := socket.ReadMsgUnix(body, control)
-	if err != nil {
-		t.Fatalf("fake npm did not transfer its own pidfd before readiness deadline: %v", err)
+	var n, controlN, flags int
+	for {
+		var err error
+		n, controlN, flags, _, err = socket.ReadMsgUnix(body, control)
+		if errors.Is(err, unix.EINTR) {
+			// A kernel signal may interrupt readiness without consuming the
+			// datagram. Preserve the existing absolute socket deadline.
+			continue
+		}
+		if err != nil {
+			t.Fatalf("fake npm did not transfer its own pidfd before readiness deadline: %v", err)
+		}
+		break
 	}
 	messages, controlErr := unix.ParseSocketControlMessage(control[:controlN])
 	var fds []int
