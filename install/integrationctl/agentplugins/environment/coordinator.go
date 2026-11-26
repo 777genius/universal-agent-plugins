@@ -80,7 +80,7 @@ func (coordinator Coordinator) ResolveSelected(ctx context.Context, requirements
 func MovingRequirement(selected Requirement) bool {
 	return selected.Git != nil && selected.Git.Selector.Kind != SelectorCommit ||
 		selected.Registry != nil && selected.Registry.Selector.Kind == SelectorRange ||
-		selected.Archive != nil && selected.Archive.SHA256 == "" || selected.Web != nil
+		selected.Archive != nil && selected.Archive.SHA256 == "" || selected.Web != nil || selected.Local != nil
 }
 
 func pinOrNil(pkg LockedPackage, exists bool) *LockedPackage {
@@ -316,6 +316,9 @@ func sortSyncBindings(bindings []PreparedBinding) {
 }
 
 func lockedRevision(pkg LockedPackage) string {
+	if pkg.Source.Local != nil {
+		return pkg.Source.Local.RawTreeDigest
+	}
 	if pkg.Source.Web != nil {
 		return pkg.Source.Web.RawTreeDigest
 	}

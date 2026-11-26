@@ -16,7 +16,7 @@ var ErrSkillsPlanStale = errors.New("skill installation plan is stale")
 
 type SkillsSelection struct {
 	Repository, URL, Commit, Path, Name, Alias, CandidateID string
-	Website                                                 string
+	Website, LocalPath                                      string
 	ExpectedIndexSHA256, ExpectedRawTreeDigest              string
 	Selector                                                environment.Selector
 }

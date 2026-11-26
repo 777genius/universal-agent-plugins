@@ -8,6 +8,8 @@ func exactReleaseRequirement(req Requirement) bool {
 
 func sameSourceRequirement(a, b Requirement) bool {
 	switch {
+	case a.Local != nil && b.Local != nil:
+		return *a.Local == *b.Local
 	case a.Registry != nil && b.Registry != nil:
 		return *a.Registry == *b.Registry
 	case a.Git != nil && b.Git != nil:

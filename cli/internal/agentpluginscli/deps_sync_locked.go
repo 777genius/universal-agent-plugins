@@ -17,6 +17,9 @@ func materializeLockedPackage(ctx context.Context, app App, locked environment.L
 	if source := locked.Source.Git; source != nil && source.Kind == environment.SkillKind && source.Normalizer != environment.SkillNormalizerV1 {
 		return loadedPackage{}, errors.New("unsupported locked skill normalizer")
 	}
+	if source := locked.Source.Local; source != nil && source.Normalizer != environment.SkillNormalizerV1 {
+		return loadedPackage{}, errors.New("unsupported locked local Skill normalizer")
+	}
 	store := app.dependencyStore()
 	if snapshot, err := store.Snapshot(ctx, locked.DigestAlgorithm, locked.TreeDigest); err == nil {
 		return loadStoredDependencySnapshot(ctx, app, snapshot, locked, recorded, operation...)

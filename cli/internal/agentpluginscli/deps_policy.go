@@ -139,6 +139,8 @@ func validPolicyHost(host string) bool {
 // new source type cannot be classified: never silently exempt it from policy.
 func lockedSourceHost(pin environment.LockedPackage) (string, error) {
 	switch {
+	case pin.Source.Local != nil:
+		return "", errors.New("local Skill source cannot be admitted by a remote host policy")
 	case pin.Source.Git != nil:
 		// A concrete URL takes precedence over a GitHub-style shorthand.
 		// Treating a remote URL as github.com merely because Repository is

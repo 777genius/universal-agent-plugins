@@ -105,6 +105,9 @@ func (resolver dependencyResolver) Resolve(ctx context.Context, requirement envi
 	if previous != nil && !update && sameRequestedSelector(requirement, *previous) {
 		return *previous, nil
 	}
+	if requirement.Local != nil {
+		return resolver.resolveLocalSkill(ctx, requirement, targets)
+	}
 	if requirement.Web != nil {
 		return resolver.resolveWebSkill(ctx, requirement, targets)
 	}

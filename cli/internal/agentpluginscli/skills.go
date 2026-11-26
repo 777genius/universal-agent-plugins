@@ -22,9 +22,13 @@ type skillsAddOptions struct {
 }
 
 func newSkillsCommand(app App, opts *options) *cobra.Command {
-	root := &cobra.Command{Use: "skills", Short: "Install raw Agent Skills from Git or HTTPS publisher indexes"}
+	root := &cobra.Command{Use: "skills", Short: "Install raw Agent Skills from local directories, Git or HTTPS publisher indexes"}
 	selection := &skillsAddOptions{}
-	add := &cobra.Command{Use: "add <owner/repository or Git/HTTPS URL>", Short: "Select and install raw Skills through the saved environment installer", Long: "Select Skills from a GitHub repository, folder or SKILL.md URL, or an HTTPS/SSH Git clone URL.\nGit sources use your existing native Git credentials; selectors use clone-url#ref//path.\nHTTPS publishers expose a complete .well-known Skills index; use --skill with an exact name.\n\nExplicit --skill, --path, --target and exact file/folder URLs use terminal review.\n--ui opens interactive selection and cannot combine with --skill, --target or --dry-run.\nJSON and non-interactive use require explicit selections, targets and --yes (except --dry-run).\nTerminal selection: arrows move, space toggles Skills, / opens search, and Enter reviews.\nWhile searching, Enter applies the filter. Esc or Ctrl+C cancels.\nWith --plain: numbers toggle Skills, /query searches, / clears the filter,\nnext/prev browse pages, selected shows your basket, all returns to the catalog,\nclear removes all selections, done reviews, q or Enter cancels.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error { return selection.run(cmd, app, opts, args[0]) }}
+	add := &cobra.Command{Use: "add <local directory, owner/repository or Git/HTTPS URL>", Short: "Select and install raw Skills through the saved environment installer", Long: "Select Skills from a local directory containing SKILL.md, a GitHub repository, folder or SKILL.md URL, or an HTTPS/SSH Git clone URL.\nGit sources use your existing native Git credentials; selectors use clone-url#ref//path.\nLocal Skills are saved immutable snapshots; use update to accept source edits.\nHTTPS publishers expose a complete .well-known Skills index; use --skill with an exact name.\n\nExplicit --skill, --path, --target and exact file/folder URLs use terminal review.\n--ui opens interactive selection and cannot combine with --skill, --target or --dry-run.\nJSON and non-interactive use require explicit selections, targets and --yes (except --dry-run).\nTerminal selection: arrows move, space toggles Skills, / opens search, and Enter reviews.\nWhile searching, Enter applies the filter. Esc or Ctrl+C cancels.\nWith --plain: numbers toggle Skills, /query searches, / clears the filter,\nnext/prev browse pages, selected shows your basket, all returns to the catalog,\nclear removes all selections, done reviews, q or Enter cancels.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error { return selection.run(cmd, app, opts, args[0]) }}
+	add.Example = "  agentplugins skills add owner/private-repository --path skills/review --target codex --yes\n" +
+		"  agentplugins skills add 'https://git.example/team/skills.git#refs/heads/main//skills/review' --target codex --yes\n" +
+		"  agentplugins skills add 'ssh://git@git.example/team/skills.git#refs/heads/main//skills/review' --target claude --yes\n" +
+		"  agentplugins skills add ./skills/review --target codex --yes"
 	add.Flags().StringSliceVar(&selection.names, "skill", nil, "exact Skill name (repeatable; ambiguity requires --path)")
 	add.Flags().StringVar(&selection.folder, "path", "", "exact repository-relative Skill folder (empty selects repository root)")
 	add.Flags().StringVar(&selection.ref, "ref", "", "exact Git ref when a URL boundary is ambiguous")
@@ -86,6 +90,9 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 	}
 	if promptErr != nil && selection.requiresInteraction(opts, true) {
 		return promptErr
+	}
+	if explicitLocalPath(input) {
+		return selection.runLocal(cmd, app, opts, input, interactive)
 	}
 	if isWebsiteSkillInput(input) {
 		return selection.runWebsite(cmd, app, opts, input, interactive)

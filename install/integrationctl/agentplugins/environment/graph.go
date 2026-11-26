@@ -180,6 +180,9 @@ func validateEdges(packages map[string]LockedPackage) error {
 }
 
 func validateRequiredBySource(pkg LockedPackage, edge RequiredBy) error {
+	if pkg.Source.Local != nil {
+		return errors.New("local Skills are root-only dependencies")
+	}
 	if pkg.Source.Git != nil {
 		if edge.Selector != pkg.Source.Git.Requested {
 			return fmt.Errorf("%s: Git selector differs from consumer %s", pkg.Alias, edge.Alias)

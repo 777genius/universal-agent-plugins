@@ -81,7 +81,9 @@ func (candidate *skillsBatchCandidate) selectSkill(ctx context.Context, app App,
 		resolver := dependencyResolver{app: app, requirements: candidate.requirements, dryRun: true, rawSkills: prefetch}
 		var pin environment.LockedPackage
 		var err error
-		if req.Web != nil {
+		if req.Local != nil {
+			pin, err = resolver.resolveLocalSkill(ctx, req, targets)
+		} else if req.Web != nil {
 			pin, err = resolver.resolveWebSkill(ctx, req, targets)
 		} else {
 			pin, err = resolver.resolveSkill(ctx, req, targets, nil, selection.Commit, "", "", nil)
@@ -109,11 +111,18 @@ func (candidate *skillsBatchCandidate) selectSkill(ctx context.Context, app App,
 }
 
 func skillSelectionRequirement(wanted environment.Requirements, selection SkillsSelection) (environment.Requirement, error) {
+	if err := validateLocalSkillSelection(selection); err != nil {
+		return environment.Requirement{}, err
+	}
 	selector := selection.Selector
 	if selector.Kind == "" {
 		selector = environment.Selector{Kind: environment.SelectorCommit, Value: selection.Commit}
 	}
 	req := environment.Requirement{Alias: defaultSkillAlias(selection), Git: &environment.GitSource{Kind: environment.SkillKind, Skill: selection.Name, Repository: strings.ToLower(selection.Repository), URL: selection.URL, Path: selection.Path, Selector: selector}}
+	if selection.LocalPath != "" {
+		req.Git = nil
+		req.Local = &environment.LocalSource{Path: selection.LocalPath, Skill: selection.Name}
+	}
 	if selection.Website != "" {
 		req.Git = nil
 		endpoint, err := environment.NormalizeWebURL(selection.Website)
@@ -157,6 +166,10 @@ func defaultSkillAlias(selection SkillsSelection) string {
 		return selection.Alias
 	}
 	probe := environment.Requirement{Alias: selection.Name, Git: &environment.GitSource{Repository: selection.Repository, URL: selection.URL, Selector: environment.Selector{Kind: environment.SelectorDefault}}}
+	if selection.LocalPath != "" {
+		probe.Git = nil
+		probe.Local = &environment.LocalSource{Path: selection.LocalPath, Skill: selection.Name}
+	}
 	if selection.Website != "" {
 		probe.Git = nil
 		// An invalid publisher URL normalizes to "", which fails Validate and keeps the hashed alias.

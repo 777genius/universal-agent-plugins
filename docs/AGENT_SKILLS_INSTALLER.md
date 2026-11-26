@@ -6,6 +6,13 @@ and compatible HTTPS publishers. This guide is verified against
 Check `agentplugins version` before following release-specific guidance. The
 historical `plugin-kit-ai` Skills commands remain documented in [SKILLS.md](./SKILLS.md).
 
+**Development-source availability:** builds containing the generic Git and local
+snapshot changes also accept private GitHub repositories, other HTTPS/SSH Git
+sources and local Skill directories. These additions are not included in the
+verified CLI 0.1.110 release. The examples labelled source build below apply to
+such builds, including `main` after these changes merge; check release notes
+before expecting them in a downloaded CLI.
+
 A Skill can be installed from a public GitHub repository, a folder URL, or a
 `SKILL.md` URL. The installer keeps its original document, scripts and resources,
 then uses the existing package installer and ownership/recovery rules.
@@ -36,7 +43,31 @@ agentplugins skills add https://github.com/owner/repository/blob/main/skills/rev
 # Explicit unattended selection; duplicate names require an exact --path.
 agentplugins skills add owner/repository --path skills/review --target codex --no-ui --yes --format json
 agentplugins skills add owner/repository --skill review --skill pdf --target codex,claude --no-ui --yes
+
+# Source build: a private GitHub repository uses your native Git credentials.
+agentplugins skills add owner/private-repository --path skills/review --target codex --yes
+
+# Source build: explicit HTTPS or SSH clone URL, ref and Skill directory.
+agentplugins skills add 'https://git.example/team/skills.git#refs/heads/main//skills/review' --target codex --yes
+agentplugins skills add 'ssh://git@git.example/team/skills.git#refs/heads/main//skills/review' --target claude --yes
+
+# Source build: one local directory with a matching root SKILL.md.
+agentplugins skills add ./skills/review --target codex --yes
 ```
+
+Git sources in these source builds use the user's existing native Git credential
+helper or SSH agent/configuration. Configure repository access in Git first;
+the installer does not collect or save a separate repository password. Source
+URLs must not contain access tokens, passwords or query-string credentials.
+An SSH username such as `git@` is supported.
+
+The clone URL syntax is `clone-url#ref//path`. Use an exact branch or tag name,
+`refs/heads/main`, or a full lowercase commit SHA; the selected revision is
+resolved and pinned before review. SCP-style sources such as
+`git@git.example:team/skills.git#refs/heads/main//skills/review` also work.
+For an HTTPS clone address without a `.git` suffix, use `git+https://` to
+distinguish it from a publisher website. `--path skills/review` is an alternative
+to the source's `//skills/review` suffix.
 
 Bare repository input opens the bundled picker in an interactive terminal.
 `--no-ui` selects the terminal flow. Explicit `--skill`, `--path`, `--target` and
@@ -106,9 +137,11 @@ does not rewrite their documents to make them pass; choose another valid skill
 or a corrected source revision. A partial scan is labelled separately and does
 not prove the repository contains no other matches.
 
-Preview lists resources without downloading their contents. A resource size may
+Preview lists resources without executing their contents. A resource size may
 be unknown until full acquisition for review/install; an unknown size is not an
-empty file. Resource files and scripts are not executed by preview or install.
+empty file. Source builds using native Git fetch the complete repository commit
+for authenticated discovery, so resource content may already be downloaded
+before selection. Resource files and scripts are not executed by preview or install.
 
 ## Saved source and updates
 
@@ -134,15 +167,23 @@ The lock records the immutable commit, resolved Skill path, raw-source digest
 and normalizer version separately from normalized package digests. An author's
 `metadata.version` is descriptive; the commit and digests pin installed bytes.
 
+Repeating `skills add` for an already saved source keeps its existing selector
+and immutable pin. It does not follow a newer branch revision, refresh a website
+index or adopt edits from a local directory. Use an explicit update to accept
+new source bytes:
+
 ```sh
+# Refresh and install the selected saved Skill through the normal update flow.
+agentplugins update review
+
 # Refresh a moving selector, then review/apply the saved environment.
 agentplugins deps update review
 agentplugins deps sync --locked --yes
 
-# Restore exactly the lock, including when the package store is empty.
+# Restore exactly the lock; cold restore still needs the recorded source bytes.
 agentplugins deps sync --locked --yes
 
-# Explicitly repair managed drift, or remove a saved dependency.
+# Repair a missing managed projection, or remove a saved dependency.
 agentplugins repair review --target codex
 agentplugins remove review
 ```
@@ -155,6 +196,41 @@ explicit dependency edit. Locked restore and repair do not search for a newer
 version. Existing protections for foreign files, drift and pending recovery apply.
 Native clients may require their normal uninstall/recovery steps; follow the
 command's instructions rather than deleting agent configuration manually.
+
+For local Skills in a source build, the selected directory must contain a regular
+root `SKILL.md` whose name matches the directory, for example `review`. The
+installer snapshots its accepted document, scripts and resources, then delivers
+the same normalized immutable package used by remote Skills. It does not create
+a live link or watch the source directory. Local selection uses terminal review;
+`--ui`, `--ref` and `--path` do not apply. An optional `--skill` must match the
+directory's name.
+
+Saved local intent uses a canonical absolute source path, independently of the
+working directory used by later commands:
+
+```toml
+[dependencies.review]
+local = "/absolute/path/skills/review"
+kind = "skill"
+skill = "review"
+```
+
+The local lock records the raw-source digest and normalization version as well
+as the normalized package digests. `update review` explicitly snapshots source
+edits. Locked sync and repair prefer verified stored content, so they can work
+after the original directory disappears. Without that content, they must find
+the original directory and reproduce its exact recorded bytes; changed or missing
+sources refuse instead of selecting a newer snapshot. A path from another OS
+can be replayed from verified storage but cannot be reopened as a local source
+on the current host. Local sources are root declarations and cannot become a
+published package's dependencies.
+
+`deps export` transfers `uap.toml` and `uap.lock`, not the stored package bytes.
+Importing that agreement preserves the exact pin, but a fresh machine without
+verified content or the original accessible source cannot restore a local Skill.
+Keep the source available or recover the matching verified content before cold
+restore. An explicitly supplied remote-host dependency policy refuses local
+sources rather than treating them as an approved remote host.
 
 ## Website sources
 

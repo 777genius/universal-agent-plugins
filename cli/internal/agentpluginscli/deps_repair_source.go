@@ -40,6 +40,14 @@ func hydrateRecordedDependencyInventory(ctx context.Context, app App, pin enviro
 // Each binding's recorded revision owns repair provenance, independently of a
 // newer environment lock or another target's successful update.
 func setRepairSkillSource(pkg *environment.LockedPackage, installation domain.Installation, rev *domain.ClientPackageRevision) error {
+	if installation.Source.SourceKind == "local-skill" {
+		if rev.Skill == nil {
+			return errors.New("recorded local Skill provenance unavailable; restore matching state/lock before repair")
+		}
+		facts := rev.Skill
+		pkg.Source.Local = &environment.LockedLocalSource{Path: installation.Source.SourceURL, Skill: facts.Name, RawTreeDigest: facts.RawTreeDigest, Normalizer: facts.Normalizer}
+		return nil
+	}
 	pkg.Source.Git = &environment.LockedGitSource{Repository: installation.Source.Repository, URL: installation.Source.SourceURL, Path: installation.Source.PackageSubpath, Commit: rev.ResolvedRevision, Requested: environment.Selector{Kind: environment.SelectorCommit, Value: rev.ResolvedRevision}}
 	if installation.Source.StableSourceKey != "" && installation.Source.SourceKind != "https-skill" {
 		facts := rev.Skill
