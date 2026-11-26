@@ -170,6 +170,180 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     result.add(".claude/" + (Path(base) / name).relative_to(profile).as_posix() + ": directory")
         return result
 
+    def author_passive_usage(self, f, temporary=True):
+        usage = {owner["key"]: {"usageCount": 0, "lastUsedAt": 1795729883121,
+                                 "lastUsedNumStartups": 0} for owner in f["owners"]}
+        document = {"firstStartVersion": "2.1.263", "foreign": {"preserve": True}, "pluginUsage": usage}
+        path = f["profile"] / ".claude.json"
+        path.write_text(json.dumps(document)); path.chmod(0o600)
+        pending = f["profile"] / ".claude.json.tmp.138.710615a62268"
+        if temporary:
+            partial = copy.deepcopy(document)
+            del partial["pluginUsage"][f["owners"][0]["key"]]
+            pending.write_text(json.dumps(partial)); pending.chmod(0o600)
+        return path, pending, document
+
+    def test_passive_native_usage_is_receipt_bound_and_remains_in_raw_scanner(self):
+        for temporary in (False, True):
+            with self.subTest(temporary=temporary), self.fixture() as f:
+                path, pending, _ = self.author_passive_usage(f, temporary)
+                before = {p: (p.read_bytes(), p.stat()) for p in (path, pending) if p.exists()}
+                subject = self.capture(f)
+                self.retire(f)
+                raw = self.scan(f)
+                self.assertIn(".claude/.claude.json", raw)
+                proof = subject.finish(f["cleanup"], raw, lambda: self.scan(f), keep_open=True)
+                self.assertEqual(proof["passive_plugin_usage"]["receipt_bound_key_count"], 4)
+                self.assertEqual(len(proof["passive_plugin_usage"]["files"]), 1 + temporary)
+                self.assertFalse(proof["full_native_removal_qualified"])
+                subject.verify_retained(f["home"], f["root"], raw, lambda: self.scan(f))
+                for p, (body, held) in before.items():
+                    self.assertEqual(p.read_bytes(), body)
+                    self.assertTrue(os.path.samestat(p.stat(), held))
+                self.assertEqual(raw, self.scan(f))
+
+    def test_passive_usage_rejects_unknown_records_config_and_temporary_files(self):
+        mutations = ("missing_owner", "wrong_version", "positive_count", "boolean_count", "unknown_usage_field",
+                     "other_market", "outside_usage", "temporary_foreign", "temporary_boolean",
+                     "temporary_symlink", "temporary_hardlink", "main_hardlink", "second_temporary", "unsafe_mode")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), self.fixture() as f:
+                path, pending, document = self.author_passive_usage(f)
+                key = f["owners"][0]["key"]
+                if mutation == "missing_owner": del document["pluginUsage"][key]
+                elif mutation == "wrong_version": document["firstStartVersion"] = "2.1.264"
+                elif mutation == "positive_count": document["pluginUsage"][key]["usageCount"] = 1
+                elif mutation == "boolean_count": document["pluginUsage"][key]["usageCount"] = False
+                elif mutation == "unknown_usage_field": document["pluginUsage"][key]["active"] = True
+                elif mutation == "other_market": document["pluginUsage"]["marketing-kit@agentplugins-0123456789ab"] = {}
+                elif mutation == "outside_usage": document["activePlugin"] = key
+                elif mutation == "temporary_foreign":
+                    value = json.loads(pending.read_text()); value["foreign"]["preserve"] = False
+                    pending.write_text(json.dumps(value))
+                elif mutation == "temporary_boolean":
+                    value = json.loads(pending.read_text()); next(iter(value["pluginUsage"].values()))["usageCount"] = False
+                    pending.write_text(json.dumps(value))
+                elif mutation == "temporary_symlink": pending.unlink(); pending.symlink_to(path.name)
+                elif mutation == "temporary_hardlink": os.link(pending, pending.with_name("foreign-hardlink"))
+                elif mutation == "main_hardlink": os.link(path, path.with_name("foreign-hardlink"))
+                elif mutation == "second_temporary":
+                    another = pending.with_name(".claude.json.tmp.139.710615a62268")
+                    another.write_bytes(pending.read_bytes()); another.chmod(0o600)
+                elif mutation == "unsafe_mode": path.chmod(0o644)
+                path.write_text(json.dumps(document))
+                with self.assertRaises(ValueError): self.capture(f)
+
+    def test_passive_usage_refuses_changed_or_replaced_bytes_and_late_temporary(self):
+        for mutation in ("bytes", "replacement", "mode", "temporary_bytes", "late_temporary"):
+            with self.subTest(mutation=mutation), self.fixture() as f:
+                path, pending, document = self.author_passive_usage(f, mutation != "late_temporary")
+                subject = self.capture(f)
+                self.retire(f)
+                if mutation == "bytes":
+                    document["foreign"]["preserve"] = False; path.write_text(json.dumps(document))
+                elif mutation == "replacement":
+                    replacement = path.with_name("replacement"); replacement.write_bytes(path.read_bytes())
+                    replacement.chmod(0o600); replacement.replace(path)
+                elif mutation == "mode": path.chmod(0o644)
+                else:
+                    pending.write_text(json.dumps(document)); pending.chmod(0o600)
+                raw = self.scan(f)
+                with self.assertRaises(ValueError): subject.finish(f["cleanup"], raw, lambda: self.scan(f))
+                self.assertEqual(subject.fds, [])
+
+    def test_only_valid_remove_admits_usage_deletion_and_one_native_temporary_once(self):
+        for transition in ("in_place", "atomic", "new_temporary", "wrong_receipt"):
+            with self.subTest(transition=transition), self.fixture() as f:
+                path, pending, document = self.author_passive_usage(f, temporary=False)
+                subject = self.capture(f)
+                self.retire(f)
+                del document["pluginUsage"][f["owners"][0]["key"]]
+                if transition in ("in_place", "wrong_receipt"):
+                    path.write_text(json.dumps(document))
+                elif transition == "atomic":
+                    pending.write_text(json.dumps(document)); pending.chmod(0o600); pending.replace(path)
+                else:
+                    pending.write_text(json.dumps(document)); pending.chmod(0o600)
+                raw = self.scan(f)
+                if transition == "wrong_receipt":
+                    f["cleanup"]["results"][0]["installation_id"] = "unrelated-installation"
+                    with self.assertRaises(ValueError): subject.finish(f["cleanup"], raw, lambda: self.scan(f))
+                    self.assertEqual(subject.fds, [])
+                    continue
+                subject.finish(f["cleanup"], raw, lambda: self.scan(f), keep_open=True)
+                subject.verify_retained(f["home"], f["root"], raw, lambda: self.scan(f))
+                # A matching-looking usage temporary created after the one
+                # authorized transition must never acquire retained authority.
+                late = pending.with_name(".claude.json.tmp.139.710615a62269")
+                late.write_text(json.dumps(document)); late.chmod(0o600)
+                with self.assertRaises(ValueError):
+                    subject.verify_retained(f["home"], f["root"], self.scan(f), lambda: self.scan(f))
+                self.assertEqual(subject.fds, [])
+
+    def test_passive_usage_rejects_same_inode_rewrites_without_owned_deletion(self):
+        for mutation in ("same_bytes", "whitespace_only"):
+            with self.subTest(mutation=mutation), self.fixture() as f:
+                path, _, document = self.author_passive_usage(f, temporary=False)
+                subject = self.capture(f)
+                self.retire(f)
+                before = path.stat()
+                if mutation == "same_bytes": path.write_bytes(path.read_bytes())
+                else: path.write_text(json.dumps(document, indent=2))
+                self.assertTrue(os.path.samestat(before, path.stat()))
+                raw = self.scan(f)
+                with self.assertRaises(ValueError): subject.finish(f["cleanup"], raw, lambda: self.scan(f))
+                self.assertEqual(subject.fds, [])
+
+    @unittest.skipUnless(shutil.which("claude"), "pinned native Claude unavailable")
+    def test_real_native_four_plugin_initialize_retains_only_bound_passive_usage(self):
+        with self.fixture() as f:
+            executable = str(Path(shutil.which("claude")).resolve())
+            data = f["root"] / "data"; data.mkdir()
+            env = f["audit"]["isolated_client_env"](f["home"], f["root"], data)
+            env.update(DISABLE_AUTOUPDATER="1", CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="1")
+            probe = runpy.run_path(str(ROOT / "scripts/native_client_research.py"))["run_probe"]
+            def native(*arguments, input_bytes=None):
+                record, stdout, stderr = probe([executable, *arguments], f["project"], env,
+                    f["root"], "pinned-native-passive-usage", timeout=60, memory_only=True, input_bytes=input_bytes)
+                self.assertEqual((record["exit"], record["error"], stderr), (0, None, b""))
+                return stdout
+            self.assertEqual(native("--version").strip(), b"2.1.263 (Claude Code)")
+            (f["profile"] / "plugins/installed_plugins.json").write_text('{"version":2,"plugins":{}}')
+            (f["profile"] / "plugins/known_marketplaces.json").write_text('{}')
+            for owner, row in zip(f["owners"], f["public"]):
+                bundle = owner["active"] / ".agentplugins-plugin"
+                (bundle / ".claude-plugin").mkdir()
+                (bundle / ".claude-plugin/plugin.json").write_text(json.dumps({
+                    "name": row["name"], "version": f["pins"][row["directory"]["recorded_distribution"]]["package_version"]}))
+                marketplace = owner["active"] / ".claude-plugin"; marketplace.mkdir()
+                (marketplace / "marketplace.json").write_text(json.dumps({"name": owner["market"],
+                    "owner": {"name": "Agent Plugins CLI"},
+                    "plugins": [{"name": row["name"], "source": "./.agentplugins-plugin"}]}))
+                shutil.rmtree(owner["cache"])
+                native("plugin", "marketplace", "add", str(owner["active"]), "--scope", "project")
+                native("plugin", "install", owner["key"], "--scope", "project")
+            native("-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
+                   "--permission-mode", "dontAsk", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
+                   input_bytes=b'{"type":"control_request","request_id":"native-discovery","request":{"subtype":"initialize"}}\n')
+            subject = self.capture(f)
+            for owner in f["owners"]:
+                native("plugin", "uninstall", owner["key"], "--scope", "project", "--keep-data")
+                native("plugin", "marketplace", "remove", owner["market"], "--scope", "project")
+            for index, owner in enumerate(f["owners"]):
+                quarantine = owner["cache"].parent / (".agentplugins-cache-retire-" + f"{index + 1:032x}")
+                quarantine.mkdir(mode=0o700)
+                owner["cache"].rename(quarantine / "retired")
+                shutil.rmtree(owner["active"])
+            self.assertEqual(json.loads(native("plugin", "list", "--json")), [])
+            raw = self.scan(f)
+            self.assertIn(".claude/.claude.json", raw)
+            runner = runpy.run_path(str(ROOT / "scripts/marketing-kit-project-release-e2e.py"))
+            proof = runner["check_removed_native_components"]("claude", f["home"], f["root"],
+                "genuine native usage", claude_retirement=subject, cleanup=f["cleanup"])
+            self.assertEqual(proof["raw_native_residuals"], sorted(raw))
+            self.assertEqual(proof["passive_plugin_usage"]["receipt_bound_key_count"], 4)
+            self.assertFalse(proof["full_native_removal_qualified"])
+
     def test_unowned_residual_refusal_is_bounded_sanitized_and_closes_custody(self):
         with self.fixture() as f:
             subject = self.capture(f)
