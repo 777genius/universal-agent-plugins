@@ -161,6 +161,63 @@ func TestProjectListingAllowsUnrelatedProjectRows(t *testing.T) {
 	}
 }
 
+func TestProjectListingRejectsManagedDuplicateWithOptionalProjectPath(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		withoutEnabled bool
+		withFirst      bool
+	}{
+		{"omitted-disabled-first", false, false},
+		{"present-enabled-first", false, true},
+		{"omitted-enabled-first", true, false},
+		{"present-disabled-first", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fixture := projectListFixture(t)
+			withoutProject := map[string]any{
+				"id": "demo@skills-dir", "scope": "project",
+				"enabled": tc.withoutEnabled, "installPath": fixture.active,
+			}
+			fixture.selected["enabled"] = !tc.withoutEnabled
+			rows := []map[string]any{withoutProject, fixture.selected}
+			if tc.withFirst {
+				rows[0], rows[1] = rows[1], rows[0]
+			}
+			body, err := json.Marshal(rows)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := PluginStatusFromListForScope(body, "demo", fixture.active, domain.ScopeProject); got != StatusUnknown {
+				t.Fatalf("duplicate managed project rows classified as %v", got)
+			}
+		})
+	}
+}
+
+func TestProjectListingKeepsUnrelatedRegistrationsProjectQualified(t *testing.T) {
+	for _, scope := range []string{"local", "project"} {
+		t.Run(scope, func(t *testing.T) {
+			fixture := projectListFixture(t)
+			cache := filepath.Join(t.TempDir(), "foreign")
+			rows := make([]map[string]any, 1, 3)
+			rows[0] = fixture.selected
+			for range 2 {
+				rows = append(rows, map[string]any{
+					"id": "other@market", "scope": scope, "enabled": true,
+					"installPath": cache, "projectPath": t.TempDir(),
+				})
+			}
+			body, err := json.Marshal(rows)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := PluginStatusFromListForScope(body, "demo", fixture.active, domain.ScopeProject); got != StatusInstalled {
+				t.Fatalf("unrelated per-project registrations classified as %v", got)
+			}
+		})
+	}
+}
+
 func TestClaude21332NativeListingWithDisabledAndEnabledManagedPlugin(t *testing.T) {
 	// Regresses the complete list shape reported for agent-notify activation:
 	// builtin rows without installPath, several per-project local rows, a

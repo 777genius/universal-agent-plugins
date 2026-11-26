@@ -94,7 +94,7 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 	if !idOK || !scopeOK || !enabledOK || !pathOK || id == "" || !knownClaudeScope(scope) || !filepath.IsAbs(installPath) {
 		return StatusUnknown, false, false
 	}
-	identity, valid := claudeListIdentity(entry, id, scope, installPath)
+	identity, valid := claudeListIdentity(entry, id, expectedID, scope, installPath)
 	if !valid {
 		return StatusUnknown, false, false
 	}
@@ -114,17 +114,17 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 	return StatusUnknown, enabled, true
 }
 
-// Claude Code prints one local/project-scope row per project. Keep
-// user/managed entries globally unique: projectPath must not let malformed
-// rows evade duplicate detection for the managed identity.
-func claudeListIdentity(entry map[string]any, id, scope, installPath string) (string, bool) {
+// Claude Code prints one unrelated local/project-scope row per project. Keep
+// the queried managed identity and global entries unique: optional projectPath
+// metadata must not let malformed rows evade duplicate detection.
+func claudeListIdentity(entry map[string]any, id, expectedID, scope, installPath string) (string, bool) {
 	identity := id + "\x00" + scope + "\x00" + filepath.Clean(installPath)
 	if project, hasProject := entry["projectPath"]; hasProject {
 		path, valid := project.(string)
 		if !valid || !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return "", false
 		}
-		if scope == "local" || scope == "project" {
+		if id != expectedID && (scope == "local" || scope == "project") {
 			identity += "\x00" + path
 		}
 	}
