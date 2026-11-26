@@ -824,8 +824,9 @@ class KiroInstallationAudit:
                 destination = Path(documents["install"]["items"][0]["destinationPath"])
                 kiro_require(destination.parent == self.project / ".uap/managed/clients/kiro")
             else:
+                # Owned preparation is separate from the default native verdict.
                 kiro_require(row.get("status") == ("installation-lifecycle-observed" if index in KIRO_ACTIVE
-                                                  else "prepared-lifecycle-passed")
+                                                  else "incomplete-native-proof")
                              and bool(selected[0]) and selected[0][0].get("name") == identity)
                 revision = selected[0][0]["clients"][0]["package_revision"]
                 components = documents["install"]["data"]["actions"][0].get("component_support")
@@ -922,7 +923,7 @@ def kiro_summary(report, fixtures, acceptance):
                 or not public_states(row, kind, "kiro", kiro_active=index in KIRO_ACTIVE)
                 or (kind == "skill" and not skill_preparation(row, item, "kiro"))
                 or (kind == "skill" and proof.get("upstream_skill_blob_sha1") != item.get("skill_md_git_blob_sha1"))
-                or (kind == "plugin" and row.get("status") != ("installation-lifecycle-observed" if index in KIRO_ACTIVE else "prepared-lifecycle-passed"))):
+                or (kind == "plugin" and row.get("status") != ("installation-lifecycle-observed" if index in KIRO_ACTIVE else "incomplete-native-proof"))):
             return result
         result["installation_passed"] += 1
     result["installation_acceptance_passed"] = (result["installation_passed"], result["installation_verified_negative_coverage"]) == ((29, 1) if kind == "plugin" else (30, 0))

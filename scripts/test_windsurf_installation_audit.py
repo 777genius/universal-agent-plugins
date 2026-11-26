@@ -714,7 +714,8 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                     expected, outcome = sequence[len(calls)]
                     self.assertEqual(argv, expected)
                     self.assertIs(kwargs.get("capture_full"), True)
-                    self.assertTrue((Path(env["XDG_CONFIG_HOME"]) / "devin/foreign-neighbor.txt").is_file())
+                    self.assertEqual((Path(env["XDG_CONFIG_HOME"]) / "devin/foreign-neighbor.txt").read_bytes(),
+                                     b"unmanaged Devin Global neighbor must survive\n")
                     self.assertEqual(project, Path(temporary).resolve() / f"plugin-{index:02d}/project")
                     data = Path(env["AGENTPLUGINS_HOME"])
                     info = data.lstat()

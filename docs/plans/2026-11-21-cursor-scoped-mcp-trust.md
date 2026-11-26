@@ -24,3 +24,31 @@ Names are constrained visible ASCII; exact server must be selected and projected
 ## Estimates / exit criteria
 Estimate ~250–450 Go production LOC and ~250–450 focused tests/docs, depending on shared helpers; complexity 5/10, expected reliability 8/10, pre-CI confidence 7/10.
 Go tests, lint, vet, generated-check, relevant exact-HEAD Linux/macOS/Windows Cursor no-auth install and genuine native lifecycle, security checks, independent review and merge/postmerge must pass before declaring complete. Queued/skipped/cancelled ≠ PASS. No release or unrelated CI changes.
+
+## Final audit corrections — 2026-11-26
+
+The Cursor implementation and its genuine pinned native lifecycle are already
+qualified on `9c009d86`. Finish the selected shared audit failures without changing
+another client's production implementation:
+
+1. Align Kiro fixtures and the installation observer with explicit Prepared intent
+   and the existing incomplete native verdict; reject a rejected exact-source
+   receipt instead of admitting it through a generic fallback.
+2. Give the Windsurf Global sentinel one fixture owner, retaining the existing
+   exclusive-create refusal and the offline local profile configuration.
+3. Assert both the historical Codex observation label and its archived lifecycle
+   outcome; historical observation remains separate from current native readiness.
+4. Observe Pi's own component inventories before add, after add, after repeat and
+   after removal. Require exact component names, native source paths and unchanged
+   owned/foreign bytes in addition to existing signed-source lifecycle checks.
+   This qualifies registration only. Preserve public Prepared states and report
+   connection failures; authentication, model calls and MCP tools/call remain false.
+
+Review 1 narrowed the work to existing audit seams and one small Pi observer;
+no installer changes, broad cache exclusions or duplicate lifecycle engine.
+Review 2 retained separate installation/registration acceptance and default native
+failure states, and required negative controls for wrong provenance, missing intent
+and foreign-state mutation. Estimated addition: 200–300 audit LOC and 100–180
+focused test LOC; complexity 4/10, expected reliability 8/10, confidence 7/10
+before genuine execution. Reuse successful evidence for unchanged source, verify
+the prospective merge with current main, then ordinary guarded merge and postmerge.

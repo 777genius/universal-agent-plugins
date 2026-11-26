@@ -897,7 +897,8 @@ class ArchivedPluginFeedTest(unittest.TestCase):
                 self.assertIs(row["historical_repeat_add_verified"], False)
                 for key in ("repeat_verified", "removal_verified", "sentinels_preserved", "listed_identity"):
                     self.assertIs(row[key], True, key)
-                self.assertEqual(row["status"], "passed")
+                self.assertEqual(row["status"], "historical-archive-lifecycle-observed")
+                self.assertEqual(row["historical_archive_status"], "passed")
                 self.assertEqual(row["native_residuals"], [])
                 self.assertFalse(native_file.exists())
                 self.assertIs(row["post_remove_identity_registered"], False)

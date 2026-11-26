@@ -13,6 +13,8 @@ on:
       - 'scripts/test_windsurf_installation_audit.py'
       - 'scripts/pi_project_skill_audit.py'
       - 'scripts/test_pi_project_skill_audit.py'
+      - 'scripts/pi_plugin_catalog_audit.py'
+      - 'scripts/test_pi_plugin_catalog_*.py'
       - 'scripts/test_native_client_research.py'
       - 'scripts/qoder_prepared_skill_audit.py'
       - 'scripts/test_qoder_prepared_skill_audit.py'
@@ -99,6 +101,7 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
           python3 -m unittest discover -s scripts -p 'test_qoder_prepared_skill_audit.py'
           python3 -m unittest discover -s scripts -p 'test_pi_project_skill_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_pi_plugin_catalog_*.py'
           python3 -m unittest discover -s scripts -p 'test_native_client_research.py'
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py'
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_opencode_negative.py'
@@ -187,7 +190,7 @@ jobs:
           retention-days: 14
 
   real-native-cli-matrix:
-    name: All 30 ${{ matrix.kind }} / ${{ matrix.target == 'pi' && matrix.kind == 'skill' && 'foreign Prepared + clean native' || matrix.target == 'qoder' && matrix.kind == 'skill' && 'Prepared installation' || 'native' }} ${{ matrix.target }}
+    name: All 30 ${{ matrix.kind }} / ${{ matrix.target == 'pi' && matrix.kind == 'skill' && 'foreign Prepared + clean native' || matrix.target == 'pi' && matrix.kind == 'plugin' && 'native registration' || matrix.target == 'qoder' && matrix.kind == 'skill' && 'Prepared installation' || 'native' }} ${{ matrix.target }}
     needs: [changes, native-pilot]
     if: ${{ !cancelled() && needs.native-pilot.result == 'success' && (needs.changes.result != 'success' || needs.changes.outputs.live_clients != '[]') }}
     runs-on: ubuntu-24.04
@@ -276,6 +279,8 @@ jobs:
             acceptance=native
             if [[ "$TARGET" == qoder && "$KIND" == skill ]]; then
               acceptance=qoder-prepared-skills-installation
+            elif [[ "$TARGET" == pi && "$KIND" == plugin ]]; then
+              acceptance=pi-plugin-native-registration
             fi
             python3 scripts/live-install-audit.py --cli "$RUNNER_TEMP/agentplugins-audit" \
               --target "$TARGET" --kind "$KIND" --limit 30 --acceptance "$acceptance" \

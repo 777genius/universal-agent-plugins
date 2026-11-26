@@ -27,6 +27,8 @@ FIXTURES = ROOT / "tests/live-install/fixtures.json"
 QODER_PREPARED_ACCEPTANCE = "qoder-prepared-skills-installation"
 QODER_PREPARED_AUDIT = None
 PI_PROJECT_SKILL_AUDIT = None
+PI_PLUGIN_ACCEPTANCE = "pi-plugin-native-registration"
+PI_PLUGIN_CATALOG_AUDIT = None
 CODEX_RUNTIME_AUDIT = run_path(str(ROOT / "scripts/codex_runtime_audit.py"))
 HISTORICAL_CODEX = run_path(str(ROOT / "scripts/published_codex_baseline.py"))
 CLAUDE_RETIREMENT_AUDIT = run_path(str(ROOT / "scripts/claude_cache_retirement_audit.py"))
@@ -2054,7 +2056,7 @@ def kiro_direct_prepared_installation(node, identity, target, kind, item):
             or type(clients) is not list or len(clients) != 1):
         return False
     client = clients[0]
-    if not prepared_package_binding(client, "kiro") or client.get("authentication") != "not_checked":
+    if kiro_prepared_user_client(clients) is None:
         return False
     revision = client.get("package_revision")
     return (type(revision) is dict and revision.get("resolved_revision") == selector[2]
@@ -2108,9 +2110,14 @@ def matching_installations(response, identity, target, kind, item, signed_releas
     for node in installations:
         if not isinstance(node, dict):
             continue
-        if kiro_prepared and kiro_direct_prepared_installation(node, identity, target, kind, item):
-            result.append(node)
-            continue
+        if (kiro_prepared and target == "kiro" and kind == "plugin"
+                and isinstance(item, str) and item.startswith("github:")):
+            if kiro_direct_prepared_installation(node, identity, target, kind, item):
+                result.append(node)
+                continue
+            # A rejected exact-source receipt must not fall through to generic admission.
+            if kiro_prepared_user_client(node.get("clients")) is not None:
+                continue
         clients = node.get("clients", [])
         if not isinstance(clients, list):
             continue
@@ -2922,7 +2929,7 @@ def initialize_project_skill_git_root(project, env, case_root):
         raise RuntimeError("genuine isolated project Git init failed")
 
 
-def windsurf_plugin_profile(home, case_root):
+def windsurf_plugin_profile(home, case_root, *, global_sentinel=True):
     """Author one Cascade channel and the real local Devin User profile."""
     roots = (home / ".codeium/windsurf", home / ".config/devin")
     preserved = []
@@ -2933,6 +2940,8 @@ def windsurf_plugin_profile(home, case_root):
             directory.mkdir(exist_ok=True)
             if directory.is_symlink() or not directory.is_dir():
                 raise ValueError("Windsurf fixture root is not ordinary")
+        if root == roots[1] and not global_sentinel:
+            continue  # The installation observer exclusively seeds and guards Global.
         sentinel = root / "foreign-neighbor.txt"
         body = "unmanaged native neighbor must survive\n"
         with sentinel.open("x", encoding="utf-8") as stream:
@@ -3039,6 +3048,13 @@ def pi_project_skill_audit():
     if PI_PROJECT_SKILL_AUDIT is None:
         PI_PROJECT_SKILL_AUDIT = run_path(str(ROOT / "scripts/pi_project_skill_audit.py"))
     return PI_PROJECT_SKILL_AUDIT
+
+
+def pi_plugin_catalog_audit():
+    global PI_PLUGIN_CATALOG_AUDIT
+    if PI_PLUGIN_CATALOG_AUDIT is None:
+        PI_PLUGIN_CATALOG_AUDIT = run_path(str(ROOT / "scripts/pi_plugin_catalog_audit.py"))
+    return PI_PLUGIN_CATALOG_AUDIT
 
 
 def qoder_prepared_audit():
@@ -3397,7 +3413,7 @@ class CopilotProjectSkillAudit:
 def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
             signed_release_pins=None, *, client_version=None, historical_baseline=False,
             historical_plugin_archive=False, qoder_prepared=False, pi_skills=None,
-            installation_audit=None, installation_fixtures=None):
+            installation_audit=None, installation_fixtures=None, pi_registration=False):
     with ExitStack() as audits:
         return _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                         signed_release_pins, audits, client_version,
@@ -3405,6 +3421,7 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                         **({"historical_plugin_archive": True} if historical_plugin_archive else {}),
                         **({"qoder_prepared": True} if qoder_prepared else {}),
                         **({"pi_skills": pi_skills} if pi_skills is not None else {}),
+                        **({"pi_registration": True} if pi_registration else {}),
                         **({"installation_audit": installation_audit,
                             "installation_fixtures": installation_fixtures} if installation_audit else {}))
 
@@ -3412,7 +3429,10 @@ def do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
 def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
              signed_release_pins, audits, client_version, *, historical_baseline=False,
              historical_plugin_archive=False, qoder_prepared=False, pi_skills=None,
-             installation_audit=None, installation_fixtures=None):
+             installation_audit=None, installation_fixtures=None, pi_registration=False):
+    if pi_registration and (target, kind, sys.platform) != ("pi", "plugin", "linux"):
+        raise ValueError("Pi registration observation requires Linux User plugins")
+    pi_catalog = None
     if historical_plugin_archive and ((target, kind) != ("codex", "plugin") or historical_baseline):
         raise ValueError("historical archived feed requires its distinct Codex plugin lane")
     if qoder_prepared and (target, kind, sys.platform) != ("qoder", "skill", "linux"):
@@ -3528,7 +3548,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     # only an empty isolated profile and is never counted as agent detection.
     if native_target in ("codex", "claude", "opencode", "gemini", "copilot", "pi"):
         native_roots[0].mkdir(parents=True, exist_ok=True)
-    windsurf_fixture = (windsurf_plugin_profile(home, case_root)
+    windsurf_fixture = (windsurf_plugin_profile(home, case_root,
+                        global_sentinel=installation_audit != WINDSURF_INSTALLATION["ACCEPTANCE"])
                         if target == "windsurf" and kind == "plugin" else [])
     windsurf_commands = []
     env = isolated_client_env(home, case_root, data)
@@ -3670,6 +3691,11 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         codex_plugin_sqlite, codex_system_metadata = initialize_codex_plugin_profile(
             AGENT_BINARIES["codex"], case_root, home, project, data, env, assert_case_unchanged)
         assert_case_unchanged()
+    if pi_registration:
+        pi_catalog = pi_plugin_catalog_audit()["PiPluginCatalogAudit"](
+            home, project, data, env, client_version, globals(), source=item, index=index)
+        pi_catalog.checked("checkpoint", "before-add")
+        assert_case_unchanged()
     before = snapshot(native_roots)
     claude_before = (scoped_snapshot(native_roots)
                      if (target, kind, sys.platform) == ("claude", "skill", "linux") else None)
@@ -3810,6 +3836,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         (kind == "plugin" or
          (bool(skill_path) and lock_pinned and skill_bytes_match))
     )
+    if pi_catalog is not None and installed:
+        pi_catalog.checked("select", added_json)
+        pi_catalog.checked("checkpoint", "after-add")
+        assert_case_unchanged()
     if copilot_skill_audit is not None and installed:
         copilot_skill_audit.require(added_json.get("schema_version") == 1
             and type(added_json.get("schema_version")) is int and added_json.get("result") == "success"
@@ -4023,6 +4053,9 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 "binding_receipts", "environment_receipt", "package", "settings"))
             repeat_verified = repeat_verified and stable_owner
             copilot_skill_native["repeat-add"] = copilot_catalogs("repeat-add")
+    if pi_catalog is not None and repeat_verified:
+        pi_catalog.checked("checkpoint", "repeat-add")
+        assert_case_unchanged()
     if pi_skill_audit is not None and repeat_verified:
         pi_skill_audit.checked("checkpoint", "repeat-add", repeat_list_json, repeat_add_json)
     if qoder_skill_audit is not None and repeat_verified:
@@ -4149,6 +4182,10 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     post_list = (audited_call([cli, "list", "--target", target, *scope, "--format", "json"],
                       env, project, 30) if cleanup and cleanup["exit_code"] == 0 else None)
     post_list_json = post_list.pop("_json", None) if post_list else None
+    if (pi_catalog is not None and repeat_verified and cleanup and cleanup["exit_code"] == 0
+            and post_list and post_list["exit_code"] == 0):
+        pi_catalog.checked("checkpoint", "after-remove")
+        assert_case_unchanged()
     if codex_runtime is not None and cleanup and cleanup["exit_code"] == 0:
         codex_runtime.checkpoint("removed", False)
         assert_case_unchanged()
@@ -4176,7 +4213,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
     post_removal_leftovers = (
         skill_removal_leftovers(project, target, identity, skill_path)
         if kind == "skill" and cleanup else [])
-    if kind == "skill" and cleanup:
+    if cleanup and (kind == "skill" or pi_catalog is not None):
         sentinels_preserved = sentinels_preserved and (
             preserved_regular_text(sentinel, "foreign content never belongs to UAP\n", case_root)
             and preserved_regular_text(user_sentinel, "foreign profile content never belongs to UAP\n", case_root)
@@ -4424,6 +4461,7 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 target=target, **({"skill_fixture": item} if target == "grok" else {}))}
                if installation_audit in PREPARED_INSTALLATION["ACCEPTANCES"] else {}),
             "pi_project_skill_proof": pi_skill_proof,
+            **({"pi_plugin_registration_proof": pi_catalog.evidence} if pi_catalog is not None else {}),
             "canonical_client_id": native_target,
             "windsurf_public_commands": windsurf_commands if windsurf_fixture else None,
             "windsurf_native_image_unchanged": (snapshot(native_roots) == before
@@ -5353,7 +5391,7 @@ def main():
     p.add_argument("--target", required=True)
     p.add_argument("--limit", type=int, default=30)
     p.add_argument("--report-dir", required=True)
-    p.add_argument("--acceptance", choices=("native", "pi-foreign-prepared-skills-installation", "pi-clean-native-skills", "kiro-prepared-installation",
+    p.add_argument("--acceptance", choices=("native", PI_PLUGIN_ACCEPTANCE, "pi-foreign-prepared-skills-installation", "pi-clean-native-skills", "kiro-prepared-installation",
                    "kiro-prepared-skills-installation",
                    "qoder-prepared-skills-installation", "windsurf-prepared-installation", "vscode-user-manual-preparation",
                     HISTORICAL_CODEX["ACCEPTANCE"], HISTORICAL_CODEX["PLUGIN_ACCEPTANCE"],
@@ -5361,6 +5399,10 @@ def main():
                     WINDSURF_INSTALLATION["ACCEPTANCE"]),
                    default="native")
     args = p.parse_args()
+    pi_registration = args.acceptance == PI_PLUGIN_ACCEPTANCE
+    if pi_registration and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != (
+            "pi", "plugin", "linux", "x86_64", 30):
+        p.error("Pi registration requires all 30 pinned User plugins on Linux x86_64")
     pi_mode = PI_SKILL_ACCEPTANCES.get(args.acceptance)
     if pi_mode is not None and (args.target, args.kind, sys.platform, platform.machine(), args.limit) != ("pi", "skill", "linux", "x86_64", 30):
         p.error("Pi dual-cohort acceptance requires all 30 Pi Skills on pinned Linux x86_64")
@@ -5431,6 +5473,8 @@ def main():
     if pi_mode is not None:
         report["acceptance"] = args.acceptance
         report["pi_skill_cohort"] = pi_mode
+    if pi_registration:
+        report["acceptance"] = args.acceptance
     if historical_baseline:
         report["acceptance"] = args.acceptance
         report.update(HISTORICAL_CODEX["summary"](report, doc))
@@ -5519,9 +5563,10 @@ def main():
                                  signed_release_pins,
                                  **({"qoder_prepared": True} if args.acceptance == QODER_PREPARED_ACCEPTANCE else {}),
                                  **({"pi_skills": pi_mode} if pi_mode is not None else {}),
+                                 **({"pi_registration": True} if pi_registration else {}),
                                  **({"client_version": report.get("client_version")}
                                     if (args.target, args.kind) in (("gemini", "skill"), ("kimi", "skill"))
-                                    or args.target == "opencode" or pi_mode is not None else {}),
+                                    or args.target == "opencode" or pi_mode is not None or pi_registration else {}),
                                  **({"historical_baseline": True} if historical_baseline else {}),
                                  **({"historical_plugin_archive": True} if historical_plugin_archive else {}),
                                  **({"installation_audit": args.acceptance} if prepared_installation else {}),
@@ -5539,6 +5584,8 @@ def main():
                     result["copilot_project_skill_proof"] = e.copilot_project_skill_proof
                 if isinstance(getattr(e, "pi_project_skill_proof", None), dict):
                     result["pi_project_skill_proof"] = e.pi_project_skill_proof
+                if isinstance(getattr(e, "pi_plugin_registration_proof", None), dict):
+                    result["pi_plugin_registration_proof"] = e.pi_plugin_registration_proof
                 if isinstance(getattr(e, "qoder_prepared_skill_proof", None), dict):
                     result["qoder_prepared_skill_proof"] = e.qoder_prepared_skill_proof
                 if historical_plugin_archive and isinstance(e, HISTORICAL_CODEX["ArchiveUnavailable"]):
@@ -5570,6 +5617,13 @@ def main():
     save()
     print(f'{args.target} {args.kind}: {passed}/{args.limit} native PASS; '
           f'verified_negative={len(accepted_negatives)}; attempted={report["cases_attempted"]}')
+    if pi_registration:
+        report.update(pi_plugin_catalog_audit()["summary"](report, doc, expected_negative_coverage))
+        save()
+        print(f'Pi native registration: {report["pi_native_registration_passed"]}/30; '
+              f'verified refusals={report["pi_native_registration_negative"]}; '
+              'connections, model calls, authentication and tools/call remain unqualified')
+        return 0 if report["pi_native_registration_qualified"] else 1
     if pi_mode is not None:
         report.update(pi_project_skill_audit()["summary"](report, doc, args.acceptance))
         save()

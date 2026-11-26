@@ -76,6 +76,8 @@ def raw(kind, index, project):
     if kind == "plugin" and index in prepared.KIRO_ACTIVE:
         state.update(activation="active", verification="installation_verified")
     node["clients"][0].update(client_id="kiro", **state)
+    if kind == "plugin" and index not in prepared.KIRO_ACTIVE:
+        node["clients"][0]["install_intent"] = "prepare"
     value["repeat_list"] = deepcopy(value["list"])
     for field in ("actions", "results"):
         for row in value["cleanup"][field]:
@@ -171,9 +173,10 @@ class KiroInstallationTests(unittest.TestCase):
         identity = item["name"] if kind == "skill" else FIXTURES["plugin_declared_names"].get(item, item)
         row = {"index": index, "target": "kiro", "kind": kind, "source": item["source"] if kind == "skill" else item,
                "identity": identity, "status": "incomplete-native-proof" if kind == "skill" else
-                   "installation-lifecycle-observed" if index in prepared.KIRO_ACTIVE else "prepared-lifecycle-passed",
+                   "installation-lifecycle-observed" if index in prepared.KIRO_ACTIVE else "incomplete-native-proof",
                "matched_installation_ids": [node["installation_id"]], "repeat_installation_ids": [node["installation_id"]],
                "prepared_binding": kind == "plugin" and index not in prepared.KIRO_ACTIVE,
+               "kiro_prepared_lifecycle_verified": kind == "plugin" and index not in prepared.KIRO_ACTIVE,
                "prepared_components_only": False, "public_skill_ready": {"after-add": False, "repeat-add": False} if kind == "skill" else None,
                "native_file_delta": 0 if kind == "skill" else 1, "native_identity_files": [] if kind == "skill" else [".kiro/skills/owned/SKILL.md"],
                "native_component_candidates": [], "signed_release_observation": [], "native_residuals": [],
@@ -334,11 +337,28 @@ class KiroInstallationTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 observer.finish(row, "marketing-kit", 13, FIXTURES)
 
+    def test_prepared_user_intent_is_required_in_both_inventories(self):
+        for index in (0, 21):
+            for phases in (("list",), ("repeat_list",), ("list", "repeat_list")):
+                for intent in (None, "automatic"):
+                    with self.subTest(index=index, phases=phases, intent=intent), tempfile.TemporaryDirectory() as directory:
+                        observer = self.fixture(Path(directory).resolve(), "plugin")
+                        documents = raw("plugin", index, observer.project)
+                        for phase in phases:
+                            client = documents[phase]["data"]["installations"][0]["clients"][0]
+                            if intent is None:
+                                client.pop("install_intent")
+                            else:
+                                client["install_intent"] = intent
+                        with self.assertRaises(ValueError):
+                            self.finish(observer, "plugin", index, documents)
+
     def test_direct_prepared_source_match_is_explicit_and_pinned(self):
         item = FIXTURES["plugin_aliases"][21]
         documents = raw("plugin", 21, Path("/fixture/project"))
         match = self.audit["matching_installations"]
-        self.assertEqual(match(documents["list"], "sanity", "kiro", "plugin", item), [])
+        self.assertEqual(match(documents["list"], "sanity", "kiro", "plugin", item),
+                         documents["list"]["data"]["installations"])
         self.assertEqual(len(match(documents["list"], "sanity", "kiro", "plugin", item, kiro_prepared=True)), 1)
         for key, value in (("source", "other/repo"), ("installation_id", "not-uuid")):
             changed = deepcopy(documents["list"]); changed["data"]["installations"][0][key] = value
@@ -663,6 +683,9 @@ class KiroInstallationTests(unittest.TestCase):
                 self.assertEqual(len(calls), 2 if index == 13 else 6)
                 self.assertEqual(row["kiro_installation_custody"]["status"],
                                  "verified-installation-negative" if index == 13 else "verified-installation-lifecycle")
+                if kind == "plugin" and index not in prepared.KIRO_ACTIVE and index != 13:
+                    self.assertEqual(row["status"], "incomplete-native-proof")
+                    self.assertIs(row["kiro_prepared_lifecycle_verified"], True)
                 serialized = json.dumps(row)
                 for field in ('"_json"', '"stdout_full"', '"stderr_full"'):
                     self.assertNotIn(field, serialized)
@@ -733,32 +756,35 @@ class KiroInstallationTests(unittest.TestCase):
 
     def test_actual_main_opt_in_keeps_native_default_failure_and_complete_forwarding(self):
         main = self.audit["main"]
-        good = self.complete_report("skill")
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory).resolve(); cli = root / "agentplugins"; cli.write_text("inert")
-            fixture_file = root / "fixtures.json"; fixture_file.write_text(json.dumps(FIXTURES))
-            calls = []
-            def case(*args, **kwargs):
-                calls.append(kwargs)
-                return deepcopy(good["results"][args[4]])
-            substitutions = {"do_case": case, "vendor_bootstrap_attested": lambda: True,
-                "FIXTURES": fixture_file,
-                "AGENT_BINARIES": {"kiro-cli": "/fixture/kiro-cli"},
-                "version_evidence": lambda argv, *args: deepcopy(good["cli_version"] if argv[1] == "version" else good["client_version"]),
-                "published_audit_temp_parent": lambda: None, "isolated_client_env": lambda *args: {}}
-            for mode, code in (("native", 1), ("kiro-skills-installation", 0)):
-                calls.clear()
-                argv = ["audit", "--cli", str(cli), "--target", "kiro", "--kind", "skill", "--limit", "30",
-                        "--report-dir", str(root / mode), "--acceptance", mode]
-                with patch.dict(main.__globals__, substitutions), patch("sys.argv", argv), patch.object(sys, "platform", "darwin"), \
-                     patch("platform.machine", return_value="arm64"), redirect_stdout(io.StringIO()):
-                    self.assertEqual(main(), code)
-                written = json.loads((root / mode / "kiro-skill.json").read_text())
-                self.assertEqual(written["passed"], 0)
-                self.assertEqual(len(calls), 30)
-                expected = {} if mode == "native" else {"installation_audit": mode, "installation_fixtures": FIXTURES}
-                self.assertTrue(all(call == expected for call in calls))
-                if mode != "native": self.assertTrue(written["installation_acceptance_passed"])
+        for kind in ("skill", "plugin"):
+            good = self.complete_report(kind)
+            acceptance = "kiro-skills-installation" if kind == "skill" else "kiro-installation"
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory).resolve(); cli = root / "agentplugins"; cli.write_text("inert")
+                fixture_file = root / "fixtures.json"; fixture_file.write_text(json.dumps(FIXTURES))
+                calls = []
+                def case(*args, **kwargs):
+                    calls.append(kwargs)
+                    return deepcopy(good["results"][args[4]])
+                substitutions = {"do_case": case, "vendor_bootstrap_attested": lambda: True,
+                    "FIXTURES": fixture_file,
+                    "AGENT_BINARIES": {"kiro-cli": "/fixture/kiro-cli"},
+                    "version_evidence": lambda argv, *args: deepcopy(good["cli_version"] if argv[1] == "version" else good["client_version"]),
+                    "published_audit_temp_parent": lambda: None, "isolated_client_env": lambda *args: {}}
+                for mode, code in (("native", 1), (acceptance, 0)):
+                    calls.clear()
+                    argv = ["audit", "--cli", str(cli), "--target", "kiro", "--kind", kind, "--limit", "30",
+                            "--report-dir", str(root / mode), "--acceptance", mode]
+                    with patch.dict(main.__globals__, substitutions), patch("sys.argv", argv), patch.object(sys, "platform", "darwin"), \
+                         patch("platform.machine", return_value="arm64"), redirect_stdout(io.StringIO()):
+                        self.assertEqual(main(), code)
+                    written = json.loads((root / mode / f"kiro-{kind}.json").read_text())
+                    self.assertEqual(written["passed"], 0)
+                    self.assertEqual(written["prepared_lifecycle_passed"], 23 if kind == "plugin" else 0)
+                    self.assertEqual(len(calls), 30)
+                    expected = {} if mode == "native" else {"installation_audit": mode, "installation_fixtures": FIXTURES}
+                    self.assertTrue(all(call == expected for call in calls))
+                    if mode != "native": self.assertTrue(written["installation_acceptance_passed"])
 
 
 if __name__ == "__main__":
