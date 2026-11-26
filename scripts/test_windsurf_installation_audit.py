@@ -176,6 +176,19 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             os.utime(binary, ns=(info.st_atime_ns, info.st_mtime_ns))
             self.assertNotEqual(before["runtime_authority"], observer.saved_image()["runtime_authority"])
 
+    def test_runtime_reader_preserves_all_original_custody_entry_exclusions(self):
+        for excluded in (".git", ".uap-integrations.lock", ".plugin-kit-ai.lock"):
+            with self.subTest(excluded=excluded), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                runtime, _ = self.author_runtime(observer)
+                path = runtime / "node_modules/unit" / excluded
+                if excluded == ".git":
+                    path.mkdir()
+                else:
+                    path.write_bytes(b"excluded authority never becomes npm custody")
+                with self.assertRaises(ValueError):
+                    observer.saved_image()
+
     def test_runtime_links_require_exact_receipt_marker_source_lock_and_physical_targets(self):
         for mutation in ("no-receipt", "owner-marker", "runtime-marker", "typed-marker", "runtime-lock", "source-lock",
                          "absolute", "escape", "chain", "foreign-bin", "outside-bin"):

@@ -465,6 +465,11 @@ class WindsurfInstallationAudit:
                 relative = "" if name == "." else name
                 info = os.fstat(tree.fds[name])
                 require(info.st_uid == os.getuid())
+                # Preserve frame()/custody.tree's existing exclusions even when
+                # qualified npm bin links require the shared HeldTree reader.
+                require(not (kind == "directory" and Path(relative).name == ".git")
+                        and not (kind == "file" and Path(relative).name in (
+                            ".uap-integrations.lock", ".plugin-kit-ai.lock")))
                 row = {"kind": "dir" if kind == "directory" else kind, **facts(info)}
                 if kind == "link":
                     root = str(Path(relative).parent.parent)
