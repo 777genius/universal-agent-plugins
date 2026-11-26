@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -67,6 +68,10 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 			status = outputResultFailure
 		}
 		data := map[string]any{"schema_version": outputSchemaVersion, "command": cmd.CommandPath(), "result": status, "outcome": outcome, "actions": dependencyActionOutput(actions, opts.dependencyComponents), "results": out, "scope": opts.scope, "scope_selection_reason": scopeSelectionReason(cmd, opts)}
+		var foreign *environment.ForeignBindingError
+		if errors.As(applyErr, &foreign) {
+			data["error"] = classifyAgentFailure(applyErr)
+		}
 		if opts.installResult != nil && len(opts.installResult.failedAgents()) > 0 {
 			// Per-binding detail is added only when something failed, so a
 			// successful result keeps its established shape.

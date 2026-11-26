@@ -20,11 +20,15 @@ function isolationArguments(help, directories) {
     '--extensions-dir', directories.extensions, directories.project];
 }
 
+const gateRules = [
+  [/sign in to (?:continue|use cursor)|log in to continue/iu, 'login-gate'],
+  [/do you trust the authors|trust this (?:workspace|project)/iu, 'trust-gate'],
+  [/local plugin imports (?:are )?(?:disabled|not allowed)|blocked by (?:your )?(?:organization|administrator)/iu, 'import-policy-gate'],
+];
+const gatePattern = new RegExp(gateRules.map(([pattern]) => `(?:${pattern.source})`).join('|'), 'iu');
+
 function gate(text) {
-  if (/sign in to (?:continue|use cursor)|log in to continue/iu.test(text)) return 'login-gate';
-  if (/do you trust the authors|trust this (?:workspace|project)/iu.test(text)) return 'trust-gate';
-  if (/local plugin imports (?:are )?(?:disabled|not allowed)|blocked by (?:your )?(?:organization|administrator)/iu.test(text)) return 'import-policy-gate';
-  return '';
+  return gateRules.find(([pattern]) => pattern.test(text))?.[1] || '';
 }
 
 async function bounded(promise, milliseconds) {
@@ -77,10 +81,37 @@ async function visibleText(page) {
   return text;
 }
 
-async function clickNamed(page, name) {
+async function refuseVisibleGate(page) {
   await visibleText(page);
+  // Text locators pierce open shadow roots; body.innerText need not include them.
+  for (const [pattern, category] of gateRules) {
+    if (await page.getByText(pattern).filter({ visible: true }).count() > 0) throw new Error(category);
+  }
+}
+
+async function controlFailureScreenshot(page, directory, result) {
+  if (!page || result.observation !== 'ui-control-unobserved') return;
+  try {
+    // Diagnostic only; never a component inventory or qualification fact.
+    result.diagnostic_screenshot = await screenshot(page, directory, 'control-unobserved.png');
+  } catch { /* Preserve the original refusal if the bounded capture fails. */ }
+}
+
+async function clickNamed(page, name) {
+  await refuseVisibleGate(page);
   const control = page.getByText(name, { exact: true }).filter({ visible: true });
+  const refusal = page.getByText(gatePattern).filter({ visible: true });
+  try {
+    // Native locator waiting observes rendering and gates together. first()
+    // only selects a wake-up candidate; count below still refuses ambiguity.
+    await control.or(refusal).first().waitFor({ state: 'visible', timeout: 5000 });
+  } catch {
+    await refuseVisibleGate(page);
+    throw new Error('ui-control-unobserved');
+  }
+  await refuseVisibleGate(page);
   if (await control.count() !== 1) throw new Error('ui-control-unobserved');
+  await refuseVisibleGate(page);
   await control.click({ timeout: 5000 });
 }
 
@@ -132,7 +163,7 @@ async function observe(input, progress = () => {}) {
     sandbox_requested: true, quit_requested: false, screenshots: [], markers: {},
     source_paths_visible: false, source_attribution_qualified: false };
   progress(result);
-  let app, closed;
+  let app, closed, page;
   try {
     for (const name of ['root', 'project', 'userData', 'extensions', 'output', 'playwright']) ordinary(input[name], true);
     ordinary(input.electron, false);
@@ -148,7 +179,7 @@ async function observe(input, progress = () => {}) {
     closed = once(child, 'close');
     if (child.spawnargs.includes('--no-sandbox') || child.spawnfile !== input.electron) throw new Error('launch-authority-refused');
     result.sandbox_request_and_argv_verified = true;
-    const page = await app.firstWindow({ timeout: 10000 });
+    page = await app.firstWindow({ timeout: 10000 });
     page.setDefaultTimeout(5000);
     result.screenshots.push(await screenshot(page, input.output, 'startup.png'));
     await visibleText(page);
@@ -177,6 +208,7 @@ async function observe(input, progress = () => {}) {
       'ui-control-unobserved', 'launch-authority-refused', 'non-natural-exit', 'component-unobserved'];
     const message = error instanceof Error ? error.message : '';
     result.observation = classes.includes(message) ? message : 'editor-observation-refused';
+    await controlFailureScreenshot(page, input.output, result);
     if (app && closed) {
       try { await quit(app, closed, result); } catch { result.shutdown_unqualified = true; }
     }
@@ -195,7 +227,7 @@ async function main(write, progress) {
   if (result.status !== 'observed') process.exitCode = 1;
 }
 
-module.exports = { isolationArguments, gate, ordinary, inventoryScreenshot };
+module.exports = { isolationArguments, gate, ordinary, inventoryScreenshot, clickNamed, controlFailureScreenshot };
 if (require.main === module) {
   let written = false;
   let latest = { stage: 'input' };

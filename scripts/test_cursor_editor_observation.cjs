@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { isolationArguments, gate, ordinary, inventoryScreenshot } = require('./cursor_editor_observation.cjs');
+const { isolationArguments, gate, ordinary, inventoryScreenshot, clickNamed, controlFailureScreenshot } = require('./cursor_editor_observation.cjs');
 
 const directories = { userData: '/owned/userdata', extensions: '/owned/extensions', project: '/owned/project' };
 // Required usage/option rows from pinned 3.30.14 help; this is a grammar
@@ -223,4 +223,166 @@ test('library import installs no terminal or crash handlers', () => {
   assert.equal(result.error, undefined);
   assert.equal(result.status, 0);
   assert.equal(result.stdout, '');
+});
+
+// Model the locator union's bounded wake-up, not Electron or native UI proof.
+function controlPage(states, afterCount) {
+  let state = states[0];
+  const events = [];
+  const target = {
+    filter(options) { assert.deepEqual(options, { visible: true }); return this; },
+    or(refusal) {
+      assert.equal(refusal, blocker);
+      return { first() { return { async waitFor(options) {
+        assert.deepEqual(options, { state: 'visible', timeout: 5000 });
+        events.push('wait');
+        for (const next of states) {
+          state = next;
+          await Promise.resolve(); // Controlled rendering turn, no clock sleep.
+          if (state.visible && state.count > 0 || blocker.pattern.test(state.locatorText ?? state.text)) return;
+        }
+        events.push('deadline');
+        throw new Error('private timeout');
+      } }; } };
+    },
+    async count() {
+      events.push('count');
+      const count = state.visible ? state.count : 0;
+      if (afterCount) state = afterCount;
+      return count;
+    },
+    async click(options) {
+      assert.deepEqual(options, { timeout: 5000 });
+      events.push('click');
+    },
+  };
+  const blocker = {
+    filter(options) { assert.deepEqual(options, { visible: true }); return this; },
+    async count() { return Number(this.pattern.test(state.locatorText ?? state.text)); },
+  };
+  const page = {
+    locator(selector) {
+      assert.equal(selector, 'body');
+      return { async evaluate() {
+        events.push('text');
+        return { text: state.text, overflow: false };
+      } };
+    },
+    getByText(name, options) {
+      if (typeof name === 'string') {
+        assert.equal(name, 'Customize');
+        assert.deepEqual(options, { exact: true });
+        return target;
+      }
+      assert.ok(name instanceof RegExp);
+      blocker.pattern = name;
+      return blocker;
+    },
+  };
+  return { page, events };
+}
+
+const blankControl = { text: '', count: 0, visible: false };
+test('control click waits for delayed visible rendering and rechecks gates before acting', async () => {
+  const { page, events } = controlPage([blankControl,
+    { text: 'Customize', count: 1, visible: true }]);
+  await clickNamed(page, 'Customize');
+  assert.deepEqual(events, ['text', 'wait', 'text', 'count', 'text', 'click']);
+});
+
+test('each blocking gate appearing during control wait refuses without clicking', async () => {
+  for (const [text, cause] of [
+    ['Sign in to continue', /login-gate/u],
+    ['Do you trust the authors?', /trust-gate/u],
+    ['Local plugin imports are disabled', /import-policy-gate/u],
+  ]) {
+    const { page, events } = controlPage([blankControl, { text, count: 0, visible: false }]);
+    await assert.rejects(clickNamed(page, 'Customize'), cause);
+    assert.equal(events.includes('click'), false);
+    assert.equal(events.includes('deadline'), false);
+  }
+});
+
+test('absent and invisible controls exhaust only the finite locator wait without clicking', async () => {
+  for (const state of [blankControl, { text: 'Customize', count: 1, visible: false }]) {
+    const { page, events } = controlPage([state]);
+    await assert.rejects(clickNamed(page, 'Customize'), /ui-control-unobserved/u);
+    assert.deepEqual(events, ['text', 'wait', 'deadline', 'text']);
+  }
+});
+
+test('ambiguous visible controls refuse after readiness without clicking', async () => {
+  const { page, events } = controlPage([blankControl,
+    { text: 'Customize Customize', count: 2, visible: true }]);
+  await assert.rejects(clickNamed(page, 'Customize'), /ui-control-unobserved/u);
+  assert.deepEqual(events, ['text', 'wait', 'text', 'count']);
+});
+
+test('a gate appearing after uniqueness check refuses immediately before click', async () => {
+  const { page, events } = controlPage([
+    { text: 'Customize', count: 1, visible: true },
+  ], { text: 'Trust this workspace', count: 1, visible: true });
+  await assert.rejects(clickNamed(page, 'Customize'), /trust-gate/u);
+  assert.deepEqual(events, ['text', 'wait', 'text', 'count', 'text']);
+});
+
+test('visible shadow-root gates refuse even when body text omits them and target is unique', async () => {
+  for (const [locatorText, cause] of [
+    ['Sign in to continue', /login-gate/u],
+    ['Do you trust the authors?', /trust-gate/u],
+    ['Local plugin imports are disabled', /import-policy-gate/u],
+  ]) {
+    const { page, events } = controlPage([blankControl,
+      { text: 'Customize', locatorText, count: 1, visible: true }]);
+    await assert.rejects(clickNamed(page, 'Customize'), cause);
+    assert.equal(events.includes('click'), false);
+  }
+});
+
+test('shadow-root gate appearing after target count refuses before clicking', async () => {
+  const { page, events } = controlPage([
+    { text: 'Customize', count: 1, visible: true },
+  ], { text: 'Customize', locatorText: 'Trust this workspace', count: 1, visible: true });
+  await assert.rejects(clickNamed(page, 'Customize'), /trust-gate/u);
+  assert.deepEqual(events, ['text', 'wait', 'text', 'count', 'text']);
+});
+
+test('control failure capture retains a fresh diagnostic receipt without inventory qualification', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-control-diagnostic-')));
+  try {
+    const { page, events } = inventoryPage();
+    const result = { status: 'unqualified', observation: 'ui-control-unobserved', screenshots: [], skills_ready: false };
+    await controlFailureScreenshot(page, root, result);
+    assert.equal(result.diagnostic_screenshot.name, 'control-unobserved.png');
+    assert.equal(result.diagnostic_screenshot.bytes, fs.statSync(path.join(root, 'control-unobserved.png')).size);
+    assert.equal(result.diagnostic_screenshot.sha256.length, 64);
+    assert.deepEqual(events, ['screenshot']);
+    assert.equal(result.observation, 'ui-control-unobserved');
+    assert.equal(result.status, 'unqualified');
+    assert.equal(result.skills_ready, false);
+    assert.deepEqual(result.screenshots, []);
+    const before = fs.readFileSync(path.join(root, 'control-unobserved.png'));
+    await controlFailureScreenshot(page, root, result); // wx refuses overwrite.
+    assert.deepEqual(fs.readFileSync(path.join(root, 'control-unobserved.png')), before);
+    assert.deepEqual(events, ['screenshot']);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('bounded failure capture errors preserve the original refusal', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-control-capture-refused-')));
+  try {
+    let captures = 0;
+    const page = { async screenshot(options) {
+      assert.deepEqual(options, { timeout: 5000 });
+      captures++;
+      throw new Error('PRIVATE-CAPTURE-FAILURE');
+    } };
+    const result = { status: 'unqualified', observation: 'ui-control-unobserved', screenshots: [] };
+    await controlFailureScreenshot(page, root, result);
+    assert.deepEqual(result, { status: 'unqualified', observation: 'ui-control-unobserved', screenshots: [] });
+    assert.equal(captures, 1);
+    await controlFailureScreenshot(page, root, { observation: 'trust-gate' });
+    await controlFailureScreenshot(undefined, root, result);
+    assert.equal(captures, 1);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

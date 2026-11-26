@@ -46,7 +46,7 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 	// scanner touches a root that may have been replaced by a symlink.
 	if err := checkOpenCodeHostRoots(prepared); err != nil {
 		result = Result{Operation: op, Outcome: OutcomeConflict, Reason: "plan_changed"}
-		attachNextActions(&result)
+		attachNextActions(&result, err)
 		return result, err
 	}
 	if err := e.checkPreparedProfiles(ctx, prepared); err != nil {
@@ -63,7 +63,7 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 		}
 		result = Result{Operation: op, Outcome: OutcomeRecovery, Reason: reason}
 		err = fmt.Errorf("%w: %s", ErrRecoveryRequired, reason)
-		attachNextActions(&result)
+		attachNextActions(&result, err)
 		return result, err
 	}
 	if err := e.confirmPreparedPlan(ctx, prepared); err != nil {
@@ -72,12 +72,12 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 			reason = "update_required"
 		}
 		result = Result{Operation: op, Outcome: OutcomeConflict, Reason: reason}
-		attachNextActions(&result)
+		attachNextActions(&result, err)
 		return result, err
 	}
 	if err := e.revalidateOpenCodeHost(ctx, prepared); err != nil {
 		result = Result{Operation: op, Outcome: OutcomeConflict, Reason: "plan_changed"}
-		attachNextActions(&result)
+		attachNextActions(&result, err)
 		return result, err
 	}
 	return e.prepareApplyResources(ctx, prepared, op)
@@ -91,7 +91,7 @@ func (e *Engine) prepareApplyResources(ctx context.Context, prepared *PreparedOp
 	if op == OpInstall || op == OpUpdate || op == OpRepair || op == OpRefreshProjection {
 		if _, err := e.preparedHelper(prepared); err != nil {
 			result = Result{Operation: op, Outcome: OutcomeIncomplete, Reason: err.Error()}
-			attachNextActions(&result)
+			attachNextActions(&result, err)
 			return result, err
 		}
 	}
@@ -100,7 +100,7 @@ func (e *Engine) prepareApplyResources(ctx context.Context, prepared *PreparedOp
 	}
 	if err := e.ensureDirs(); err != nil {
 		result = Result{Operation: op, Outcome: OutcomeIncomplete, Reason: err.Error()}
-		attachNextActions(&result)
+		attachNextActions(&result, err)
 		return result, err
 	}
 	return Result{}, nil
@@ -112,7 +112,7 @@ func (e *Engine) applyPreparedOperation(ctx context.Context, prepared *PreparedO
 	e.report(ProgressPreflight)
 	if err := e.confirmDeliveries(ctx, prepared); err != nil {
 		result = Result{Operation: op, Outcome: OutcomeConflict, Reason: "plan_changed"}
-		attachNextActions(&result)
+		attachNextActions(&result, err)
 		return result, err
 	}
 	if len(prepared.req.Targets) > 1 {
@@ -134,7 +134,7 @@ func (e *Engine) applyPreparedOperation(ctx context.Context, prepared *PreparedO
 			return Result{}, err
 		}
 	}
-	attachNextActions(&result)
+	attachNextActions(&result, err)
 	return result, err
 }
 

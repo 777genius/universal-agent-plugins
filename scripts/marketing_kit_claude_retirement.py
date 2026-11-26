@@ -307,6 +307,8 @@ class SignedClosureRetirement:
             require((info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid) == identity)
         for owner in self.owners:
             _CUSTODY["named_directory"](owner["parent"], owner["parent_fd"])
+            if "retired_parent_entries" in owner:
+                require(_CUSTODY["entries"](owner["parent_fd"]) == owner["retired_parent_entries"])
 
     def close(self):
         while self.fds:
@@ -340,7 +342,7 @@ class SignedClosureRetirement:
         require(stat.S_IMODE(info.st_mode) == 0o700 and info.st_uid == os.geteuid()
                 and set(_CUSTODY["entries"](fd)) == {"retired"})
         owner.update(quarantine=quarantine, quarantine_fd=fd, quarantine_identity=(info.st_mode, info.st_uid),
-                     moved=quarantine / "retired")
+                     moved=quarantine / "retired", retired_parent_entries=dict(after))
         _CUSTODY["named_directory"](owner["moved"], owner["cache_fd"])
         after, _, _ = _CUSTODY["tree"](owner["cache_fd"])
         marker = after.pop(".orphaned_at", None)

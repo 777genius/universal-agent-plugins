@@ -50,6 +50,9 @@ func (s *skillsCatalogSession) reviewRefusal(err error) *skillspicker.ReviewRefu
 	case failureUpdateRequired:
 		refusal.Code = "UPDATE_REQUIRED"
 		refusal.Message = "An existing installation requires an explicit update. Use agentplugins update for the saved dependency before reviewing again."
+		if errors.Is(err, domain.ErrRetainedRevisionChange) {
+			refusal.Message = retainedRevisionSummary + " " + retainedRevisionGuidance
+		}
 	case failureEnvironmentChange:
 		refusal.Code = "ENVIRONMENT_CHANGED"
 		refusal.Message = "The environment changed during review. Refresh the selection and prepare a new review."
