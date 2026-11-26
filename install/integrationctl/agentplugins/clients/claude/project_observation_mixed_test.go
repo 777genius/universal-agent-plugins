@@ -25,6 +25,7 @@ func TestProjectObservationPreservesCompleteMixedRowResults(t *testing.T) {
 		{"selected-foreign", []string{"selected", "foreign"}, projectListObservation{}},
 		{"duplicate-unrelated", []string{"local", "local"}, projectListObservation{}},
 		{"two-user-paths", []string{"user", "second-user"}, projectListObservation{}},
+		{"two-managed-paths", []string{"managed", "second-managed"}, projectListObservation{}},
 		{"suppressed-malformed-unrelated", []string{"suppressed", "malformed"}, projectListObservation{}},
 		{"unrelated-local", []string{"local"}, projectListObservation{state: projectListAbsent}},
 		{"unrelated-managed", []string{"managed"}, projectListObservation{state: projectListAbsent}},
@@ -71,6 +72,8 @@ func mixedProjectListFixtures(t *testing.T) (string, string, string, map[string]
 	local["id"], local["scope"], local["installPath"] = "unrelated", "local", filepath.Join(root, "unrelated")
 	managed := maps.Clone(local)
 	managed["scope"] = "managed"
+	secondManaged := maps.Clone(managed)
+	secondManaged["projectPath"] = filepath.Join(root, "another-project")
 	malformed := maps.Clone(local)
 	malformed["notes"] = "unrecognized"
 	sameLocal, sameManaged := maps.Clone(local), maps.Clone(managed)
@@ -78,7 +81,7 @@ func mixedProjectListFixtures(t *testing.T) (string, string, string, map[string]
 	return root, user, active, map[string]map[string]any{
 		"selected": selected, "user": other, "suppressed": suppressed, "opaque": opaque,
 		"foreign": foreign, "disabled-foreign": disabledForeign, "second-user": secondUser,
-		"local": local, "managed": managed, "malformed": malformed, "same-local": sameLocal, "same-managed": sameManaged,
+		"local": local, "managed": managed, "second-managed": secondManaged, "malformed": malformed, "same-local": sameLocal, "same-managed": sameManaged,
 	}
 }
 
