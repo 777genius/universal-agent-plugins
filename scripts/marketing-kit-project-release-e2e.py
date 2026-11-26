@@ -22,7 +22,9 @@ CodexProfile = runpy.run_path(str(ROOT / "scripts/marketing_kit_codex_profile.py
 claude_retirement = runpy.run_path(str(ROOT / "scripts/marketing_kit_claude_retirement.py"))
 SignedClosureRetirement = claude_retirement["SignedClosureRetirement"]
 observe_claude_checkpoint = claude_retirement["observe_project_checkpoint"]
-RemovalDiscovery = runpy.run_path(str(ROOT / "scripts/marketing_kit_claude_discovery.py"))["RemovalDiscovery"]
+claude_discovery_helpers = runpy.run_path(str(ROOT / "scripts/marketing_kit_claude_discovery.py"))
+RemovalDiscovery = claude_discovery_helpers["RemovalDiscovery"]
+claude_owned_runtime_links = claude_discovery_helpers["owned_runtime_link_entries"]
 isolated_env = audit["isolated_client_env"]
 _CLI_VERSION = ContextVar("marketing_kit_cli_version", default="0.1.115")
 invoke = audit["call"]
@@ -1026,6 +1028,27 @@ def copilot_cold_store_additions(data, previous, observed, pins):
 def profile_snapshot(env, project):
     """Hash all files and directory entries in HOME, UAP data and Project."""
     return scoped_snapshot([Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"]), project])
+
+
+def claude_observation_snapshot(env, project, case):
+    """Reject unsafe entries while retaining owned npm links in the full image."""
+    canonical = case.resolve(strict=True)
+    for candidate in (Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"]), project):
+        if not (audit["path_inside_case"](candidate, case)
+                or audit["path_inside_case"](candidate, canonical)):
+            raise AssertionError("Claude native observation root is unsafe")
+    complete = profile_snapshot(env, project)
+    allowed = claude_owned_runtime_links(audit, env, project, canonical, complete, FIXED_SIGNED_CLOSURE)
+    unsafe = {key: value for key, value in complete.items()
+              if key not in allowed and (key.startswith(("root-link:", "link:"))
+              or value in ("symlink", "non-regular"))}
+    if unsafe:
+        # Targets and native bytes remain private; the shared reporter hashes
+        # values. Validated bin links are never excluded from complete.
+        delta = audit["copilot_snapshot_delta"]({}, unsafe)
+        raise AssertionError("Claude native observation contains an unsafe entry: "
+                             + json.dumps(delta, sort_keys=True))
+    return complete
 
 
 def settled_profile_snapshot(env, project, *, attempts=12, interval=5, guard=None):
@@ -2175,23 +2198,7 @@ def main():
                 # after the real install/restore; never warm cold B/C first.
                 # Its runtime baseline has no path-name exceptions. Foreign,
                 # Project/data and peers remain protected during initialization.
-                canonical_root = root.resolve(strict=True)
-                for candidate in (Path(e["HOME"]), Path(e["AGENTPLUGINS_HOME"]), p):
-                    # Reject interior links in either spelling of the same owned
-                    # root; only the trusted macOS temporary ancestor may differ.
-                    if not (audit["path_inside_case"](candidate, root)
-                            or audit["path_inside_case"](candidate, canonical_root)):
-                        raise AssertionError("Claude native observation root is unsafe")
-                complete = profile_snapshot(e, p)
-                unsafe = {key: value for key, value in complete.items()
-                          if key.startswith(("root-link:", "link:"))
-                          or value in ("symlink", "non-regular")}
-                if unsafe:
-                    # Fail closed. Native data and symlink targets are not
-                    # printed; the shared reporter bounds and hashes values.
-                    delta = audit["copilot_snapshot_delta"]({}, unsafe)
-                    raise AssertionError("Claude native observation contains an unsafe entry: "
-                                         + json.dumps(delta, sort_keys=True))
+                complete = claude_observation_snapshot(e, p, root)
                 check_foreign(foreign_files, root)
                 own = scoped_snapshot((p, Path(e["AGENTPLUGINS_HOME"]))) if initializing else complete
                 runtime_before = complete if initializing else None
