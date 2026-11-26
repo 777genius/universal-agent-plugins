@@ -112,12 +112,12 @@ func localAddPrepareError(app App, opts *options, target domain.ClientID, cause 
 	if opts.format != "human" || !errors.Is(cause, installer.ErrUpdateRequired) || errors.Is(cause, domain.ErrRetainedRevisionChange) {
 		return cause
 	}
-	context := "user scope"
+	scopeContext := "user scope"
 	if app.scope() == domain.ScopeProject {
-		context = "project scope at " + app.ProjectRoot
+		scopeContext = "project scope at " + app.ProjectRoot
 	}
 	summary := fmt.Sprintf("This installation requires an explicit update. Review an update for the same installation on %s in %s.",
-		prompt.SafeText(publicCLITargetName(target)), prompt.SafeText(context))
+		prompt.SafeText(publicCLITargetName(target)), prompt.SafeText(scopeContext))
 	return installFailureWithCause{summary: summary, cause: cause}
 }
 
