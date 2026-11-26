@@ -127,7 +127,7 @@ class PlatformIdentityTests(unittest.TestCase):
                 info = win_info(real_fstat(fd), held=True)
                 info.st_mode = (info.st_mode & ~0o777) | 0o666
                 return info
-            helpers = {"open_member": lambda path: os.open(path, os.O_RDONLY),
+            helpers = {"open_member": lambda path: os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0)),
                        "same_opened": artifacts.same_opened, "identity": artifacts.identity}
             with patch.object(artifacts, "WINDOWS", True), patch.object(Path, "lstat", named_info), \
                     patch.object(os, "fstat", opened_info), patch.object(audit, "NATIVE_ARTIFACTS", helpers):
