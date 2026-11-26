@@ -1,6 +1,6 @@
 # Installed-package update reliability
 
-Status: plan v1; implementation is blocked until two sequential independent plan reviews and their revisions are committed.
+Status: plan v2; R1 resolved in the plan, awaiting independent R2. Implementation remains blocked until R2 findings and plan v3 are committed.
 
 ## Goal and baseline
 
@@ -16,13 +16,13 @@ Source-confirmed path: `cli/internal/agentpluginscli/update_all.go` prepares imp
 
 Production composition matters: `cli/cmd/agentplugins/compose.go` supplies `app.Lifecycle` as a direct use-case service; `lifecycle_helpers.go` returns that service, and the prepared service's `UpdateGroup` stages and commits. The separate installer facade's package-assessment gate is not on this path; replacing only `app.Installer` with a preview app does not gate lifecycle mutations. This is source evidence, not an executed reproduction yet.
 
-Proposed behavior: authorize every changed imperative package during complete batch preflight, before `applySaved` and before any imperative effects. Reuse the existing authorizer and actual options. Preserve explicit `--accept-security-risk` and dry-run policy; `--yes` must not bypass authorization. Preparation/cache observations may follow existing semantics; refusal must preserve installed bindings, managed/native bytes, receipts and saved agreements.
+Proposed behavior: authorize every changed imperative package during complete batch preflight, before `applySaved` and before any imperative effects. Use the actual `session.opts` and authorize all changed imperative preparations before `applyAll` / `applySaved`. Reuse the existing authorizer's decision and interactive behavior. The authorizer currently writes its own JSON failure; add only a small update-specific use of the existing command output seam to suppress that nested document so `renderUpdateAll` owns the one public JSON document. Do not create a new authorization framework or policy. The saved recheck/freshness pass must not authorize or prompt a second time. Preserve explicit `--accept-security-risk` and dry-run policy; `--yes` must not bypass authorization. Preparation/cache observations may follow existing semantics; refusal must preserve installed bindings, managed/native bytes, receipts and saved agreements.
 
 ### B: stale prepared local update (conditional)
 
 Source evidence: `install/integrationctl/agentplugins/installer/confirmation.go` compares captured delivery/profile authority, but early-continues for zero SelectedDelivery plus nil ProfileAuthority without comparing the captured source/package revision. Claude refinement can retain this legacy zero projection. Apply reloads under the existing mutation lock; same-version local changed bytes are valid revisions.
 
-Hypothesis requiring a red runtime reproduction: prepare updates A and B against C0, apply B, then apply stale A; A may overwrite B. Reuse existing copied-package/new-digest and stale-plan fixtures rather than inventing a second engine. If confirmed and accepted in both plan reviews, compare the selected binding's captured revision authority within existing locked confirmation, including the legacy zero-projection route. Reject through existing `ErrPlanChanged`, `OutcomeConflict`, and `plan_changed` contracts before effects. Do not compare an entire environment snapshot, as unrelated sibling changes must remain valid.
+Hypothesis requiring a red runtime reproduction: prepare updates A and B against C0, apply B, then apply stale A; A may overwrite B. Reuse existing copied-package/new-digest and stale-plan fixtures rather than inventing a second engine. If confirmed and accepted in both plan reviews, compare the selected `ClientBinding.PackageRevision` committed authority within existing locked confirmation, including the legacy zero-projection route. `domain.ClientPackageRevision` in `domain/state.go` records exact per-client package facts; installation-level Source/Package is shared latest accepted state and is unsuitable when siblings converge separately. Retain binding existence and `ClientBindingID` checks before any legacy early return. Explicitly distinguish nil historical revision from populated revision; two nil revisions do not invent authority. Reuse complete existing domain value semantics (including nested facts), without timestamps or whole-state equality. Read the actual confirmation and domain types before finalizing the narrow comparison; no new lock is needed. Reject through existing `ErrPlanChanged`, `OutcomeConflict`, and `plan_changed` contracts before effects. Do not compare an entire environment snapshot, as unrelated sibling changes must remain valid.
 
 If the runtime reproduction does not fail as predicted, record the evidence and defer B without speculative production changes. A remains independently actionable.
 
@@ -40,7 +40,7 @@ These are review boundaries, not permission to edit every file:
 - A ordinary regression: existing `cli/internal/agentpluginscli/update_all_test.go`, `update_all_saved_test.go`, or a focused update-specific test file.
 - A production-composed/public route regression: `cli/cmd/agentplugins/saved_updates_e2e_test.go` or an update-specific companion using the actual composer. Extend the existing production installation catalog and `cli/cmd/agentplugins/testdata/package_manager_install_cases.json` only for a necessary qualifying journey.
 - B conditional production: `install/integrationctl/agentplugins/installer/confirmation.go`, or a cohesive helper beside it if existing size constraints require one. Use existing domain/use-case confirmation contracts; determine whether any narrow accompanying file is necessary from the red reproduction.
-- B conditional regression: existing installer test fixtures containing `TestUpdateCopiedPackageWithNewDigest` and `TestUpdateStalePlanChanged`; locate their exact repository paths before editing.
+- B conditional regression: `install/integrationctl/agentplugins/installer/engine_test.go`, which contains `TestUpdateCopiedPackageWithNewDigest` and `TestUpdateStalePlanChanged`.
 - This plan records reviews, decisions and final evidence. Workflow changes are not anticipated.
 
 Keep new production files within 500 effective lines and functions within existing length/complexity limits; existing exempt production files cannot grow. No mechanical split solely to evade limits. Any newly discovered required production path must be justified in this plan before expanding scope.
@@ -60,11 +60,39 @@ Keep new production files within 500 effective lines and functions within existi
 
 ## Regression acceptance
 
-A must reproduce through public CLI parsing and production composition, not only a helper or installer facade stub. Exercise a clean earlier imperative item followed by a blocked later item, and a mixed saved/imperative batch with a blocked item. All installed packages, saved manifest/lock, managed/native bytes and receipts remain unchanged on preflight refusal; native mutation calls remain absent. Assert truthful single JSON output with existing failure/status semantics and no fabricated success. Exercise `--yes` refusal, explicit accepted-risk success and read-only dry-run using existing policy. Successful scenarios clean up owned artifacts and preserve independently seeded foreign bytes.
+A must reproduce through public CLI parsing and production composition, not only a helper or installer facade stub. Exercise a clean earlier imperative item followed by a blocked later item, and a mixed saved/imperative batch with a blocked item. The saved fixture must contain a real pending manifest/lock/materialization change, rather than a no-op graph. All installed packages, saved manifest/lock, managed/native bytes and receipts remain unchanged on preflight refusal; native mutation calls remain absent. Assert truthful single JSON output with existing failure/status semantics and no fabricated success: decode the first JSON value, then require a second decode to return EOF. Exercise `--yes` refusal, explicit accepted-risk success and read-only dry-run using existing policy. Run accepted-risk success on a fresh fixture separate from refusal snapshots. Successful scenarios clean up owned artifacts and preserve independently seeded foreign bytes.
 
 Fixture security assessments can establish authorization routing. They cannot prove production scanner execution; retain the existing unchanged-executable cold production-scanner phase as separate evidence.
 
-B's red case prepares A/B from C0 with same-version distinct local payloads, applies B, then attempts A through the real prepared-update API. After refusal, independently expected B payload/native bytes, current state, receipts and native mutation-call count remain intact. Freshly preparing A must still succeed; an unrelated sibling binding change must not invalidate a selected binding. Cover the legacy zero-projection confirmation path explicitly. Use the existing locked confirmation authority; do not add a new snapshot/lock mechanism.
+B's red case prepares A/B from C0 with same-version distinct local payloads, applies B, then attempts A through the real prepared-update API. After refusal, independently expected B payload/native bytes, current state, receipts and native mutation-call count remain intact. Freshly preparing A must still succeed; an unrelated sibling binding change must not invalidate a selected binding. Prove the legacy zero-projection route by explicitly asserting zero `SelectedDelivery` and nil `ProfileAuthority` on the relevant captured/current binding and delivery before apply. Use the existing locked confirmation authority; do not add a new snapshot/lock mechanism.
+
+Proposed production catalog IDs are `update-all-security-batch-preflight` and `update-all-security-mixed-saved-preflight`, registered in the existing flat JSON array and `TestPackageManagerInstallE2E` map. The first journey includes refusal/yes, fresh accepted-risk and dry-run subcases; the second proves a real pending saved change remains untouched. Focused command from `cli/`: `go test -tags=uappm_e2e -count=1 -timeout=12m ./cmd/agentplugins -run '^TestPackageManagerInstallE2E/update-all-security-(batch|mixed-saved)-preflight and produce terminal passes with no skips. Assert exact independently expected payloads and effects. Native executable discovery/reload/MCP/model claims require the existing genuine native lanes; fixture runners do not establish them.
+
+## Estimates and decision record
+
+A: roughly 40–90 production LOC and 200–350 test LOC; complexity 3/10, reliability value 9/10, confidence 8/10 before runtime reproduction.
+B adds roughly 40–80 production LOC and 150–250 test LOC; complexity 5/10, reliability value 9/10, confidence 6/10 until reproduced.
+These are sizing estimates, not targets. Prefer fewer cohesive changes and meaningful scenarios over redundant tests or abstractions.
+
+- v1: committed as `a747054a52ad2496d9c16e1b6ca146e426710faf` before implementation; Draft PR #1116.
+- R1 / v2: reviewer `update_plan_r1` reviewed `a747054a52ad2496d9c16e1b6ca146e426710faf`. Resolved all four findings: one JSON owner with EOF assertion; actual session options and pre-apply authorization without freshness reprompt; selected per-binding revision plus nil/identity handling before legacy return; exact engine fixture path and catalog IDs/commands. R1 required these corrections before implementation; v2 awaits R2. No runtime PASS is claimed.
+- R2 / v3: pending.
+- Red reproductions and conditional B decision: pending.
+- Implementation review, exact-head qualification, merge and merged six-platform evidence: pending.
+`. Ordinary B reproduction from `install/integrationctl/agentplugins/`: `go test -count=1 ./installer -run '^TestUpdate(StalePreparedLocalRevision|CopiedPackageWithNewDigest|StalePlanChanged) and produce terminal passes with no skips. Assert exact independently expected payloads and effects. Native executable discovery/reload/MCP/model claims require the existing genuine native lanes; fixture runners do not establish them.
+
+## Estimates and decision record
+
+A: roughly 40–90 production LOC and 200–350 test LOC; complexity 3/10, reliability value 9/10, confidence 8/10 before runtime reproduction.
+B adds roughly 40–80 production LOC and 150–250 test LOC; complexity 5/10, reliability value 9/10, confidence 6/10 until reproduced.
+These are sizing estimates, not targets. Prefer fewer cohesive changes and meaningful scenarios over redundant tests or abstractions.
+
+- v1: initial plan committed before implementation; R1 pending.
+- R1 / v2: pending.
+- R2 / v3: pending.
+- Red reproductions and conditional B decision: pending.
+- Implementation review, exact-head qualification, merge and merged six-platform evidence: pending.
+` (the new test name is proposed). Full qualification remains `python scripts/package-manager-e2e.py` at the repository root.
 
 Cross-platform catalog additions must register required case IDs and produce terminal passes with no skips. Assert exact independently expected payloads and effects. Native executable discovery/reload/MCP/model claims require the existing genuine native lanes; fixture runners do not establish them.
 
