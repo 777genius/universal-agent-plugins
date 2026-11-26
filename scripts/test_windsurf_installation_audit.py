@@ -87,12 +87,17 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             if not source.startswith("github:"):
                 self.fixtures["signed_release_pins"][source].update(source_pin(files))
         self.addCleanup(patch.stopall)
-        patch.object(installation, "GLOBAL_SKILL_CASES", self.pins).start()
+        self.native_pins = {selected(self.fixtures, index)[0]: self.pins[selected(self.fixtures, index)[0]]
+                            for index in ACTIVE_SLOTS}
+        self.prepared_git_pins = {source: self.pins[source] for source in installation.PREPARED_GIT_PINS}
+        patch.object(installation, "GLOBAL_SKILL_CASES", self.native_pins).start()
+        patch.object(installation, "PREPARED_GIT_PINS", self.prepared_git_pins).start()
         # The transport is deliberately inert; all byte/digest/projection code
         # remains real. Producer-binary provenance has separate controls below.
         patch.object(installation, "verify_projection_producer", return_value=None).start()
         observer_globals = self.audit["WINDSURF_INSTALLATION"]["WindsurfInstallationAudit"].__init__.__globals__
-        patch.dict(observer_globals, {"GLOBAL_SKILL_CASES": self.pins,
+        patch.dict(observer_globals, {"GLOBAL_SKILL_CASES": self.native_pins,
+            "PREPARED_GIT_PINS": self.prepared_git_pins,
             "verify_projection_producer": lambda cli: None,
             "projection_helper": installation.projection_helper}).start()
         temporary = TemporaryDirectory(prefix="windsurf-unit-fixtures-")
@@ -113,6 +118,178 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                "AGENTPLUGINS_HOME": str(case / "uap-data")}
         observer = WindsurfInstallationAudit(cli, env, case / "project", case, self.audit)
         return observer, env
+
+    def author_runtime(self, observer):
+        """Independent minimal owned runtime; no npm command or native execution."""
+        identity, uid = "unit-runtime", "39b5780a-ea06-41f3-9b42-41918272b260"
+        physical = identity + "-" + hashlib.sha256(uid.encode()).hexdigest()[:12]
+        lock = b'{"lockfileVersion":3,"requires":true,"packages":{"":{"dependencies":{"unit":"1.0.0"}},"node_modules/unit":{"version":"1.0.0"}}}'
+        package = b'{"private":true,"dependencies":{"unit":"1.0.0"}}'
+        lock_digest = "sha256:" + hashlib.sha256(lock).hexdigest()
+        config = {"schema_version": 1, "package": "unit", "version": "1.0.0",
+                  "entrypoint": "node_modules/unit/bin.js", "package_lock_sha256": lock_digest,
+                  "omit_optional": False}
+        prefix = "io.github.777genius.agentplugins/runtime/"
+        files = {"plugin.json": b'{"name":"unit-runtime","version":"1.0.0"}',
+                 prefix + "runtime.json": json.dumps(config).encode(),
+                 prefix + "package.json": package, prefix + "package-lock.json": lock,
+                 prefix + "launcher.mjs": b"// inert\n"}
+        pin = source_pin(files)
+        source = observer.data / "store/packages/agentplugins-tree-sha256-v1" / pin["tree_digest"][7:] / "package"
+        for name, body in files.items():
+            path = source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(body)
+        data = observer.data / "plugin-data" / physical
+        runtime = data / "npm-runtime" / lock_digest[7:]
+        (runtime / "node_modules/.bin").mkdir(parents=True)
+        (runtime / "node_modules/unit").mkdir()
+        (runtime / "node_modules/unit/bin.js").write_bytes(b"console.log('inert');\n")
+        (runtime / "node_modules/.bin/unit").symlink_to("../unit/bin.js")
+        for name, body in (("package.json", package), ("package-lock.json", lock)):
+            (runtime / name).write_bytes(body)
+        marker = {"schema_version": 1, "lock_digest": lock_digest, "package": "unit", "version": "1.0.0",
+                  "entrypoint": config["entrypoint"], "omit_optional": False}
+        (runtime / ".agentplugins-runtime.json").write_text(json.dumps(marker))
+        receipt_id = "data_" + hashlib.sha256("\0".join((uid, physical, "user")).encode()).hexdigest()[:24]
+        receipt = {"data_receipt_id": receipt_id, "physical_backend_id": physical, "scope": "user", "state": "owned",
+                   "locator": str(data), "ownership_digest": "sha256:" + hashlib.sha256(
+                       ("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + str(data)).encode()).hexdigest()}
+        (data / ".agentplugins-data-owner.json").write_text(json.dumps(receipt))
+        state = {"schema_version": 5, "installations": [{"installation_id": uid, "declared_name": identity,
+                 "clients": {}, "data_retained": True, "source": {"tree_digest": pin["tree_digest"]}, "data_receipts": {receipt_id: receipt}}]}
+        (observer.data / "state-v2.json").write_text(json.dumps(state))
+        return runtime, state
+
+    def test_owned_locked_npm_bin_links_have_full_bytes_and_identity_custody(self):
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            runtime, state = self.author_runtime(observer)
+            before = observer.saved_image()
+            self.assertTrue(before["runtime_authority"])
+            link = next(row for row in before["runtime_authority"].values() if row["kind"] == "link")
+            self.assertEqual(link["target"], "../unit/bin.js")
+            self.assertEqual(before, observer.saved_image())
+            binary = runtime / "node_modules/unit/bin.js"
+            body, info = binary.read_bytes(), binary.stat()
+            binary.write_bytes(body.replace(b"inert", b"other"))
+            os.utime(binary, ns=(info.st_atime_ns, info.st_mtime_ns))
+            self.assertNotEqual(before["runtime_authority"], observer.saved_image()["runtime_authority"])
+
+    def test_runtime_authority_keeps_root_and_locked_input_identity(self):
+        for mutation in (".agentplugins-runtime.json", "package.json", "package-lock.json", "root-mode"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                runtime, _ = self.author_runtime(observer)
+                before = observer.saved_image()
+                self.assertEqual(before["runtime_authority"], observer.saved_image()["runtime_authority"])
+                if mutation == "root-mode":
+                    runtime.chmod(stat.S_IMODE(runtime.stat().st_mode) ^ 0o010)
+                else:
+                    path = runtime / mutation
+                    body, info = path.read_bytes(), path.stat()
+                    path.rename(observer.case / "original-runtime-input")
+                    path.write_bytes(body)
+                    path.chmod(stat.S_IMODE(info.st_mode))
+                    os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns))
+                    self.assertNotEqual(path.stat().st_ino, info.st_ino)
+                    self.assertEqual(path.read_bytes(), body)
+                after = observer.saved_image()
+                self.assertEqual(before["ancillary"], after["ancillary"])
+                self.assertNotEqual(before["runtime_authority"], after["runtime_authority"])
+
+    def test_retained_runtime_cannot_rebind_original_source_or_data_receipt(self):
+        for mutation in ("unchanged", "coherent-source", "source-binding", "package-binding",
+                         "coherent-receipt", "source-replacement"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                runtime, state = self.author_runtime(observer)
+                record = state["installations"][0]
+                receipt_id, receipt = next(iter(record["data_receipts"].items()))
+                physical = receipt["physical_backend_id"]
+                source_digest = record["source"]["tree_digest"]
+                source = observer.data / "store/packages/agentplugins-tree-sha256-v1" / source_digest[7:] / "package"
+                active = observer.data / "managed/clients/windsurf" / physical
+                active.mkdir(parents=True); (active / "plugin.json").write_bytes((source / "plugin.json").read_bytes())
+                record["package"] = {"manifest_digest": "sha256:" + "a" * 64}
+                record["clients"] = {"bound": {"client_id": "windsurf", "physical_artifact_id": physical,
+                    "data_receipt_id": receipt_id, "target_locator": str(active),
+                    "package_revision": {"tree_digest": source_digest}}}
+                record.pop("data_retained")
+                state_path = observer.data / "state-v2.json"
+                state_path.write_text(json.dumps(state))
+                original = observer.saved_image()
+                observer.saved_observations.append(original)
+                shutil.rmtree(active)
+                record.update(clients={}, data_retained=True)
+                if mutation == "coherent-source":
+                    files = {path.relative_to(source).as_posix(): path.read_bytes()
+                             for path in source.rglob("*") if path.is_file()}
+                    files["README.md"] = b"Different self-consistent source with the same runtime lock.\n"
+                    replacement_digest = source_pin(files)["tree_digest"]
+                    replacement = source.parent.parent / replacement_digest[7:] / "package"
+                    for name, body in files.items():
+                        path = replacement / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(body)
+                    record["source"]["tree_digest"] = replacement_digest
+                elif mutation == "source-binding": record["source"]["repository"] = "unrelated/source"
+                elif mutation == "package-binding": record["package"]["manifest_digest"] = "sha256:" + "b" * 64
+                elif mutation == "coherent-receipt":
+                    receipt["created_at"] = "2026-11-26T00:00:00Z"
+                    (runtime.parent.parent / ".agentplugins-data-owner.json").write_text(json.dumps(receipt))
+                elif mutation == "source-replacement":
+                    held = source.with_name("previous-package"); source.rename(held); shutil.copytree(held, source)
+                state_path.write_text(json.dumps(state))
+                if mutation == "unchanged":
+                    retained = observer.saved_image()
+                    self.assertEqual(retained["runtime_authority"], original["runtime_authority"])
+                else:
+                    with self.assertRaises(ValueError): observer.saved_image()
+
+    def test_runtime_reader_preserves_all_original_custody_entry_exclusions(self):
+        for excluded in (".git", ".uap-integrations.lock", ".plugin-kit-ai.lock"):
+            with self.subTest(excluded=excluded), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                runtime, _ = self.author_runtime(observer)
+                path = runtime / "node_modules/unit" / excluded
+                if excluded == ".git":
+                    path.mkdir()
+                else:
+                    path.write_bytes(b"excluded authority never becomes npm custody")
+                with self.assertRaises(ValueError):
+                    observer.saved_image()
+
+    def test_runtime_links_require_exact_receipt_marker_source_lock_and_physical_targets(self):
+        for mutation in ("no-receipt", "owner-marker", "runtime-marker", "typed-marker", "runtime-lock", "source-lock",
+                         "absolute", "escape", "chain", "foreign-bin", "outside-bin"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                runtime, state = self.author_runtime(observer)
+                link = runtime / "node_modules/.bin/unit"
+                if mutation == "no-receipt":
+                    state["installations"][0]["data_receipts"] = {}
+                    (observer.data / "state-v2.json").write_text(json.dumps(state))
+                elif mutation == "owner-marker": (runtime.parent.parent / ".agentplugins-data-owner.json").write_text("{}")
+                elif mutation == "runtime-marker": (runtime / ".agentplugins-runtime.json").write_text("{}")
+                elif mutation == "typed-marker":
+                    path = runtime / ".agentplugins-runtime.json"
+                    marker = json.loads(path.read_text()); marker["schema_version"] = True
+                    path.write_text(json.dumps(marker))
+                elif mutation == "runtime-lock": (runtime / "package-lock.json").write_bytes(b"{}")
+                elif mutation == "source-lock":
+                    next((observer.data / "store").rglob("package-lock.json")).write_bytes(b"{}")
+                elif mutation == "foreign-bin":
+                    (observer.data / "unowned/.bin").mkdir(parents=True)
+                    (observer.data / "unowned/.bin/unit").symlink_to("../../" + str(link.relative_to(observer.data)))
+                elif mutation == "outside-bin": (runtime / "node_modules/unit/alias").symlink_to("bin.js")
+                else:
+                    link.unlink()
+                    if mutation == "absolute": link.symlink_to(runtime / "node_modules/unit/bin.js")
+                    if mutation == "escape": link.symlink_to("../../package.json")
+                    if mutation == "chain":
+                        (runtime / "node_modules/.bin/other").symlink_to("../unit/bin.js")
+                        link.symlink_to("other")
+                with self.assertRaises((ValueError, OSError)):
+                    observer.saved_image()
 
     def row(self, index):
         source, identity = selected(self.fixtures, index)
@@ -348,7 +525,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                     row, native_fixture.ITEM, 26, self.fixtures))
                 return row
 
-            pins = {**self.pins, native_fixture.ITEM: transport.expected_pin}
+            pins = {**self.native_pins, native_fixture.ITEM: transport.expected_pin}
             with patch.dict(cls.__init__.__globals__, {
                     "BINARY_SHA": native_fixture.hashed(transport.binary.read_bytes()), "CASES": pins}),                     patch.object(installation, "GLOBAL_SKILL_CASES", pins),                     patch.dict(live.WINDSURF_GLOBAL_AUDIT, {"WindsurfGlobalSkillAudit": real_factory}),                     patch.dict(live.AGENT_BINARIES, {"devin": str(transport.binary)}, clear=True),                     patch.object(live, "call", side_effect=public_call),                     patch.dict(live.NATIVE_RESEARCH, {"run_probe": transport.run_probe}),                     patch.object(live, "_do_case", side_effect=completed_case):
                 result = live.do_case("/fixture/agentplugins", "windsurf", "plugin", native_fixture.ITEM, 26,
@@ -356,6 +533,36 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                         "status": "reported", "value": CLIENT_VERSION, "exit_code": 0})
             self.assertTrue(transport.verifier.closed)
             return result, pins
+
+    def test_prepared_git_source_keeps_the_native_map_closed_to_four_cases(self):
+        source, identity = selected(self.fixtures, 21)
+        self.assertEqual(identity, "sanity")
+        native_sources = {selected(self.fixtures, index)[0] for index in ACTIVE_SLOTS}
+        self.assertEqual(set(installation.GLOBAL_SKILL_CASES), native_sources)
+        self.assertEqual(len(native_sources), 4)
+        self.assertNotIn(source, installation.GLOBAL_SKILL_CASES)
+        self.assertEqual(set(installation.PREPARED_GIT_PINS), {source})
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            row = self.row(21)
+            proof = self.finish(observer, row)
+            self.assertEqual(proof["source_projection"]["tree_digest"], self.pins[source]["tree_digest"])
+            self.assertEqual(proof["public_state"], PREPARED)
+            self.assertFalse(proof["native_runtime_qualified"])
+            self.assertNotIn("preserved_native_proof", proof)
+        with self.assertRaises(ValueError):
+            installation.independent_source_pin(source.rsplit("@", 1)[0] + "@" + "0" * 40, self.fixtures)
+
+    def test_prepared_git_projection_rejects_a_different_independent_pin(self):
+        source, _ = selected(self.fixtures, 21)
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            row = self.row(21)
+            for argv, outcome in self.authored_sequence(observer, row, self.sequence(observer, row)):
+                observer.observe(argv, outcome)
+            bad = {source: {**self.prepared_git_pins[source], "tree_digest": "sha256:" + "0" * 64}}
+            with patch.object(installation, "PREPARED_GIT_PINS", bad), self.assertRaises(ValueError):
+                observer.finish(row, source, 21, self.fixtures)
 
     def test_all_exact_slots_preserve_prepared_active_and_five_negatives(self):
         proofs = []
@@ -436,6 +643,12 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         self.assertEqual(cached_native["status"], "passed")
         self.assertTrue(cached_native["windsurf_global_native_proof"]["cache_exception_granted"])
         self.assertEqual(cached_native["windsurf_installation_audit"]["native_post_remove_state"], "pristine")
+
+        public_cached, _ = self.native_lifecycle(transport_mode="public-both-cache")
+        self.assertEqual(public_cached["status"], "passed")
+        self.assertEqual([event["phase"] for event in public_cached["windsurf_global_native_proof"]["native_cache_evidence"]],
+                         ["public-add", "public-repeat"])
+        self.assertIn("preserved_native_proof", public_cached["windsurf_installation_audit"])
 
         failed_native, _ = self.native_lifecycle(transport_mode="native-missing")
         self.assertEqual(failed_native["status"], "prepared-lifecycle-passed")
@@ -1078,7 +1291,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                 with self.assertRaises(ValueError): self.finish(observer, row, sequence)
 
     def integrated_native_case(self, cli, root, index, mode="good"):
-        """Real combined route with complete 16/26/1/8 Skill sets and inert I/O."""
+        """Real combined route with complete 16/17/1/8 admitted sets and inert I/O."""
         import test_windsurf_global_skill_audit as native_fixture
         item, identity = selected(self.fixtures, index)
         pin = copy.deepcopy(native_fixture.proof.CASES[item])
@@ -1090,6 +1303,11 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         for name in names:
             files.update({f"skills/{name}/SKILL.md": bodies[name],
                           f"skills/{name}/references/note.txt": native_fixture.REFERENCE})
+        for name in pin.get("rejected_skills", {}):
+            files[f"skills/{name}/SKILL.md"] = (f"---\nname: {name}\ndescription: Rejected immutable source Skill\n"
+                "metadata:\n  openclaw:\n    emoji: test\n---\nInert rejected Skill.\n").encode()
+        if "source_skills" in pin:
+            files["commands/scientific-writer-init.md"] = b"Plain upstream command, not a portable command Skill.\n"
         pin.update(source_pin(files))
 
         class CompleteTransport(native_fixture.InertPublicAndNative):
@@ -1100,14 +1318,17 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
 
             def author_installation(self, env, cwd):
                 super().author_installation(env, cwd)
-                for relative, body in files.items():
+                delivered = {relative: body for relative, body in files.items()
+                             if not any(relative.startswith("skills/" + name + "/")
+                                        for name in pin.get("rejected_skills", {}))}
+                for relative, body in delivered.items():
                     native_fixture.write(self.managed / relative, body)
                 installed = self.state["installations"][0]
                 installed["package"]["inventory"]["skills"] = list(names)
                 source = "github:" + self.repo + "@" + self.commit
                 installed["source"].update(requested_source=source, canonical_source=source)
                 objects = installed["clients"][self.binding_id]["native_objects"]
-                objects[0]["managed_digest"] = native_fixture.source_digest(files)
+                objects[0]["managed_digest"] = native_fixture.source_digest(delivered)
                 for name in names[1:]:
                     directory = self.home / ".config/devin/skills" / name
                     native_fixture.write(directory / "SKILL.md", bodies[name])
@@ -1154,7 +1375,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             def retain_instance(instance, *args, **kwargs):
                 original_init(instance, *args, **kwargs)
                 transport.verifier = instance
-            pins = {**self.pins, item: pin}
+            pins = {**self.native_pins, item: pin}
             with patch.dict(original_init.__globals__, {"CASES": pins,
                     "BINARY_SHA": native_fixture.hashed(transport.binary.read_bytes())}), \
                     patch.dict(installation_globals, {"GLOBAL_SKILL_CASES": pins}), \
@@ -1398,7 +1619,7 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                         return {"status": "reported", "value": CLI_VERSION if argv[1] == "version" else CLIENT_VERSION,
                                 "exit_code": 0}
                     output = root / ("report-" + name)
-                    selected_pins = dict(self.pins)
+                    selected_pins = dict(self.native_pins)
                     for index in admitted:
                         source = self.fixtures["plugin_aliases"][index]
                         selected_pins[source] = pins[source]

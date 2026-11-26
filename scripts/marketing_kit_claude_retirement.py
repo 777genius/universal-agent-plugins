@@ -148,11 +148,26 @@ def observe_project_checkpoint(case, project, public_rows, audit):
         return {"status": "unavailable"}
 
 
+def require_owned_residuals(audit, residuals, allowed):
+    """Keep the refusal actionable without exposing unsafe names or file data."""
+    unexpected = set(residuals) - allowed
+    if unexpected:
+        # A literal filename can end in the same text as a scanner reason.
+        # Project complete observations: unsafe names and reason-bearing rows
+        # remain hash-only rather than publishing a guessed safe prefix.
+        diagnostic = audit["copilot_snapshot_delta"]({}, {value: True for value in unexpected})
+        diagnostic["unexpected_residual_count"] = len(unexpected)
+        raise ValueError("Claude cache retirement has unowned native residuals: "
+                         + json.dumps(diagnostic, sort_keys=True))
+
+
 class SignedClosureRetirement:
     """Hold all four owned caches continuously across one Project removal."""
 
     def __init__(self, case_root, home, project, public_rows, pins, audit, checkpoint_diagnostics=None):
         self.fds, self.owners, self.anchors = [], [], {}
+        self.passive_usage = []
+        self.usage_contract = None
         self.finished = False
         self.retired_allowed = None
         if checkpoint_diagnostics is not None:
@@ -206,6 +221,7 @@ class SignedClosureRetirement:
                 market = self.markets[owner["market"]]
                 require(market["source"] == {"source": "directory", "path": str(owner["active"])}
                         and market["installLocation"] == str(owner["active"]))
+            self.capture_passive_usage()
             self.guard()
         except BaseException:
             self.close()
@@ -213,6 +229,133 @@ class SignedClosureRetirement:
 
     def document(self, path):
         return _checkpoint_document(self.audit, self.case, path)
+
+    def passive_image(self, path, fd):
+        """Read through the shared bounded reader while retaining the same inode."""
+        identity = _CUSTODY["_FILES"]["identity"]
+        before = path.lstat()
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+                and stat.S_IMODE(before.st_mode) == 0o600 and before.st_uid == os.geteuid()
+                and 0 < before.st_size <= 1 << 20
+                and identity(before) == identity(os.fstat(fd)))
+        body, error = self.audit["copilot_settings_read"](path, self.case)
+        require(error is None and type(body) is str
+                and identity(before) == identity(path.lstat()) == identity(os.fstat(fd)))
+        return (identity(before), before.st_uid, before.st_gid, hashlib.sha256(body.encode()).hexdigest())
+
+    def held_passive_document(self, path):
+        require(stat.S_ISREG(path.lstat().st_mode))
+        fd = _CUSTODY["_FILES"]["open_member"](path); self.fds.append(fd)
+        image = self.passive_image(path, fd)
+        document = self.document(path)
+        require(self.passive_image(path, fd) == image)
+        return document, {"path": path, "fd": fd, "image": image}
+
+    def capture_passive_usage(self):
+        """Bind only pinned Claude's zero-count usage history to these receipts."""
+        path = self.profile / ".claude.json"
+        if not path.exists() and not path.is_symlink():
+            return
+        document, held = self.held_passive_document(path)
+        require(type(document) is dict)
+        usage = document.get("pluginUsage")
+        keys = {owner["key"] for owner in self.owners}
+        if type(usage) is not dict or not keys.intersection(usage):
+            return
+        require(document.get("firstStartVersion") == "2.1.263" and keys <= set(usage))
+        for key in keys:
+            row = usage[key]
+            require(type(row) is dict and set(row) == {"usageCount", "lastUsedAt", "lastUsedNumStartups"}
+                    and type(row["usageCount"]) is int and row["usageCount"] == 0
+                    and type(row["lastUsedNumStartups"]) is int and row["lastUsedNumStartups"] == 0
+                    and type(row["lastUsedAt"]) is int and 10 ** 12 <= row["lastUsedAt"] < 10 ** 13)
+        foreign = dict(document, pluginUsage={key: row for key, row in usage.items() if key not in keys})
+        body = json.dumps(foreign, sort_keys=True)
+        aliases = self.audit["MARKETING_KIT_DISTRIBUTIONS"]
+        for alias in set(aliases) | {distribution.rsplit("/", 1)[-1] for distribution in aliases.values()}:
+            require(not self.audit["exact_native_identity"](body, alias)
+                    and re.search(r"(?<![A-Za-z0-9_./:-])" + re.escape(alias)
+                        + r"@agentplugins-[0-9a-f]{12}(?![A-Za-z0-9_./-])", body, re.IGNORECASE) is None)
+        self.passive_usage.append(held)
+        self.usage_contract = {"rows": {key: usage[key] for key in keys}, "foreign": foreign}
+        # Claude 2.1.263's concurrent usage writes can leave one immutable
+        # atomic-write temporary file. Bind its exact pre-removal name/inode,
+        # complete foreign projection and subset of the same four usage rows.
+        temporary = [path for path in self.profile.iterdir()
+                     if re.fullmatch(r"\.claude\.json\.tmp\.[1-9][0-9]{0,9}\.[0-9a-f]{12}", path.name)]
+        require(len(temporary) <= 1)
+        for path in temporary:
+            pending, held = self.held_passive_document(path)
+            require(type(pending) is dict and type(pending.get("pluginUsage")) is dict)
+            pending_usage = pending["pluginUsage"]
+            selected = keys.intersection(pending_usage)
+            require(bool(selected) and all(_CUSTODY["same_json"](pending_usage[key], usage[key]) for key in selected)
+                    and held["image"][1:3] == self.passive_usage[0]["image"][1:3]
+                    and _CUSTODY["same_json"](dict(pending, pluginUsage={
+                        key: row for key, row in pending_usage.items() if key not in keys}), foreign))
+            self.passive_usage.append(held)
+
+    def validate_usage_deletion(self, document):
+        """Only receipt-owned zero-count rows may disappear; all other JSON stays exact."""
+        require(type(document) is dict and type(document.get("pluginUsage")) is dict)
+        usage, contract = document["pluginUsage"], self.usage_contract
+        keys = set(contract["rows"])
+        require(all(_CUSTODY["same_json"](usage[key], contract["rows"][key]) for key in keys.intersection(usage))
+                and _CUSTODY["same_json"](dict(document, pluginUsage={
+                    key: row for key, row in usage.items() if key not in keys}), contract["foreign"]))
+
+    def finish_passive_usage(self):
+        """Admit the pinned uninstall's exact deletion once, after its verified receipt."""
+        if self.usage_contract is None:
+            return
+        old_main, *old_temporary = self.passive_usage
+        # Atomic replacement can unlink the old main while its descriptor stays
+        # ours. Its held bytes must still have the same foreign JSON and may
+        # only reflect the same permitted deletion. No pathname rediscovery is
+        # used to recover this original authority.
+        before = os.fstat(old_main["fd"])
+        require((before.st_dev, before.st_ino, before.st_mode) == old_main["image"][0][:3]
+                and before.st_nlink in (0, 1) and before.st_uid == old_main["image"][1]
+                and before.st_gid == old_main["image"][2] and before.st_size <= 1 << 20)
+        with os.fdopen(os.dup(old_main["fd"]), "rb") as stream:
+            stream.seek(0); body = stream.read((1 << 20) + 1)
+        require(len(body) <= 1 << 20 and _CUSTODY["_FILES"]["identity"](before)
+                == _CUSTODY["_FILES"]["identity"](os.fstat(old_main["fd"])))
+        self.validate_usage_deletion(json.loads(body, object_pairs_hook=self.audit["_unique_json_object"],
+                                               parse_constant=lambda _: require(False)))
+        document, main = self.held_passive_document(old_main["path"])
+        self.validate_usage_deletion(document)
+        same_main = main["image"][0][:2] == old_main["image"][0][:2]
+        remaining = len(set(document["pluginUsage"]).intersection(self.usage_contract["rows"]))
+        require(before.st_nlink == (1 if same_main else 0)
+                and (remaining < 4 or main["image"] == old_main["image"])
+                and main["image"][1:3] == old_main["image"][1:3])
+        temporary = [path for path in self.profile.iterdir()
+                     if re.fullmatch(r"\.claude\.json\.tmp\.[1-9][0-9]{0,9}\.[0-9a-f]{12}", path.name)]
+        require(len(temporary) <= 1)
+        for row in old_temporary:
+            require(row["path"] in temporary and self.passive_image(row["path"], row["fd"]) == row["image"])
+        following = [main]
+        for path in temporary:
+            pending, held = self.held_passive_document(path)
+            self.validate_usage_deletion(pending)
+            selected = set(pending["pluginUsage"]).intersection(self.usage_contract["rows"])
+            require(bool(selected) and (path in {row["path"] for row in old_temporary} or len(selected) < 4)
+                    and held["image"][1:3] == main["image"][1:3])
+            following.append(held)
+        # After the one receipt-authorized transition, every future checkpoint
+        # again requires exact post-removal inode, metadata and byte equality.
+        self.passive_usage = following
+
+    def passive_usage_paths(self):
+        return {".claude/" + row["path"].relative_to(self.profile).as_posix() for row in self.passive_usage}
+
+    def passive_usage_proof(self):
+        return {"native_version": "2.1.263", "receipt_bound_key_count": 4 if self.passive_usage else 0,
+                "preserved_foreign_document": True,
+                "foreign_document_equality": "strict-decoded-json",
+                "post_removal_bytes_and_identity_held": True,
+                "files": [{"name": row["path"].name, "sha256": row["image"][-1]} for row in self.passive_usage]}
 
     def capture(self, alias, distribution, pin, public, record):
         require(record["declared_name"] == record["package"]["declared_name"] == public["name"] == alias
@@ -309,7 +452,7 @@ class SignedClosureRetirement:
                 "signed_release": dict(pin), "binding_at_capture": readiness,
                 "receipt": {key: receipt[key] for key in ("object_id", "source_relative", "managed_digest")}}
 
-    def guard(self):
+    def guard(self, *, check_usage=True):
         require(not self.finished)
         for path, identity in self.anchors.items():
             info = _CUSTODY["ordinary"](path)
@@ -318,6 +461,9 @@ class SignedClosureRetirement:
             _CUSTODY["named_directory"](owner["parent"], owner["parent_fd"])
             if "retired_parent_entries" in owner:
                 require(_CUSTODY["entries"](owner["parent_fd"]) == owner["retired_parent_entries"])
+        if check_usage:
+            for row in self.passive_usage:
+                require(self.passive_image(row["path"], row["fd"]) == row["image"])
 
     def close(self):
         while self.fds:
@@ -413,8 +559,8 @@ class SignedClosureRetirement:
         try:
             require(Path(home) == self.home and Path(case_root) == self.case)
             self.checkpoint()
-            require(callable(rescan) and type(residuals) in (set, list, tuple) and bool(residuals)
-                    and set(residuals) <= self.retired_allowed)
+            require(callable(rescan) and type(residuals) in (set, list, tuple) and bool(residuals))
+            require_owned_residuals(self.audit, residuals, self.retired_allowed)
             for _ in range(2):
                 require(set(rescan()) == set(residuals))
                 self.checkpoint()
@@ -426,6 +572,7 @@ class SignedClosureRetirement:
                     "managed_digest_validation_authority": "genuine-published-cli-remove",
                     "custody_validation_authority": "held-descriptor-image-and-namespace-equality",
                     "raw_native_residuals": sorted(set(residuals)),
+                    "passive_plugin_usage": self.passive_usage_proof(),
                     "matched_residual_count": len(set(residuals))}
         except BaseException:
             self.close()
@@ -436,7 +583,7 @@ class SignedClosureRetirement:
         validated = False
         try:
             require(type(keep_open) is bool and self.retired_allowed is None)
-            self.guard()
+            self.guard(check_usage=False)
             require(callable(rescan) and type(residuals) in (set, list, tuple) and bool(residuals)
                     and cleanup["result"] == "success" and cleanup["outcome"] == "completed"
                     and cleanup["scope"] == "project")
@@ -453,8 +600,10 @@ class SignedClosureRetirement:
                         and result["outcome"] == "completed")
                 observed.add(owner["alias"])
             allowed = set().union(*(self.retired(owner) for owner in self.owners))
-            require(set(residuals) <= allowed)
             self.registries_removed()
+            self.finish_passive_usage()
+            allowed.update(self.passive_usage_paths())
+            require_owned_residuals(self.audit, residuals, allowed)
             require(set(rescan()) == set(residuals))
             self.recheck()
             require(set(rescan()) == set(residuals))
@@ -467,6 +616,7 @@ class SignedClosureRetirement:
                     "managed_digest_validation_authority": "genuine-published-cli-remove",
                     "custody_validation_authority": "held-descriptor-image-and-namespace-equality",
                     "raw_native_residuals": sorted(set(residuals)),
+                    "passive_plugin_usage": self.passive_usage_proof(),
                     "matched_residual_count": len(set(residuals)),
                     "members": [{"distribution": owner["distribution"], "receipt": owner["receipt"],
                         "binding_at_capture": owner["binding_at_capture"],

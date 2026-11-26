@@ -62,8 +62,8 @@ func runUpdateMany(ctx context.Context, cmd *cobra.Command, app App, opts *optio
 	}
 	if err != nil {
 		if prepared != nil {
-			_ = renderUpdateMultiResult(cmd, opts, prepared.result)
-			return fmt.Errorf("group update preflight failed; no target was changed: %w%s", err, groupNextAction(prepared.result.Targets))
+			renderErr := renderUpdateMultiResult(cmd, opts, prepared.result)
+			return errors.Join(fmt.Errorf("group update preflight failed; no target was changed: %w%s", err, groupNextAction(prepared.result.Targets)), installOutputError(renderErr))
 		}
 		return err
 	}
@@ -74,10 +74,14 @@ func runUpdateMany(ctx context.Context, cmd *cobra.Command, app App, opts *optio
 		return renderUpdateMultiResult(cmd, opts, prepared.result)
 	}
 	result, applyErr := applyPreparedUpdate(ctx, prepared)
-	if renderErr := renderUpdateMultiResult(cmd, opts, result); renderErr != nil && applyErr == nil {
-		applyErr = renderErr
+	if applyErr != nil {
+		app.finishInstall(opts, "update", imperativeUpdateAgentItems(prepared, &result, applyErr))
 	}
-	return applyErr
+	renderErr := renderUpdateMultiResult(cmd, opts, result)
+	if renderErr == nil && opts.format == "human" {
+		renderErr = renderInstallAttention(cmd, opts)
+	}
+	return errors.Join(humanInstallApplyError(opts.format, opts.installResult, applyErr), installOutputError(renderErr))
 }
 
 func prepareUpdateMany(ctx context.Context, app App, opts *options, installation domain.Installation, targets []domain.ClientID, probeVersion bool) (*preparedUpdateMany, error) {
