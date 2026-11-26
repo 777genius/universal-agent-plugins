@@ -87,7 +87,7 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 	scope, scopeOK := entry["scope"].(string)
 	enabled, enabledOK := entry["enabled"].(bool)
 	installPath, pathOK := entry["installPath"].(string)
-	if !idOK || !scopeOK || !enabledOK || !pathOK || id == "" || scope == "" || !filepath.IsAbs(installPath) {
+	if !idOK || !scopeOK || !enabledOK || !pathOK || id == "" || !knownClaudeScope(scope) || !filepath.IsAbs(installPath) {
 		return StatusUnknown, false, false
 	}
 	// Claude Code prints one local/project-scope row per project. Keep
