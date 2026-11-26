@@ -24,6 +24,12 @@ on:
       - 'Makefile'
       - 'scripts/check-lint-baseline.sh'
       - 'scripts/live-install-audit.py'
+      - 'scripts/prepared_installation_audit.py'
+      - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/windsurf_installation_audit.py'
+      - 'scripts/test_windsurf_installation_audit.py'
+      - 'scripts/published_codex_baseline.py'
+      - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/gemini_runtime_audit.py'
       - 'scripts/gemini_windows_custody.py'
@@ -67,6 +73,8 @@ jobs:
           cache: false
       - name: Verify scoped ownership, project lifecycle and legacy lock safety
         run: go test -p=2 -count=1 -timeout=12m ./install/integrationctl/agentplugins/domain ./install/integrationctl/agentplugins/adapters/statev2 ./install/integrationctl/agentplugins/adapters/nativeconfig ./install/integrationctl/agentplugins/adapters/legacylock ./install/integrationctl/agentplugins/clients/... ./install/integrationctl/agentplugins/providers ./install/integrationctl/agentplugins/planner ./install/integrationctl/agentplugins/installer ./install/integrationctl/agentplugins/environment ./install/integrationctl/agentplugins/usecase ./cli/internal/agentpluginscli ./cli/cmd/agentplugins -run 'Test(TargetContext|Project|PrepareRejectsCrossEnvironmentContext|StateLockSharesPhysicalLegacyFileLock|RemoveLegacyAbortsReconcileWhenLegacyStateReappears|RemoveLegacyDelegatesThenReconcilesStateV2|LegacyControllerRejectsForeignHomeBeforeLegacyEngine|LegacyControllerAcceptsOriginalUserHome|LegacyRemovalRequiresExplicitAllTargetAndReconcilesV2|MigrateStateIsExplicitPlanFirstAndPathRedacted|MigrateStateExplicitlyMigratesAuthoritativeSchemaTwoThroughFour)'
+      - name: Verify Cursor scoped tool approval and public CLI on each OS
+        run: go test -p=2 -count=1 -timeout=3m -v ./install/integrationctl/agentplugins/clients/cursor ./cli/internal/agentpluginscli -run '^TestCursor'
       - name: Verify Devin User installation and original profile authority
         shell: bash
         run: |

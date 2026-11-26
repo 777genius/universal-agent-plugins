@@ -188,3 +188,38 @@ func TestClaude21332NativeListingWithDisabledAndEnabledManagedPlugin(t *testing.
 		}
 	}
 }
+
+func TestListingsRejectProjectMetadataOnNonProjectRows(t *testing.T) {
+	fixture := projectListFixture(t)
+	for _, scope := range []string{"user", "managed", "synced", "builtin"} {
+		t.Run(scope, func(t *testing.T) {
+			row := map[string]any{
+				"id": "x@market", "scope": scope, "enabled": true,
+				"installPath": filepath.Join(t.TempDir(), "plugin"),
+				"projectPath": fixture.root,
+			}
+			if scope == "builtin" {
+				row["id"] = "cc-plugin-privacy@builtin"
+				row["scope"] = "user"
+				delete(row, "installPath")
+			}
+			body, err := json.Marshal([]map[string]any{fixture.selected, row})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := observeClaudeProjectList(body, "demo", fixture.active, fixture.root, fixture.user); got.state != projectListUnknown {
+				t.Fatalf("invalid project metadata became %+v", got)
+			}
+			body, err = json.Marshal([]map[string]any{row, {
+				"id": "demo@skills-dir", "scope": "user", "enabled": true,
+				"installPath": fixture.active,
+			}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := PluginStatusFromList(body, "demo", fixture.active); got != StatusUnknown {
+				t.Fatalf("invalid project metadata classified as %v", got)
+			}
+		})
+	}
+}

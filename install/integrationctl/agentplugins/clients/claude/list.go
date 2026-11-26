@@ -124,6 +124,9 @@ func claudeBuiltinListIdentity(entry map[string]any) (string, bool) {
 	if _, hasPath := entry["installPath"]; hasPath {
 		return "", false
 	}
+	if _, hasProject := entry["projectPath"]; hasProject {
+		return "", false
+	}
 	id, idOK := entry["id"].(string)
 	scope, scopeOK := entry["scope"].(string)
 	_, enabledOK := entry["enabled"].(bool)

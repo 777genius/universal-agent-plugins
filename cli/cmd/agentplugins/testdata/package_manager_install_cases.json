@@ -11,5 +11,7 @@
   "rich-cold-restore-isolation",
   "unmanaged-source-refusal",
   "foreign-environment-refusal",
-  "dependency-ownership-refusal"
+  "dependency-ownership-refusal",
+  "update-all-security-batch-preflight",
+  "update-all-security-mixed-saved-preflight"
 ]

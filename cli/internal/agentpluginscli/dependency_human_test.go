@@ -102,9 +102,9 @@ func TestDependencyHumanResultsUsePairedIdentityAndKeepGuidance(t *testing.T) {
 	a.NextActions = []installer.NextAction{{Kind: "authenticate", Reason: "review existing authentication"}}
 	items := outcomeAgentItems([]environment.BindingOutcome{
 		{Binding: dependencyAction{Alias: "not-attempted", ClientID: "claude"}, Status: environment.BindingNotAttempted},
-		{Binding: dependencyAction{Alias: "alpha", ClientID: "claude"}, Result: &a},
+		{Binding: dependencyAction{Alias: "alpha", ClientID: "claude"}, Status: environment.BindingApplied, Result: &a},
 		{Binding: dependencyAction{Alias: "beta", ClientID: "claude"}, Status: environment.BindingFailed, Result: &b, Err: applyErr},
-		{Binding: dependencyAction{Alias: "alpha", ClientID: "codex"}, Result: &c},
+		{Binding: dependencyAction{Alias: "alpha", ClientID: "codex"}, Status: environment.BindingApplied, Result: &c},
 	})
 	// Reorder actual results: alias lookup must use paired identity, not position.
 	results := []installer.Result{b, a, c}
@@ -114,7 +114,7 @@ func TestDependencyHumanResultsUsePairedIdentityAndKeepGuidance(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	for _, want := range []string{"Install beta for Claude Code: incomplete client apply failed", "Install alpha for Claude Code: completed", "Install alpha for OpenAI Codex: completed", "Installation: id-beta (beta)\n", "Installation: id-alpha (alpha)\n", "Manual: " + a.ManualActions[0], "Next: authenticate review existing authentication"} {
+	for _, want := range []string{"Install beta for Claude Code: incomplete The installation did not complete for this agent.", "Install alpha for Claude Code: completed", "Install alpha for OpenAI Codex: completed", "Installation: id-beta (beta)\n", "Installation: id-alpha (alpha)\n", "Manual: " + a.ManualActions[0], "Next: authenticate review existing authentication"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing paired result/guidance %q: %q", want, text)
 		}

@@ -106,7 +106,7 @@ func (s *projectListScan) record(entry map[string]any) bool {
 		return false
 	}
 	if identity, builtin := claudeBuiltinListIdentity(entry); builtin {
-		if s.seen[identity] {
+		if s.seen[identity] || !validProjectListMetadata(entry, "") {
 			return false
 		}
 		s.seen[identity] = true
@@ -243,7 +243,8 @@ func validProjectListMetadata(entry map[string]any, project string) bool {
 		}
 	}
 	if path, exists := entry["projectPath"]; exists {
-		if text, ok := path.(string); !ok || !exactAbsolute(text) || (project != "" && text != project) {
+		scope, _ := entry["scope"].(string)
+		if text, ok := path.(string); !ok || !exactAbsolute(text) || (scope != "local" && scope != "project") || (project != "" && text != project) {
 			return false
 		}
 	}

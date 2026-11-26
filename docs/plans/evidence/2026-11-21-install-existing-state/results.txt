@@ -1,0 +1,119 @@
+PLAN RESEARCH — filtered Go JSON events
+Base: 5f63d48bf4461600e6bb916a6e4997f9830545e1
+go version go1.26.11 linux/amd64
+Offline: GOTOOLCHAIN=local GOPROXY=off GOMAXPROCS=2
+
+Optional GC settings: GOGC=25 GOMEMLIMIT=768MiB
+SUITE cli
+ARGV ["go", "test", "-json", "-count=1", "-p", "2", "-mod=readonly", "./cli/internal/agentpluginscli", "-run", "^(TestPlanStateSpike.*|TestPlanUXRemediationParserSpike|TestSavedAddAutomaticTargetsDeferUnqualifiedHostWithoutProbing|TestSavedAddDeferredHostCancelOrDeselectNeverProbes|TestSavedAddDefaultsOnlySafelyDetectedTargets|TestSavedAddExplicitTargetKeepsInstallerAdmission|TestSkippedReasonsSurviveZeroSingleAndMultipleChoices)$"]
+{"exit_code": 0, "fail": 0, "missing_spikes": [], "packages": ["github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli"], "pass": 30, "run": 30, "skip": 0, "top_level_pass": 9}
+EVIDENCE plan_state_spike_test.go:121: ACTUAL SAVED CANDIDATE pin={Version:1.0.0 RequiredBy:[] Alias:demo Source:{Web:<nil> Archive:<nil> Git:0x1e8fad1c04e0 Registry:<nil>} SourceKey:github:acme/demo: DigestAlgorithm:agentplugins-tree-sha256-v1 TreeDigest:sha256:038510ef78f4b5a4ee5df60a9e6b59667cdfb95b66a5f245c32a877b41d044e6 ManifestDigest:sha256:cd880f5b873e6011aac32306232152d06761ce00a469321f0c83813945f0a295 ExecutableFiles:[] Targets:[]} source={SourceKind: SourceURL: ArchiveSHA256: Skill:<nil> WebSkill:<nil> StableSourceKey: RequestedSource:github:acme/demo@c6423c8d0c5e071e7b51c739496302f77bd2ba32 CanonicalSource:github:acme/demo@c6423c8d0c5e071e7b51c739496302f77bd2ba32 Repository:acme/demo PackageSubpath: ResolvedRevision:c6423c8d0c5e071e7b51c739496302f77bd2ba32 SourceBindingHint:uap-dependency-git} computed_binding_id=src_359c29c3c8764f051aa6139e
+EVIDENCE plan_state_spike_test.go:156: ASSERT unchanged manifest/lock/state/data bytes and metadata; PLUGIN_DATA sentinel survives; zero environment receipts
+PASS TestPlanStateSpikeRetainedInstallation/same_pin_and_digest
+EVIDENCE plan_state_spike_test.go:121: ACTUAL SAVED CANDIDATE pin={Version:1.0.0 RequiredBy:[] Alias:demo Source:{Web:<nil> Archive:<nil> Git:0x1e8fad11e8f0 Registry:<nil>} SourceKey:github:acme/demo: DigestAlgorithm:agentplugins-tree-sha256-v1 TreeDigest:sha256:038510ef78f4b5a4ee5df60a9e6b59667cdfb95b66a5f245c32a877b41d044e6 ManifestDigest:sha256:cd880f5b873e6011aac32306232152d06761ce00a469321f0c83813945f0a295 ExecutableFiles:[] Targets:[]} source={SourceKind: SourceURL: ArchiveSHA256: Skill:<nil> WebSkill:<nil> StableSourceKey: RequestedSource:github:acme/demo@aa7fbcf35dea23b6ca11ea8b028e83e24005075c CanonicalSource:github:acme/demo@aa7fbcf35dea23b6ca11ea8b028e83e24005075c Repository:acme/demo PackageSubpath: ResolvedRevision:aa7fbcf35dea23b6ca11ea8b028e83e24005075c SourceBindingHint:uap-dependency-git} computed_binding_id=src_359c29c3c8764f051aa6139e
+EVIDENCE plan_state_spike_test.go:156: ASSERT unchanged manifest/lock/state/data bytes and metadata; PLUGIN_DATA sentinel survives; zero environment receipts
+PASS TestPlanStateSpikeRetainedInstallation/new_commit_same_digest
+EVIDENCE plan_state_spike_test.go:121: ACTUAL SAVED CANDIDATE pin={Version:1.0.0 RequiredBy:[] Alias:demo Source:{Web:<nil> Archive:<nil> Git:0x1e8fad121380 Registry:<nil>} SourceKey:github:acme/demo: DigestAlgorithm:agentplugins-tree-sha256-v1 TreeDigest:sha256:e23f080a8cba00cf1c5f5e4322cb0c821bee5c5b904535e648744e3ea53e9107 ManifestDigest:sha256:cd880f5b873e6011aac32306232152d06761ce00a469321f0c83813945f0a295 ExecutableFiles:[] Targets:[]} source={SourceKind: SourceURL: ArchiveSHA256: Skill:<nil> WebSkill:<nil> StableSourceKey: RequestedSource:github:acme/demo@01542b42769081964e0f42bacf84415e988ee2eb CanonicalSource:github:acme/demo@01542b42769081964e0f42bacf84415e988ee2eb Repository:acme/demo PackageSubpath: ResolvedRevision:01542b42769081964e0f42bacf84415e988ee2eb SourceBindingHint:uap-dependency-git} computed_binding_id=src_359c29c3c8764f051aa6139e
+EVIDENCE plan_state_spike_test.go:156: ASSERT unchanged manifest/lock/state/data bytes and metadata; PLUGIN_DATA sentinel survives; zero environment receipts
+PASS TestPlanStateSpikeRetainedInstallation/new_commit_new_digest
+PASS TestPlanStateSpikeRetainedInstallation
+PASS TestPlanStateSpikeRootDependenciesNoSave
+EVIDENCE ERROR source belongs to saved dependency selected; use agentplugins add without --no-save or agentplugins update selected
+PASS TestPlanStateSpikeUnrelatedUnmanagedSync
+EVIDENCE plan_ux_spike_test.go:41: actual Cobra remove argv: ["00000000-0000-4000-8000-000000000001" "--target" "codex,chatgptweb" "--scope" "project" "--project-root" "/selected/project with spaces" "--dry-run" "--format" "json"] -> canonical targets=[codex chatgpt]; project root retained exactly
+PASS TestPlanUXRemediationParserSpike/public-web-remedy
+EVIDENCE plan_ux_spike_test.go:41: actual Cobra remove argv: ["00000000-0000-4000-8000-000000000001" "--target" "chatgpt" "--scope" "project" "--project-root" "/selected/project with spaces" "--dry-run" "--format" "json"] -> canonical targets=[codex]; project root retained exactly
+PASS TestPlanUXRemediationParserSpike/raw-state-web-id-selects-desktop
+EVIDENCE plan_ux_spike_test.go:41: actual Cobra remove argv: ["00000000-0000-4000-8000-000000000001" "--target" "codex" "--target" "cursor" "--scope" "project" "--project-root" "/selected/project with spaces" "--dry-run" "--format" "json"] -> canonical targets=[cursor]; project root retained exactly
+PASS TestPlanUXRemediationParserSpike/repeated-target-loses-first
+EVIDENCE plan_ux_spike_test.go:41: actual Cobra remove argv: ["00000000-0000-4000-8000-000000000001" "--target" "codex,cursor" "--scope" "project" "--project-root" "/selected/project with spaces" "--dry-run" "--format" "json"] -> canonical targets=[codex cursor]; project root retained exactly
+PASS TestPlanUXRemediationParserSpike/single-comma-target-preserves-both
+PASS TestPlanUXRemediationParserSpike
+PASS TestSavedAddAutomaticTargetsDeferUnqualifiedHostWithoutProbing/user/normal
+PASS TestSavedAddAutomaticTargetsDeferUnqualifiedHostWithoutProbing/user/dry-run
+PASS TestSavedAddAutomaticTargetsDeferUnqualifiedHostWithoutProbing/user
+PASS TestSavedAddAutomaticTargetsDeferUnqualifiedHostWithoutProbing/project/normal
+PASS TestSavedAddAutomaticTargetsDeferUnqualifiedHostWithoutProbing/project/dry-run
+PASS TestSavedAddAutomaticTargetsDeferUnqualifiedHostWithoutProbing/project
+PASS TestSavedAddAutomaticTargetsDeferUnqualifiedHostWithoutProbing
+PASS TestSavedAddDeferredHostCancelOrDeselectNeverProbes/deselect
+PASS TestSavedAddDeferredHostCancelOrDeselectNeverProbes/cancel
+PASS TestSavedAddDeferredHostCancelOrDeselectNeverProbes
+PASS TestSavedAddDefaultsOnlySafelyDetectedTargets/0
+PASS TestSavedAddDefaultsOnlySafelyDetectedTargets/1
+PASS TestSavedAddDefaultsOnlySafelyDetectedTargets/2
+PASS TestSavedAddDefaultsOnlySafelyDetectedTargets
+PASS TestSavedAddExplicitTargetKeepsInstallerAdmission
+PASS TestSkippedReasonsSurviveZeroSingleAndMultipleChoices/0
+PASS TestSkippedReasonsSurviveZeroSingleAndMultipleChoices/1
+PASS TestSkippedReasonsSurviveZeroSingleAndMultipleChoices/2
+PASS TestSkippedReasonsSurviveZeroSingleAndMultipleChoices
+
+SUITE reliability
+ARGV ["go", "test", "-json", "-count=1", "-p", "2", "-mod=readonly", "./install/integrationctl/agentplugins/environment", "./install/integrationctl/agentplugins/environmentapp", "./install/integrationctl/agentplugins/transaction", "-run", "Test(Apply|SyncError|Environment|RecoveryAuthority|Observe|LifecycleFacts)"]
+{"exit_code": 0, "fail": 0, "missing_spikes": [], "packages": ["github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment", "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp", "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/transaction"], "pass": 65, "run": 65, "skip": 0, "top_level_pass": 34}
+PASS TestApplySyncOneFailingClientDoesNotBlockOthers/prepare_error
+PASS TestApplySyncOneFailingClientDoesNotBlockOthers/apply_error
+PASS TestApplySyncOneFailingClientDoesNotBlockOthers/incomplete_outcome
+PASS TestApplySyncOneFailingClientDoesNotBlockOthers/conflict_outcome
+PASS TestApplySyncOneFailingClientDoesNotBlockOthers
+PASS TestApplySyncUnclosedProbeStopsBeforeLaterBindings/bare
+PASS TestApplySyncUnclosedProbeStopsBeforeLaterBindings/wrapped
+PASS TestApplySyncUnclosedProbeStopsBeforeLaterBindings
+PASS TestApplySyncRecoveryRequiredStopsRemainingBindings
+PASS TestApplySyncStopMarkerAndResultOutcomesEndTheSync/canceled_outcome
+PASS TestApplySyncStopMarkerAndResultOutcomesEndTheSync/marked_guard
+PASS TestApplySyncStopMarkerAndResultOutcomesEndTheSync/plan_changed
+PASS TestApplySyncStopMarkerAndResultOutcomesEndTheSync/recovery_outcome
+PASS TestApplySyncStopMarkerAndResultOutcomesEndTheSync
+PASS TestApplySyncCanceledContextStopsBeforeLaterBindings
+PASS TestApplySyncRejectsPlanWithMissingActionBeforeMutating
+PASS TestApplySyncSuccessReturnsNoErrorAndKeepsUnchangedBindings
+PASS TestSyncErrorUnwrapListsEachCauseOnce
+PASS TestApplySyncUnclosedProbeStopsRemainingBindings/prepare
+PASS TestApplySyncUnclosedProbeStopsRemainingBindings/apply
+PASS TestApplySyncUnclosedProbeStopsRemainingBindings
+PASS TestApplySyncRawProcessClosureStopsRemainingBindings/domain/prepare
+PASS TestApplySyncRawProcessClosureStopsRemainingBindings/domain/apply
+PASS TestApplySyncRawProcessClosureStopsRemainingBindings/runner/prepare
+PASS TestApplySyncRawProcessClosureStopsRemainingBindings/runner/apply
+PASS TestApplySyncRawProcessClosureStopsRemainingBindings
+PASS TestLifecycleFactsAuthenticationDoesNotRetry
+PASS TestObserveIncludesUnmanagedSiblingsAndRejectsReceiptMismatch
+PASS TestLifecycleFactsManualReadiness
+PASS TestApplyRetainsPublicationAndBindingGuardOrdering
+PASS TestApplyRefusalsNeverPublishOrApply/initial_readiness
+PASS TestApplyRefusalsNeverPublishOrApply/lock
+PASS TestApplyRefusalsNeverPublishOrApply/canceled_after_acquire
+PASS TestApplyRefusalsNeverPublishOrApply/locked_readiness
+PASS TestApplyRefusalsNeverPublishOrApply/stale_review
+PASS TestApplyRefusalsNeverPublishOrApply/materialization
+PASS TestApplyRefusalsNeverPublishOrApply/canceled_after_materialization
+PASS TestApplyRefusalsNeverPublishOrApply/changed_inputs
+PASS TestApplyRefusalsNeverPublishOrApply/custom_guard
+PASS TestApplyRefusalsNeverPublishOrApply
+PASS TestApplyPublicationFailureReportsObservedDurableIntent/manifest_refused
+PASS TestApplyPublicationFailureReportsObservedDurableIntent/manifest_written_then_error
+PASS TestApplyPublicationFailureReportsObservedDurableIntent/lock_refused
+PASS TestApplyPublicationFailureReportsObservedDurableIntent/lock_written_then_error
+PASS TestApplyPublicationFailureReportsObservedDurableIntent
+PASS TestApplyChecksInputsBeforeEachPrepareAndApply/prepare
+PASS TestApplyChecksInputsBeforeEachPrepareAndApply/apply
+PASS TestApplyChecksInputsBeforeEachPrepareAndApply
+PASS TestApplyRepairAndUnchangedIntent
+PASS TestApplyIsolatesFailedBindingAndAttemptsTheRest
+PASS TestApplyRequiresRetainedReview
+PASS TestEnvironmentRecoveryRefusesMixedForeignScope
+PASS TestEnvironmentReceiptSurvivesPartialAndDropsOnlyAtTerminalRemoval
+PASS TestEnvironmentAuthorityPreservesUnmanagedImperativeOperations
+PASS TestRecoveryAuthorityCoversMultipleOwnedAliasesAndTargets
+PASS TestApplyDirectoryCommitsNativeTreeAndStateReceipt
+PASS TestApplyDirectoryGroupRequireAbsentRejectsAndRollsBackWithoutTouchingOccupiedTarget
+PASS TestApplyRejectsReusedCompletedOperationIDBeforeFilesystemMutation
+PASS TestApplyRetriesVisibleStateAfterStoreSortsNewInstallation
+PASS TestApplyLeavesJournalWhenStateSaveDurabilityRemainsAmbiguous
+PASS TestApplyDirectoryNeverPersistsDesiredStateBeforeDurableDirectorySuccess
+PASS TestApplyDirectoryGroupPostApplyVerifyRunsAfterRestorationAndRollsBackOnFailure
+PASS TestApplyDirectoryGroupPostApplyVerifySucceedsBeforeCommit
+PASS TestApplyDirectoryGroupRollsBackEveryTargetWhenSecondVerificationFails
+PASS TestApplyDirectoryRollsBackWhenVerificationFails

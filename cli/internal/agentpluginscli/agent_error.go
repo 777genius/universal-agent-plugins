@@ -71,6 +71,10 @@ func classifyAgentFailure(err error) AgentFailure {
 // ShouldWriteAgentFailure opts in only early usage and ownership errors. Source selection
 // errors already emit their own JSON; old native refusals require empty stdout.
 func ShouldWriteAgentFailure(err error) bool {
+	var reported *declaredInstallResultError
+	if errors.As(err, &reported) {
+		return false
+	}
 	var usage CLIUsageError
 	var foreign *earlyForeignBindingError
 	return errors.As(err, &usage) || errors.As(err, &foreign)

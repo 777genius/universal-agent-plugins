@@ -33,16 +33,22 @@ func applySkillsWithRecovery(cmd *cobra.Command, app App, opts *options, prepare
 	for attempt := 1; ; attempt++ {
 		result, err := applySkillsTerminalAttempt(cmd, app, opts, current)
 		updateOutstandingAgents(outstanding, reportByAgent(skillsAgentItems(result.Items)))
-		logPath := app.recordInstallRun("skills add", attempt, agentLogEntries(skillsAgentItems(result.Items)))
+		diagnostic := app.recordInstallRun("skills add", attempt, agentLogEntries(skillsAgentItems(result.Items)))
+		logPath := diagnostic.Path
 		err = humanSkillsApplyError(opts.format, result.Items, err, logPath)
 		if writeErr := renderSkillsResult(cmd, opts, result, logPath); writeErr != nil {
-			return errors.Join(err, writeErr)
+			return errors.Join(err, installOutputError(writeErr))
+		}
+		if opts.format == "human" && logPath == "" {
+			if writeErr := renderInstallDiagnostic(cmd.OutOrStdout(), diagnostic, reportByAgent(skillsAgentItems(result.Items))); writeErr != nil {
+				return errors.Join(err, installOutputError(writeErr))
+			}
 		}
 		if current != prepared {
 			current.Close()
 		}
 		if err == nil && len(outstanding) > 0 {
-			err = fmt.Errorf("%s still need attention; see the technical log", strings.Join(sortedValues(outstanding), ", "))
+			err = fmt.Errorf("%s still need attention; follow their per-agent results and next steps", strings.Join(sortedValues(outstanding), ", "))
 		}
 		if err == nil || domain.IsUnclosedClientProbe(err) || !canRetry || attempt > maxSkillsRetries || cmd.Context().Err() != nil || result.Status == "succeeded" {
 			return err
@@ -91,7 +97,7 @@ func prepareSkillsRetry(cmd *cobra.Command, app App, opts *options, original *Pr
 	}
 	if _, err := fmt.Fprintf(cmd.ErrOrStderr(), "Retrying %d agent(s)…\n", len(targets)); err != nil {
 		next.Close()
-		return nil, err
+		return nil, installOutputError(err)
 	}
 	return next, nil
 }
@@ -191,13 +197,13 @@ func coveredByReview(reviewed, retry []SkillsAction) bool {
 }
 
 func confirmChangedRetry(cmd *cobra.Command, app App, opts *options, prepared *PreparedSkillsBatch) error {
-	review := skillsPickerPrepared{prepared}.Review()
-	if err := renderHumanSkillsReview(cmd, review); err != nil {
-		return err
-	}
 	app, err := withPrompter(cmd, app, opts)
 	if err != nil {
 		return err
+	}
+	review := skillsPickerPrepared{prepared}.Review()
+	if err := renderHumanSkillsReviewTo(reviewWriter(cmd, app), review); err != nil {
+		return installOutputError(err)
 	}
 	answer, err := app.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "The retry differs from what you reviewed. Apply it?", Default: false})
 	if err != nil {

@@ -2185,7 +2185,7 @@ class RuntimeSetupDiagnosticTests(unittest.TestCase):
                 final = text.split("      - name: Retain the actual native verdict and bounded diagnostic\n")[1]
                 self.assertIn("        if: always()\n", final)
                 self.assertIn("            ${{ runner.temp }}/grok-runtime-setup-diagnostic.json\n", final)
-                self.assertIn("    timeout-minutes: 18\n", text)
+                self.assertIn("    timeout-minutes: 60\n", text)
             else:
                 upload = text.split("      - name: Preserve bounded runtime setup failure\n")[1].split("\n      - ")[0]
                 self.assertIn("if: ${{ always() && steps.grok_runtime_diagnostic.outcome == 'success' }}", upload)
@@ -2194,7 +2194,7 @@ class RuntimeSetupDiagnosticTests(unittest.TestCase):
                 setup_block = text.split("      - name: Provision the signature-verified readonly controller runtime\n")[1].split("\n      - ")[0]
                 self.assertIn("        timeout-minutes: 10\n", setup_block)
             else:
-                self.assertIn("    timeout-minutes: " + ("18" if filename == "grok-enable-readonly.yml" else "20") + "\n", text)
+                self.assertIn("    timeout-minutes: " + ("60" if filename == "grok-enable-readonly.yml" else "20") + "\n", text)
         self.assertEqual(len(set(commands)), 1)
         self.assertEqual(commands[0], "timeout --signal=TERM --kill-after=2s 10s /usr/bin/python3 -I -B scripts/grok_runtime_setup_diagnostic.py")
         root, source = self.fixture("cancelled-command")

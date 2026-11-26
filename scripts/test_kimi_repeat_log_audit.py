@@ -161,6 +161,41 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
         self.assertIsNone(listed)
         self.assertIsNone(self.classify(before, after, listed))
 
+    def test_absent_workspace_target_still_checks_final_companion(self):
+        for kind in ("directory", "file", "symlink"):
+            with self.subTest(kind=kind):
+                self.fixture()
+                target = self.home / ".kimi-code/.projects-write-lock"
+                companion = target.with_name(target.name + ".lock")
+                before = self.capture()
+                self.append()
+                after = self.capture()
+                self.assertIsNotNone(self.classify(before, after, self.capture()))
+                lstat, reached = Path.lstat, []
+
+                def create_on_missing_target(path, *args, **kwargs):
+                    try:
+                        return lstat(path, *args, **kwargs)
+                    except FileNotFoundError:
+                        if path == target and not reached:
+                            reached.append(True)
+                            if kind == "directory":
+                                companion.mkdir()
+                            elif kind == "file":
+                                companion.write_bytes(b"")
+                            else:
+                                companion.symlink_to(self.home / "foreign")
+                        raise
+
+                facts = {}
+                with patch.object(Path, "lstat", create_on_missing_target):
+                    listed = self.capture(facts)
+                self.assertEqual(reached, [True])
+                self.assertIsNone(listed)
+                self.assertEqual(facts, {"reason": "parent-or-path-refused"})
+                self.assertIsNone(self.classify(before, after, listed))
+                self.assertEqual((self.home / "foreign").read_bytes(), b"foreign")
+
     def test_workspace_lock_exception_preserves_all_other_scope_guards(self):
         for mutation in ("unexpected-path", "parent", "config", "missing", "created",
                          "post-list", "public-ready", "closure"):
@@ -400,12 +435,12 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
                 self.assertNotIn(canary, json.dumps(diagnostic))
                 self.assertNotIn(str(self.root), json.dumps(diagnostic))
 
-    def test_protected_scope_diagnostics_identify_only_fixed_metadata_fields(self):
+    def test_protected_scope_diagnostics_identify_relative_name_and_metadata_fields(self):
         for scope in ("home", "project-native", "managed"):
             with self.subTest(scope=scope):
                 self.fixture()
                 canary = "private-profile-path-and-content-canary"
-                target = {"home": self.home / canary,
+                target = {"home": self.home / "unknown-native-cache",
                           "project-native": self.project / ".kimi-code/skills/docs/SKILL.md",
                           "managed": self.project / ".uap/managed/package/payload"}[scope]
                 target.write_text(canary)
@@ -425,19 +460,24 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
                 self.assertEqual(record["key_kind"], "metadata")
                 self.assertEqual(record["change_kind"], "changed")
                 self.assertEqual(record["metadata_fields"], ["mtime_ns"])
+                self.assertEqual(record["relative_path"], target.relative_to({
+                    "home": self.home, "project-native": self.project / ".kimi-code",
+                    "managed": self.project / ".uap/managed"}[scope]).as_posix())
+                self.assertFalse(record["relative_path_truncated"])
+                self.assertEqual(record["entry_type"], "file")
                 self.assertRegex(record["key_sha256"], r"^[0-9a-f]{64}$")
                 published = json.dumps(self.audit.failed_case_diagnostics({"kimi_repeat_log_facts": facts}))
                 self.assertNotIn(canary, published)
                 self.assertNotIn(str(self.root), published)
 
-    def test_protected_scope_diagnostics_cap_records_hash_keys_and_hide_values(self):
+    def test_protected_scope_diagnostics_bound_relative_names_and_hide_values(self):
         self.fixture()
         before = self.capture()
         self.append()
         after = self.capture()
         canary = "private-path-and-value-canary"
         for index in range(10):
-            key = f"metadata:2:{canary}-{index:02d}"
+            key = f"metadata:2:unknown-native-cache-{index:02d}"
             before["scope"][key] = (stat.S_IFREG | 0o600, 11, 22, 33)
             after["scope"][key] = (stat.S_IFREG | 0o600, 11, 22, 34)
         facts = {}
@@ -447,12 +487,29 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
         self.assertEqual(len(facts["scope_changes"]), 8)
         self.assertEqual(facts["scope_changes_omitted"], 2)
         self.assertEqual(facts["changed_entries_capped"], 10)
-        key = f"metadata:2:{canary}-00"
+        key = "metadata:2:unknown-native-cache-00"
         self.assertEqual(facts["scope_changes"][0]["key_sha256"], self.audit.hashlib.sha256(key.encode()).hexdigest())
         self.assertTrue(all(record["metadata_fields"] == ["mtime_ns"] for record in facts["scope_changes"]))
+        self.assertEqual(facts["scope_changes"][0]["relative_path"], "unknown-native-cache-00")
         self.assertNotIn(canary, json.dumps(facts))
         self.assertNotIn(str(self.root), json.dumps(facts))
-        self.assertLess(len(json.dumps(facts)), 2500)
+        self.assertLess(len(json.dumps(facts)), 4000)
+
+    def test_protected_scope_diagnostic_names_cannot_export_absolute_paths_or_control_text(self):
+        self.fixture()
+        for path, expected in (("/outside/private", None), ("../private", None),
+                               ("safe/../../private", None), ("native/line\nnext", "native/line?next"),
+                               ("a" * 200, "a" * 160)):
+            with self.subTest(path=path):
+                key = "metadata:0:" + path
+                facts = self.audit.kimi_scope_change_facts(
+                    {key: (stat.S_IFREG | 0o600, 11, 22, 33)},
+                    {key: (stat.S_IFREG | 0o600, 11, 23, 34)}, "home")
+                record = facts["scope_changes"][0]
+                self.assertEqual(record.get("relative_path"), expected)
+                self.assertEqual(record["metadata_fields"], ["inode", "mtime_ns"])
+                if expected is not None:
+                    self.assertEqual(record["relative_path_truncated"], len(path) > 160)
 
     def test_protected_scope_surrogate_key_remains_private_refusal(self):
         self.fixture()

@@ -1,14 +1,16 @@
 """Prevent the live acceptance harness from touching ambient client profiles."""
 import importlib.util
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone, timedelta
 import hashlib
 import json
 import os
+import sqlite3
 import subprocess
 import sys
 import textwrap
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from runpy import run_path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
@@ -49,8 +51,12 @@ class PiContext7SignedFallbackContracts(unittest.TestCase):
     def inputs(self):
         import copy
         audit = load_audit()
-        fixtures = json.loads(audit.FIXTURES.read_text())
-        return audit, fixtures['signed_release_pins'], copy.deepcopy(self.NODE)
+        doc = json.loads(audit.FIXTURES.read_text())
+        defaults = doc['signed_release_pins']
+        # Pi selects the signed community release7 through the per-target pin
+        # override; matching never derives an expected release from a row.
+        selected = audit.effective_signed_release_pins(doc, 'pi')
+        return audit, defaults, selected, copy.deepcopy(self.NODE)
 
     def matching(self, audit, pins, node, target='pi', alias='context7'):
         return audit.matching_installations({'data': {'installations': [node]}},
@@ -58,9 +64,11 @@ class PiContext7SignedFallbackContracts(unittest.TestCase):
 
     def test_actual_target_fallback_row_requires_the_full_immutable_pin(self):
         import copy
-        audit, pins, node = self.inputs()
-        self.assertEqual(self.matching(audit, pins, node), [node])
-        self.assertEqual(audit.expected_signed_release_pin('context7', 'pi', pins), self.EXPECTED)
+        audit, defaults, selected, node = self.inputs()
+        self.assertEqual(self.matching(audit, selected, node), [node])
+        # Raw default pins name the inactive upstream distribution for pi.
+        self.assertEqual(self.matching(audit, defaults, node), [])
+        self.assertEqual(selected['context7'], self.EXPECTED)
         self.assertEqual(node['clients'][0]['activation'], 'prepared')
         self.assertEqual(node['clients'][0]['authentication'], 'not_checked')
         mutations = [
@@ -80,27 +88,30 @@ class PiContext7SignedFallbackContracts(unittest.TestCase):
                 elif key.startswith('client.'): bad['clients'][0][key.split('.')[1]] = value
                 elif key.startswith('revision.'): bad['clients'][0]['package_revision'][key.split('.')[1]] = value
                 else: bad[key] = value
-                self.assertEqual(self.matching(audit, pins, bad), [])
+                self.assertEqual(self.matching(audit, selected, bad), [])
         current_only = copy.deepcopy(node)
         for key in ('recorded_distribution', 'recorded_revision', 'recorded_release_sequence'):
             del current_only['directory'][key]
-        self.assertEqual(self.matching(audit, pins, current_only), [])
+        self.assertEqual(self.matching(audit, selected, current_only), [])
 
     def test_default_authority_and_all_other_clients_aliases_stay_exact(self):
         import copy
-        audit, pins, node = self.inputs()
-        original = copy.deepcopy(pins)
+        audit, defaults, selected, node = self.inputs()
+        doc = json.loads(audit.FIXTURES.read_text())
+        original = copy.deepcopy(defaults)
         for target in audit.NATIVE_ROOTS:
-            for alias in pins:
-                if (target, alias) == ('pi', 'context7'): continue
-                self.assertEqual(audit.expected_signed_release_pin(alias, target, pins), pins[alias])
+            canonical = audit.audit_client_id(target, 'plugin')
+            target_pins = audit.effective_signed_release_pins(doc, canonical)
+            for alias in defaults:
+                if (canonical, alias) == ('pi', 'context7'): continue
+                self.assertEqual(target_pins[alias], defaults[alias])
         for target in audit.NATIVE_ROOTS:
             if target == 'pi': continue
             foreign = copy.deepcopy(node)
             foreign['clients'][0]['client_id'] = target
-            self.assertEqual(self.matching(audit, pins, foreign, target=target), [])
+            self.assertEqual(self.matching(audit, defaults, foreign, target=target), [])
         upstream = copy.deepcopy(node)
-        pin = pins['context7']
+        pin = defaults['context7']
         upstream['source'] = pin['repository'] + '/' + pin['path']
         upstream['directory'].update(recorded_distribution=pin['distribution'],
             recorded_revision=pin['revision'], recorded_release_sequence=pin['sequence'])
@@ -108,26 +119,31 @@ class PiContext7SignedFallbackContracts(unittest.TestCase):
             resolved_revision=pin['revision'], release_sequence=pin['sequence'],
             tree_digest=pin['tree_digest'], manifest_digest=pin['manifest_digest'])
         upstream['clients'][0]['client_id'] = 'codex'
-        self.assertEqual(self.matching(audit, pins, upstream, target='codex'), [upstream])
+        self.assertEqual(self.matching(audit, defaults, upstream, target='codex'), [upstream])
         upstream['clients'][0]['client_id'] = 'pi'
-        self.assertEqual(self.matching(audit, pins, upstream), [])
+        self.assertEqual(self.matching(audit, selected, upstream), [])
         for mutation in ('missing', 'extra', 'revision', 'bool-sequence', 'string-sequence'):
             with self.subTest(mutation=mutation):
-                bad = copy.deepcopy(pins)
+                bad = copy.deepcopy(selected)
                 if mutation == 'missing': del bad['context7']
-                elif mutation == 'extra': bad['context7']['unreviewed'] = True
+                elif mutation == 'extra':
+                    bad['context7']['unreviewed'] = True
+                    doc_bad = json.loads(audit.FIXTURES.read_text())
+                    doc_bad['signed_release_pins_by_target']['pi']['context7'] = copy.deepcopy(bad['context7'])
+                    with self.assertRaisesRegex(ValueError, 'frozen signed release pin'):
+                        audit.validate_fixtures(doc_bad)
+                    continue
                 elif mutation == 'revision': bad['context7']['revision'] = '0' * 40
                 elif mutation == 'bool-sequence': bad['context7']['sequence'] = True
                 else: bad['context7']['sequence'] = '1'
-                self.assertIsNone(audit.expected_signed_release_pin('context7', 'pi', bad))
                 self.assertEqual(self.matching(audit, bad, node), [])
-        self.assertEqual(self.matching(audit, pins, node, alias='notion'), [])
-        self.assertEqual(pins, original)
+        self.assertEqual(self.matching(audit, selected, node, alias='notion'), [])
+        self.assertEqual(defaults, original)
 
     def test_real_case_orchestration_keeps_prepared_state_and_all_repeat_removal_gates(self):
         import copy
         import shutil
-        audit, pins, node = self.inputs()
+        audit, defaults, selected, node = self.inputs()
         calls, installed = [], [False]
         def perform(argv, env, project, timeout=105):
             operation = argv[1]
@@ -156,8 +172,10 @@ class PiContext7SignedFallbackContracts(unittest.TestCase):
                     'timeout': False, '_json': response}
         with TemporaryDirectory() as temporary, patch.object(audit, 'call', side_effect=perform):
             result = audit.do_case('/inert/uap', 'pi', 'plugin', 'context7', 1,
-                                  Path(temporary).resolve(), {}, pins)
-        self.assertEqual(result['status'], 'passed')
+                                  Path(temporary).resolve(), {}, selected)
+        # Pi component support and owned files do not provide independent
+        # before/add/repeat/remove native inventories in this catalog lane.
+        self.assertEqual(result['status'], 'package-installed-native-unqualified')
         self.assertEqual(calls, ['add', 'list', 'add', 'list', 'remove', 'list'])
         self.assertEqual(result['matched_installation_ids'], result['repeat_installation_ids'])
         self.assertTrue(result['repeat_verified'])
@@ -183,6 +201,89 @@ class QoderPreparedRoutingContracts(unittest.TestCase):
 
 
 class IsolatedClientEnvironmentTest(unittest.TestCase):
+
+    def test_copilot_canonical_remove_public_envelope(self):
+        audit = load_audit()
+        receipt = {"schema_version": 1, "command": "agentplugins remove", "result": "success"}
+        self.assertTrue(audit.copilot_skill_success_response(receipt, "agentplugins remove"))
+        for mutated in ({"schema_version": 1, "command": "remove", "result": "success"},
+                        {"schema_version": True, "command": "agentplugins remove", "result": "success"},
+                        {"schema_version": 1, "command": "agentplugins remove", "result": "failure"}):
+            with self.subTest(mutated=mutated):
+                self.assertFalse(audit.copilot_skill_success_response(mutated, "agentplugins remove"))
+
+    def test_copilot_skill_repeat_only_owns_empty_new_process_logs(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            case = Path(temporary).resolve()
+            home = case / "home"
+            logs = home / ".copilot" / "logs"
+            logs.mkdir(parents=True, mode=0o700)
+            roots = [home / ".copilot", home / ".config" / "copilot"]
+            before = audit.snapshot(roots)
+            first = logs / "process-123-456.log"
+            second = logs / "process-789-101.log"
+            first.write_bytes(b"")
+            after = audit.snapshot(roots)
+            self.assertTrue(audit.copilot_skill_repeat_log_only(before, after, home, case))
+            second.write_bytes(b"")
+            self.assertTrue(audit.copilot_skill_repeat_log_only(
+                before, audit.snapshot(roots), home, case))
+            (logs / "process-222-333.log").write_bytes(b"")
+            self.assertFalse(audit.copilot_skill_repeat_log_only(
+                before, audit.snapshot(roots), home, case))
+            (logs / "process-222-333.log").unlink()
+            first.write_bytes(b"changed")
+            self.assertFalse(audit.copilot_skill_repeat_log_only(
+                before, audit.snapshot(roots), home, case))
+            first.write_bytes(b"")
+            second.unlink()
+            first.unlink()
+            link = logs / "process-123-456.log"
+            link.symlink_to(case)
+            self.assertFalse(audit.copilot_skill_repeat_log_only(
+                before, audit.snapshot(roots), home, case))
+
+    def test_marketing_current_vscode_boundary_preserves_authenticated_managed_user_grants(self):
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        classify = runner["current_vscode_boundary_kind"]
+        managed = {client: {"scopes": ["user"], "delivery": "managed"}
+                   for client in ("codex", "cursor", "copilot", "claude", "gemini", "opencode")}
+        extra = {client: {"scopes": ["user"], "delivery": "managed"}
+                 for client in ("hermes", "antigravity", "pi")}
+        vscode = {"vscode": {"scopes": ["user"], "delivery": "prepared"}}
+        policy = {"source_mode": "production_default", "snapshot_sequence": 49,
+                  "snapshot_digest": "sha256:" + "a" * 64,
+                  "closure": runner["FIXED_SIGNED_CLOSURE"]}
+        for roots, result in ((managed, "signed_grant_refusal"),
+                              ({**managed, **extra}, "signed_grant_refusal"),
+                              ({**managed, **vscode}, "saved_management_capability"),
+                              ({**managed, **extra, **vscode}, "saved_management_capability"),
+                              ({**managed, **extra, "other": {"scopes": ["user"], "delivery": "managed"}},
+                               "signed_grant_refusal")):
+            self.assertEqual(classify({**policy, "root_target_compatibility": roots}), result)
+        for invalid in ({**managed, **extra, "vscode": {"scopes": ["user"], "delivery": "managed"}},
+                        {**managed, "hermes": {"scopes": ["project"], "delivery": "managed"}},
+                        {**managed, **extra, "other": {"scopes": ["user"], "delivery": "prepared"}}):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(
+                    AssertionError, "unqualified signed target shape"):
+                classify({**policy, "root_target_compatibility": invalid})
+
+    def test_remotion_diagnostic_has_only_sanitized_source_coordinates(self):
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "remotion_published_windows_long_temp_e2e.py"))
+        try:
+            raise ValueError("private-value-never-in-report")
+        except ValueError as error:
+            site = runner["sanitized_failure_site"](error, Path(__file__).resolve().parents[1])
+        self.assertEqual(site["file"], "test_live_install_audit_env.py")
+        self.assertIsInstance(site["line"], int)
+        self.assertNotIn("private-value-never-in-report", str(site))
+        self.assertNotIn(str(Path(__file__).resolve().parents[1]), str(site))
+        self.assertEqual(runner["sanitized_failure_site"](
+            ValueError("other-secret"), Path(__file__).resolve().parents[1])["file"], "unqualified")
+
 
     def test_gemini_repeat_snapshot_tracks_ordinary_empty_directory_deltas(self):
         audit = load_audit()
@@ -1409,8 +1510,13 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             env, project, *_ = runner["run_case"]("unused", "copilot", root, "A")
+            injected_grant = False
             def invoke(command, *_):
-                return self._marketing_kit_info_response(runner, command[2])
+                response = self._marketing_kit_info_response(runner, command[2])
+                if injected_grant and command[2] == runner["REQUIRED_DISTRIBUTIONS"]["marketing-kit"]:
+                    response["_json"]["data"]["selected_release"]["target_compatibility"].append(
+                        {"client": "other", "scopes": ["user"], "delivery": "managed"})
+                return response
             checked = []
             with patch.dict(observe.__globals__, {"invoke": invoke}):
                 policy = observe("agentplugins", env, project, "copilot")
@@ -1424,7 +1530,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 with self.assertRaisesRegex(AssertionError, "policy identity changed"):
                     observe("agentplugins", env, project, "copilot", advanced,
                             (lambda: checked.append(True),))
-            self.assertEqual(checked, [True, True, True])
+                injected_grant = True
+                with self.assertRaisesRegex(AssertionError, "production policy observation changed"):
+                    observe("agentplugins", env, project, "copilot", policy,
+                            (lambda: checked.append(True),))
+            self.assertEqual(checked, [True, True, True, True])
 
     def test_marketing_kit_fixed45_warms_only_directory_then_freezes_negative_profile(self):
         from runpy import run_path
@@ -2422,7 +2532,10 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                               codex_checkpoint_error=None, codex_constructor_error=None,
                                               require_copilot_trust=False, copilot_trust_mutation=None,
                                               copilot_fixture_failure=None, claude_retained_scan_error=False,
-                                              temporary_root_alias=False):
+                                              temporary_root_alias=False, real_codex=False, codex_capture_failure=False,
+                                              codex_initializer=None, copilot_refusal_mutation=None,
+                                              copilot_add_failure=False, claude_native_mutation=None,
+                                              claude_runtime_fixture=None):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2433,7 +2546,41 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                               "marketing-kit-project-release-e2e.py"))
         main = runner["main"]
         installed, phases = {}, []
-        codex_profiles, retirements = [], []
+        retirements = []
+        sqlite_profiles = {}
+        sqlite_preparations = []
+
+        # This orchestration fixture already substitutes every public/native
+        # lifecycle. Real SQLite custody has separate real-database regressions.
+        def prepare_sqlite(name, _env, _project):
+            if target == "codex":
+                self.assertIn(name, ("A", "B", "C"))
+                self.assertNotIn(name, sqlite_preparations)
+                sqlite_preparations.append(name)
+                proof = main.__globals__["CodexProfile"](runner["audit"], _project.parent.parent, _env, _project)
+                sqlite_profiles[name] = {"runtime_semantics_unchanged": True}
+                return proof
+
+        real_profiles = runner["MarketingCodexSQLiteProfiles"](target)
+        if codex_capture_failure:
+            original_evidence = real_profiles.evidence
+            def failed_capture():
+                original_evidence()
+                raise ValueError("injected live evidence guard failure")
+            real_profiles.evidence = failed_capture
+        async def native_exchange(binary, project, profile, environment, **kwargs):
+            database = Path(environment["HOME"]) / ".local/state/codex-sqlite/state_5.sqlite"
+            with closing(sqlite3.connect(database)) as connection:
+                connection.execute("CREATE TABLE fixture_rows(value TEXT)")
+                connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
+                connection.commit()
+            return {"data": [{"cwd": str(project), "errors": [], "skills": []}]}
+
+        mutation_checkpoints = []
+        sqlite_orchestration = SimpleNamespace(
+            prepare=prepare_sqlite, checkpoint=mutation_checkpoints.append,
+            call=lambda _phase, action: action(), evidence=lambda: dict(sqlite_profiles))
+        codex_profiles = []
         codex_failures = []
         outside_roots = []
         original_open = Path.open
@@ -2501,6 +2648,15 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
         class CheckedCleanup:
             def __init__(self, **kwargs):
+                self.parent = TemporaryDirectory() if temporary_root_alias else None
+                if self.parent is not None:
+                    parent = Path(self.parent.name).resolve(strict=True)
+                    owned = parent / "owned"
+                    owned.mkdir()
+                    self.alias_parent = parent / "alias"
+                    self.alias_parent.symlink_to(owned, target_is_directory=True)
+                    kwargs["dir"] = owned
+                self.lifecycle_root = kwargs.get("prefix") == "uap-real-marketing-kit-"
                 self.inner = TemporaryDirectory(**kwargs)
                 self.alias_directory = None
 
@@ -2524,7 +2680,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 finally:
                     if self.alias_directory is not None:
                         self.alias_directory.cleanup()
-                if exc_type is None and cleanup_failure:
+                if exc_type is None and cleanup_failure and self.lifecycle_root:
                     raise OSError("disposable cleanup failed")
 
         class FakeCodexProfile:
@@ -2606,44 +2762,76 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
         self_test = self
 
-        def execute(_cli, env, project, _target, label, *args, capture=None):
+        mutation_labels = []
+        def execute(_cli, env, project, _target, label, *args, checkpoint=None, capture=None):
             phases.append(label)
+            mutation_labels.append("after-public-mutation-" + label)
+            if real_codex:
+                self.assertEqual(checkpoint, real_profiles.checkpoint)
+            else:
+                self.assertIs(checkpoint, sqlite_orchestration.checkpoint)
             scope = args[args.index("--scope") + 1]
             key = (env["AGENTPLUGINS_HOME"], scope)
             portable = project if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
-            if require_copilot_trust:
-                config = Path(env["HOME"]) / ".copilot/config.json"
-                if label == "cold locked restore":
-                    if not config.exists():
-                        raise AssertionError("Copilot selected Project B has no remembered trust")
-                    self.assertEqual(json.loads(config.read_text()), {"trustedFolders": [str(project)]})
-                    self.assertNotIn(key, installed)
-                    self.assertEqual(list(Path(env["AGENTPLUGINS_HOME"]).iterdir()), [])
-                elif project.parent.name in ("A", "C") and args[0] == "add":
-                    self.assertFalse(config.exists(), "fixture must not preauthorize A or User C")
-            if label == copilot_trust_mutation:
-                (Path(env["HOME"]) / ".copilot/config.json").write_text('{"trustedFolders": []}')
-            if args[0] in ("add", "install"):
-                for name in ("uap.toml", "uap.lock"):
-                    if not (portable / name).exists():
-                        (portable / name).write_text("retained portable agreement")
-                installed[key] = {name: f"{scope}:{project.parent.name}:{name}"
-                                  for name in runner["EXPECTED"]}
-            elif args[0] == "remove":
-                if label == project_remove_error:
-                    raise AssertionError("injected Project removal failure")
-                if capture is not None:
-                    prior = installed[key]
-                    actions = [{"alias": alias, "action": "remove", "client_id": _target,
-                                "installation_id": prior[distribution]}
-                               for alias, distribution in runner["REQUIRED_DISTRIBUTIONS"].items()]
-                    capture({"result": "success", "outcome": "completed", "scope": scope,
-                             "actions": actions, "results": [
-                                 {"operation": "remove", "client_id": _target,
-                                  "installation_id": row["installation_id"], "outcome": "completed"}
-                                 for row in actions]})
-                installed[key] = {}
+            removal_receipt = None
+            try:
+                if label == "cold locked restore" and target == "copilot" and copilot_add_failure:
+                    raise AssertionError("positive cold restore failed")
+                if require_copilot_trust:
+                    config = Path(env["HOME"]) / ".copilot/config.json"
+                    if label == "cold locked restore":
+                        if not config.exists():
+                            raise AssertionError("Copilot selected Project B has no remembered trust")
+                        self.assertEqual(json.loads(config.read_text()), {"trustedFolders": [str(project)]})
+                        self.assertNotIn(key, installed)
+                        self.assertEqual(list(Path(env["AGENTPLUGINS_HOME"]).iterdir()), [])
+                    elif project.parent.name in ("A", "C") and args[0] == "add":
+                        self.assertFalse(config.exists(), "fixture must not preauthorize A or User C")
+                if label == copilot_trust_mutation:
+                    (Path(env["HOME"]) / ".copilot/config.json").write_text('{"trustedFolders": []}')
+                if args[0] in ("add", "install"):
+                    for name in ("uap.toml", "uap.lock"):
+                        if not (portable / name).exists():
+                            (portable / name).write_text("retained portable agreement")
+                    installed[key] = {name: f"{scope}:{project.parent.name}:{name}"
+                                      for name in runner["EXPECTED"]}
+                elif args[0] == "remove":
+                    if label == project_remove_error:
+                        raise AssertionError("injected Project removal failure")
+                    if capture is not None:
+                        prior = installed[key]
+                        actions = [{"alias": alias, "action": "remove", "client_id": _target,
+                                    "installation_id": prior[distribution]}
+                                   for alias, distribution in runner["REQUIRED_DISTRIBUTIONS"].items()]
+                        removal_receipt = {"result": "success", "outcome": "completed", "scope": scope,
+                                 "actions": actions, "results": [
+                                     {"operation": "remove", "client_id": _target,
+                                      "installation_id": row["installation_id"], "outcome": "completed"}
+                                     for row in actions]}
+                    installed[key] = {}
+                if claude_runtime_fixture is not None:
+                    claude_runtime_fixture(runner, env, project, label)
+            finally:
+                checkpoint("after-public-mutation-" + label)
+            if capture is not None and removal_receipt is not None:
+                if not real_codex:
+                    self.assertEqual(mutation_checkpoints[-1], "after-public-mutation-" + label)
+                capture(removal_receipt)
+            elif capture is not None:
+                capture({"inert_test_only": True})
             return {"stage": label, "exit_code": 0, "result": "passed"}
+
+        def cold_consent(argv, env, project, timeout):
+            self.assertEqual(target, "copilot")
+            self.assertEqual(project.parent.name, "D")
+            self.assertEqual(argv, ["unused", "install", "--locked", "--yes", "--scope", "project",
+                                    "--project-root", str(project), "--format", "json"])
+            self.assertEqual(timeout, 180)
+            phases.append("cold Copilot Project folder consent refused")
+            response = self._marketing_kit_copilot_consent_response(runner, project)
+            if copilot_refusal_mutation is not None:
+                copilot_refusal_mutation(response, env, project)
+            return response
 
         def boundary(_cli, env, project, expected, _guards):
             self.assertEqual(project.parent.name, "E")
@@ -2707,11 +2895,58 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             return {"status": "installed" if owners else "absent", "managed_count": len(owners),
                     "profile": str(Path(env["HOME"]).resolve()), "owners": owners}
 
+        def codex_profile(audit, root, env, project):
+            if codex_initializer is not None:
+                return codex_initializer(runner, env, project)
+            return FakeCodexProfile(audit, root, env, project)
+
+        # These are inert scope/report controls, like the existing public/native
+        # substitutes above. Real cache custody and native-output validation
+        # have separate adversarial filesystem/protocol tests; no native claim.
+        class ClaudeDiscovery:
+            def __init__(self, *args):
+                pass
+            def before_remove(self, env, project, scope, label):
+                phases.append("claude-before:" + label)
+                if project.parent.name == "B":
+                    self_case.assertIn("cold locked restore", phases)
+                if project.parent.name == "C":
+                    self_case.assertIn("User cold locked restore C", phases)
+                mutate_claude("before", project)
+                return {"scope": scope}
+            def after_remove(self, env, project, before, label):
+                phases.append("claude-after:" + label)
+                mutate_claude("after", project)
+                return {"inert_test_only": True, "scope": before["scope"]}
+
+        self_case = self
+        def mutate_claude(phase, project):
+            if claude_native_mutation is not None:
+                selected_phase, selected_case, victim, failure = claude_native_mutation
+                if (phase, project.parent.name) == (selected_phase, selected_case):
+                    (project.parent.parent / victim / "home/unknown-native-write").write_text("tampered")
+                    if failure:
+                        raise ValueError("injected Claude native observation failure")
+
+        class ClaudeRetirement:
+            def __init__(self, case, home, *args):
+                self.case, self.home = case, home
+            def close(self):
+                pass
+            def finish(self, *args, **kwargs):
+                return {"inert_test_only": True}
+            def verify_retained(self, *args):
+                return {"inert_test_only": True}
+
         with TemporaryDirectory() as output:
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
                     "execute": execute, "verify_pinned_launcher": lambda *_: None,
-                    "CodexProfile": FakeCodexProfile, "SignedClosureRetirement": FakeRetirement,
+                    "MarketingCodexSQLiteProfiles": lambda _: real_profiles if real_codex else sqlite_orchestration,
+                    "invoke": cold_consent if target == "copilot" else (
+                        lambda *a, **k: {"exit_code": 0, "stdout_full": "codex-cli 0.153.4"}),
+                    "CodexProfile": runner["CodexProfile"] if real_codex else codex_profile,
+                    "SignedClosureRetirement": FakeRetirement,
                     "prepare_copilot_project_b_trust": prepare_trust,
                     "profile_snapshot": profile, "check_foreign": foreign,
                     "check_user_project_unchanged": project_check,
@@ -2727,27 +2962,434 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "verify_fixed_vscode_user_policy_refusal": lambda *_: self.fail("historical45 is not a current gate"),
                     "verify_current_vscode_user_boundary": boundary,
                     "observe_production_policy": observe,
+                    "RemovalDiscovery": ClaudeDiscovery,
                     "codex_user_native_remove_attestation": lambda *_: ("--external-uninstalled",),
                     # Patch the runner binding, preserving tempfile for setup helpers.
                     "tempfile": SimpleNamespace(TemporaryDirectory=CheckedCleanup),
                     }), \
                     patch.dict(runner["audit"], {"copilot_native_roots_guard": make_guard}), \
+                    patch.dict(runner["audit"]["AGENT_BINARIES"], {"codex": sys.executable}), \
+                    patch.dict(runner["audit"]["CODEX_RUNTIME_AUDIT"]["CodexPluginSQLiteAudit"].__init__.__globals__,
+                               {"_exchange": native_exchange}), \
                     patch.object(Path, "open", checked_open), \
                     patch.object(sys, "argv", ["runner", "--target", target, "--cli", "unused",
+                                               *(["--cli-version", "0.1.116"] if target == "claude" else []),
                                                "--report", str(report_path)]), \
                     patch.object(sys, "stdout", StringIO()), patch.object(sys, "stderr", StringIO()):
                 code = main()
-            if target == "codex":
+            if real_codex:
+                return code, json.loads(report_path.read_text()), phases
+            self.assertEqual([phase for phase in mutation_checkpoints
+                              if phase.startswith("after-public-mutation-")], mutation_labels)
+            if target == "codex" and codex_initializer is None:
                 self.assertEqual(len(codex_profiles),
                                  ("A", "B", "C").index(codex_constructor_error)
                                  if codex_constructor_error is not None else 3)
                 self.assertTrue(all(profile.checkpoints for profile in codex_profiles))
+                self.assertEqual(sqlite_preparations, list(("A", "B", "C")[:len(codex_profiles)])
+                                 + ([codex_constructor_error] if codex_constructor_error else []))
+                self.assertEqual([profile.project.parent.name for profile in codex_profiles],
+                                 list(("A", "B", "C")[:len(codex_profiles)]))
             if target == "claude":
-                self.assertTrue(retirements)
                 self.assertTrue(all(retirement.closed for retirement in retirements))
-                self.assertTrue(all(retirement.finished for retirement in retirements)
-                                if project_remove_error not in ("remove A", "remove B") else not retirements[-1].finished)
+                # A refused native preflight may stop before capture; a failed
+                # postflight must close custody without qualifying retirement.
+                if claude_native_mutation is None:
+                    self.assertTrue(retirements)
+                    self.assertTrue(all(retirement.finished for retirement in retirements)
+                                    if project_remove_error not in ("remove A", "remove B") else not retirements[-1].finished)
             return code, json.loads(report_path.read_text()), phases
+
+    def test_marketing_kit_real_codex_main_captures_evidence_before_cleanup(self):
+        for cleanup_failure in (False, True):
+            with self.subTest(cleanup_failure=cleanup_failure):
+                code, report, _ = self._exercise_marketing_kit_scope_report(
+                    "codex", real_codex=True, cleanup_failure=cleanup_failure)
+                self.assertEqual(code, 1 if cleanup_failure else 0, report.get("failure"))
+                self.assertEqual(report["two_scope_lifecycle_qualified"], not cleanup_failure)
+                self.assertEqual(set(report["codex_sqlite_profiles"]), {"A", "B", "C"})
+                for proof in report["codex_sqlite_profiles"].values():
+                    self.assertTrue(proof["runtime_semantics_unchanged"])
+                    self.assertEqual(proof["final_checkpoint"], "passed")
+
+    def test_marketing_kit_real_codex_capture_failure_still_writes_failed_report(self):
+        code, report, _ = self._exercise_marketing_kit_scope_report(
+            "codex", real_codex=True, codex_capture_failure=True)
+        self.assertEqual(code, 1)
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertEqual(report["status"], "failed")
+        self.assertIn("live evidence guard failure", report["failure"])
+
+    @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
+    def test_marketing_kit_copilot_owned_temporary_parent_alias_keeps_full_lifecycle(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "copilot", require_copilot_trust=True, temporary_root_alias=True)
+        self.assertEqual(code, 0, report.get("failure"))
+        self.assertTrue(report["two_scope_lifecycle_qualified"])
+        self.assertEqual(report["scope_results"]["project"]["status"], "passed")
+        self.assertEqual(report["scope_results"]["user"]["status"], "passed")
+        self.assertEqual(report["copilot_project_b_trust_fixture"]["status"],
+                         "authored-native-prerequisite")
+        for phase in ("temporary-root-alias", "preauthorized-trust:B", "cold locked restore",
+                      "remove B", "remove A", "User cold locked restore C", "User remove C",
+                      "User remove", "catalog:E"):
+            self.assertIn(phase, phases)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    def _marketing_kit_copilot_consent_response(self, runner, project):
+        reason = "copilot has not remembered the selected project folder; rerun installation to restore folder trust"
+        aliases = sorted(runner["UPDATE_ALIASES"])
+        return {"exit_code": 1, "timeout": False, "_json": {
+            "schema_version": 1, "command": "agentplugins install", "result": "failure",
+            "outcome": "partial", "scope": "project", "scope_selection_reason": "explicit",
+            "selection": {"scope": "project", "scope_selection_reason": "explicit",
+                          "project_root": str(project), "manifest_path": str(project / "uap.toml"),
+                          "lock_path": str(project / "uap.lock")},
+            "bindings": [{"alias": alias, "client_id": "copilot", "status": "incomplete", "code": "FAILED"}
+                         for alias in aliases],
+            "actions": [{"alias": alias, "client_id": "copilot", "action": "install",
+                         "package_digest": runner["FIXED_SIGNED_CLOSURE"][runner["REQUIRED_DISTRIBUTIONS"][alias]]["tree_digest"],
+                         "revision": runner["FIXED_SIGNED_CLOSURE"][runner["REQUIRED_DISTRIBUTIONS"][alias]]["resolved_revision"]}
+                        for alias in aliases],
+            "results": [{"installation_id": "refused-" + alias, "client_id": "copilot",
+                         "operation": "install", "outcome": "incomplete", "reason": reason,
+                         "next_actions": [{"kind": "activate", "reason": reason}]} for alias in aliases]}}
+
+    @contextmanager
+    def _cold_copilot_data_case(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            home, data, project = (root / name for name in ("home", "data", "project"))
+            for directory in (home, data, project): directory.mkdir(mode=0o700)
+            (home / ".copilot").mkdir(mode=0o700)
+            (project / "uap.toml").write_text("retained portable manifest")
+            (project / "uap.lock").write_text("retained signed lock")
+            foreign = data / "foreign-receipt.json"
+            foreign.write_text("unmanaged data remains unchanged")
+            foreign.chmod(0o600)
+            env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+            yield runner, env, project, data
+
+    def test_marketing_kit_cold_copilot_expected_refusal_rejects_installer_data_writes(self):
+        for relative in ("state-v2.json", "uap.toml", "uap.lock", "managed/plugin",
+                         "operations-v2/receipt", "plugin-data/data", "foreign-receipt.json",
+                         "store/packages/unowned/package", "store/.staging/entry-leftover/file"):
+            with self.subTest(path=relative), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                def invoke(*_):
+                    path = data / relative
+                    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    path.write_text("unexpected durable state")
+                    path.chmod(0o600)
+                    return self._marketing_kit_copilot_consent_response(runner, project)
+                with patch.dict(verify.__globals__, {"invoke": invoke}):
+                    with self.assertRaises(AssertionError): verify("unused", env, project)
+
+    def test_marketing_kit_cold_copilot_preserves_existing_file_link_custody(self):
+        for remove_alias in (False, True):
+            with self.subTest(remove_alias=remove_alias), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                original = data / "foreign-receipt.json"
+                before = runner["scoped_snapshot"]([data])
+                def invoke(*_):
+                    alias = data.parent / "outside-data-alias"
+                    os.link(original, alias)
+                    if remove_alias: alias.unlink()
+                    # Shared snapshot equality is deliberately insufficient:
+                    # bytes, inode, mode and mtime all survive this mutation.
+                    self.assertEqual(runner["scoped_snapshot"]([data]), before)
+                    return self._marketing_kit_copilot_consent_response(runner, project)
+                with patch.dict(verify.__globals__, {"invoke": invoke}):
+                    with self.assertRaisesRegex(AssertionError, "existing data entry"):
+                        verify("unused", env, project)
+
+    def test_marketing_kit_cold_copilot_exception_still_checks_installer_data(self):
+        for mutation in (False, True):
+            with self.subTest(mutation=mutation), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                def invoke(*_):
+                    if mutation: (data / "state-v2.json").write_text("unexpected")
+                    raise RuntimeError("subject process failed")
+                with patch.dict(verify.__globals__, {"invoke": invoke}):
+                    if mutation:
+                        with self.assertRaises(AssertionError): verify("unused", env, project)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "subject process failed"):
+                            verify("unused", env, project)
+
+    def test_marketing_kit_cold_copilot_clean_cache_and_receipt_bound_project_positive(self):
+        with self._cold_copilot_data_case() as (runner, env, project, data):
+            verify = runner["verify_copilot_cold_project_refusal"]
+            foreign_before = runner["scoped_snapshot"]([data])
+            def invoke(*_):
+                for name, body in (("directory-v1-cache.json", b"signed Directory cache"),
+                                   ("directory-v1-cache.json.lock", b"")):
+                    path = data / name; path.write_bytes(body); path.chmod(0o600)
+                response = self._marketing_kit_copilot_consent_response(runner, project)
+                alias = response["_json"]["actions"][0]["alias"]
+                iid = response["_json"]["results"][0]["installation_id"]
+                physical = alias + "-" + hashlib.sha256(iid.encode()).hexdigest()[:12]
+                managed = project / ".uap/managed/clients/copilot" / physical
+                managed.mkdir(parents=True, mode=0o700)
+                (managed / "plugin.json").write_text("receipt-bound materialization")
+                (project / ".uap/state-v2.json").write_text("Project state may be retained")
+                return response
+            with patch.dict(verify.__globals__, {"invoke": invoke}):
+                result = verify("unused", env, project)
+            self.assertEqual(result["result"], "expected_refusal")
+            self.assertFalse(result["cold_native_restore_qualified"])
+            after = runner["scoped_snapshot"]([data])
+            self.assertTrue(all(after[key] == value for key, value in foreign_before.items()))
+
+    @unittest.skipUnless(os.name == "posix", "published Ubuntu cold-cache descriptor custody")
+    def test_marketing_kit_cold_copilot_cache_allowance_is_exact_and_source_bound(self):
+        mutations = (None, "source-bytes", "metadata", "executables", "state-in-entry", "unknown-entry",
+                     "nonempty-staging", "lock", "source-mode", "hardlink", "symlink", "fifo",
+                     "existing-addition", "existing-rewrite")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                helpers = runner["audit"]["WINDSURF_GLOBAL_AUDIT"]
+                custody = runner["audit"]["CLAUDE_RETIREMENT_AUDIT"]
+                # Exercise the cache-coordinate join with an inert independently
+                # held source; the reused digest engine has its own contracts.
+                source = data.parent / "source"
+                source.mkdir(mode=0o700)
+                (source / "plugin.json").write_bytes(b'{"name":"inert-cache"}\n')
+                (source / "plugin.json").chmod(0o600)
+                fd = custody["open_directory"](source)
+                try: digest = helpers["immutable_source_digest"](fd, helpers["frame"](fd))
+                finally: os.close(fd)
+                distribution = runner["REQUIRED_DISTRIBUTIONS"]["marketing-kit"]
+                pins = runner["FIXED_SIGNED_CLOSURE"]
+                pin = {**pins[distribution], "tree_digest": digest}
+                entry = data / "store/packages/agentplugins-tree-sha256-v1" / digest[7:]
+                metadata = {"schema_version": 1, "digest_algorithm": "agentplugins-tree-sha256-v1",
+                            "tree_digest": digest, "source": {}}
+                def populate():
+                    import shutil
+                    entry.mkdir(parents=True, mode=0o700)
+                    shutil.copytree(source, entry / "package")
+                    path = entry / "metadata.json"
+                    path.write_text(json.dumps(metadata)); path.chmod(0o600)
+                    (data / "store/.staging").mkdir(mode=0o700)
+                    for directory in (data / "store", data / "store/packages",
+                                      data / "store/packages/agentplugins-tree-sha256-v1"):
+                        directory.chmod(0o700)
+                if mutation and mutation.startswith("existing-"): populate()
+                def invoke(*_):
+                    if not (mutation and mutation.startswith("existing-")): populate()
+                    lock = data / "store/store.lock"
+                    lock.write_text('{"pid":123,"acquired_at":"2026-11-23T12:00:00Z"}\n')
+                    lock.chmod(0o600)
+                    if mutation == "source-bytes": (entry / "package/plugin.json").write_text("wrong bytes")
+                    elif mutation == "metadata": (entry / "metadata.json").write_text("{}")
+                    elif mutation == "executables":
+                        (entry / "metadata.json").write_text(json.dumps({**metadata, "executable_files": ["unknown"]}))
+                    elif mutation == "state-in-entry": (entry / "state-v2.json").write_text("unowned")
+                    elif mutation == "unknown-entry": (entry.parent / ("0" * 64)).mkdir(mode=0o700)
+                    elif mutation == "nonempty-staging": (data / "store/.staging/entry-unfinished").mkdir(mode=0o700)
+                    elif mutation == "lock": lock.write_text("not a producer process lock")
+                    elif mutation == "source-mode": (entry / "package/plugin.json").chmod(0o644)
+                    elif mutation == "hardlink": os.link(entry / "package/plugin.json", source / "linked")
+                    elif mutation == "symlink":
+                        (entry / "package/plugin.json").unlink()
+                        (entry / "package/plugin.json").symlink_to(source / "plugin.json")
+                    elif mutation == "fifo":
+                        (entry / "package/plugin.json").unlink()
+                        os.mkfifo(entry / "package/plugin.json", 0o600)
+                    elif mutation == "existing-addition": (entry / "package/extra").write_text("unowned")
+                    elif mutation == "existing-rewrite": (entry / "package/plugin.json").write_text("changed")
+                    return self._marketing_kit_copilot_consent_response(runner, project)
+                descriptors = Path("/proc/self/fd")
+                count = len(list(descriptors.iterdir())) if descriptors.is_dir() else None
+                with patch.dict(pins, {distribution: pin}), patch.dict(verify.__globals__, {"invoke": invoke}):
+                    if mutation is None:
+                        self.assertEqual(verify("unused", env, project)["result"], "expected_refusal")
+                    else:
+                        with self.assertRaises((AssertionError, RuntimeError, ValueError)): verify("unused", env, project)
+                if count is not None:
+                    self.assertEqual(len(list(descriptors.iterdir())), count, "cache custody leaked a descriptor")
+
+    def test_marketing_kit_copilot_consent_refusal_requires_exact_causal_closure(self):
+        mutations = [
+            lambda r, *_: r.update(exit_code=0),
+            lambda r, *_: r.update(timeout=True),
+            lambda r, *_: r.update(_json=None),
+            lambda r, *_: r["_json"].update(scope="user"),
+            lambda r, *_: r["_json"].update(result="success"),
+            lambda r, *_: r["_json"].pop("bindings"),
+            lambda r, *_: r["_json"]["bindings"].pop(),
+            lambda r, *_: r["_json"]["bindings"][0].update(alias="unrelated"),
+            lambda r, *_: r["_json"]["bindings"][0].update(client_id="codex"),
+            lambda r, *_: r["_json"]["bindings"][0].update(status="completed"),
+            lambda r, *_: r["_json"]["bindings"][0].update(code="TIMEOUT"),
+            lambda r, *_: r["_json"].pop("selection"),
+            lambda r, *_: r["_json"]["selection"].update(scope="user"),
+            lambda r, *_: r["_json"]["selection"].update(scope_selection_reason="inferred"),
+            lambda r, *_: r["_json"]["selection"].update(project_root="/unrelated/project"),
+            lambda r, *_: r["_json"]["selection"].update(manifest_path="/unrelated/uap.toml"),
+            lambda r, *_: r["_json"]["selection"].update(lock_path="/unrelated/uap.lock"),
+            lambda r, *_: r["_json"]["actions"].pop(),
+            lambda r, *_: r["_json"]["actions"][0].update(client_id="codex"),
+            lambda r, *_: r["_json"]["actions"][0].update(revision="unreviewed"),
+            lambda r, *_: r["_json"]["results"][0].update(reason="native command timed out"),
+            lambda r, *_: r["_json"]["results"][0].update(outcome="completed"),
+            lambda r, *_: r["_json"]["results"][0].update(next_actions=[]),
+            lambda r, *_: r["_json"]["results"][0].update(
+                installation_id=r["_json"]["results"][1]["installation_id"]),
+            lambda r, e, p: (Path(e["HOME"]) / ".copilot/config.json").write_text(
+                json.dumps({"trustedFolders": [str(p)]})),
+            lambda r, e, p: (Path(e["HOME"]) / ".copilot/unowned-cache").write_text("unknown native write"),
+            lambda r, e, p: (p / "uap.lock").write_text("rewritten agreement"),
+            lambda r, e, p: (p.parent.parent / "A/home/peer-write").write_text("tampered"),
+        ]
+        for index, mutation in enumerate(mutations):
+            with self.subTest(index=index):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=mutation)
+                self.assertEqual(code, 1)
+                self.assertFalse(report["cold_native_restore_qualified"])
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertNotIn("cold locked restore", phases)
+
+    def test_marketing_kit_copilot_refusal_does_not_qualify_failed_explicit_add(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "copilot", copilot_add_failure=True)
+        self.assertEqual(code, 1)
+        self.assertEqual(report["failure"], "positive cold restore failed")
+        self.assertFalse(report["cold_native_restore_qualified"])
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertEqual(report["scope_results"]["project"]["status"], "not_run")
+        self.assertLess(phases.index("cold Copilot Project folder consent refused"),
+                        phases.index("cold locked restore"))
+        self.assertNotIn("remove B", phases)
+
+    def test_marketing_kit_copilot_refusal_binds_present_action_ids_and_accepts_cold_missing_ids(self):
+        def bind_ids(response, _env, _project):
+            for action, result in zip(response["_json"]["actions"], response["_json"]["results"]):
+                action["installation_id"] = result["installation_id"]
+
+        def swap_child_ids(response, env, project):
+            bind_ids(response, env, project)
+            rows = response["_json"]["results"]
+            actions = response["_json"]["actions"]
+            notion = next(i for i, row in enumerate(actions) if row["alias"] == "notion")
+            hubspot = next(i for i, row in enumerate(actions) if row["alias"] == "hubspot-crm")
+            rows[notion]["installation_id"], rows[hubspot]["installation_id"] = (
+                rows[hubspot]["installation_id"], rows[notion]["installation_id"])
+
+        for mutation in (None, bind_ids, swap_child_ids):
+            with self.subTest(mutation=mutation):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=mutation)
+                self.assertEqual(code, int(mutation is swap_child_ids), report.get("failure"))
+                self.assertFalse(report["cold_native_restore_qualified"])
+                self.assertEqual("cold locked restore" in phases, mutation is not swap_child_ids)
+
+    def test_marketing_kit_copilot_refusal_protects_native_project_files_and_empty_directories(self):
+        paths = (".github/mcp.json", ".github/copilot/settings.local.json", ".github/empty-native",
+                 "empty-project-directory", ".uap/unknown-empty", ".uap/operations-v2/unowned.json",
+                 ".uap/managed/clients/copilot/unowned-package")
+        for relative in paths:
+            with self.subTest(relative=relative):
+                def mutate(_response, _env, project):
+                    path = project / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if relative.endswith(".json"):
+                        path.write_text('{"mcpServers":{"unexpected":{}}}')
+                    else:
+                        path.mkdir()
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=mutate)
+                self.assertEqual(code, 1)
+                self.assertIn("Project state", report["failure"])
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertNotIn("cold locked restore", phases)
+
+    def test_marketing_kit_copilot_refusal_checks_project_custody_when_invocation_raises(self):
+        for relative in (None, ".github/mcp.json", ".github/empty-native"):
+            with self.subTest(relative=relative):
+                def interrupted(_response, _env, project):
+                    if relative is not None:
+                        path = project / relative
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        if relative.endswith(".json"):
+                            path.write_text('{"mcpServers":{"unexpected":{}}}')
+                        else:
+                            path.mkdir()
+                    raise RuntimeError("refused invocation interrupted")
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=interrupted)
+                self.assertEqual(code, 1)
+                self.assertIn("Project state" if relative else "refused invocation interrupted", report["failure"])
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertNotIn("cold locked restore", phases)
+
+    def test_marketing_kit_copilot_cold_trust_accepts_owned_temp_ancestor_alias(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            canonical = Path(temporary) / "canonical"
+            canonical.mkdir()
+            alias = Path(temporary) / "alias"
+            try:
+                alias.symlink_to(canonical, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"host cannot create a temporary path alias: {error}")
+            root = alias / "cases"
+            root.mkdir()
+            env, project, *_ = runner["run_case"]("unused", "copilot", root, "B")
+            for name in ("uap.toml", "uap.lock"):
+                (project / name).write_text("retained agreement")
+            reached = []
+            def stop_before_native_call(*_args, **_kwargs):
+                reached.append(True)
+                raise RuntimeError("reached genuine cold invocation boundary")
+            verify = runner["verify_copilot_cold_project_refusal"]
+            with patch.dict(verify.__globals__, {"invoke": stop_before_native_call}):
+                with self.assertRaisesRegex(RuntimeError, "reached genuine cold invocation boundary"):
+                    verify("unused", env, project)
+            self.assertEqual(reached, [True])
+
+    def test_marketing_kit_copilot_refusal_accepts_only_receipt_bound_private_materialization(self):
+        def materialize(response, _env, project):
+            private = project / ".uap"
+            private.mkdir(mode=0o700)
+            for name in ("state-v2.json", "mutation.lock", "environment.lock"):
+                (private / name).write_text("inert installer artifact")
+            for name in ("operations-v2", "installer-tmp"):
+                (private / name).mkdir()
+            for action, result in zip(response["_json"]["actions"], response["_json"]["results"]):
+                physical = action["alias"] + "-" + hashlib.sha256(result["installation_id"].encode()).hexdigest()[:12]
+                package = private / "managed/clients/copilot" / physical
+                package.mkdir(parents=True)
+                (package / "plugin.json").write_text("inert staged package")
+                data = private / "plugin-data" / physical
+                data.mkdir(parents=True)
+                (data / ".agentplugins-data-owner.json").write_text("inert data receipt")
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "copilot", copilot_refusal_mutation=materialize)
+        self.assertEqual(code, 0, report.get("failure"))
+        self.assertFalse(report["cold_native_restore_qualified"])
+        self.assertTrue(report["two_scope_lifecycle_qualified"])
+        self.assertIn("cold locked restore", phases)
 
     @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
     def test_marketing_kit_canonicalizes_allocated_root_before_trust_and_keeps_later_guards(self):
@@ -2865,8 +3507,21 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 code, report, phases = self._exercise_marketing_kit_scope_report(target)
                 self.assertEqual(code, 0, report.get("failure"))
                 self.assertEqual(report["status"], "passed")
-                self.assertEqual(report["qualification_scope"], "user_and_project")
+                self.assertEqual(report["qualification_scope"],
+                    "user_and_project_installation_lifecycle_with_retained_Claude_bytes"
+                    if target == "claude" else "user_and_project")
+                if target == "claude":
+                    self.assertEqual(len(report["claude_fresh_removal_discovery"]), 4)
+                    for flag in ("full_native_removal_qualified", "physical_absence_qualified",
+                                 "writer_closure_qualified", "mcp_discovery_absence_qualified"):
+                        self.assertIs(report["native_removal_qualification"][flag], False)
                 self.assertTrue(report["two_scope_lifecycle_qualified"])
+                if target == "codex":
+                    self.assertEqual(set(report["codex_sqlite_profiles"]), {"A", "B", "C"})
+                if target == "copilot":
+                    self.assertFalse(report["cold_native_restore_qualified"])
+                else:
+                    self.assertNotIn("cold_native_restore_qualified", report)
                 self.assertEqual(report["positive_policy"]["source_mode"], "production_default")
                 self.assertEqual(report["positive_policy"]["snapshot_sequence"], 46)
                 self.assertEqual([phase for phase in phases if phase.startswith("catalog:")],
@@ -2876,8 +3531,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "policy": report["positive_policy"]})
                 for scope in ("user", "project"):
                     self.assertEqual(report["scope_results"][scope], {
-                        "expectation": "positive_lifecycle", "status": "passed"})
-                required = ["add", "repeat add", "update", "repair intact", "cold locked restore",
+                        "expectation": "positive_lifecycle",
+                        "status": "passed"})
+                restore = (["cold Copilot Project folder consent refused", "cold locked restore"]
+                           if target == "copilot" else ["cold locked restore"])
+                required = ["add", "repeat add", "update", "repair intact", *restore,
                             "remove B", "remove A", "User add", "User repeat add", "User update",
                             "User repair intact", "User cold locked restore C", "User remove C", "User remove"]
                 self.assertEqual([phase for phase in phases if phase in required], required)
@@ -3754,6 +4412,116 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 check({**installed, "_json": {**installed["_json"], **changed}},
                       "cold locked restore", "install")
 
+    def test_marketing_kit_signed_tuple_failure_preserves_bounded_public_evidence(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        inspect = runner["inspect_signed_closure"]
+        distribution = runner["REQUIRED_DISTRIBUTIONS"]["playwright"]
+        def invoke(command, *_):
+            response = self._marketing_kit_info_response(runner, command[2])
+            if command[2] == distribution:
+                response["_json"]["data"]["selected_release"].update(
+                    release_sequence=1, repository="x" * 300,
+                    resolved_revision="128b01ff2b4f7242ad061ad823d5e4018af6b2e4",
+                    private_unselected_field="must-not-appear")
+            return response
+        with patch.dict(inspect.__globals__, {"invoke": invoke}):
+            with self.assertRaisesRegex(AssertionError, "immutable source identity changed") as caught:
+                inspect("agentplugins", {}, Path("."), "codex")
+        text = str(caught.exception)
+        observed = json.loads(text.split(": ", 1)[1])
+        self.assertEqual(observed["distribution"], distribution)
+        self.assertEqual(observed["snapshot_sequence"], runner["FIXED_REFUSAL_POLICY"]["snapshot_sequence"])
+        self.assertEqual(observed["snapshot_digest"], runner["FIXED_REFUSAL_POLICY"]["snapshot_digest"])
+        self.assertEqual(observed["expected_release"]["release_sequence"], 2)
+        self.assertEqual(observed["observed_release"]["release_sequence"], 1)
+        self.assertEqual(observed["observed_release"]["repository"], {
+            "type": "str", "length": 300, "sha256": hashlib.sha256(b"x" * 300).hexdigest()})
+        self.assertEqual(observed["observed_release"]["resolved_revision"], {
+            "type": "str", "length": 40,
+            "sha256": hashlib.sha256(b"128b01ff2b4f7242ad061ad823d5e4018af6b2e4").hexdigest()})
+        self.assertEqual(observed["observed_release"]["package_path"],
+                         runner["FIXED_SIGNED_CLOSURE"][distribution]["package_path"])
+        self.assertNotIn("must-not-appear", text)
+        self.assertNotIn("private_unselected_field", text)
+        self.assertLess(len(text), 2500)
+
+    def test_marketing_kit_signed_tuple_diagnostic_redacts_sensitive_allowlisted_values(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        inspect = runner["inspect_signed_closure"]
+        distribution = runner["REQUIRED_DISTRIBUTIONS"]["playwright"]
+        sensitive = (
+            ("allowlisted-uri-secret", "https://alice:allowlisted-uri-secret@host.invalid/private"),
+            ("allowlisted-private-secret", "allowlisted-private-secret arbitrary\nsensitive text"),
+            ("allowlisted-repository-secret", "allowlisted-repository-secret/private"),
+            ("allowlisted-path-secret", "private/allowlisted-path-secret"),
+            ("allowlisted-version-secret", "0.1.0+allowlisted-version-secret"),
+            ("allowlisted-surrogate-secret", "allowlisted-surrogate-secret" + chr(0xDCFF)),
+        )
+        for field in ("selected_distribution", "id", "release_status",
+                      *runner["FIXED_SIGNED_CLOSURE"][distribution]):
+            for canary, value in sensitive:
+                with self.subTest(field=field, canary=canary):
+                    def invoke(command, *_):
+                        response = self._marketing_kit_info_response(runner, command[2])
+                        if command[2] == distribution:
+                            data = response["_json"]["data"]
+                            if field == "selected_distribution":
+                                data[field] = value
+                            else:
+                                data["selected_release"][field] = value
+                        return response
+                    with patch.dict(inspect.__globals__, {"invoke": invoke}):
+                        with self.assertRaisesRegex(AssertionError, "immutable source identity changed") as caught:
+                            inspect("agentplugins", {}, Path("."), "codex")
+                    text = str(caught.exception)
+                    observed = json.loads(text.split(": ", 1)[1])
+                    selected = (observed["selected_distribution"] if field == "selected_distribution"
+                                else observed["observed_release"][field])
+                    self.assertEqual(selected, {"type": "str", "length": len(value),
+                        "sha256": hashlib.sha256(value.encode("utf-8", errors="surrogatepass")).hexdigest()})
+                    self.assertNotIn(canary, text)
+                    self.assertNotIn("alice", text)
+                    self.assertLess(len(text), 2500)
+
+    def test_marketing_kit_workflow_separates_current_lifecycle_and_historical_abort(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/marketing-kit-project-release-e2e.yml").read_text()
+        self.assertIn("npm install --global universal-agent-plugins@0.1.116", workflow)
+        self.assertIn('--cli-version 0.1.116', workflow)
+        self.assertIn('release.version !== "0.1.116"', workflow)
+        self.assertIn('result.stdout.replace(/\\n+$/, "") !== "agentplugins 0.1.116"', workflow)
+        historical = workflow.split("      - name: Verify historical npm 0.1.115 launcher abort cleanup", 1)[1].split("      - name:", 1)[0]
+        self.assertIn('npm install --prefix "$RUNNER_TEMP/uap-legacy" --no-audit --no-fund universal-agent-plugins@0.1.115', historical)
+        self.assertIn('UAP_GLOBAL_NPM_ROOT="$RUNNER_TEMP/uap-legacy/node_modules"', historical)
+        self.assertIn('timeout 20s node scripts/marketing-kit-published-launcher-abort.js', historical)
+        self.assertNotIn('continue-on-error', historical)
+
+    def test_marketing_kit_selected_published_version_is_strict_and_context_local(self):
+        import argparse
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        require = runner["require_exact_published_version"]
+        token = runner["_CLI_VERSION"].set("0.1.116")
+        valid = {"exit_code": 0, "timeout": False, "stdout_tail": "agentplugins 0.1.116\n"}
+        try:
+            require(valid)
+            with patch.dict(require.__globals__, {"invoke": Mock(return_value=valid)}):
+                runner["verify_pinned_launcher"]("agentplugins", {}, Path("."))
+            for value in ("0.1.104", "0.1.116-dev", "0.1.1161", "0.1.117"):
+                with self.subTest(value=value), self.assertRaisesRegex(AssertionError, "not exact"):
+                    require({**valid, "stdout_tail": "agentplugins " + value})
+            for value in ("latest", "0.1.116-dev", "01.1.116", "0.1.116\n"):
+                with self.subTest(pin=value), self.assertRaises(argparse.ArgumentTypeError):
+                    runner["published_cli_version"](value)
+        finally:
+            runner["_CLI_VERSION"].reset(token)
+        require({**valid, "stdout_tail": "agentplugins 0.1.115\n"})
+
     def test_marketing_kit_published_abort_watchdog_refuses_stranded_proof_phases(self):
         # Run the actual script with an inert private bootstrap. A stranded
         # downloader or lock waiter must fail instead of letting Node exit
@@ -3851,6 +4619,7 @@ module.exports = {
         require(valid)
         for version in ("agentplugins 0.1.115-dev",
                         "agentplugins 0.1.1151",
+                        "agentplugins 0.1.114",
                         "agentplugins 0.1.103",
                         "other-launcher 0.1.115",
                         "agentplugins 0.1.115\nagentplugins 0.1.115",
@@ -6092,6 +6861,43 @@ module.exports = {
         self.assertEqual(report["pr_head_sha"], "b" * 40)
         self.assertEqual(report["results"][0]["status"], "client-unavailable")
 
+    @unittest.skipUnless(sys.platform == "linux", "Ubuntu Windsurf projection toolchain prelude")
+    def test_windsurf_workflow_preserves_selected_go_and_refuses_wrong_version(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        step = workflow.split("      - name: Run real acquisitions and report every source and outcome\n", 1)[1]
+        prelude = textwrap.dedent(step.split("        run: |\n", 1)[1]
+            .split("          acceptance=()", 1)[0])
+        # Execute the actual prelude only: no vendor, audit, or native process.
+        script = prelude + '\n[[ "$(command -v go)" == "$EXPECTED_GO" ]]\nprintf "%s\\n" "$(command -v go)"\n'
+        for version in ("go version go1.26.11 linux/amd64", "go version go1.26.10 linux/amd64"):
+            with self.subTest(version=version), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                selected = root / "setup-go/bin/go"
+                vendor = root / "runner/vendor-root/usr/bin/go"
+                home = root / "home"
+                for directory in (selected.parent, vendor.parent, home): directory.mkdir(parents=True)
+                selected.write_text('#!/bin/bash\n[[ "$#" == 1 && "$1" == version && "$GOTOOLCHAIN" == local ]] || exit 64\n'
+                    'printf "%s\\n" "$0" >> "$TEST_GO_LOG"\nprintf "%s\\n" "$TEST_GO_VERSION"\n')
+                vendor.write_text('#!/bin/bash\nprintf "vendor invoked\\n" >> "$TEST_VENDOR_LOG"\nexit 79\n')
+                selected.chmod(0o700); vendor.chmod(0o700)
+                selected_log, vendor_log = root / "selected-go.log", root / "vendor-go.log"
+                env = {"PATH": str(selected.parent) + ":/usr/bin:/bin", "HOME": str(home),
+                       "RUNNER_TEMP": str(root / "runner"), "AUDIT_TARGET": "windsurf", "AUDIT_KIND": "plugin",
+                       "EXPECTED_GO": str(selected), "TEST_GO_VERSION": version,
+                       "TEST_GO_LOG": str(selected_log), "TEST_VENDOR_LOG": str(vendor_log)}
+                result = subprocess.run(["/bin/bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
+                                        env=env, capture_output=True, text=True, timeout=10)
+                if version == "go version go1.26.11 linux/amd64":
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, str(selected) + "\n")
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(result.stdout, "")
+                self.assertTrue(selected_log.is_file(), "selected compiler version was never checked")
+                self.assertEqual(selected_log.read_text(), str(selected) + "\n")
+                self.assertFalse(vendor_log.exists())
+
     def test_both_matrix_workflows_export_pr_source_head(self):
         for relative_path in (
             ".github/workflows/live-install-audit.yml",
@@ -6210,28 +7016,24 @@ module.exports = {
         run = workflow.split("      - name: Run real acquisitions and report every source and outcome\n", 1)[1]
         prefix = textwrap.dedent(run.split("        run: |\n", 1)[1].split("          python3 scripts/live-install-audit.py", 1)[0])
         fixed = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
-        self.assertEqual(prefix, 'acceptance=()\n'
-                         'if [[ "$AUDIT_TARGET" == kiro ]]; then\n'
-                         '  test -n "$KIRO_NODE_BIN"\n'
-                         '  export PATH="$KIRO_NODE_BIN:' + fixed + '"\n'
-                         '  if [[ "$AUDIT_KIND" == plugin ]]; then\n'
-                         '    acceptance=(--acceptance kiro-prepared-installation)\n'
-                         '  fi\n'
-                         'else\n  export PATH="' + fixed + '"\nfi\n'
-                         'if [[ "$AUDIT_TARGET" == cursor && "$AUDIT_KIND" == plugin ]]; then\n'
-                         '  acceptance=(--acceptance cursor-prepared-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == cursor && "$AUDIT_KIND" == skill ]]; then\n'
-                         '  acceptance=(--acceptance cursor-prepared-skills-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == skill ]]; then\n'
-                         '  acceptance=(--acceptance kiro-prepared-skills-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == grok && "$AUDIT_KIND" == skill ]]; then\n'
-                         '  acceptance=(--acceptance grok-prepared-skills-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then\n'
-                         '  acceptance=(--acceptance windsurf-prepared-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == vscode && "$AUDIT_KIND" == plugin ]]; then\n'
-                         '  # User preparation and preserved refusal only; no uninstall attestation.\n'
-                         '  acceptance=(--acceptance vscode-user-manual-preparation)\n'
-                         'fi\n')
+        self.assertTrue(prefix.startswith('audit_go_bin=""\n'))
+        self.assertIn('audit_go="$(command -v go)"', prefix)
+        self.assertIn('GOTOOLCHAIN=local "$audit_go" version', prefix)
+        self.assertIn('go version go1.26.11 linux/amd64', prefix)
+        self.assertIn('audit_go_bin="${audit_go%/*}:"', prefix)
+        self.assertIn('acceptance=()\nif [[ "$AUDIT_TARGET" == kiro ]]; then\n', prefix)
+        self.assertIn('test -n "$KIRO_NODE_BIN"', prefix)
+        self.assertIn('export PATH="${audit_go_bin}$KIRO_NODE_BIN:' + fixed + '"', prefix)
+        self.assertIn('export PATH="${audit_go_bin}' + fixed + '"', prefix)
+        for mode in ('kiro-installation', 'kiro-skills-installation',
+                     'cursor-prepared-installation', 'cursor-prepared-skills-installation',
+                     'grok-prepared-skills-installation', 'windsurf-global-installation',
+                     'vscode-user-manual-preparation'):
+            self.assertIn('acceptance=(--acceptance ' + mode + ')', prefix)
+        self.assertNotIn('kiro-prepared-skills-installation', prefix)
+        self.assertNotIn('windsurf-prepared-installation', prefix)
+        self.assertIn('[[ "$(command -v go)" == "$audit_go" ]]', prefix)
+        self.assertIn('[[ "$(command -v docker)" == "$RUNNER_TEMP/vendor-root/usr/bin/docker" ]]', prefix)
         self.assertNotIn("$PATH", prefix)
         audit = load_audit()
         with TemporaryDirectory() as temporary:
@@ -8448,10 +9250,13 @@ module.exports = {
                 def fake_call(argv, env, cwd, timeout=105):
                     if argv[1] == "skills":
                         state["add_count"] = state.get("add_count", 0) + 1
-                        skill.parent.mkdir(parents=True, exist_ok=True)
-                        skill.write_text("---\nname: demo-skill\n---\n")
-                        (project / "uap.toml").write_text("demo-skill\n")
-                        (project / "uap.lock").write_text('{"name":"demo-skill"}')
+                        # A genuine repeated add is a no-op: Cursor checks the
+                        # pinned tree's inode/mtime as well as its content.
+                        if not state["installed"]:
+                            skill.parent.mkdir(parents=True, exist_ok=True)
+                            skill.write_text("---\nname: demo-skill\n---\n")
+                            (project / "uap.toml").write_text("demo-skill\n")
+                            (project / "uap.lock").write_text('{"name":"demo-skill"}')
                         state["installed"] = True
                     elif argv[1] == "remove":
                         skill.unlink()
@@ -8637,6 +9442,163 @@ module.exports = {
 
 
 
+    def test_pi_foreign_skill_uses_separate_preserved_project(self):
+        audit = load_audit()
+        item = {"name": "frontend-design", "source": "unused-fixture",
+                "repo": "example/skills", "folder": "frontend-design",
+                "skill_md_git_blob_sha1": "0" * 40}
+        refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
+                   "timeout": False, "_json": {"data": {"installations": []}}}
+        for mutation in (None, "bytes", "extra-file"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                runroot = Path(temporary).resolve()
+                case = runroot / "skill-00"
+                neighbor = case / "project-b/.pi/skills/foreign-neighbor/SKILL.md"
+                def source_refusal(*args, **kwargs):
+                    if mutation == "bytes":
+                        neighbor.write_text("changed")
+                    elif mutation == "extra-file":
+                        (neighbor.parent / "unowned.txt").write_text("unexpected")
+                    return dict(refused)
+                with patch.object(audit, "call", side_effect=source_refusal):
+                    if mutation:
+                        with self.assertRaisesRegex(ValueError, "Pi foreign project changed"):
+                            audit.do_case("/unused/agentplugins", "pi", "skill", item, 0, runroot, {})
+                    else:
+                        row = audit.do_case("/unused/agentplugins", "pi", "skill", item, 0, runroot, {})
+                        self.assertEqual(neighbor.read_text(),
+                                         "---\nname: foreign-neighbor\ndescription: unrelated\n---\n")
+                        self.assertFalse((case / "project/.pi/skills/foreign-neighbor").exists())
+                        self.assertTrue(row["sentinels_preserved"])
+                        self.assertEqual(row["status"], "install-failed")
+
+    def test_pi_foreign_project_redirect_is_refused_before_fixture_write(self):
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            runroot, outside = root / "run", root / "outside"
+            case = runroot / "skill-00"
+            case.mkdir(parents=True)
+            outside.mkdir()
+            try:
+                (case / "project-b").symlink_to(outside, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"symlinks unavailable: {error}")
+            with patch.object(audit, "call") as forbidden:
+                with self.assertRaisesRegex(ValueError, "foreign Skill neighbor escapes"):
+                    audit.do_case("/unused/agentplugins", "pi", "skill", {}, 0, runroot, {})
+                forbidden.assert_not_called()
+            self.assertEqual(list(outside.iterdir()), [])
+
+    def test_pi_foreign_project_mkdir_swap_refuses_before_fixture_write(self):
+        audit = load_audit()
+        item = {"name": "frontend-design", "source": "unused-fixture",
+                "repo": "example/skills", "folder": "frontend-design",
+                "skill_md_git_blob_sha1": "0" * 40}
+        refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
+                   "timeout": False, "_json": {"data": {"installations": []}}}
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            runroot, outside = root / "run", root / "outside"
+            case = runroot / "skill-00"
+            project_b = case / "project-b"
+            foreign = project_b / ".pi/skills/foreign-neighbor/SKILL.md"
+            outside_member = outside / ".pi/skills/foreign-neighbor/SKILL.md"
+            outside_member.parent.mkdir(parents=True)
+            before = audit.scoped_snapshot((outside,))
+            original_mkdir, swapped = Path.mkdir, []
+            def redirected_mkdir(path, *args, **kwargs):
+                result = original_mkdir(path, *args, **kwargs)
+                if path == foreign.parent and not swapped:
+                    project_b.rename(case / "original-project-b")
+                    try:
+                        project_b.symlink_to(outside, target_is_directory=True)
+                    except (OSError, NotImplementedError) as error:
+                        self.skipTest(f"symlinks unavailable: {error}")
+                    swapped.append(True)
+                return result
+            with (patch.object(Path, "mkdir", redirected_mkdir),
+                  patch.object(audit, "call", return_value=refused) as forbidden):
+                with self.assertRaisesRegex(ValueError, "Pi foreign Skill neighbor.*before fixture write"):
+                    audit.do_case("/unused/agentplugins", "pi", "skill", item, 0, runroot, {})
+                forbidden.assert_not_called()
+            self.assertEqual(swapped, [True])
+            self.assertEqual(audit.scoped_snapshot((outside,)), before)
+            self.assertFalse(outside_member.exists())
+
+    def test_pi_existing_foreign_skill_refuses_without_overwriting_bytes(self):
+        audit = load_audit()
+        item = {"name": "frontend-design", "source": "unused-fixture",
+                "repo": "example/skills", "folder": "frontend-design",
+                "skill_md_git_blob_sha1": "0" * 40}
+        refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
+                   "timeout": False, "_json": {"data": {"installations": []}}}
+        for linked in (False, True):
+            with self.subTest(hardlink=linked), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                runroot, outside = root / "run", root / "outside"
+                project_b = runroot / "skill-00/project-b"
+                foreign = project_b / ".pi/skills/foreign-neighbor/SKILL.md"
+                foreign.parent.mkdir(parents=True)
+                outside.mkdir()
+                original = outside / "foreign.txt"
+                original.write_bytes(b"original foreign bytes\n")
+                if linked:
+                    try:
+                        os.link(original, foreign)
+                    except (OSError, NotImplementedError) as error:
+                        self.skipTest(f"hardlinks unavailable: {error}")
+                else:
+                    foreign.write_bytes(original.read_bytes())
+                before = audit.scoped_snapshot((project_b, outside))
+                with patch.object(audit, "call", return_value=refused) as forbidden:
+                    with self.assertRaises(FileExistsError):
+                        audit.do_case("/unused/agentplugins", "pi", "skill", item, 0, runroot, {})
+                    forbidden.assert_not_called()
+                self.assertEqual(audit.scoped_snapshot((project_b, outside)), before)
+                self.assertEqual(foreign.read_bytes(), b"original foreign bytes\n")
+                self.assertEqual(original.read_bytes(), b"original foreign bytes\n")
+
+    def test_pi_foreign_project_must_be_ordinary_before_baseline(self):
+        audit = load_audit()
+        item = {"name": "frontend-design", "source": "unused-fixture",
+                "repo": "example/skills", "folder": "frontend-design",
+                "skill_md_git_blob_sha1": "0" * 40}
+        refused = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
+                   "timeout": False, "_json": {"data": {"installations": []}}}
+        for replacement in ("symlink", "file", "absent"):
+            with self.subTest(replacement=replacement), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                runroot, outside = root / "run", root / "outside"
+                case = runroot / "skill-00"
+                project_b = case / "project-b"
+                foreign = project_b / ".pi/skills/foreign-neighbor/SKILL.md"
+                outside.mkdir()
+                before = audit.scoped_snapshot((outside,))
+                original_open, swapped = Path.open, []
+                @contextmanager
+                def redirected_open(path, *args, **kwargs):
+                    with original_open(path, *args, **kwargs) as stream:
+                        yield stream
+                    mode = args[0] if args else kwargs.get("mode", "r")
+                    if path == foreign and mode in ("w", "x") and not swapped:
+                        project_b.rename(case / "original-project-b")
+                        if replacement == "symlink":
+                            try:
+                                project_b.symlink_to(outside, target_is_directory=True)
+                            except (OSError, NotImplementedError) as error:
+                                self.skipTest(f"symlinks unavailable: {error}")
+                        elif replacement == "file":
+                            project_b.write_bytes(b"replacement")
+                        swapped.append(True)
+                with (patch.object(Path, "open", redirected_open),
+                      patch.object(audit, "call", return_value=refused) as forbidden):
+                    with self.assertRaisesRegex(ValueError, "Pi foreign project.*ordinary contained directory"):
+                        audit.do_case("/unused/agentplugins", "pi", "skill", item, 0, runroot, {})
+                    forbidden.assert_not_called()
+                self.assertEqual(swapped, [True])
+                self.assertEqual(audit.scoped_snapshot((outside,)), before)
+
     def test_qoder_foreign_skill_is_never_placed_in_uap_managed_bundle(self):
         audit = load_audit()
         item = {"name": "frontend-design", "source": "unused-fixture",
@@ -8791,7 +9753,7 @@ module.exports = {
                     audit.initialize_project_skill_git_root(project, env, case)
                 forbidden.assert_not_called()
 
-    def test_isolated_git_prerequisite_only_for_kimi_and_grok_skills(self):
+    def test_isolated_git_prerequisite_only_for_kimi_grok_and_copilot_skills(self):
         audit = load_audit()
         failed = {"exit_code": 1, "stdout_tail": "", "stderr_tail": "test refusal",
                   "timeout": False, "_json": {"data": {"installations": []}}}
@@ -8805,21 +9767,23 @@ module.exports = {
             for target, kind, item in (
                     ("kimi", "plugin", "atlassian"),
                     ("grok", "plugin", "atlassian"),
+                    ("copilot", "plugin", "atlassian"),
                     ("qoder", "skill", fixture)):
                 audit.do_case("/unused/agentplugins", target, kind, item, 0,
                               root / f"{target}-{kind}", {})
             self.assertEqual(initialize.call_count, 0)
-            for target in ("kimi", "grok"):
+            for target in ("kimi", "grok", "copilot"):
                 audit.do_case("/unused/agentplugins", target, "skill", fixture,
                               0, root / f"{target}-skill", {})
-            self.assertEqual(initialize.call_count, 2)
+            self.assertEqual(initialize.call_count, 3)
             self.assertEqual(
                 {call.args[0] for call in initialize.call_args_list},
                 {root / "kimi-skill/skill-00/project",
-                 root / "grok-skill/skill-00/project"})
+                 root / "grok-skill/skill-00/project",
+                 root / "copilot-skill/skill-00/project"})
 
-    def test_grok_project_skill_gets_real_git_root_before_install(self):
-        # BUG-063: upstream grok inspect projectRoot is Git-discovered, not cwd.
+    def test_grok_and_copilot_skills_get_real_git_root_before_install(self):
+        # Both native clients discover their selected project through Git.
         audit = load_audit()
         self.assertTrue(audit.GIT_EXECUTABLE and Path(audit.GIT_EXECUTABLE).is_file())
         item = {"name": "frontend-design", "source": "unused",
@@ -8831,24 +9795,27 @@ module.exports = {
         def fake_call(argv, env, cwd, timeout=105):
             if argv[0] == audit.GIT_EXECUTABLE:
                 return original_call(argv, env, cwd, timeout)
+            self.assertTrue((cwd / ".git").is_dir())
             return dict(failed)
-        with TemporaryDirectory() as temporary:
-            root = Path(temporary).resolve()
-            with patch.object(audit, "call", side_effect=fake_call):
-                result = audit.do_case("/unused/agentplugins", "grok", "skill",
-                                       item, 0, root, {})
-            project = root / "skill-00/project"
-            self.assertEqual(result["status"], "install-failed")  # mocked add is not PASS
-            self.assertTrue(result["sentinels_preserved"])
-            self.assertTrue((project / ".git").is_dir())
-            self.assertFalse((project / ".git").is_symlink())
-            checked = subprocess.run([audit.GIT_EXECUTABLE, "-C", str(project),
-                                      "rev-parse", "--show-toplevel"],
-                                     capture_output=True, text=True, check=False)
-            self.assertEqual(checked.returncode, 0)
-            self.assertEqual(Path(checked.stdout.strip()).resolve(), project)
-            self.assertTrue((project / ".grok/skills/foreign-neighbor/SKILL.md").is_file())
-            self.assertFalse((project / ".grok/plugins/foreign-neighbor").exists())
+        for target in ("grok", "copilot"):
+            with self.subTest(target=target), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                with patch.object(audit, "call", side_effect=fake_call):
+                    result = audit.do_case("/unused/agentplugins", target, "skill",
+                                           item, 0, root, {})
+                project = root / "skill-00/project"
+                self.assertEqual(result["status"], "install-failed")  # mocked add is not PASS
+                self.assertTrue(result["sentinels_preserved"])
+                self.assertTrue((project / ".git").is_dir())
+                self.assertFalse((project / ".git").is_symlink())
+                checked = subprocess.run([audit.GIT_EXECUTABLE, "-C", str(project),
+                                          "rev-parse", "--show-toplevel"],
+                                         capture_output=True, text=True, check=False)
+                self.assertEqual(checked.returncode, 0)
+                self.assertEqual(Path(checked.stdout.strip()).resolve(), project)
+                skill_root = ".grok/skills" if target == "grok" else ".github/skills"
+                self.assertTrue((project / skill_root / "foreign-neighbor/SKILL.md").is_file())
+                self.assertFalse((project / ".grok/plugins/foreign-neighbor").exists())
 
     def test_qoder_latest_log_link_only_qualifies_closed_run_diagnostics(self):
         audit = load_audit()
@@ -9624,15 +10591,90 @@ class CrossPlatformPublishedProofRegressions(unittest.TestCase):
         with patch.object(audit.sys, "platform", "win32"):
             for target in ("codex", "claude", "opencode", "gemini",
                            "copilot", "cline", "kimi", "qoder", "pi"):
-                expected = 660 if target == "claude" else 180
-                self.assertEqual(audit.install_case_timeout(target, "plugin", "firebase"), expected)
-                self.assertLess(audit.install_case_timeout(target, "plugin", "firebase"), 900)
-                self.assertEqual(audit.install_case_timeout(target, "plugin", "docker-hub"), 105)
-                self.assertEqual(audit.install_case_timeout(target, "skill", "firebase"), 105)
-        with patch.object(audit.sys, "platform", "darwin"):
-            self.assertEqual(audit.install_case_timeout("codex", "plugin", "firebase"), 105)
-        with patch.object(audit.sys, "platform", "linux"):
-            self.assertEqual(audit.install_case_timeout("claude", "plugin", "firebase"), 105)
+                for repeat in (False, True):
+                    expected = 900 if target == "claude" and not repeat else 180
+                    self.assertEqual(audit.install_case_timeout(
+                        target, "plugin", "firebase", repeat=repeat), expected)
+                    self.assertEqual(audit.install_case_timeout(
+                        target, "plugin", "docker-hub", repeat=repeat), 105)
+                    self.assertEqual(audit.install_case_timeout(
+                        target, "skill", "firebase", repeat=repeat), 105)
+        for platform in ("darwin", "linux"):
+            with patch.object(audit.sys, "platform", platform):
+                for repeat in (False, True):
+                    self.assertEqual(audit.install_case_timeout(
+                        "claude", "plugin", "firebase", repeat=repeat), 105)
+
+
+class WindowsFirebaseBudgetContracts(unittest.TestCase):
+    """Exercise the real lifecycle oracle with distinct cold and warm bounds."""
+
+    def test_cold_budget_routes_once_and_timeout_never_qualifies_registration(self):
+        audit = load_audit()
+        pin = {"distribution": "777genius/firebase", "repository": "example/plugins",
+               "path": "plugins/firebase", "revision": "a" * 40, "sequence": 1,
+               "tree_digest": "sha256:" + "b" * 64, "manifest_digest": "sha256:" + "c" * 64}
+        revision = {"distribution_id": pin["distribution"], "resolved_revision": pin["revision"],
+                    "release_sequence": 1, "tree_digest": pin["tree_digest"],
+                    "manifest_digest": pin["manifest_digest"]}
+        matched = {"name": "firebase", "installation_id": "same-firebase-installation",
+                   "source": "example/plugins/plugins/firebase", "clients": [{
+                       "client_id": "claude", "scope": "user", "materialization": "materialized",
+                       "activation": "active", "verification": "installation_verified",
+                       "policy": "allowed", "authentication": "not_required", "package_revision": revision}],
+                   "directory": {"product_id": "firebase", "recorded_distribution": pin["distribution"],
+                                 "recorded_revision": pin["revision"], "recorded_release_sequence": 1}}
+        for timeout_at in (None, 1, 2):
+            with self.subTest(timeout_at=timeout_at), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                config = root / "plugin-06/home/.claude/firebase.json"
+                state = {"installed": False, "adds": 0}
+                calls = []
+
+                def fake_call(argv, _env, _cwd, timeout=105, **options):
+                    operation = argv[1]
+                    calls.append((operation, timeout, options))
+                    timed_out = False
+                    if operation == "add":
+                        state["adds"] += 1
+                        config.parent.mkdir(parents=True, exist_ok=True)
+                        config.write_text('{"firebase":{"command":"inert"}}', encoding="utf-8")
+                        state["installed"] = True
+                        timed_out = state["adds"] == timeout_at
+                        data = {"actions": [{"component_support": [{"name": "firebase", "support": "native"}]}]}
+                    else:
+                        if operation == "remove":
+                            config.unlink()
+                            state["installed"] = False
+                        data = {"installations": [matched] if state["installed"] else []}
+                    # Even valid success JSON and durable registration cannot
+                    # turn an expired command into a qualified installation.
+                    return {"exit_code": None if timed_out else 0, "stdout_tail": "", "stderr_tail": "",
+                            "timeout": timed_out, "_json": {"result": "success", "data": data}}
+
+                with (patch.object(audit.sys, "platform", "win32"),
+                      patch.object(audit, "call", side_effect=fake_call)):
+                    row = audit.do_case("/unused/agentplugins", "claude", "plugin", "firebase",
+                                        6, root, {}, {"firebase": pin})
+                expected = [("add", 900, {"capture_files": True}), ("list", 30, {})]
+                if timeout_at != 1:
+                    expected += [("add", 180, {"capture_files": True}), ("list", 30, {}),
+                                 ("remove", 60, {}), ("list", 30, {})]
+                self.assertEqual(calls, expected)
+                self.assertTrue(row["sentinels_preserved"])
+                if timeout_at is None:
+                    self.assertEqual(row["status"], "passed")
+                    self.assertTrue(row["repeat_verified"])
+                    self.assertTrue(row["removal_verified"])
+                elif timeout_at == 1:
+                    self.assertEqual(row["status"], "failed-install-residue")
+                    self.assertTrue(row["failed_install_registered"])
+                    self.assertFalse(row["repeat_verified"])
+                    self.assertFalse(row["removal_verified"])
+                else:
+                    self.assertEqual(row["status"], "repeat-add-unqualified")
+                    self.assertFalse(row["repeat_verified"])
+                    self.assertTrue(row["removal_verified"])
 
 
 
@@ -9924,7 +10966,7 @@ class ClaudeCacheRetirementAuditContracts(unittest.TestCase):
 
 
 class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
-    def run_case(self, mutation=None, system=False, kind="plugin"):
+    def run_case(self, mutation=None, system=False, kind="plugin", historical=False):
         import sqlite3
         from contextlib import closing
         audit = load_audit()
@@ -10006,10 +11048,32 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                             skills.append({"name": name, "path": str(path), "enabled": True,
                                            "scope": "repo", "pluginId": None})
                 return {"data": [{"cwd": str(project), "errors": [], "skills": skills}]}
-            def perform(argv, environment, cwd, timeout=105):
+            class HistoricalObserver:
+                def __init__(self, launcher, environment, project):
+                    self.environment, self.project = environment, project
+                    self.launcher, self.commands, self.proof = launcher, 0, None
+                def after_command(self):
+                    self.commands += 1
+                    self.proof = {"commands_verified": self.commands}
+            def prepare_archive(observer, invoke, selected_source, pin):
+                self.assertEqual(selected_source, identity if historical else source)
+                self.assertEqual(pin, {"integration": "selected-fixture"})
+                self.assertFalse((profile / "config.toml").exists())
+                for _ in range(2):
+                    output = invoke([observer.launcher, "info", source], observer.environment,
+                                    observer.project, 80, capture_full=True)
+                    self.assertEqual(output["stdout_full"], "complete info fixture")
+                    self.assertEqual(output["stderr_full"], "")
+                return {"integration": "archive prepared before native bootstrap"}
+            def perform(argv, environment, cwd, timeout=105, **options):
                 commands.append(list(argv))
                 self.assertNotIn("--disable", argv)
                 command = argv[1]
+                if historical:
+                    self.assertIs(options.get("capture_full"), True)
+                    if command == "info":
+                        return {"exit_code": 0, "timeout": False, "stdout_tail": "info fixture", "stderr_tail": "",
+                                "stdout_full": "complete info fixture", "stderr_full": "", "_json": {"result": "success"}}
                 config = profile / "config.toml"
                 self.assertNotIn("features", audit.tomllib.loads(config.read_text()))
                 if command == "skills":
@@ -10055,6 +11119,7 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                     if mutation == "profile-wal":
                         (profile / "state_5.sqlite-wal").write_bytes(b"x" * ((1 << 20) + 1))
                 return {"exit_code": 0, "stdout_tail": "", "stderr_tail": "",
+                        **({"stdout_full": "private complete receipt", "stderr_full": ""} if historical else {}),
                         "timeout": False, "_json": {"data": {"installations":
                             matched if registered[0] else []}}}
             def uninstall(*args):
@@ -10085,13 +11150,18 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
                   patch.object(audit, "locked_skill_is_pinned", return_value=True),
                   patch.object(audit, "matches_pinned_skill_bytes", return_value=True),
                   patch.object(audit, "uninstall_native_codex_plugin", side_effect=uninstall),
+                  patch.dict(audit.HISTORICAL_CODEX, {"PublishedBaseline": HistoricalObserver,
+                      "prepare_plugin_archive": prepare_archive} if historical else {}),
                   patch.dict(os.environ, {"HOME": str(ambient), "USERPROFILE": str(ambient)})):
                 try:
                     item = {"name": identity, "repo": "example/skills", "folder": identity,
                             "source": source, "skill_md_git_blob_sha1": "b" * 40}
                     return audit.do_case("/inert/uap", "codex", kind,
-                                         item if kind == "skill" else source, 0, root,
-                                         {source: identity}), commands
+                                         (identity if historical else
+                                          (item if kind == "skill" else source)), 0, root,
+                                         {source: identity},
+                                         {(identity if historical else source): {"integration": "selected-fixture"}},
+                                         **({"historical_plugin_archive": True} if historical else {})), commands
                 finally:
                     if mutation and mutation.startswith("prebaseline-"):
                         self.assertEqual(commands, [])
@@ -10129,6 +11199,23 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
             with self.subTest(mutation=mutation), self.assertRaisesRegex(
                     ValueError, "changed protected fixture authority"):
                 self.run_case(mutation)
+
+    def test_historical_archive_keeps_eight_public_probes_and_native_sqlite_checkpoints(self):
+        row, commands = self.run_case(historical=True)
+        self.assertEqual([argv[1] for argv in commands],
+                         ["info", "info", "add", "list", "add", "list", "native-uninstall", "remove", "list"])
+        self.assertEqual(row["historical_npm_proof"], {"commands_verified": 8})
+        self.assertEqual(row["historical_plugin_feed"], {"integration": "archive prepared before native bootstrap"})
+        self.assertEqual(row["historical_archive_status"], "passed")
+        self.assertEqual(row["status"], "historical-archive-lifecycle-observed")
+        self.assertEqual([item["phase"] for item in row["codex_plugin_sqlite_proof"]["observations"]],
+                         ["before-install"] + ["after-public-command"] * 4
+                         + ["after-native-uninstall"] + ["after-public-command"] * 2)
+        for phase in ("install", "list", "repeat_add", "repeat_list", "cleanup", "post_remove_list"):
+            self.assertTrue({"stdout_full", "stderr_full", "_json"}.isdisjoint(row[phase]), phase)
+        row, _ = self.run_case("profile-wal", historical=True)
+        self.assertEqual(row["status"], "cleanup-failed")
+        self.assertEqual(row["historical_archive_status"], "cleanup-failed")
 
 
     def test_pinned_system_github_literal_is_retained_only_with_complete_unchanged_proof(self):
@@ -10246,6 +11333,15 @@ class WindowsOwnedFileCaptureContracts(unittest.TestCase):
                         self.assertTrue(refusal, facts)
                     else:
                         self.assertIn("timeout-owned-bytes", result["stdout_tail"])
+                        diagnostic = result["owned_timeout_diagnostic"]
+                        self.assertEqual(diagnostic["status"], "observed-unqualified")
+                        self.assertIs(diagnostic["qualified"], False)
+                        self.assertEqual(diagnostic["stage"], "timeout-before-owned-termination")
+                        self.assertEqual(diagnostic["bootstrap_state"], "running")
+                        self.assertEqual(diagnostic["active"], 3)
+                        self.assertEqual(len(diagnostic["members"]), 3)
+                        self.assertTrue(all(member["state"] == "running" for member in diagnostic["members"]))
+                        self.assertNotIn(str(root), json.dumps(diagnostic))
                     self.assertEqual(waits, {"launcher": 0, "descendant": 0}, facts)
                     self.assertIsNone(ambient.poll())
                 finally:
@@ -11379,6 +12475,914 @@ class LiveAuditNativeVersionRoutingTests(unittest.TestCase):
                 self.assertEqual(report["client_version"], native_version)
 
 
+class MarketingKitCodexSQLiteTest(unittest.TestCase):
+    def setUp(self):
+        self.runner = run_path(str(Path(__file__).with_name('marketing-kit-project-release-e2e.py')))
+        self.runtime = self.runner['audit']['CODEX_RUNTIME_AUDIT']
+        temporary = TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        self.env, self.project, self.foreign, _, _ = self.runner['run_case'](
+            'unused-cli', 'codex', self.root, 'A')
+        self.home = Path(self.env['HOME'])
+        self.database = self.home / '.local/state/codex-sqlite/state_5.sqlite'
+        self.bootstrap_mutation = None
+
+    async def discover(self, binary, project, profile, environment, **kwargs):
+        self.assertEqual(kwargs, {'sqlite_baseline': True})
+        self.assertEqual(environment['CODEX_HOME'], str(self.home / '.codex'))
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute('CREATE TABLE fixture_rows (value TEXT)')
+            connection.execute("INSERT INTO fixture_rows VALUES ('stable')")
+            connection.commit()
+        if self.bootstrap_mutation:
+            self.bootstrap_mutation()
+        return {'data': [{'cwd': str(project), 'errors': [], 'skills': []}]}
+
+    def prepare(self, version_probe=None, *, wrapped=False):
+        observer_type = self.runtime['CodexPluginSQLiteAudit']
+        with patch.dict(observer_type.__init__.__globals__, {'_exchange': self.discover}), \
+                patch.dict(self.runner['prepare_codex_sqlite'].__globals__, {
+                    'invoke': version_probe or (lambda *args, **kwargs: {'exit_code': 0, 'timeout': False,
+                                            'stdout_full': 'codex-cli 0.153.4\n'})}):
+            with patch.dict(self.runner['audit']['AGENT_BINARIES'], {'codex': sys.executable}):
+                proof = self.runner['prepare_codex_sqlite'](sys.executable, self.env, self.project)
+                return proof if wrapped else proof.runtime
+
+    def test_marketing_kit_version_probe_uses_removed_separate_native_profile(self):
+        profiles = []
+
+        def probe(argv, env, project, timeout, *, capture_full=False):
+            self.assertTrue(capture_full)
+            self.assertEqual(argv, [sys.executable, '--version'])
+            self.assertEqual(project, self.project)
+            self.assertEqual(env['HOME'], str(self.home))
+            version_home = Path(env['CODEX_HOME'])
+            self.assertEqual(version_home.parent, self.project.parent)
+            self.assertNotEqual(version_home, self.home / '.codex')
+            self.assertTrue(version_home.is_dir())
+            # Real pinned --version creates arg0 files even with existing
+            # lifecycle tmp/arg0 parents. They belong only to this profile.
+            (version_home / 'tmp/arg0/native-version-helper').mkdir(parents=True)
+            profiles.append(version_home)
+            return {'exit_code': 0, 'timeout': False, 'stdout_full': 'codex-cli 0.153.4\n'}
+
+        observer = self.prepare(probe)
+        self.assertEqual(len(profiles), 1)
+        self.assertFalse(profiles[0].exists())
+        self.assertEqual(list((self.home / '.codex/tmp/arg0').iterdir()), [])
+        observer.checkpoint('after-isolated-version')
+
+    def test_marketing_kit_version_probe_still_refuses_wrong_version_or_lifecycle_writes(self):
+        original = self.foreign.read_bytes()
+        for mutation in (
+            'wrong-version', 'hidden-banner', 'timeout', 'exit', 'foreign-write',
+            'new-home-file', 'project-write', 'data-write', 'raised-invoke',
+        ):
+            with self.subTest(mutation=mutation):
+                version_profiles = []
+                def probe(*args, **kwargs):
+                    self.assertIs(kwargs.get('capture_full'), True)
+                    version_profiles.append(Path(args[1]['CODEX_HOME']))
+                    result = {'exit_code': 0, 'timeout': False, 'stdout_full': 'codex-cli 0.153.4\n'}
+                    if mutation == 'wrong-version':
+                        result['stdout_full'] = 'codex-cli 0.153.4-dev\n'
+                    elif mutation == 'hidden-banner':
+                        result['stdout_tail'] = 'codex-cli 0.153.4\n'
+                        result['stdout_full'] = 'unsafe banner\n' + ' ' * 1900 + result['stdout_tail']
+                    elif mutation == 'timeout':
+                        result['timeout'] = True
+                    elif mutation == 'exit':
+                        result['exit_code'] = 1
+                    elif mutation == 'foreign-write':
+                        self.foreign.write_text('changed by metadata probe')
+                    elif mutation == 'project-write':
+                        (self.project / 'unexpected-version-write').write_text('forbidden')
+                    elif mutation == 'data-write':
+                        (Path(self.env['AGENTPLUGINS_HOME']) / 'unexpected-version-write').write_text('forbidden')
+                    elif mutation == 'raised-invoke':
+                        raise RuntimeError('native version invocation failed')
+                    else:
+                        (self.home / 'unexpected-version-write').write_text('forbidden')
+                    return result
+                expected = RuntimeError if mutation == 'raised-invoke' else AssertionError
+                diagnostic = 'native version invocation failed' if mutation == 'raised-invoke' else 'unchanged native 0.153.4 version probe'
+                with self.assertRaisesRegex(expected, diagnostic):
+                    self.prepare(probe)
+                self.assertEqual(len(version_profiles), 1)
+                self.assertFalse(version_profiles[0].exists())
+                self.foreign.write_bytes(original)
+                for root in (self.home, self.project, Path(self.env['AGENTPLUGINS_HOME'])):
+                    (root / 'unexpected-version-write').unlink(missing_ok=True)
+                self.assertFalse((self.home / '.codex/config.toml').exists())
+                self.assertFalse((self.home / '.codex/installation_id').exists())
+
+    def test_marketing_kit_large_wal_requires_audited_separate_root_and_native_absence(self):
+        observer = self.prepare()
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute('PRAGMA journal_mode=WAL')
+            connection.execute('PRAGMA wal_autocheckpoint=0')
+            for _ in range(300):
+                connection.execute("UPDATE fixture_rows SET value='temporary'")
+                connection.execute("UPDATE fixture_rows SET value='stable'")
+                connection.commit()
+            wal = Path(str(self.database) + '-wal')
+            self.assertGreater(wal.stat().st_size, 1 << 20)
+            observer.checkpoint('after-remove')
+            self.runner['check_removed_native_components']('codex', self.home, self.root, 'audited-remove')
+            evidence = observer.evidence()
+            self.assertTrue(evidence['runtime_semantics_unchanged'])
+            self.assertGreater(evidence['observations'][-1]['runtime_files_fully_read']['state_5.sqlite-wal']['bytes'], 1 << 20)
+            # The same bytes under the raw native authority still fail closed.
+            (self.home / '.codex/state_5.sqlite-wal').write_bytes(wal.read_bytes())
+            with self.assertRaisesRegex(AssertionError, 'unscanned-too-large'):
+                self.runner['check_removed_native_components']('codex', self.home, self.root, 'unowned-wal')
+
+    def test_marketing_kit_runtime_schema_or_row_change_refuses(self):
+        observer = self.prepare()
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute("UPDATE fixture_rows SET value='changed'")
+            connection.commit()
+            with self.assertRaisesRegex(ValueError, 'table contents changed'):
+                observer.checkpoint('changed-row')
+            connection.execute("UPDATE fixture_rows SET value='stable'")
+            connection.execute('CREATE TABLE unexpected (value TEXT)')
+            connection.commit()
+            with self.assertRaisesRegex(ValueError, 'schema changed'):
+                observer.checkpoint('changed-schema')
+
+    def test_marketing_kit_runtime_config_and_root_replacement_refuse(self):
+        observer = self.prepare()
+        original = observer.config.read_bytes()
+        observer.config.write_text('sqlite_home = "/foreign"\n')
+        with self.assertRaisesRegex(ValueError, 'config authority changed'):
+            observer.checkpoint('changed-config')
+        observer.config.write_bytes(original)
+        observer.runtime.rename(observer.runtime.with_name('held-runtime'))
+        observer.runtime.mkdir()
+        with self.assertRaisesRegex(ValueError, 'authority root changed'):
+            observer.checkpoint('replaced-root')
+
+    def test_marketing_kit_native_bootstrap_cannot_mutate_foreign_or_add_config(self):
+        self.bootstrap_mutation = lambda: self.foreign.write_text('changed')
+        with self.assertRaisesRegex(ValueError, 'initialization changed protected'):
+            self.prepare()
+
+    def test_marketing_kit_native_bootstrap_cannot_add_extra_config_keys(self):
+        def mutate():
+            with (self.home / '.codex/config.toml').open('a') as stream:
+                stream.write('unexpected = true\n')
+        self.bootstrap_mutation = mutate
+        with self.assertRaisesRegex(ValueError, 'preinstall changed the authored config'):
+            self.prepare()
+
+    def test_marketing_kit_mutating_command_checkpoint_precedes_inventory_even_on_failure(self):
+        observer = self.prepare()
+        execute = self.runner['execute']
+        inventory = Mock()
+
+        def changed_runtime(*_args):
+            with closing(sqlite3.connect(self.database)) as connection:
+                connection.execute("UPDATE fixture_rows SET value='changed'")
+                connection.commit()
+            return {'exit_code': 0}
+
+        with patch.dict(execute.__globals__, {'invoke': changed_runtime, 'inventory': inventory}):
+            with self.assertRaisesRegex(ValueError, 'table contents changed'):
+                execute('cli', self.env, self.project, 'codex', 'add',
+                        'add', 'marketing-kit', '--scope', 'user', checkpoint=observer.checkpoint)
+        inventory.assert_not_called()
+        phases = []
+        with patch.dict(execute.__globals__, {'invoke': Mock(side_effect=RuntimeError('command failed'))}):
+            with self.assertRaisesRegex(RuntimeError, 'command failed'):
+                execute('cli', self.env, self.project, 'codex', 'failed-add',
+                        'add', 'marketing-kit', '--scope', 'user', checkpoint=phases.append)
+        self.assertEqual(phases, ['after-public-mutation-failed-add'])
+
+    def test_marketing_kit_profile_calls_check_failed_commands_and_exclude_E(self):
+        profiles = self.runner['MarketingCodexSQLiteProfiles']('codex')
+        observer = self.prepare()
+        profiles.profiles['A'] = observer
+        with self.assertRaisesRegex(RuntimeError, 'command failed'):
+            profiles.call('failed-command', lambda: (_ for _ in ()).throw(RuntimeError('command failed')))
+        self.assertEqual(observer.observations[-1]['phase'], 'after-failed-command')
+        with self.assertRaisesRegex(AssertionError, 'fresh lifecycle profile'):
+            profiles.prepare('E', self.env, self.project)
+        self.assertEqual(set(profiles.evidence()), {'A'})
+
+
+    def test_marketing_kit_profile_evidence_distinguishes_failure_from_unrun_final(self):
+        profiles = self.runner['MarketingCodexSQLiteProfiles']('codex')
+        observer = self.prepare()
+        profiles.profiles['A'] = observer
+        initial = profiles.evidence()['A']
+        self.assertFalse(initial['runtime_semantics_unchanged'])
+        self.assertEqual(initial['final_checkpoint'], 'not_run')
+        self.assertIsNone(initial['failed_phase'])
+        with closing(sqlite3.connect(self.database)) as connection:
+            connection.execute("UPDATE fixture_rows SET value='changed'")
+            connection.commit()
+        with self.assertRaisesRegex(ValueError, 'table contents changed'):
+            profiles.checkpoint('after-public-mutation-add')
+        failed = profiles.evidence()['A']
+        self.assertFalse(failed['runtime_semantics_unchanged'])
+        self.assertEqual(failed['final_checkpoint'], 'failed')
+        self.assertEqual(failed['failed_phase'], 'after-public-mutation-add')
+
+    def test_marketing_kit_profile_evidence_pass_requires_final_checkpoint(self):
+        profiles = self.runner['MarketingCodexSQLiteProfiles']('codex')
+        profiles.profiles['A'] = self.prepare(wrapped=True)
+        profiles.checkpoint('final-qualification')
+        profiles.profiles['A'].checkpoint('final-lifecycle')
+        recorded = profiles.evidence()['A']
+        self.assertTrue(recorded['runtime_semantics_unchanged'])
+        self.assertEqual(recorded['final_checkpoint'], 'passed')
+        self.assertIsNone(recorded['failed_phase'])
+
+class SignedReleaseTargetPinsTests(unittest.TestCase):
+    """Source matching only: a recorded Prepared receipt is not native proof."""
+
+    PI_CONTEXT7_PIN = {
+        "distribution": "777genius/context7",
+        "repository": "777genius/universal-agent-plugins-registry",
+        "path": "plugins/context7",
+        "revision": "8360159c07140d17cbd4060a110553092c9cd245",
+        "sequence": 7,
+        "tree_digest": "sha256:635e673ec3aa8440a2826dc3a677ebe652b63e542db2e861b61d2df7f55e48b3",
+        "manifest_digest": "sha256:1c1b8633e99d8ae10ed804b2c98532c4e08049b95f6229a6dd0b3746bdaea496",
+    }
+
+    @staticmethod
+    def original_pi_receipt():
+        # Complete public list JSON from original run 44939583899, artifact
+        # 14732728467 (ZIP SHA256 bfa91a8ecb19b1367038def464b101097a6bdb574d03f3217977363bde01ca79).
+        # It remains incomplete-native-proof; repeat/remove were not executed.
+        return json.loads('''{
+          "schema_version": 1, "command": "list", "result": "success",
+          "data": {"installations": [{
+            "installation_id": "3601ea6b-89d1-4a2e-853a-945d8b5abd19",
+            "name": "context7", "version": "0.2.5",
+            "source": "777genius/universal-agent-plugins-registry/plugins/context7",
+            "clients": [{
+              "client_id": "pi", "scope": "user", "materialization": "materialized",
+              "activation": "prepared", "authentication": "not_checked",
+              "policy": "allowed", "verification": "installation_verified",
+              "package_revision": {
+                "version": "0.2.5", "resolved_revision": "8360159c07140d17cbd4060a110553092c9cd245",
+                "distribution_id": "777genius/context7", "release_sequence": 7,
+                "tree_digest": "sha256:635e673ec3aa8440a2826dc3a677ebe652b63e542db2e861b61d2df7f55e48b3",
+                "manifest_digest": "sha256:1c1b8633e99d8ae10ed804b2c98532c4e08049b95f6229a6dd0b3746bdaea496"
+              }, "affected_surfaces": ["pi"]
+            }],
+            "directory": {
+              "product_id": "context7", "recorded_distribution": "777genius/context7",
+              "current_distribution": "777genius/context7",
+              "recorded_revision": "8360159c07140d17cbd4060a110553092c9cd245",
+              "current_revision": "8360159c07140d17cbd4060a110553092c9cd245",
+              "recorded_release_sequence": 7, "current_release_sequence": 7,
+              "recorded_snapshot_sequence": 49
+            }, "mixed_version": false
+          }]}
+        }''')
+
+    def test_original_pi_receipt_requires_its_exact_target_pin(self):
+        audit = load_audit()
+        doc = json.loads(audit.FIXTURES.read_text())
+        audit.validate_fixtures(doc)
+        self.assertEqual(doc["signed_release_pins_by_target"], {"pi": {"context7": self.PI_CONTEXT7_PIN}})
+        response = self.original_pi_receipt()
+        self.assertEqual(audit.matching_installations(
+            response, "context7", "pi", "plugin", "context7", doc["signed_release_pins"]), [])
+        selected = audit.effective_signed_release_pins(doc, "pi")
+        self.assertEqual(audit.matching_installations(
+            response, "context7", "pi", "plugin", "context7", selected), response["data"]["installations"])
+        self.assertEqual(response["data"]["installations"][0]["clients"][0]["activation"], "prepared")
+        for target in ("codex", "claude", "qoder"):
+            with self.subTest(target=target):
+                other = self.original_pi_receipt()
+                other["data"]["installations"][0]["clients"][0]["client_id"] = target
+                self.assertEqual(audit.matching_installations(
+                    other, "context7", target, "plugin", "context7",
+                    audit.effective_signed_release_pins(doc, target)), [])
+
+    def test_effective_map_copies_pins_and_preserves_all_defaults(self):
+        audit = load_audit()
+        doc = json.loads(audit.FIXTURES.read_text())
+        original = json.loads(json.dumps(doc))
+        selected = audit.effective_signed_release_pins(doc, "pi")
+        self.assertEqual(len(selected), 21)
+        for alias, pin in doc["signed_release_pins"].items():
+            self.assertEqual(selected[alias], self.PI_CONTEXT7_PIN if alias == "context7" else pin)
+            self.assertIsNot(selected[alias], pin)
+        for target in set(doc["targets"]) - {"pi"}:
+            canonical = audit.audit_client_id(target, "plugin")
+            self.assertEqual(audit.effective_signed_release_pins(doc, canonical), doc["signed_release_pins"])
+        selected["context7"]["sequence"] = 99
+        selected["atlassian"]["revision"] = "0" * 40
+        selected.pop("cloudflare")
+        self.assertEqual(doc, original)
+        del doc["signed_release_pins_by_target"]
+        audit.validate_fixtures(doc)
+        self.assertEqual(audit.effective_signed_release_pins(doc, "pi"), doc["signed_release_pins"])
+
+    def test_target_maps_reject_unknown_alias_target_and_empty_or_non_maps(self):
+        audit = load_audit()
+        fixture = json.loads(audit.FIXTURES.read_text())
+        pin = self.PI_CONTEXT7_PIN
+        direct = next(alias for alias in fixture["plugin_aliases"] if alias.startswith("github:"))
+        invalid = [None, [], "pi", {}, {"unknown": {"context7": pin}},
+                   {"PI": {"context7": pin}}, {"chatgpt": {"context7": pin}},
+                   {"pi": None}, {"pi": []}, {"pi": {}},
+                   {"pi": {"unknown": pin}}, {"pi": {direct: pin}}]
+        for value in invalid:
+            with self.subTest(value=value):
+                doc = json.loads(json.dumps(fixture))
+                doc["signed_release_pins_by_target"] = value
+                with self.assertRaisesRegex(ValueError, "target-specific signed release"):
+                    audit.validate_fixtures(doc)
+
+    def test_default_and_target_pins_share_strict_shape_and_scalar_validation(self):
+        audit = load_audit()
+        fixture = json.loads(audit.FIXTURES.read_text())
+        invalid = [None, [], {}, dict(self.PI_CONTEXT7_PIN, extra="not-a-pin-field")]
+        invalid += [dict(self.PI_CONTEXT7_PIN, **{key: value}) for key, value in (
+            ("sequence", True), ("sequence", 7.0), ("sequence", 0), ("sequence", -1),
+            ("distribution", ""), ("repository", None), ("path", False),
+            ("revision", None), ("revision", "a" * 39), ("revision", "A" * 40),
+            ("tree_digest", "sha256:" + "b" * 63), ("manifest_digest", None))]
+        missing = dict(self.PI_CONTEXT7_PIN)
+        del missing["sequence"]
+        invalid.append(missing)
+        for route in ("default", "pi"):
+            for value in invalid:
+                with self.subTest(route=route, value=value):
+                    doc = json.loads(json.dumps(fixture))
+                    pins = (doc["signed_release_pins"] if route == "default" else
+                            doc["signed_release_pins_by_target"]["pi"])
+                    pins["context7"] = value
+                    with self.assertRaisesRegex(ValueError, "frozen signed release pin"):
+                        audit.validate_fixtures(doc)
+
+    def test_coherent_wrong_release_and_mixed_pin_fields_are_rejected(self):
+        audit = load_audit()
+        doc = json.loads(audit.FIXTURES.read_text())
+        selected = audit.effective_signed_release_pins(doc, "pi")
+        defaults = doc["signed_release_pins"]["context7"]
+        changes = [
+            ("recorded_release_sequence", "release_sequence", 8),
+            ("recorded_revision", "resolved_revision", "a" * 40),
+            ("recorded_distribution", "distribution_id", "wrong/context7"),
+            ("recorded_revision", "resolved_revision", defaults["revision"]),
+            (None, "tree_digest", defaults["tree_digest"]),
+            (None, "manifest_digest", defaults["manifest_digest"]),
+        ]
+        for directory_key, revision_key, value in changes:
+            with self.subTest(field=revision_key, value=value):
+                response = self.original_pi_receipt()
+                node = response["data"]["installations"][0]
+                if directory_key:
+                    node["directory"][directory_key] = value
+                node["clients"][0]["package_revision"][revision_key] = value
+                self.assertEqual(audit.matching_installations(
+                    response, "context7", "pi", "plugin", "context7", selected), [])
+        response = self.original_pi_receipt()
+        response["data"]["installations"][0]["source"] = defaults["repository"] + "/" + defaults["path"]
+        self.assertEqual(audit.matching_installations(
+            response, "context7", "pi", "plugin", "context7", selected), [])
+
+    def test_main_selects_once_for_cases_and_expected_release_diagnostics(self):
+        from io import StringIO
+
+        for target, native in (("pi", "pi"), ("claude", "claude"), ("chatgpt", "codex")):
+            with self.subTest(target=target), TemporaryDirectory() as temporary:
+                audit = load_audit()
+                fixture = json.loads(audit.FIXTURES.read_text())
+                expected = audit.effective_signed_release_pins(fixture, native)
+                output = StringIO()
+                argv = ["live-install-audit.py", "--cli", sys.executable, "--target", target,
+                        "--kind", "plugin", "--limit", "2", "--report-dir", temporary]
+                with (patch.object(sys, "argv", argv), patch.object(sys, "stdout", output),
+                      patch.dict(audit.AGENT_BINARIES, {native: sys.executable}, clear=True),
+                      patch.object(audit, "vendor_bootstrap_attested", return_value=True),
+                      patch.object(audit, "version_evidence", return_value={"status": "reported"}),
+                      patch.object(audit, "effective_signed_release_pins",
+                                   wraps=audit.effective_signed_release_pins) as select,
+                      patch.object(audit, "do_case", return_value={"status": "incomplete-native-proof"}) as case):
+                    self.assertEqual(audit.main(), 1)
+                select.assert_called_once()
+                self.assertEqual(select.call_args.args[1], native)
+                self.assertEqual(case.call_count, 2)
+                first, second = (call.args[7] for call in case.call_args_list)
+                self.assertIs(first, second)
+                self.assertEqual(second, expected)
+                lines = [json.loads(line) for line in output.getvalue().splitlines() if line.startswith("{")]
+                self.assertEqual(lines[1]["index"], 1)
+                self.assertEqual(lines[1]["expected_signed_release"], expected["context7"])
+                report = json.loads((Path(temporary) / f"{target}-plugin.json").read_text())
+                self.assertEqual((report["passed"], report["prepared_lifecycle_passed"],
+                                  report["verified_negative_coverage"]), (0, 0, 0))
+
+
+class PiPluginNativeQualificationTests(unittest.TestCase):
+    """Inert public transport with real source matching, files, and lifecycle gates."""
+
+    def run_case(self, audit, scenario):
+        doc = json.loads(audit.FIXTURES.read_text())
+        pins = audit.effective_signed_release_pins(doc, "pi")
+
+        def signed_node(name, activation, uid):
+            pin = pins[name]
+            return {"name": name, "installation_id": uid,
+                    "source": pin["repository"] + "/" + pin["path"],
+                    "directory": {"product_id": name, "recorded_distribution": pin["distribution"],
+                                  "recorded_revision": pin["revision"], "recorded_release_sequence": pin["sequence"]},
+                    "clients": [{"client_id": "pi", "scope": "user", "materialization": "materialized",
+                                 "activation": activation,
+                                 "authentication": "not_required" if activation == "active" else "not_checked",
+                                 "policy": "allowed", "verification": "installation_verified",
+                                 "package_revision": {"distribution_id": pin["distribution"],
+                                     "resolved_revision": pin["revision"], "release_sequence": pin["sequence"],
+                                     "tree_digest": pin["tree_digest"], "manifest_digest": pin["manifest_digest"]}}]}
+
+        uid = "3601ea6b-89d1-4a2e-853a-945d8b5abd19"
+        if scenario == "prepared-mcp":
+            item, name = "context7", "context7"
+            nodes = SignedReleaseTargetPinsTests.original_pi_receipt()["data"]["installations"]
+            components = [{"kind": "mcp_server", "name": "context7", "support": "native"}]
+        elif scenario == "active-skill":
+            item = next(source for source, name in doc["plugin_declared_names"].items()
+                        if name == "recipe-skills")
+            name = "recipe-skills"
+            nodes = [{"name": name, "installation_id": uid, "source": "workato-devs/recipe-skills",
+                      "clients": [{"client_id": "pi", "scope": "user", "materialization": "materialized",
+                                   "activation": "active", "authentication": "not_required", "policy": "allowed",
+                                   "verification": "installation_verified",
+                                   "package_revision": {"resolved_revision": item.rsplit("@", 1)[1]}}]}]
+            components = [{"kind": "skill", "name": component, "support": "native"}
+                          for component in ("asana-recipes", "datatable-recipes", "gmail-recipes", "jira-recipes",
+                                            "salesforce-recipes", "slack-recipes", "stripe-recipes", "workato-recipes")]
+        else:
+            self.assertEqual(scenario, "active-root-prepared-mcp-child")
+            item, name = "marketing-kit", "marketing-kit"
+            nodes = [signed_node(name, "active", uid),
+                     signed_node("notion", "prepared", "929803ef-7ca9-4577-a62d-1562fd4a5483")]
+            components = [{"kind": "skill", "name": "marketing-plan", "support": "native"},
+                          {"kind": "mcp_server", "name": "notion", "support": "native"}]
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            native = root / "plugin-00/home/.pi/agent"
+            data = root / "plugin-00/uap-data"
+            owned = []
+            for component in components:
+                if component["kind"] == "skill":
+                    owned.append((native / "skills" / component["name"] / "SKILL.md",
+                                  f'---\nname: {component["name"]}\ndescription: inert unit only\n---\n'))
+                else:
+                    owned.append((native / (component["name"] + ".json"),
+                                  json.dumps({"mcpServers": {component["name"]: {"command": "never-executed"}}})))
+            state = {"installed": False}
+            operations = []
+
+            def public(argv, _env, _cwd, timeout=120, **_kwargs):
+                self.assertEqual(argv[0], "/unused/unit-agentplugins")
+                operation = argv[1]
+                operations.append(operation)
+                if operation == "add":
+                    self.assertEqual(argv[2], item)
+                    if not state["installed"]:
+                        for path, content in owned:
+                            path.parent.mkdir(parents=True, exist_ok=True)
+                            path.write_text(content)
+                        (data / "uap.toml").write_text("# inert unit desired source\n")
+                        (data / "uap.lock").write_text(json.dumps({"lock_version": 1, "packages": [{"alias": name}]}))
+                        state["installed"] = True
+                    results = []
+                    actions = []
+                    for node in nodes:
+                        entry = {"installation_id": node["installation_id"], "client_id": "pi",
+                                 "operation": "install", "outcome": "completed"}
+                        if node["clients"][0]["activation"] == "prepared":
+                            entry["manual_actions"] = [
+                                "Reload resources or restart Pi to discover user Skills and MCP; "
+                                "installed files do not prove an authenticated connection or model tool call."]
+                        results.append(entry)
+                        selected_components = (components if len(nodes) == 1 else
+                            [component for component in components if
+                             (component["kind"] == "skill") == (node["name"] == name)])
+                        actions.append({"alias": node["name"], "client_id": "pi", "action": "install",
+                                        "component_support": selected_components})
+                    result = {"schema_version": 1, "command": "add", "result": "success",
+                              "data": {"actions": actions, "results": results, "outcome": "completed",
+                                       "scope": "user", "scope_selection_reason": "explicit"}}
+                elif operation == "remove":
+                    self.assertEqual(argv[2], name)
+                    for path, _content in owned:
+                        path.unlink()
+                    (data / "uap.lock").write_text('{"lock_version":1,"packages":[]}')
+                    state["installed"] = False
+                    result = {"data": {}}
+                else:
+                    self.assertEqual(operation, "list")
+                    result = {"data": {"installations": nodes if state["installed"] else []}}
+                return {"exit_code": 0, "stdout_tail": json.dumps(result), "stderr_tail": "",
+                        "timeout": False, "_json": json.loads(json.dumps(result))}
+
+            # No matcher, attribution, snapshot, repeat, removal or status verifier is stubbed.
+            with patch.object(audit, "call", side_effect=public):
+                row = audit.do_case("/unused/unit-agentplugins", "pi", "plugin", item, 0,
+                                    root, doc["plugin_declared_names"], pins)
+            self.assertEqual(operations, ["add", "list", "add", "list", "remove", "list"])
+            for key in ("listed_identity", "repeat_verified",
+                        "repeat_native_unchanged", "repeat_lock_unchanged", "removal_verified", "sentinels_preserved"):
+                self.assertTrue(row[key], key)
+            self.assertEqual(row["repeat_installation_ids"], [uid])
+            self.assertTrue(row["native_identity_files"])
+            self.assertEqual(row["native_residuals"], [])
+            self.assertFalse(row["prepared_binding"])
+            self.assertFalse(row["prepared_components_only"])
+            return row
+
+    def test_clean_public_lifecycles_do_not_supply_independent_native_discovery(self):
+        audit = load_audit()
+        for scenario in ("prepared-mcp", "active-skill", "active-root-prepared-mcp-child"):
+            with self.subTest(scenario=scenario):
+                row = self.run_case(audit, scenario)
+                self.assertEqual(row["status"], "package-installed-native-unqualified")
+                self.assertFalse(audit.expected_negative_coverage(row, "agentplugins 0.1.115"))
+
+
+class CopilotManagedSkillReceiptTest(unittest.TestCase):
+    @staticmethod
+    def fixture(project):
+        # Identity constants are from the original Live Audit frontend-design
+        # receipt. The inert payload below has its own independent blob pin.
+        body = b"---\nname: frontend-design\ndescription: Inert source-bound fixture.\n---\n"
+        item = {"name": "frontend-design", "folder": "frontend-design", "repo": "anthropics/skills",
+                "ref": "ca45fc496a3436251f191354091d557da31c15b5",
+                "source": "https://github.com/anthropics/skills/tree/ca45fc496a3436251f191354091d557da31c15b5/skills/frontend-design",
+                "skill_md_git_blob_sha1": hashlib.sha1(b"blob " + str(len(body)).encode() + b"\0" + body).hexdigest()}
+        uid = "8695e2b5-596b-4385-96ea-cfbc9c02b5b2"
+        name = "skill-b0a5b0253f26020d7acb797250495459c1bd758fe440530b3db1347e"
+        physical = "skill-b0a5b0253f26020d7acb797250495459c1bd758fe4405-dc661c5b1ea6"
+        destination = project / ".uap/managed/clients/copilot" / physical
+        skill = destination / "skills/frontend-design/SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_bytes(body)
+        revision = {"resolved_revision": item["ref"], "tree_digest": "sha256:" + "b" * 64,
+                    "manifest_digest": "sha256:" + "c" * 64}
+        node = {"installation_id": uid, "name": name, "source": "anthropics/skills/skills/frontend-design",
+                "clients": [{"client_id": "copilot", "scope": "project", "materialization": "materialized",
+                             "activation": "active", "authentication": "not_required", "policy": "allowed",
+                             "verification": "installation_verified", "package_revision": revision}]}
+        receipt = {"schema_version": 1, "command": "skills add", "result": "success", "status": "succeeded",
+                   "scope": "project", "readiness": "ready", "next_actions": [], "items": [{
+                       "alias": item["name"], "targetId": "copilot", "status": "succeeded",
+                       "candidateId": "sha256:b596c15579514b31901b660dcee94def801033e595d112ff5afb9ebfefea6e8b",
+                       "destinationPath": str(destination)}]}
+        package = {"alias": item["name"], "targets": ["copilot"], "tree_digest": revision["tree_digest"],
+                   "manifest_digest": revision["manifest_digest"], "source": {"git": {
+                       "kind": "skill", "skill": item["name"], "repository": item["repo"], "commit": item["ref"],
+                       "path": "skills/frontend-design",
+                       "resolved_skill_path": "skills/frontend-design"}}}
+        lock = {"packages": [package]}
+        (project / "uap.lock").write_text(json.dumps(lock), encoding="utf-8")
+        (project / "uap.toml").write_text("frontend-design\n", encoding="utf-8")
+        return {"project": project, "file": skill, "body": body, "item": item,
+                "receipt": receipt, "node": node, "matches": [node], "lock": lock}
+
+    def observed(self, audit, fixture, *, repeated=False):
+        return audit.copilot_project_skill_path(fixture["project"], fixture["item"],
+            fixture["receipt"], fixture["matches"], repeated=repeated)
+
+    def test_managed_path_requires_complete_source_iid_receipt_and_lock(self):
+        from copy import deepcopy
+        changes = {
+            "source": lambda f: f["node"].update(source="other/skills/skills/frontend-design"),
+            "synthetic-name": lambda f: f["node"].update(name="skill-" + "d" * 56),
+            "iid": lambda f: f["node"].update(installation_id="11111111-1111-4111-8111-111111111111"),
+            "candidate": lambda f: f["receipt"]["items"][0].update(candidateId="sha256:" + "d" * 64),
+            "destination": lambda f: f["receipt"]["items"][0].update(destinationPath=str(f["file"].parents[2]) + "-foreign"),
+            "alias": lambda f: f["receipt"]["items"][0].update(alias="other-skill"),
+            "target": lambda f: f["receipt"]["items"][0].update(targetId="qoder"),
+            "client-scope": lambda f: f["node"]["clients"][0].update(scope="user"),
+            "receipt-scope": lambda f: f["receipt"].update(scope="user"),
+            "revision": lambda f: f["node"]["clients"][0]["package_revision"].update(resolved_revision="d" * 40),
+            "tree": lambda f: f["node"]["clients"][0]["package_revision"].update(tree_digest="sha256:" + "d" * 64),
+            "manifest": lambda f: f["node"]["clients"][0]["package_revision"].update(manifest_digest="sha256:" + "d" * 64),
+            "duplicate-match": lambda f: f["matches"].append(deepcopy(f["node"])),
+            "duplicate-item": lambda f: f["receipt"]["items"].append(deepcopy(f["receipt"]["items"][0])),
+            "duplicate-client": lambda f: f["node"]["clients"].append(deepcopy(f["node"]["clients"][0])),
+            "duplicate-lock": lambda f: f["lock"]["packages"].append(deepcopy(f["lock"]["packages"][0])),
+            "lock-source": lambda f: f["lock"]["packages"][0]["source"]["git"].update(repository="other/skills"),
+            "lock-revision": lambda f: f["lock"]["packages"][0]["source"]["git"].update(commit="d" * 40),
+            "lock-subpath": lambda f: f["lock"]["packages"][0]["source"]["git"].update(resolved_skill_path="skills/other"),
+            "lock-skill": lambda f: f["lock"]["packages"][0]["source"]["git"].update(skill="other-skill"),
+            "lock-target": lambda f: f["lock"]["packages"][0].update(targets=["qoder"]),
+            "lock-digest": lambda f: f["lock"]["packages"][0].update(tree_digest="sha256:" + "d" * 64),
+            "bytes": lambda f: f["file"].write_bytes(f["body"] + b"changed\n"),
+            "status": lambda f: f["receipt"]["items"][0].update(status="unchanged"),
+            "schema-bool": lambda f: f["receipt"].update(schema_version=True),
+        }
+        audit = load_audit()
+        for mutation in (None, *changes, "duplicate-json-key"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve() / "case/project")
+                if mutation in changes:
+                    changes[mutation](f)
+                wire = json.dumps(f["lock"])
+                if mutation == "duplicate-json-key":
+                    wire = '{"packages":[],' + wire[1:]
+                (f["project"] / "uap.lock").write_text(wire, encoding="utf-8")
+                found = self.observed(audit, f)
+                if mutation is not None:
+                    self.assertIsNone(found)
+                else:
+                    self.assertEqual(found, str(f["file"].relative_to(f["project"])))
+                    f["receipt"]["items"][0]["status"] = "unchanged"
+                    self.assertEqual(self.observed(audit, f, repeated=True), found)
+                    # The finder does not manufacture readiness from bytes.
+                    f["receipt"]["readiness"] = "needs_action"
+                    f["node"]["clients"][0]["activation"] = "prepared"
+                    self.assertEqual(self.observed(audit, f, repeated=True), found)
+                    self.assertEqual(f["receipt"]["readiness"], "needs_action")
+
+    def test_managed_path_rejects_links_relocated_namesakes_and_removed_payload(self):
+        audit = load_audit()
+        for mutation in ("file-symlink", "ancestor-symlink", "file-hardlink", "lock-symlink", "relocated", "removed"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                f = self.fixture(Path(temporary).resolve() / "case/project")
+                installed = self.observed(audit, f)
+                self.assertIsNotNone(installed)
+                foreign = f["project"].parent / "foreign.md"
+                foreign.write_bytes(f["body"])
+                if mutation == "lock-symlink":
+                    foreign.write_text(json.dumps(f["lock"]))
+                    lock = f["project"] / "uap.lock"
+                    lock.unlink(); lock.symlink_to(foreign)
+                elif mutation == "ancestor-symlink":
+                    original = f["file"].parent
+                    moved = original.with_name("foreign-directory")
+                    original.rename(moved); original.symlink_to(moved, target_is_directory=True)
+                else:
+                    f["file"].unlink()
+                    if mutation == "file-symlink":
+                        f["file"].symlink_to(foreign)
+                    elif mutation == "file-hardlink":
+                        os.link(foreign, f["file"])
+                    elif mutation == "relocated":
+                        stray = f["project"] / ".uap/managed/clients/copilot/foreign/skills/frontend-design/SKILL.md"
+                        stray.parent.mkdir(parents=True); stray.write_bytes(f["body"])
+                        # Recursive scanning is retained only as negative
+                        # post-remove evidence, never as a positive substitute.
+                        self.assertIsNotNone(audit.skill_file_present(f["project"], "copilot", "frontend-design"))
+                self.assertIsNone(self.observed(audit, f))
+                if mutation in ("file-symlink", "ancestor-symlink", "file-hardlink"):
+                    self.assertTrue(audit.skill_removal_leftovers(
+                        f["project"], "copilot", "frontend-design", installed))
+                expected = json.dumps(f["lock"]).encode() if mutation == "lock-symlink" else f["body"]
+                self.assertEqual(foreign.read_bytes(), expected)
+
+    def test_real_case_requires_both_receipts_clean_removal_and_public_ready(self):
+        from copy import deepcopy
+        import shutil
+        for scenario in ("ready", "prepared", "repeat-receipt", "repeat-bytes", "remove-residue", "remove-relocated"):
+            with self.subTest(scenario=scenario), TemporaryDirectory() as temporary:
+                audit = load_audit()
+                root = Path(temporary).resolve()
+                item = self.fixture(root / "template")["item"]
+                state = {"count": 0, "installed": False}
+                def call(argv, env, cwd, timeout=105, **kwargs):
+                    command = argv[1]
+                    if command == "skills":
+                        state["count"] += 1
+                        if state["count"] == 1:
+                            state["fixture"] = self.fixture(Path(cwd))
+                            state["installed"] = True
+                        f = state["fixture"]
+                        doc = deepcopy(f["receipt"])
+                        if state["count"] == 2:
+                            doc["items"][0]["status"] = "unchanged"
+                            if scenario == "repeat-receipt":
+                                doc["items"][0]["candidateId"] = "sha256:" + "d" * 64
+                            elif scenario == "repeat-bytes":
+                                f["file"].write_bytes(f["body"] + b"changed on repeat\n")
+                        if scenario == "prepared":
+                            doc["readiness"] = "needs_action"
+                            doc["next_actions"] = [{"code": "verify_native"}]
+                            f["node"]["clients"][0]["activation"] = "prepared"
+                    elif command == "list":
+                        doc = {"schema_version": 1, "command": "list", "result": "success", "data": {
+                            "installations": [deepcopy(state["fixture"]["node"])] if state["installed"] else []}}
+                    elif command == "remove":
+                        f = state["fixture"]
+                        destination = f["file"].parents[2]
+                        if scenario == "remove-relocated":
+                            destination.rename(destination.with_name("foreign-relocated"))
+                        elif scenario != "remove-residue":
+                            shutil.rmtree(destination)
+                        (f["project"] / "uap.lock").write_text('{"packages":[]}')
+                        state["installed"] = False
+                        doc = {"schema_version": 1, "command": "agentplugins remove", "result": "success", "data": {}}
+                    else:
+                        raise AssertionError("unexpected public command: " + repr(argv))
+                    return {"exit_code": 0, "timeout": False, "stdout_tail": json.dumps(doc),
+                            "stderr_tail": "", "_json": doc}
+                with patch.object(audit, "call", side_effect=call), \
+                     patch.object(audit, "initialize_project_skill_git_root"):
+                    row = audit.do_case("/unused/agentplugins", "copilot", "skill", item, 0, root, {})
+                self.assertTrue(row["skill_path"])
+                self.assertTrue(row["skill_bytes_match"])
+                self.assertTrue(row["lock_exact_source_pinned"])
+                self.assertTrue(row["sentinels_preserved"])
+                if scenario == "ready":
+                    self.assertEqual(row["status"], "passed")
+                    self.assertTrue(row["repeat_verified"])
+                    self.assertTrue(row["repeat_project_unchanged"])
+                    self.assertTrue(row["removal_verified"])
+                else:
+                    self.assertNotEqual(row["status"], "passed")
+                    if scenario == "prepared":
+                        self.assertEqual(row["status"], "incomplete-native-proof")
+                        self.assertTrue(row["repeat_verified"])
+                        self.assertTrue(row["removal_verified"])
+                        self.assertFalse(any(row["public_skill_ready"].values()))
+                    elif scenario.startswith("repeat"):
+                        self.assertFalse(row["repeat_verified"])
+                        self.assertTrue(row["removal_verified"])
+                    else:
+                        self.assertFalse(row["removal_verified"])
+                        self.assertTrue(row["post_removal_skill"])
+                        self.assertTrue(row["post_skill_tree_delta"])
+
+
+class CopilotManagedSkillConsistencyTest(unittest.TestCase):
+    def run_case(self, *, client_change=None, envelope_change=None,
+                 tree_change=None, prepared=False):
+        from copy import deepcopy
+        import shutil
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            item = CopilotManagedSkillReceiptTest.fixture(root / "template")["item"]
+            state = {"adds": 0, "installed": False, "calls": []}
+
+            def mutate(document, key, value):
+                if value is None:
+                    document.pop(key, None)
+                else:
+                    document[key] = value
+
+            def call(argv, env, cwd, timeout=105, **kwargs):
+                command = argv[1]
+                state["calls"].append(command)
+                if command == "skills":
+                    state["adds"] += 1
+                    if state["adds"] == 1:
+                        state["fixture"] = CopilotManagedSkillReceiptTest.fixture(Path(cwd))
+                        state["installed"] = True
+                    f = state["fixture"]
+                    doc = deepcopy(f["receipt"])
+                    if state["adds"] == 2:
+                        doc["items"][0]["status"] = "unchanged"
+                        if tree_change == "empty-directory":
+                            (f["file"].parents[2] / "unexpected-empty").mkdir()
+                        elif tree_change == "file-mode":
+                            f["file"].chmod(f["file"].stat().st_mode ^ 0o100)
+                        elif tree_change == "same-byte-replacement":
+                            replacement = f["file"].with_name("replacement.tmp")
+                            replacement.write_bytes(f["body"])
+                            replacement.replace(f["file"])
+                        elif tree_change == "file-mtime":
+                            before = f["file"].stat()
+                            os.utime(f["file"], ns=(before.st_atime_ns, before.st_mtime_ns + 1000000000))
+                    if prepared:
+                        doc["readiness"] = "needs_action"
+                        doc["next_actions"] = [{"code": "verify_native"}]
+                    phase = "add" if state["adds"] == 1 else "repeat"
+                elif command == "list":
+                    nodes = [deepcopy(state["fixture"]["node"])] if state["installed"] else []
+                    phase = ("after-add" if state["adds"] == 1 else "repeat-add") if nodes else "after-remove"
+                    if nodes:
+                        client = nodes[0]["clients"][0]
+                        if prepared:
+                            client.update(activation="prepared", authentication="not_checked")
+                        if client_change is not None and client_change[0] == phase:
+                            mutate(client, *client_change[1:])
+                    doc = {"schema_version": 1, "command": "list", "result": "success",
+                           "data": {"installations": nodes}}
+                elif command == "remove":
+                    f = state["fixture"]
+                    shutil.rmtree(f["file"].parents[2])
+                    (f["project"] / "uap.lock").write_text('{"packages":[]}')
+                    state["installed"] = False
+                    phase = "remove"
+                    doc = {"schema_version": 1, "command": "agentplugins remove", "result": "success", "data": {}}
+                else:
+                    raise AssertionError("unexpected public command")
+                if envelope_change is not None and envelope_change[0] == phase:
+                    mutate(doc, *envelope_change[1:])
+                return {"exit_code": 0, "timeout": False, "stdout_tail": json.dumps(doc),
+                        "stderr_tail": "", "_json": doc}
+
+            with patch.object(audit, "call", side_effect=call), \
+                 patch.object(audit, "initialize_project_skill_git_root"), \
+                 patch.object(audit.subprocess, "run", side_effect=AssertionError("real CLI forbidden")), \
+                 patch.object(audit.subprocess, "Popen", side_effect=AssertionError("real CLI forbidden")):
+                row = audit.do_case("/unused/agentplugins", "copilot", "skill", item, 0, root, {})
+            self.assertEqual(state["calls"], ["skills", "list", "skills", "list", "remove", "list"])
+            self.assertTrue(row["sentinels_preserved"])
+            return row
+
+    def test_fresh_copilot_lock_requires_exact_single_target(self):
+        audit = load_audit()
+        for targets in (["copilot"], ["copilot", "qoder"], ["copilot", False],
+                        ["copilot", {}], ["copilot", "copilot"], [], "copilot"):
+            with self.subTest(targets=targets), TemporaryDirectory() as temporary:
+                f = CopilotManagedSkillReceiptTest.fixture(Path(temporary).resolve() / "case/project")
+                f["lock"]["packages"][0]["targets"] = targets
+                (f["project"] / "uap.lock").write_text(json.dumps(f["lock"]))
+                found = audit.copilot_project_skill_path(f["project"], f["item"], f["receipt"], f["matches"])
+                if targets == ["copilot"]:
+                    self.assertEqual(found, str(f["file"].relative_to(f["project"])))
+                else:
+                    self.assertIsNone(found)
+
+    def test_copilot_ready_requires_both_public_client_states(self):
+        ready = self.run_case()
+        self.assertEqual(ready["status"], "passed")
+        for phase in ("after-add", "repeat-add"):
+            for key, values in (
+                    ("activation", ("prepared", "manual_activation_required", "failed", "not_required", "invalid", None)),
+                    ("authentication", ("not_checked", "auth_pending", "failed", "authenticated", "invalid", None))):
+                for value in values:
+                    with self.subTest(phase=phase, key=key, value=value):
+                        row = self.run_case(client_change=(phase, key, value))
+                        self.assertEqual(row["status"], "incomplete-native-proof")
+                        self.assertTrue(row["skill_bytes_match"])
+                        self.assertTrue(row["repeat_verified"])
+                        self.assertTrue(row["removal_verified"])
+                        self.assertFalse(row["public_skill_ready"][phase])
+                        other = "repeat-add" if phase == "after-add" else "after-add"
+                        self.assertTrue(row["public_skill_ready"][other])
+        # Unready files still receive the full repeat/remove lifecycle.
+        prepared = self.run_case(prepared=True)
+        self.assertEqual(prepared["status"], "incomplete-native-proof")
+        self.assertTrue(prepared["skill_bytes_match"])
+        self.assertTrue(prepared["repeat_verified"])
+        self.assertTrue(prepared["removal_verified"])
+        self.assertFalse(any(prepared["public_skill_ready"].values()))
+
+    def test_fresh_copilot_lock_requires_both_exact_skill_paths(self):
+        audit = load_audit()
+        for key in ("path", "resolved_skill_path"):
+            for value in (None, "other/frontend-design", False, {}):
+                with self.subTest(key=key, value=value), TemporaryDirectory() as temporary:
+                    f = CopilotManagedSkillReceiptTest.fixture(Path(temporary).resolve() / "case/project")
+                    git = f["lock"]["packages"][0]["source"]["git"]
+                    if value is None:
+                        git.pop(key, None)
+                    else:
+                        git[key] = value
+                    (f["project"] / "uap.lock").write_text(json.dumps(f["lock"]))
+                    self.assertIsNone(audit.copilot_project_skill_path(
+                        f["project"], f["item"], f["receipt"], f["matches"]))
+
+    def test_copilot_ready_requires_both_successful_list_envelopes(self):
+        for phase in ("after-add", "repeat-add"):
+            for key, value in (("schema_version", True), ("schema_version", 2),
+                               ("command", "doctor"), ("result", "failure"),
+                               ("result", "partial"), ("result", None)):
+                with self.subTest(phase=phase, key=key, value=value):
+                    row = self.run_case(envelope_change=(phase, key, value))
+                    self.assertEqual(row["status"], "incomplete-native-proof")
+                    self.assertTrue(row["repeat_verified"])
+                    self.assertTrue(row["removal_verified"])
+                    self.assertFalse(row["public_skill_ready"][phase])
+
+    def test_copilot_cleanup_requires_successful_remove_and_list_envelopes(self):
+        for phase in ("remove", "after-remove"):
+            for key, value in (("schema_version", True), ("schema_version", 2),
+                               ("command", "doctor"), ("command", "remove"), ("result", "failure"),
+                               ("result", "partial"), ("result", None)):
+                with self.subTest(phase=phase, key=key, value=value):
+                    row = self.run_case(envelope_change=(phase, key, value))
+                    self.assertNotEqual(row["status"], "passed")
+                    self.assertTrue(row["repeat_verified"])
+                    self.assertFalse(row["removal_verified"])
+                    if phase == "after-remove":
+                        self.assertFalse(row["post_list_schema_valid"])
+
+    def test_copilot_repeat_preserves_managed_tree_custody(self):
+        for mutation in ("empty-directory", "file-mode", "same-byte-replacement", "file-mtime"):
+            with self.subTest(mutation=mutation):
+                row = self.run_case(tree_change=mutation)
+                self.assertNotEqual(row["status"], "passed")
+                self.assertTrue(row["skill_bytes_match"])
+                self.assertTrue(row["removal_verified"])
+                self.assertFalse(row["repeat_project_unchanged"])
+                self.assertFalse(row["repeat_verified"])
+
+
 
 class KiroPreparedInstallationAcceptanceContracts(unittest.TestCase):
     def original_report(self):
@@ -11914,7 +13918,7 @@ class PreparedInstallationRecoveryContracts(unittest.TestCase):
                 "client_version": {"status": "reported", "value": "inert fixture version", "exit_code": 0},
                 "results": rows}, fixtures
 
-    def invoke(self, report, acceptance=None, *, target=None, kind=None, platform="linux", limit=30):
+    def invoke(self, report, acceptance=None, *, target=None, kind=None, platform="linux", arch="x86_64", limit=30):
         import copy
         from contextlib import redirect_stdout, redirect_stderr
         from io import StringIO
@@ -11926,6 +13930,7 @@ class PreparedInstallationRecoveryContracts(unittest.TestCase):
             if acceptance:
                 argv += ["--acceptance", acceptance]
             with (patch.object(audit.sys, "argv", argv), patch.object(audit.sys, "platform", platform),
+                  patch.object(audit.platform, "machine", return_value=arch),
                   patch.object(audit, "vendor_bootstrap_attested", return_value=True),
                   patch.dict(audit.AGENT_BINARIES, {"cursor": sys.executable, "grok": sys.executable}, clear=True),
                   patch.object(audit, "version_evidence", return_value=report["client_version"]) as version,
@@ -11938,7 +13943,7 @@ class PreparedInstallationRecoveryContracts(unittest.TestCase):
             path = Path(temporary) / f"{target}-{kind}.json"
             return code, json.loads(path.read_text()) if path.exists() else None, version.call_count, cases.call_count
 
-    def test_two_full_installation_lanes_keep_default_native_negative(self):
+    def test_reduced_legacy_fixtures_cannot_qualify_strict_installation_lanes(self):
         for target, kind, mode in (("cursor", "plugin", "cursor-prepared-installation"),
                                    ("grok", "skill", "grok-prepared-skills-installation")):
             with self.subTest(mode=mode):
@@ -11949,13 +13954,13 @@ class PreparedInstallationRecoveryContracts(unittest.TestCase):
                 self.assertEqual(default["verified_negative_coverage"], 0)
                 self.assertNotIn("installation_acceptance_passed", default)
                 code, prepared, versions, calls = self.invoke(original, mode)
-                self.assertEqual((code, versions, calls), (0, 2, 30))
+                self.assertEqual((code, versions, calls), (1, 2, 30))
                 self.assertEqual(prepared["results"], original["results"])
                 self.assertEqual(prepared["passed"], 0)
                 self.assertEqual(prepared["verified_negative_coverage"], 0)
-                self.assertEqual(prepared["installation_passed"], 30)
-                self.assertEqual(prepared["installation_verified_negative_coverage"], 0)
-                self.assertIs(prepared["installation_acceptance_passed"], True)
+                self.assertEqual(prepared["installation_passed"], 0)
+                self.assertIs(prepared["installation_acceptance_passed"], False)
+                self.assertIs(prepared["native_activation_qualified"], False)
 
     def test_all_commands_provenance_effects_and_source_slots_stay_required(self):
         import copy
@@ -11999,7 +14004,7 @@ class PreparedInstallationRecoveryContracts(unittest.TestCase):
             original, _ = self.report(target, kind)
             for changed in ({"target": "vscode"}, {"target": target + ",grok"},
                             {"kind": "skill" if kind == "plugin" else "plugin"},
-                            {"platform": "darwin"}, {"platform": "win32"}, {"limit": 29}):
+                            {"platform": "darwin"}, {"platform": "win32"}, {"arch": "arm64"}, {"limit": 29}):
                 with self.subTest(mode=mode, changed=changed):
                     self.assertEqual(self.invoke(original, mode, **changed), (2, None, 0, 0))
 
@@ -12146,8 +14151,11 @@ class PreparedProjectSkillEvidenceContracts(unittest.TestCase):
         for target in ("cursor", "kiro"):
             with self.subTest(target=target):
                 audit, _fixtures, report = self.fixture(target)
+                # Cursor now requires the strict full-envelope receipt; the reduced
+                # legacy fixture must fail its CLI route. Kiro retains its legacy route.
                 for acceptance, expected_code in (("native", 1),
-                                                  (target + "-prepared-skills-installation", 0)):
+                                                  (target + "-prepared-skills-installation",
+                                                   1 if target == "cursor" else 0)):
                     with TemporaryDirectory() as directory:
                         argv = ["live-install-audit", "--cli", sys.executable,
                                 "--target", target, "--kind", "skill",
@@ -12168,11 +14176,16 @@ class PreparedProjectSkillEvidenceContracts(unittest.TestCase):
                         self.assertEqual(runs.call_count, 30)
                         saved = json.loads((Path(directory) / f"{target}-skill.json").read_text())
                         self.assertEqual(saved["passed"], 0)
-                        if acceptance != "native":
+                        self.assertEqual(saved["results"], report["results"])
+                        if acceptance == "native":
+                            self.assertNotIn("installation_acceptance_passed", saved)
+                        elif target == "cursor":
+                            self.assertEqual(saved["installation_passed"], 0)
+                            self.assertIs(saved["installation_acceptance_passed"], False)
+                            self.assertIs(saved["native_activation_qualified"], False)
+                        else:
                             self.assertEqual(saved["installation_passed"], 30)
                             self.assertIs(saved["installation_acceptance_passed"], True)
-                        else:
-                            self.assertNotIn("installation_acceptance_passed", saved)
 
 
 class WindsurfRecoveredFixtureContracts(unittest.TestCase):
@@ -13075,6 +15088,51 @@ class WindsurfPreparedAcceptanceContracts(unittest.TestCase):
         self.assertEqual((original['passed'], original['prepared_lifecycle_passed'],
                           original['verified_negative_coverage']), (0, 25, 1))
 
+    def test_actual_prepared_cases_keep_six_calls_without_global_native_observer(self):
+        import copy
+        audit = load_audit()
+        report = self.original()
+        fixtures = json.loads(audit.FIXTURES.read_text())
+        phases = ('install', 'list', 'repeat_add', 'repeat_list', 'cleanup', 'post_remove_list')
+        # Only subprocess transport is inert. Exercise real case setup,
+        # source matching, repeat/remove and the unchanged legacy summary.
+        for index in (22, 25, 26, 29):
+            with self.subTest(index=index), TemporaryDirectory() as temporary:
+                retained = copy.deepcopy(report['results'][index])
+                commands = []
+                def invoke(argv, env, cwd, timeout=105, **options):
+                    phase = phases[len(commands)]
+                    self.assertEqual(argv, retained['windsurf_public_commands'][len(commands)])
+                    self.assertTrue(options['capture_full'])
+                    self.assertTrue((Path(env['HOME']) / '.config/devin/foreign-neighbor.txt').is_file())
+                    commands.append(list(argv))
+                    if phase in ('install', 'repeat_add'):
+                        document = {'schema_version': 1, 'command': 'add', 'result': 'success',
+                                    'data': {'actions': [{'alias': retained['identity'], 'client_id': 'windsurf',
+                                        'component_support': [{'kind': 'skill', 'name': 'inert', 'support': 'prepared'}]}]}}
+                        body = json.dumps(document)
+                    else:
+                        body = retained[phase]['stdout_tail']
+                        document = json.loads(body)
+                    return {'exit_code': 0, 'timeout': False, 'stdout_tail': body[-1800:],
+                            'stderr_tail': '', 'stdout_full': body, 'stderr_full': '', '_json': document}
+                with patch.object(audit, 'call', side_effect=invoke), patch.dict(
+                        audit.WINDSURF_GLOBAL_AUDIT, {'WindsurfGlobalSkillAudit': lambda *a, **k:
+                            self.fail('explicit Prepared acceptance invoked the native observer')}):
+                    row = audit.do_case(report['cli'], 'windsurf', 'plugin', retained['source'], index,
+                        Path(temporary), fixtures['plugin_declared_names'], fixtures['signed_release_pins'],
+                        installation_audit='windsurf-prepared-installation')
+                self.assertEqual(row['status'], 'prepared-lifecycle-passed')
+                self.assertEqual(row['windsurf_public_commands'], commands)
+                self.assertEqual(len(commands), 6)
+                self.assertNotIn('windsurf_global_native_proof', row)
+                self.assertTrue(all('stdout_full' not in row[phase] and 'stderr_full' not in row[phase]
+                                    for phase in phases))
+                report['results'][index] = row
+        accepted = audit.prepared_installation_summary(report, fixtures, 'windsurf-prepared-installation')
+        self.assertEqual((accepted['installation_passed'], accepted['installation_verified_negative_coverage'],
+                          accepted['installation_acceptance_passed']), (25, 5, True))
+
 
     def test_original_provenance_effects_and_nullable_refusals_are_required(self):
         import copy
@@ -13168,6 +15226,9 @@ class WindsurfPreparedAcceptanceContracts(unittest.TestCase):
         for row in rows:
             for command in row['windsurf_public_commands']:
                 command[0] = cli
+        def next_case(*args, **kwargs):
+            self.assertEqual(kwargs.get('installation_audit'), acceptance)
+            return rows[args[4]]
         with TemporaryDirectory() as temporary:
             argv = ['live-install-audit', '--cli', cli, '--target', target, '--kind', kind,
                     '--limit', str(limit), '--report-dir', temporary]
@@ -13178,7 +15239,7 @@ class WindsurfPreparedAcceptanceContracts(unittest.TestCase):
                   patch.object(audit, 'vendor_bootstrap_attested', return_value=True),
                   patch.dict(audit.AGENT_BINARIES, {'devin': cli, 'windsurf': cli}, clear=True),
                   patch.object(audit, 'version_evidence', return_value=original['client_version']) as version,
-                  patch.object(audit, 'do_case', side_effect=rows) as cases,
+                  patch.object(audit, 'do_case', side_effect=next_case) as cases,
                   redirect_stdout(StringIO()), redirect_stderr(StringIO())):
                 try:
                     code = audit.main()
