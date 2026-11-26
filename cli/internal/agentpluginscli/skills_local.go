@@ -54,7 +54,7 @@ func validateLocalSkillSelection(selection SkillsSelection) error {
 	if selection.LocalPath == "" {
 		return nil
 	}
-	if selection.Repository != "" || selection.Website != "" || selection.Path != "" || selection.Commit != "" || selection.Selector.Kind != "" || selection.ExpectedIndexSHA256 != "" || selection.ExpectedRawTreeDigest != "" {
+	if selection.Repository != "" || selection.URL != "" || selection.Website != "" || selection.Path != "" || selection.Commit != "" || selection.Selector.Kind != "" || selection.ExpectedIndexSHA256 != "" || selection.ExpectedRawTreeDigest != "" {
 		return errors.New("local Skill selection cannot contain remote source fields")
 	}
 	return nil

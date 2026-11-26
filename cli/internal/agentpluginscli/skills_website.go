@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 // Website discovery is explicit and deterministic: a publisher index and exact
@@ -50,6 +51,10 @@ func (selection *skillsAddOptions) runWebsite(cmd *cobra.Command, app App, opts 
 }
 
 func isWebsiteSkillInput(input string) bool {
+	spec, parseErr := sourcespec.Parse(input)
+	if parseErr == nil && spec.Kind == sourcespec.KindGit {
+		return false
+	}
 	u, err := url.Parse(input)
 	return err == nil && u.Scheme == "https" && !strings.EqualFold(u.Hostname(), "github.com") && !strings.EqualFold(u.Hostname(), "raw.githubusercontent.com")
 }

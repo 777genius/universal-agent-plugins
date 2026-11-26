@@ -15,10 +15,10 @@ import (
 var ErrSkillsPlanStale = errors.New("skill installation plan is stale")
 
 type SkillsSelection struct {
-	Repository, Commit, Path, Name, Alias, CandidateID string
-	Website, LocalPath                                 string
-	ExpectedIndexSHA256, ExpectedRawTreeDigest         string
-	Selector                                           environment.Selector
+	Repository, URL, Commit, Path, Name, Alias, CandidateID string
+	Website, LocalPath                                      string
+	ExpectedIndexSHA256, ExpectedRawTreeDigest              string
+	Selector                                                environment.Selector
 }
 type SkillsBatchRequest struct {
 	Selections []SkillsSelection

@@ -64,7 +64,7 @@ func (candidate *skillsBatchCandidate) prefetchRawSkills(ctx context.Context, ap
 		if old, ok := candidate.requirements.Dependencies[req.Alias]; ok && mustSourceKey(old) == mustSourceKey(req) {
 			continue
 		}
-		keys = append(keys, rawSkillKey{repository: req.Git.Repository, commit: selection.Commit, path: req.Git.Path})
+		keys = append(keys, rawSkillKey{repository: req.Git.Repository, url: req.Git.URL, commit: selection.Commit, path: req.Git.Path})
 	}
 	if len(keys) < 2 {
 		return nil
@@ -118,7 +118,7 @@ func skillSelectionRequirement(wanted environment.Requirements, selection Skills
 	if selector.Kind == "" {
 		selector = environment.Selector{Kind: environment.SelectorCommit, Value: selection.Commit}
 	}
-	req := environment.Requirement{Alias: defaultSkillAlias(selection), Git: &environment.GitSource{Kind: environment.SkillKind, Skill: selection.Name, Repository: strings.ToLower(selection.Repository), Path: selection.Path, Selector: selector}}
+	req := environment.Requirement{Alias: defaultSkillAlias(selection), Git: &environment.GitSource{Kind: environment.SkillKind, Skill: selection.Name, Repository: strings.ToLower(selection.Repository), URL: selection.URL, Path: selection.Path, Selector: selector}}
 	if selection.LocalPath != "" {
 		req.Git = nil
 		req.Local = &environment.LocalSource{Path: selection.LocalPath, Skill: selection.Name}
@@ -165,7 +165,7 @@ func defaultSkillAlias(selection SkillsSelection) string {
 	if selection.Alias != "" {
 		return selection.Alias
 	}
-	probe := environment.Requirement{Alias: selection.Name, Git: &environment.GitSource{Repository: selection.Repository, Selector: environment.Selector{Kind: environment.SelectorDefault}}}
+	probe := environment.Requirement{Alias: selection.Name, Git: &environment.GitSource{Repository: selection.Repository, URL: selection.URL, Selector: environment.Selector{Kind: environment.SelectorDefault}}}
 	if selection.LocalPath != "" {
 		probe.Git = nil
 		probe.Local = &environment.LocalSource{Path: selection.LocalPath, Skill: selection.Name}

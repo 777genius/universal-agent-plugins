@@ -5,6 +5,9 @@ import "testing"
 func TestSkillBindingSurvivesRevisionAndRelocation(t *testing.T) {
 	source := SourceIdentity{SourceBindingHint: "uap-dependency-skill", StableSourceKey: "github-skill:acme/tools:pdf:skills/pdf", Repository: "acme/tools", PackageSubpath: "skills/pdf", CanonicalSource: "github:acme/tools@old//skills/pdf"}
 	before := ComputeSourceBindingID(source)
+	if before != "src_9684207236a194313598252f" {
+		t.Fatal("historical GitHub Skill binding changed", before)
+	}
 	source.PackageSubpath = "moved/pdf"
 	source.ResolvedRevision = "new"
 	source.CanonicalSource = "github:acme/tools@new//moved/pdf"

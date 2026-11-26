@@ -50,11 +50,6 @@ func validateAcquiredSource(acquired *domain.AcquiredSnapshot, portable bool) (s
 		}
 		return acquiredLocalSkillSourceKey(source, portable)
 	}
-	return validateAcquiredRemoteSource(acquired, portable)
-}
-
-func validateAcquiredRemoteSource(acquired *domain.AcquiredSnapshot, portable bool) (string, error) {
-	source := acquired.Source
 	if source.SourceKind == "https-skill" || source.WebSkill != nil || source.SourceBindingHint == "uap-dependency-web-skill" {
 		if acquired.OriginMode != domain.OriginModeDirect {
 			return "", ErrInvalidRequest
@@ -62,10 +57,7 @@ func validateAcquiredRemoteSource(acquired *domain.AcquiredSnapshot, portable bo
 		return acquiredWebSkillSourceKey(source, portable)
 	}
 	if source.SourceKind != "" {
-		if acquired.OriginMode != domain.OriginModeDirect || source.Skill != nil || source.StableSourceKey != "" || source.SourceBindingHint == "uap-dependency-skill" {
-			return "", ErrInvalidRequest
-		}
-		return acquiredDirectSourceKey(source, portable)
+		return validateAcquiredTransportSource(acquired, portable)
 	}
 	expected := "github:" + source.Repository + "@" + source.ResolvedRevision
 	if source.PackageSubpath != "" {
@@ -81,4 +73,18 @@ func validateAcquiredRemoteSource(acquired *domain.AcquiredSnapshot, portable bo
 		return acquiredSkillSourceKey(source, portable)
 	}
 	return "github:" + strings.ToLower(source.Repository) + ":" + source.PackageSubpath, nil
+}
+
+func validateAcquiredTransportSource(acquired *domain.AcquiredSnapshot, portable bool) (string, error) {
+	source := acquired.Source
+	if acquired.OriginMode != domain.OriginModeDirect {
+		return "", ErrInvalidRequest
+	}
+	if source.SourceKind == "git" && source.Skill != nil {
+		return acquiredGitSkillSourceKey(source, portable)
+	}
+	if source.Skill != nil || source.StableSourceKey != "" || source.SourceBindingHint == "uap-dependency-skill" {
+		return "", ErrInvalidRequest
+	}
+	return acquiredDirectSourceKey(source, portable)
 }

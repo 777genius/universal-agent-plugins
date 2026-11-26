@@ -54,7 +54,7 @@ func setRepairSkillSource(pkg *environment.LockedPackage, installation domain.In
 		if facts == nil {
 			return errors.New("recorded Skill source provenance unavailable; restore the matching state/lock before repair")
 		}
-		pkg.Source.Git = &environment.LockedGitSource{Kind: environment.SkillKind, Skill: facts.Name, Repository: installation.Source.Repository, Path: facts.RequestedPath, Commit: rev.ResolvedRevision, Requested: environment.Selector{Kind: environment.SelectorCommit, Value: rev.ResolvedRevision}, ResolvedSkillPath: facts.ResolvedPath, RawTreeDigest: facts.RawTreeDigest, Normalizer: facts.Normalizer}
+		pkg.Source.Git = &environment.LockedGitSource{Kind: environment.SkillKind, Skill: facts.Name, Repository: installation.Source.Repository, URL: installation.Source.SourceURL, Path: facts.RequestedPath, Commit: rev.ResolvedRevision, Requested: environment.Selector{Kind: environment.SelectorCommit, Value: rev.ResolvedRevision}, ResolvedSkillPath: facts.ResolvedPath, RawTreeDigest: facts.RawTreeDigest, Normalizer: facts.Normalizer}
 	}
 	if installation.Source.SourceKind == "https-skill" {
 		if rev.WebSkill == nil {

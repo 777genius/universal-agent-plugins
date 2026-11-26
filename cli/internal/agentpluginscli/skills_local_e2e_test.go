@@ -46,10 +46,26 @@ func localResource(t *testing.T, app App, pin environment.LockedPackage) string 
 	return string(body)
 }
 
+func assertLocalInstalledResource(t *testing.T, j savedJourney, expected string) {
+	t.Helper()
+	state := j.state(t)
+	for _, target := range []string{"codex", "claude"} {
+		binding := savedJourneyBinding(t, state, target)
+		root := binding.TargetLocator
+		if target == "claude" {
+			root = filepath.Join(root, ".agentplugins-runtime")
+		}
+		p := filepath.Join(root, "skills", "review", "scripts", "check.sh")
+		if body, err := os.ReadFile(p); err != nil || string(body) != expected {
+			t.Fatalf("%s installed resource bytes differ: %q %v", target, body, err)
+		}
+	}
+}
+
 func TestLocalSkillCLISavedSnapshotLifecycle(t *testing.T) {
 	j, root := localSkillJourney(t)
 	args := []string{"skills", "add", root, "--target", "codex,claude", "--yes", "--format", "json"}
-	j.run(t, append(args, "--dry-run")...)
+	j.run(t, append(append([]string(nil), args...), "--dry-run")...)
 	mp, lp := j.cli.app.dependencyPaths()
 	for _, p := range []string{mp, lp, j.cli.app.EnvironmentStoreRoot} {
 		if _, err := os.Stat(p); !os.IsNotExist(err) {
@@ -70,6 +86,7 @@ func TestLocalSkillCLISavedSnapshotLifecycle(t *testing.T) {
 		t.Fatal("local add bypassed environment receipts", before.EnvironmentReceipts)
 	}
 	oldBytes := localResource(t, j.cli.app, pin)
+	assertLocalInstalledResource(t, j, oldBytes)
 	newBytes := "#!/bin/sh\nexit 98\n"
 	if err := os.WriteFile(filepath.Join(root, "scripts", "check.sh"), []byte(newBytes), 0700); err != nil {
 		t.Fatal(err)
@@ -79,6 +96,7 @@ func TestLocalSkillCLISavedSnapshotLifecycle(t *testing.T) {
 	if !environment.SamePin(pin, repeated.Packages[0]) || localResource(t, j.cli.app, pin) != oldBytes {
 		t.Fatal("re-add adopted mutable local bytes")
 	}
+	assertLocalInstalledResource(t, j, oldBytes)
 	j.run(t, "deps", "sync", "--locked", "--yes", "--format", "json")
 	j.run(t, "update", "review", "--format", "json")
 	_, updated := j.intent(t)
@@ -87,11 +105,14 @@ func TestLocalSkillCLISavedSnapshotLifecycle(t *testing.T) {
 	if pin.SourceKey != next.SourceKey || pin.TreeDigest == next.TreeDigest || localResource(t, j.cli.app, next) != newBytes || before.Installations[0].InstallationID != after.Installations[0].InstallationID || before.Installations[0].Source.SourceBindingID != after.Installations[0].Source.SourceBindingID {
 		t.Fatal("explicit local update changed ownership or failed to snapshot source")
 	}
+	assertLocalInstalledResource(t, j, newBytes)
 	if err := os.RemoveAll(root); err != nil {
 		t.Fatal(err)
 	}
 	// The verified artifact owns replay and each binding's recorded repair.
+	savedRawSkillDropOwnedFixture(t, j, savedJourneyBinding(t, after, "codex").TargetLocator)
 	j.run(t, "repair", "review", "--target", "codex", "--format", "json")
+	assertLocalInstalledResource(t, j, newBytes)
 	j.run(t, "deps", "sync", "--locked", "--yes", "--format", "json")
 	exchange := filepath.Join(t.TempDir(), "exchange")
 	j.run(t, "deps", "export", exchange, "--yes", "--format", "json")

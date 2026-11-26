@@ -39,15 +39,13 @@ func (resolver dependencyResolver) resolveSkill(ctx context.Context, requirement
 	}()
 	source := requirement.Git
 	resolved := source.Path
-	if finder, ok := resolver.app.SourceAcquirer.(interface {
-		ResolveGitHubSkill(context.Context, string, string, string, string, string) (string, error)
-	}); ok && previous != nil {
+	if previous != nil {
 		last := source.Path
-		if previous != nil && previous.Source.Git != nil {
+		if previous.Source.Git != nil {
 			last = previous.Source.Git.ResolvedSkillPath
 		}
 		var err error
-		resolved, err = finder.ResolveGitHubSkill(ctx, source.Repository, commit, source.Skill, source.Path, last)
+		resolved, err = resolver.app.resolveRawSkillPath(ctx, *source, commit, last)
 		if err != nil {
 			return environment.LockedPackage{}, err
 		}
@@ -55,22 +53,21 @@ func (resolver dependencyResolver) resolveSkill(ctx context.Context, requirement
 	if skillDirectoryMismatch(source.Skill, resolved) {
 		return environment.LockedPackage{}, errors.New("skill name differs from source directory")
 	}
-	acquirer, err := resolver.app.rawSkillAcquirer()
-	if err != nil {
-		return environment.LockedPackage{}, err
-	}
+	var err error
 	var raw domain.PackageSnapshot
 	var ok bool
 	if prefetched != nil && resolved == source.Path {
 		raw, ok, prefetched = *prefetched, true, nil
 	} else {
-		raw, ok, err = resolver.rawSkills.take(ctx, rawSkillKey{repository: source.Repository, commit: commit, path: resolved})
+		raw, ok, err = resolver.rawSkills.take(ctx, rawSkillKey{repository: source.Repository, url: source.URL, commit: commit, path: resolved})
 		if err != nil {
 			return environment.LockedPackage{}, err
 		}
 	}
 	if !ok {
-		raw, err = acquirer.AcquireGitHubSkill(ctx, source.Repository, commit, resolved)
+		rawSource := *source
+		rawSource.Path = resolved
+		raw, err = resolver.app.acquireRawGitSkill(ctx, rawSource, commit, "")
 		if err != nil {
 			return environment.LockedPackage{}, err
 		}
@@ -81,7 +78,7 @@ func (resolver dependencyResolver) resolveSkill(ctx context.Context, requirement
 	if err != nil {
 		return environment.LockedPackage{}, err
 	}
-	pin := environment.LockedPackage{Alias: requirement.Alias, SourceKey: key, Targets: append([]string{}, targets...), DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: snapshot.TreeDigest, ExecutableFiles: snapshot.ExecutableFiles, Source: environment.LockedSource{Git: &environment.LockedGitSource{Kind: environment.SkillKind, Skill: source.Skill, Repository: source.Repository, Path: source.Path, Requested: source.Selector, Commit: commit, ResolvedRef: resolvedRef, DefaultBranch: defaultBranch, ResolvedSkillPath: resolved, RawTreeDigest: raw.TreeDigest, Normalizer: environment.SkillNormalizerV1}}}
+	pin := environment.LockedPackage{Alias: requirement.Alias, SourceKey: key, Targets: append([]string{}, targets...), DigestAlgorithm: domain.TreeDigestAlgorithm, TreeDigest: snapshot.TreeDigest, ExecutableFiles: snapshot.ExecutableFiles, Source: environment.LockedSource{Git: &environment.LockedGitSource{Kind: environment.SkillKind, Skill: source.Skill, Repository: source.Repository, URL: source.URL, Path: source.Path, Requested: source.Selector, Commit: commit, ResolvedRef: resolvedRef, DefaultBranch: defaultBranch, ResolvedSkillPath: resolved, RawTreeDigest: raw.TreeDigest, Normalizer: environment.SkillNormalizerV1}}}
 	snapshot.Source = skillSnapshotSource(pin)
 	loaded, err := resolver.app.loadStandardSnapshot(ctx, snapshot, domain.OriginModeDirect, nil, nil)
 	if err != nil {
@@ -100,7 +97,12 @@ func skillDirectoryMismatch(skill, directory string) bool {
 func skillSnapshotSource(pin environment.LockedPackage) domain.SourceIdentity {
 	source := pin.Source.Git
 	identity := githubIdentity(source.Repository, source.Commit, source.ResolvedSkillPath)
-	return domain.SourceIdentity{Skill: &domain.SkillSourceFacts{Name: source.Skill, RequestedPath: source.Path, ResolvedPath: source.ResolvedSkillPath, RawTreeDigest: source.RawTreeDigest, Normalizer: source.Normalizer}, RequestedSource: identity, CanonicalSource: identity, Repository: source.Repository, PackageSubpath: source.ResolvedSkillPath, ResolvedRevision: source.Commit, SourceBindingHint: "uap-dependency-skill", StableSourceKey: pin.SourceKey}
+	identityFacts := domain.SourceIdentity{Skill: &domain.SkillSourceFacts{Name: source.Skill, RequestedPath: source.Path, ResolvedPath: source.ResolvedSkillPath, RawTreeDigest: source.RawTreeDigest, Normalizer: source.Normalizer}, RequestedSource: identity, CanonicalSource: identity, Repository: source.Repository, PackageSubpath: source.ResolvedSkillPath, ResolvedRevision: source.Commit, SourceBindingHint: "uap-dependency-skill", StableSourceKey: pin.SourceKey}
+	if source.URL != "" {
+		identityFacts.SourceKind, identityFacts.SourceURL = "git", source.URL
+		identityFacts.RequestedSource, identityFacts.CanonicalSource = pin.SourceKey, pin.SourceKey
+	}
+	return identityFacts
 }
 
 func (app App) acquireLockedSkill(ctx context.Context, pin environment.LockedPackage) (domain.PackageSnapshot, error) {
@@ -111,11 +113,7 @@ func (app App) acquireLockedSkill(ctx context.Context, pin environment.LockedPac
 	if skillDirectoryMismatch(source.Skill, source.ResolvedSkillPath) {
 		return domain.PackageSnapshot{}, errors.New("locked Skill name differs from source directory")
 	}
-	acquirer, err := app.rawSkillAcquirer()
-	if err != nil {
-		return domain.PackageSnapshot{}, err
-	}
-	raw, err := acquirer.AcquireGitHubSkillVerified(ctx, source.Repository, source.Commit, source.ResolvedSkillPath, source.RawTreeDigest)
+	raw, err := app.acquireRawGitSkill(ctx, environment.GitSource{Repository: source.Repository, URL: source.URL, Path: source.ResolvedSkillPath}, source.Commit, source.RawTreeDigest)
 	if err != nil {
 		return domain.PackageSnapshot{}, err
 	}

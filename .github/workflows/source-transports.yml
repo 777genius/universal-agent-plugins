@@ -103,3 +103,33 @@ jobs:
           set -euo pipefail
           go test -count=1 -timeout=3m -json ./internal/agentpluginscli -run '^TestDirectSourceSavedLifecycleRealSSH$' | tee cli-ssh.json
           jq -s -e 'any(.[]; .Action == "pass" and .Test == "TestDirectSourceSavedLifecycleRealSSH/ssh-url") and any(.[]; .Action == "pass" and .Test == "TestDirectSourceSavedLifecycleRealSSH/scp") and all(.[]; .Action != "skip")' cli-ssh.json
+      - name: Verify raw Skill immutable transport and subtree invariants
+        working-directory: install/integrationctl/agentplugins
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout=3m -json ./adapters/sourceacquisition \
+            -run '^(TestNativeSkillTreeFetchesCompleteAuthenticatedCommit|TestNativeRawSkillRejectsRootAndSelectedSubmodules)$' | tee raw-skill-transport.json
+          jq -s -e '
+            . as $events
+            | all(["TestNativeSkillTreeFetchesCompleteAuthenticatedCommit", "TestNativeRawSkillRejectsRootAndSelectedSubmodules"][];
+                . as $name
+                | any($events[]; .Action == "run" and .Test == $name)
+                and any($events[]; .Action == "pass" and .Test == $name))
+              and all($events[]; .Action != "skip" and .Action != "fail")
+          ' raw-skill-transport.json
+      - name: Verify private HTTPS standalone Skill saved lifecycle
+        working-directory: cli
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -count=1 -timeout=5m -json ./internal/agentpluginscli \
+            -run '^(TestStandaloneGitSkillPrivateHTTPSLifecycle|TestStandaloneGitSkillDeniedAccessLeavesEnvironmentUntouched|TestGenericGitSkillColdDigestRefusal)$' | tee cli-git-skills.json
+          jq -s -e '
+            . as $events
+            | all(["TestStandaloneGitSkillPrivateHTTPSLifecycle", "TestStandaloneGitSkillDeniedAccessLeavesEnvironmentUntouched", "TestGenericGitSkillColdDigestRefusal"][];
+                . as $name
+                | any($events[]; .Action == "run" and .Test == $name)
+                and any($events[]; .Action == "pass" and .Test == $name))
+              and all($events[]; .Action != "skip" and .Action != "fail")
+          ' cli-git-skills.json
