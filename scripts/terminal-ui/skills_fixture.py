@@ -4,11 +4,13 @@ The local publisher uses verified HTTPS with Linux SSL_CERT_FILE. Other systems
 use the separately pinned public GitHub source. No transport/policy is replaced.
 Native responders qualify installer behavior, not vendor acceptance or models.
 """
+from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
 from pathlib import Path
 import shutil
+import socket
 import ssl
 import subprocess
 import sys
@@ -22,6 +24,59 @@ GITHUB_PATH = 'tests/fixtures/uap_apm/skills/benchmark-note'
 GITHUB_SKILL_BLOB = '1341ca3c10621a9e5e25304cca19144c6b54fa3b'
 SKILL_BODY = ('---\nname: console-proof\ndescription: Read an inert fixture note\n---\n'
               'Read reference.txt. Do not execute commands or contact services.\n')
+
+
+class _PublisherServer(ThreadingHTTPServer):
+    """Accept raw TCP; a stalled TLS peer cannot block other request threads."""
+    daemon_threads = False
+    handshake_timeout = 1.0
+
+    def __init__(self, address, handler, context):
+        self.context = context
+        self.connections = set()
+        self.connection_lock = threading.Lock()
+        self.closing = False
+        super().__init__(address, handler)
+
+    def process_request_thread(self, request, client_address):
+        connection = request
+        try:
+            with self.connection_lock:
+                if self.closing:
+                    return
+                self.connections.add(request)
+            request.settimeout(self.handshake_timeout)
+            connection = self.context.wrap_socket(
+                request, server_side=True, do_handshake_on_connect=False)
+            with self.connection_lock:
+                self.connections.discard(request)
+                if self.closing:
+                    return
+                self.connections.add(connection)
+            connection.do_handshake()
+            connection.settimeout(5)
+            self.finish_request(connection, client_address)
+        except (OSError, ssl.SSLError):
+            pass  # Untrusted, stalled and canceled peers are not successful requests.
+        except Exception:
+            self.handle_error(connection, client_address)
+        finally:
+            with self.connection_lock:
+                self.connections.discard(request)
+                self.connections.discard(connection)
+            self.shutdown_request(connection)
+
+    def server_close(self):
+        with self.connection_lock:
+            self.closing = True
+            connections = tuple(self.connections)
+        for connection in connections:
+            with suppress(OSError):
+                connection.shutdown(socket.SHUT_RDWR)
+            with suppress(OSError):
+                connection.close()
+        # Non-daemon request threads are joined only after their sockets close.
+        super().server_close()
 
 
 class Publisher:
@@ -81,10 +136,9 @@ class Publisher:
             def log_message(self, *_args):
                 pass
 
-        self.server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.load_cert_chain(cert, key)
-        self.server.socket = context.wrap_socket(self.server.socket, server_side=True)
+        self.server = _PublisherServer(('127.0.0.1', 0), Handler, context)
         self.ca = cert
         self.url = f'https://127.0.0.1:{self.server.server_port}/publisher'
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -155,7 +209,7 @@ class SkillsFixture(Fixture):
 
     def calls(self):
         path = self.root / 'native-calls.jsonl'
-        return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+        return [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()] if path.exists() else []
 
     def close(self):
         if self.publisher:

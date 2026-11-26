@@ -5,6 +5,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 // failImperativeUpdate keeps the original result for JSON and native evidence.
@@ -20,6 +21,12 @@ func (session *updateAllSession) failImperativeUpdate(index int, applied *update
 	var items []agentItem
 	if previous := session.opts.installResult; previous != nil {
 		items = append(items, previous.Items...)
+	}
+	for _, completed := range session.preparedItems[:index] {
+		plan := session.result.Installations[completed.resultIndex].Plan
+		if plan != nil {
+			items = append(items, imperativeUpdateAgentItems(completed.prepared, plan, nil)...)
+		}
 	}
 	items = append(items, imperativeUpdateAgentItems(item.prepared, applied, cause)...)
 	for _, remaining := range session.preparedItems[index+1:] {
@@ -66,7 +73,7 @@ func imperativeUpdateFailure(item agentItem, cause error) *installFailure {
 		}
 		return describeBindingFailure(environment.BindingOutcome{Status: status, Err: cause})
 	}
-	if item.failure.Kind == failureSkipped {
+	if item.failure.Kind == failureSkipped || errors.Is(cause, installer.ErrRecoveryRequired) {
 		failure := describeSyncFailure(cause)
 		if item.failure.Detail != "" {
 			failure.Detail = item.failure.Detail + "\n" + failure.Detail

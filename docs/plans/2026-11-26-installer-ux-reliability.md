@@ -350,6 +350,16 @@ repair presentation until the final result, keeps full convergence, and finalize
 once on a later early refusal. Failed or short output cannot cause a second
 document. It changes neither the installer transaction nor the JSON field schema.
 
+The subsequent repository review found three more result-path defects: saved
+logs could change a failed binding's displayed status, an imperative batch
+failure omitted earlier successful bindings, and a matched failed target could
+lose aggregate recovery guidance. Their fixes retain original native/JSON facts
+and add regressions at the actual reporting and staging boundaries. Qualification
+controls now also reject saved-intent changes before consent, incorrect fresh
+statuses, a digest from an unrelated lock entry and stale native cache without an
+installed registration. Executed binary provenance and publisher cleanup are
+checked independently of the caller's directory and shared executable path.
+
 The recovered local executor builds the production picker assets and runs the
 focused Go and Python controls. Its ordinary process-containment prerequisite
 is unavailable (`/proc/.../task/.../children`), so Git/native cases remain

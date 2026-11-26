@@ -120,6 +120,9 @@ Linux lifecycle cases use a disposable HTTPS publisher with a freshly generated
 trusted CA supplied through standard `SSL_CERT_FILE`. TLS verification stays
 enabled. The fixture serves a complete index, `SKILL.md` and its adjacent
 reference. Evidence compares delivered bytes with the original resource bytes.
+TLS negotiation runs in bounded request threads, so a stalled peer cannot block
+new requests or publisher cleanup. The controls retain both trusted-client
+success and untrusted-certificate refusal.
 
 macOS and Windows use the same pinned, inert public GitHub Skill:
 
@@ -163,15 +166,23 @@ source metadata, native calls and durable state. The top-level report separates
 the product build revision, harness revision, pinned GitHub fixture revision
 and actual CLI SHA-256. It also identifies the resolved native responder binary,
 its SHA-256, whether it was built or supplied, and the embedded responder source
-digest. Both input binaries must remain unchanged throughout each successful
-case. Per-case source records identify the source actually used and publisher
-resource hashes where applicable.
+digest. The CLI executes from an independent copy under the new private artifact
+directory; the report records both supplied and executed paths. The supplied
+binary, executed copy and native responder must remain unchanged throughout each
+successful case. Harness revision and dirty state come from the script's own
+checkout, regardless of the caller's directory. Per-case source records identify
+the source actually used and publisher resource hashes where applicable.
 
 The success oracle checks selected targets, delivered bytes, environment owner,
 immutable lock, committed receipt authority and native discovery. Codex must be
 verified active rather than merely prepared. A repeated install must have no
 native mutation and no durable rewrite. Retrying a partial failure must retain
 the complete healthy peer binding and receipts.
+The lock comparison selects the exact alias, source and target entry; an expected
+digest elsewhere cannot qualify it. Native discovery requires an installed and
+enabled registry entry as well as matching cached bytes. Fresh result rows must
+each report success. Review refusal, Ctrl+C and EOF compare the durable manifest,
+lock and state with a snapshot captured before the CLI launches.
 
 The failure-log oracle requires the versioned Skills run header and a matching
 failed binding with a code and summary. A nonempty file, header-only file,

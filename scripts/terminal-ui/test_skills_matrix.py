@@ -4,8 +4,10 @@ import json
 import os
 from pathlib import Path
 import ssl
+import socket
 import sys
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -98,10 +100,14 @@ class DurableStateTests(unittest.TestCase):
         path.write_text('\n'.join(json.dumps(row) for row in rows) + '\n')
         self.assertEqual(oracle.failure_log(self.diagnostic(path), self.fixture)[1]['client'], 'codex')
         path.unlink()
-        with self.assertRaises(AssertionError):
+        with self.assertRaisesRegex(AssertionError, 'nonexistent log'):
             oracle.failure_log(self.diagnostic(path), self.fixture)
-        with self.assertRaises(AssertionError):
-            oracle.failure_log(self.diagnostic(self.root.parent / 'outside'), self.fixture)
+        outside = self.root.parent / (self.root.name + '-outside.jsonl')
+        self.addCleanup(outside.unlink, missing_ok=True)
+        outside.write_text('\n'.join(json.dumps(row) for row in rows) + '\n', encoding='utf-8')
+        self.assertTrue(outside.is_file())
+        with self.assertRaisesRegex(AssertionError, 'log escaped fixture'):
+            oracle.failure_log(self.diagnostic(outside), self.fixture)
 
     def test_header_only_success_only_wrong_client_and_unclassified_logs_cannot_pass(self):
         path = self.root / 'diagnostic.jsonl'
@@ -165,23 +171,40 @@ class InstallationEvidenceTests(unittest.TestCase):
         cached.parent.mkdir(parents=True)
         cached.write_bytes(self.fixture.skill_bytes)
         self.digest = 'sha256:' + 'a' * 64
-        authority = {'source_key': 'fixture-source', 'client_id': 'codex'}
+        authority = {'source_key': 'fixture-source', 'client_id': 'codex', 'alias': 'demo'}
         self.binding = dict(
             client_id='codex', client_binding_id='binding', target_locator=str(self.target),
             materialization='materialized', activation='active', authentication='not_required',
             verification='installation_verified', package_revision={'tree_digest': self.digest},
             receipts=[{'phase': 'committed', 'environment_authority': authority}])
-        self.owner = dict(client_binding_id='binding', client_id='codex',
+        self.owner = dict(alias='demo', client_binding_id='binding', client_id='codex',
                           source_key='fixture-source', package_digest=self.digest)
         self.state = dict(installations=[{'clients': {'binding': self.binding}}],
                           environment_receipts=[self.owner])
         self.save()
         (self.fixture.data / 'uap.toml').write_text('fixture agreement')
-        (self.fixture.data / 'uap.lock').write_text('tree_digest = "' + self.digest + '"\n')
-        (self.root / 'native-registry.json').write_text(json.dumps({'cache': str(cache)}))
+        self.lock = {'lock_version': 1, 'packages': [{
+            'alias': 'demo', 'source_key': 'fixture-source', 'targets': ['codex'],
+            'tree_digest': self.digest}]}
+        self.save_lock()
+        (self.target / 'plugin.json').write_text(json.dumps({'name': 'demo', 'version': '1.0.0'}),
+                                               encoding='utf-8')
+        self.registry = dict(cache=str(cache), name='demo', marketplace='fixture-market',
+                             spec='demo@fixture-market', path=str(self.target), installed=[{
+                                 'pluginId': 'demo@fixture-market', 'name': 'demo',
+                                 'marketplaceName': 'fixture-market', 'installed': True,
+                                 'enabled': True, 'version': '1.0.0',
+                                 'source': {'source': 'local', 'path': str(self.target)}}])
+        self.save_registry()
 
     def save(self):
-        (self.fixture.data / 'state-v2.json').write_text(json.dumps(self.state))
+        (self.fixture.data / 'state-v2.json').write_text(json.dumps(self.state), encoding='utf-8')
+
+    def save_lock(self):
+        (self.fixture.data / 'uap.lock').write_text(json.dumps(self.lock), encoding='utf-8')
+
+    def save_registry(self):
+        (self.root / 'native-registry.json').write_text(json.dumps(self.registry), encoding='utf-8')
 
     def test_complete_matching_native_evidence_is_accepted(self):
         self.assertEqual(oracle.installed(self.fixture, ('codex',))['codex'], self.binding)
@@ -208,10 +231,80 @@ class InstallationEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, 'Skill bytes changed'):
             oracle.installed(self.fixture, ('codex',))
         self.skill.write_bytes(self.fixture.skill_bytes)
-        registry = json.loads((self.root / 'native-registry.json').read_text())
+        registry = json.loads((self.root / 'native-registry.json').read_text(encoding='utf-8'))
         cached = Path(registry['cache']) / 'skills' / 'guide' / 'SKILL.md'
         cached.write_bytes(b'changed native cache\n')
         with self.assertRaisesRegex(AssertionError, 'cache has different Skill bytes'):
+            oracle.installed(self.fixture, ('codex',))
+
+    def test_lock_digest_in_comment_or_other_entry_cannot_qualify_binding(self):
+        package = self.lock['packages'][0]
+        package['tree_digest'] = 'sha256:' + 'b' * 64
+        self.lock['comment'] = 'retained old digest: ' + self.digest
+        self.lock['packages'].append(dict(package, alias='unrelated', tree_digest=self.digest))
+        self.save_lock()
+        with self.assertRaisesRegex(AssertionError, 'matching locked binding.*digest disagree'):
+            oracle.installed(self.fixture, ('codex',))
+
+    def test_lock_must_match_alias_source_target_and_unambiguous_package(self):
+        original = dict(self.lock['packages'][0])
+        for field, wrong in (('alias', 'other'), ('source_key', 'foreign-source'),
+                             ('targets', ['cursor']), ('targets', 'codex')):
+            with self.subTest(field=field, wrong=wrong):
+                self.lock['packages'] = [dict(original, **{field: wrong})]
+                self.save_lock()
+                with self.assertRaisesRegex(AssertionError, 'exact binding alias/source/target'):
+                    oracle.installed(self.fixture, ('codex',))
+        self.lock['packages'] = [original, dict(original)]
+        self.save_lock()
+        with self.assertRaisesRegex(AssertionError, 'exact binding alias/source/target'):
+            oracle.installed(self.fixture, ('codex',))
+
+    def test_lock_is_parsed_instead_of_accepting_a_raw_digest_substring(self):
+        path = self.fixture.data / 'uap.lock'
+        for body in ('# previous digest ' + self.digest, '{"lock_version": 2, "packages": []}'):
+            with self.subTest(body=body):
+                path.write_text(body, encoding='utf-8')
+                with self.assertRaisesRegex(AssertionError, 'saved immutable lock'):
+                    oracle.installed(self.fixture, ('codex',))
+
+    def test_committed_receipt_alias_must_match_lock_and_owner(self):
+        self.binding['receipts'][0]['environment_authority']['alias'] = 'foreign-alias'
+        self.save()
+        with self.assertRaisesRegex(AssertionError, 'authority or alias'):
+            oracle.installed(self.fixture, ('codex',))
+
+    def test_removed_or_disabled_native_registration_rejects_intact_cache(self):
+        cached = Path(self.registry['cache']) / 'skills' / 'guide' / 'SKILL.md'
+        original = dict(self.registry['installed'][0])
+        for entries in ([], [dict(original, installed=False)], [dict(original, enabled=False)],
+                        [dict(original, pluginId='other@fixture-market')],
+                        [dict(original, version='0.0.0')],
+                        [dict(original, source={'path': str(self.root / 'other-package')})]):
+            with self.subTest(installed=entries):
+                self.registry['installed'] = entries
+                self.save_registry()
+                self.assertEqual(cached.read_bytes(), self.fixture.skill_bytes)
+                with self.assertRaisesRegex(AssertionError, 'not registered as installed and enabled'):
+                    oracle.installed(self.fixture, ('codex',))
+
+    def test_native_registry_read_explicitly_uses_utf8(self):
+        read_text = Path.read_text
+        observed = []
+
+        def check_encoding(path, *args, **kwargs):
+            if path.name == 'native-registry.json':
+                observed.append(kwargs.get('encoding'))
+            return read_text(path, *args, **kwargs)
+
+        with patch.object(Path, 'read_text', check_encoding):
+            oracle.installed(self.fixture, ('codex',))
+        self.assertEqual(observed, ['utf-8'])
+
+    def test_registry_metadata_must_identify_the_current_native_package(self):
+        self.registry['spec'] = 'other@fixture-market'
+        self.save_registry()
+        with self.assertRaisesRegex(AssertionError, 'source does not match'):
             oracle.installed(self.fixture, ('codex',))
 
     def test_pinned_github_object_is_checked_independently_of_fixture_body(self):
@@ -258,6 +351,65 @@ class PublisherTrustTests(unittest.TestCase):
             opener.open(self.publisher.url + '/.well-known/agent-skills/index.json', timeout=5)
         self.assertEqual(failure.exception.code, 503)
 
+    def stalled_peer(self):
+        peer = socket.create_connection(('127.0.0.1', self.publisher.server.server_port), timeout=2)
+        self.addCleanup(peer.close)
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            with self.publisher.server.connection_lock:
+                if self.publisher.server.connections:
+                    return peer
+            time.sleep(0.005)
+        self.fail('raw stalled peer was never dispatched')
+
+    def test_stalled_tls_peer_does_not_block_verified_requests(self):
+        self.publisher.server.handshake_timeout = 5
+        peer = self.stalled_peer()
+        context = ssl.create_default_context(cafile=str(self.publisher.ca))
+        opener = self.opener(context)
+        with opener.open(self.publisher.url + '/.well-known/agent-skills/index.json', timeout=2) as response:
+            self.assertEqual(json.load(response)['skills'][0]['name'], 'console-proof')
+        self.assertEqual(len(self.publisher.requests), 1)
+        # The healthy request completed while the first connection still had
+        # not sent a TLS ClientHello; waiting for its timeout cannot qualify.
+        peer.settimeout(0.05)
+        with self.assertRaises(socket.timeout):
+            peer.recv(1)
+
+    def test_stalled_handshake_times_out_and_request_threads_are_cleaned_up(self):
+        peer = self.stalled_peer()
+        self.assertEqual(peer.recv(1), b'')
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            with self.publisher.server.connection_lock:
+                if not self.publisher.server.connections:
+                    break
+            time.sleep(0.005)
+        else:
+            self.fail('timed-out handshake retained an active peer')
+        self.assertEqual(self.publisher.requests, [])
+
+    def test_close_cleans_stalled_peer_and_joins_dispatch_threads(self):
+        self.publisher.server.handshake_timeout = 5
+        peer = self.stalled_peer()
+        failures = []
+
+        def close_publisher():
+            try:
+                self.publisher.close()
+            except Exception as error:
+                failures.append(error)
+
+        closer = source.threading.Thread(target=close_publisher, daemon=True)
+        closer.start()
+        closer.join(timeout=3)
+        self.assertFalse(closer.is_alive(), 'publisher close exceeded the cleanup deadline')
+        self.assertEqual(failures, [])
+        self.assertFalse(self.publisher.thread.is_alive())
+        with self.publisher.server.connection_lock:
+            self.assertFalse(self.publisher.server.connections)
+        self.assertEqual(peer.recv(1), b'')
+
 
 class FixtureIsolationTests(unittest.TestCase):
     def test_public_source_exposes_git_without_ambient_credentials(self):
@@ -273,6 +425,24 @@ class FixtureIsolationTests(unittest.TestCase):
         self.assertEqual(fixture.env['HOME'], 'private-home')
         self.assertNotIn('HTTPS_PROXY', fixture.env)
         self.assertNotIn('GITHUB_TOKEN', fixture.env)
+
+    def test_native_call_log_is_read_as_utf8(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            calls = [['plugin', 'add', 'документы@источник', '--json']]
+            (root / 'native-calls.jsonl').write_text(
+                '\n'.join(json.dumps(row, ensure_ascii=False) for row in calls) + '\n',
+                encoding='utf-8')
+            read_text = Path.read_text
+            encodings = []
+
+            def observed_read(path, *args, **kwargs):
+                encodings.append(kwargs.get('encoding'))
+                return read_text(path, *args, **kwargs)
+
+            with patch.object(Path, 'read_text', observed_read):
+                self.assertEqual(source.SkillsFixture.calls(SimpleNamespace(root=root)), calls)
+            self.assertEqual(encodings, ['utf-8'])
 
     def test_missing_git_fails_instead_of_swapping_source(self):
         with patch.object(source.shutil, 'which', return_value=None):

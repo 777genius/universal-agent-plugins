@@ -43,15 +43,16 @@ func dependencyActionOutput(actions []dependencyAction, support map[string][]dom
 }
 
 type dependencyResultDTO struct {
-	InstallationID string                    `json:"installation_id,omitempty"`
-	ClientID       string                    `json:"client_id,omitempty"`
-	Operation      string                    `json:"operation"`
-	Outcome        string                    `json:"outcome"`
-	Reason         string                    `json:"reason,omitempty"`
-	ManualActions  []string                  `json:"manual_actions,omitempty"`
-	NextActions    []dependencyNextActionDTO `json:"next_actions,omitempty"`
-	bindingStatus  environment.BindingStatus
-	bindingFailure *installFailure
+	InstallationID  string                    `json:"installation_id,omitempty"`
+	ClientID        string                    `json:"client_id,omitempty"`
+	Operation       string                    `json:"operation"`
+	Outcome         string                    `json:"outcome"`
+	Reason          string                    `json:"reason,omitempty"`
+	ManualActions   []string                  `json:"manual_actions,omitempty"`
+	NextActions     []dependencyNextActionDTO `json:"next_actions,omitempty"`
+	bindingStatus   environment.BindingStatus
+	bindingFailure  *installFailure
+	bindingObserved bool
 }
 type dependencyNextActionDTO struct {
 	Kind   string `json:"kind"`
@@ -124,6 +125,7 @@ func dependencyBindingResultOutput(outcomes []environment.BindingOutcome) []depe
 		}
 		out[index].bindingStatus = binding.Status
 		out[index].bindingFailure = describeBindingFailure(binding)
+		out[index].bindingObserved = true
 		index++
 	}
 	return out

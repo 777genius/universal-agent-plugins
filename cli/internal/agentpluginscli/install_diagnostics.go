@@ -127,14 +127,11 @@ func retainGroupApplyCause(summary, cause error) error {
 // uses fixed classification only. JSON/native facts and healthy peers survive.
 func dependencyHumanResult(opts *options, result dependencyResultDTO) dependencyResultDTO {
 	outcome := opts.installResult
-	if outcome != nil && outcome.LogFile != "" {
-		return result
-	}
 	if result.bindingStatus == environment.BindingApplied || result.bindingStatus == environment.BindingUnchanged {
 		return result
 	}
 	failure := result.bindingFailure
-	if result.bindingStatus == "" {
+	if !result.bindingObserved && result.bindingStatus == "" {
 		if outcome == nil {
 			return result
 		}
@@ -144,15 +141,19 @@ func dependencyHumanResult(opts *options, result dependencyResultDTO) dependency
 			return result
 		}
 	}
+	// Binding truth is independent of whether diagnostic recording succeeded.
+	if result.Outcome == string(installer.OutcomeCompleted) || result.Outcome == string(installer.OutcomeUnchanged) {
+		result.Outcome = "failed"
+	}
+	if outcome != nil && outcome.LogFile != "" {
+		return result
+	}
 	if failure == nil {
 		kind := failureKindOfOutcome(installer.Outcome(result.Outcome))
 		failure = &installFailure{Kind: kind}
 		failure.Summary, failure.Next, failure.Retryable = applyFailureWording(kind)
 	}
 	result.Reason = failure.Summary
-	if result.Outcome == string(installer.OutcomeCompleted) || result.Outcome == string(installer.OutcomeUnchanged) {
-		result.Outcome = "failed"
-	}
 	result.NextActions, result.ManualActions = nil, nil
 	return result
 }

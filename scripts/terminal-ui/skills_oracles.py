@@ -62,6 +62,12 @@ def installed(fixture, targets):
     actual = bindings(fixture)
     state = json.loads((fixture.data / 'state-v2.json').read_text(encoding='utf-8'))
     check(set(actual) == set(targets), f'durable targets {set(actual)}, expected {set(targets)}')
+    try:
+        lock = json.loads((fixture.data / 'uap.lock').read_text(encoding='utf-8'))
+    except json.JSONDecodeError as error:
+        raise AssertionError('saved immutable lock is not valid JSON') from error
+    check(lock.get('lock_version') == 1 and isinstance(lock.get('packages'), list),
+          'saved immutable lock has no versioned package inventory')
     for target, binding in actual.items():
         path = Path(binding['target_locator'])
         check(path.resolve().is_relative_to(fixture.root.resolve()), 'native target escaped fixture')
@@ -92,18 +98,27 @@ def installed(fixture, targets):
                      if receipt.get('phase') == 'committed']
         check(any(receipt.get('environment_authority', {}).get('source_key') ==
                   owner.get('source_key') and
-                  receipt.get('environment_authority', {}).get('client_id') == target
+                  receipt.get('environment_authority', {}).get('client_id') == target and
+                  receipt.get('environment_authority', {}).get('alias') == owner.get('alias')
                   for receipt in committed),
-              'committed native receipt lost its reviewed source/client authority')
-        lock = (fixture.data / 'uap.lock').read_text(encoding='utf-8')
-        check(revision.get('tree_digest', 'missing-digest') in lock,
-              'installed package digest does not occur in the saved immutable lock')
+              'committed native receipt lost its reviewed source/client authority or alias')
+        check(owner.get('alias') and owner.get('source_key'),
+              'saved ownership receipt lost its package alias/source identity')
+        packages = [package for package in lock['packages']
+                    if package.get('alias') == owner['alias'] and
+                    package.get('source_key') == owner['source_key'] and
+                    isinstance(package.get('targets'), list) and target in package['targets']]
+        check(len(packages) == 1, 'lock lost the exact binding alias/source/target')
+        check(bool(revision.get('tree_digest')) and
+              packages[0].get('tree_digest') == revision['tree_digest'],
+              'matching locked binding and installed immutable package digest disagree')
         if target == 'codex':
             check(binding.get('activation') == 'active' and
                   binding.get('verification') == 'installation_verified' and
                   binding.get('authentication') == 'not_required',
                   'synthetic Codex protocol did not prove native Skill completion')
-            registry = json.loads((fixture.root / 'native-registry.json').read_text())
+            registry = json.loads((fixture.root / 'native-registry.json').read_text(encoding='utf-8'))
+            native_registration(path, registry)
             cache = Path(registry['cache']).resolve()
             check(cache.is_relative_to(fixture.root.resolve()), 'native cache escaped fixture')
             cached = cache / 'skills' / fixture.skill_name / 'SKILL.md'
@@ -111,6 +126,25 @@ def installed(fixture, targets):
     check((fixture.data / 'uap.toml').is_file(), 'saved desired intent missing')
     check((fixture.data / 'uap.lock').is_file(), 'saved immutable lock missing')
     return actual
+
+
+def native_registration(path, registry):
+    manifest = json.loads((path / 'plugin.json').read_text(encoding='utf-8'))
+    name, version = manifest.get('name'), manifest.get('version') or '0.0.0'
+    marketplace = registry.get('marketplace')
+    check(name and marketplace, 'native registry lost its package/marketplace identity')
+    spec = name + '@' + marketplace
+    check(registry.get('name') == name and registry.get('spec') == spec and
+          Path(registry.get('path', '')).resolve() == path.resolve(),
+          'native registry source does not match the installed binding')
+    registrations = registry.get('installed')
+    check(isinstance(registrations, list), 'native registry has no installed inventory')
+    matches = [row for row in registrations
+               if row.get('pluginId') == spec and row.get('name') == name and
+               row.get('marketplaceName') == marketplace and row.get('version') == version and
+               row.get('installed') is True and row.get('enabled') is True and
+               Path(row.get('source', {}).get('path', '')).resolve() == path.resolve()]
+    check(len(matches) == 1, 'native package is not registered as installed and enabled')
 
 
 def native_mutations(calls):

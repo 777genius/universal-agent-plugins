@@ -13,6 +13,7 @@ from pathlib import Path
 import shutil
 import select
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -118,16 +119,25 @@ class Matrix:
 
     def session(self, argv, fixture, evidence, redirect=None):
         persist(evidence / 'argv.json', argv)
+        before = durable_tree(fixture)
         if os.name == 'nt':
             check(redirect is None, 'redirect case requires Unix descriptors')
-            return WindowsSession(argv, fixture, evidence, self.acquisition_timeout)
-        return Session(argv, fixture, evidence, self.acquisition_timeout,
-                       redirect=redirect, rows=35, cols=120)
+            session = WindowsSession(argv, fixture, evidence, self.acquisition_timeout)
+        else:
+            session = Session(argv, fixture, evidence, self.acquisition_timeout,
+                              redirect=redirect, rows=35, cols=120)
+        session.durable_before = before
+        return session
+
+    def assert_unapplied(self, session, fixture):
+        fixture.unchanged()
+        check(durable_tree(fixture) == session.durable_before,
+              'unconfirmed or canceled interaction changed durable saved intent/state')
 
     def review(self, session, fixture):
         session.wait(QUESTION, 'review-ready')
         session.timeout = self.timeout
-        fixture.unchanged()
+        self.assert_unapplied(session, fixture)
         text = compact(clean(session.raw))
         check(fixture.skill_name in text, 'review omitted selected Skill identity')
         check(compact(str(fixture.root)) in text, 'review omitted complete destination authority')
@@ -139,16 +149,16 @@ class Matrix:
             check(sys.platform == 'linux', 'recovery process identity fixture requires Linux pidfd')
         with tempfile.TemporaryDirectory(prefix='skills-console-é-') as temporary:
             fixture = SkillsFixture(temporary, self.native, self.scanner, source)
-            source_info = dict(source_kind=fixture.source_kind,
-                               requested_source=fixture.source)
-            if fixture.publisher:
-                source_info['publisher_files_sha256'] = {
-                    name: hashlib.sha256(body).hexdigest()
-                    for name, body in fixture.publisher.files.items()}
-            else:
-                source_info['github_fixture_sha'] = SOURCE_SHA
-            persist(evidence / 'source.json', source_info)
             try:
+                source_info = dict(source_kind=fixture.source_kind,
+                                   requested_source=fixture.source)
+                if fixture.publisher:
+                    source_info['publisher_files_sha256'] = {
+                        name: hashlib.sha256(body).hexdigest()
+                        for name, body in fixture.publisher.files.items()}
+                else:
+                    source_info['github_fixture_sha'] = SOURCE_SHA
+                persist(evidence / 'source.json', source_info)
                 method = getattr(self, 'case_' + name.replace('-', '_'))
                 method(fixture, evidence)
             finally:
@@ -182,7 +192,10 @@ class Matrix:
 
     def case_fresh(self, fixture, evidence):
         result = self.command(fixture, evidence, 'fresh', targets='codex,cursor')
-        check(set(items_by_agent(result)) == {'codex', 'cursor'}, 'lost a selected agent')
+        rows = items_by_agent(result)
+        check(set(rows) == {'codex', 'cursor'}, 'lost a selected agent')
+        check(all(row.get('status') == 'succeeded' for row in rows.values()),
+              'fresh installation did not report success for every selected agent')
         installed(fixture, ('codex', 'cursor'))
         check(any(args[:2] == ['plugin', 'add'] for args in fixture.calls()),
               'native installation protocol was not exercised')
@@ -471,7 +484,7 @@ class Matrix:
             self.review(session, fixture)
             session.send(action)
             session.finish(0 if action == b'n\n' else 1)
-            fixture.unchanged()
+            self.assert_unapplied(session, fixture)
             check(not native_mutations(fixture.calls()),
                   'canceled review invoked native mutation')
         finally:
@@ -508,7 +521,7 @@ class Matrix:
             check('not detected' in text or 'not installed' in text,
                   'no-target refusal lost target reasons')
             check('install these skills?' not in text, 'no eligible target reached consent')
-            fixture.unchanged()
+            self.assert_unapplied(session, fixture)
         finally:
             session.close()
 
@@ -520,12 +533,12 @@ class Matrix:
         try:
             session.wait(r'q or Enter cancels', 'visible-catalog')
             session.timeout = self.timeout
-            fixture.unchanged()
+            self.assert_unapplied(session, fixture)
             check('Available Skills' in clean(session.raw), 'numeric catalog not visible before input')
             check(not (fixture.root / 'browser-opened').exists(), '--plain opened automatic browser')
             session.send(b'q\n')
             session.finish(1)
-            fixture.unchanged()
+            self.assert_unapplied(session, fixture)
         finally:
             session.close()
 
@@ -540,7 +553,7 @@ class Matrix:
             # No input is ever sent to the CLI. The existing restoration probe
             # runs only after actual process exit and reuses the same descriptor.
             session.finish(1)
-            fixture.unchanged()
+            self.assert_unapplied(session, fixture)
             output = ((evidence / 'stdout.raw').read_bytes() +
                       (evidence / 'stderr.raw').read_bytes()).decode('utf-8', 'replace')
             check('Available Skills' not in output and 'Select: ' not in output,
@@ -564,10 +577,10 @@ class Matrix:
             session.wait(r'Skills picker opened', 'bundled-explicit-ui')
             session.timeout = self.timeout
             check((fixture.root / 'browser-opened').is_file(), 'explicit --ui did not call opener')
-            fixture.unchanged()
+            self.assert_unapplied(session, fixture)
             session.send(b'\x03')
             session.finish(1)
-            fixture.unchanged()
+            self.assert_unapplied(session, fixture)
         finally:
             session.close()
 
@@ -598,6 +611,32 @@ def selected_cases(cases, suite, platform):
     return selected
 
 
+def harness_checkout():
+    checkout = Path(__file__).resolve().parents[2]
+    try:
+        head = subprocess.check_output(
+            ['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
+        dirty = bool(subprocess.check_output(
+            ['git', '-C', str(checkout), 'status', '--porcelain'], text=True))
+    except (OSError, subprocess.CalledProcessError):
+        head, dirty = None, None
+    return checkout, head, dirty
+
+
+def copy_product_binary(source, artifacts):
+    """Launch only independent bytes held in a new private evidence directory."""
+    directory = artifacts / 'product'
+    directory.mkdir(mode=0o700)
+    binary = directory / ('agentplugins.exe' if os.name == 'nt' else 'agentplugins')
+    with source.open('rb') as original, binary.open('xb') as private:
+        check(stat.S_ISREG(os.fstat(original.fileno()).st_mode), 'CLI input is not a regular file')
+        shutil.copyfileobj(original, private)
+    binary.chmod(0o700)
+    check(binary.resolve() != source.resolve() and not os.path.samefile(source, binary),
+          'qualification CLI must be independent of the supplied executable')
+    return binary
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--binary', required=True, type=Path)
@@ -618,7 +657,11 @@ def main():
     check(args.timeout > 0 and args.acquisition_timeout > 0, 'deadlines must be positive')
     args.artifacts = args.artifacts.resolve()
     args.artifacts.mkdir(parents=True, exist_ok=False)
-    binary = args.binary.resolve(strict=True)
+    supplied_binary = args.binary.resolve(strict=True)
+    binary = copy_product_binary(supplied_binary, args.artifacts)
+    supplied_digest = hashlib.sha256(supplied_binary.read_bytes()).hexdigest()
+    check(hashlib.sha256(binary.read_bytes()).hexdigest() == supplied_digest,
+          'supplied CLI changed while its qualification copy was prepared')
     native = args.native_fixture
     native_origin = 'supplied' if native is not None else 'built'
     if native is None:
@@ -630,13 +673,10 @@ def main():
     scanner = prepare_scanner(args)
     matrix = Matrix(binary, native, args.timeout,
                     args.acquisition_timeout, args.source, args.scanner_path)
-    try:
-        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
-        dirty = bool(subprocess.check_output(['git', 'status', '--porcelain'], text=True))
-    except subprocess.CalledProcessError:
-        head, dirty = None, None
+    checkout, head, dirty = harness_checkout()
     report = dict(schema_version=1, product_sha=args.product_sha,
-                  harness_sha=head, harness_dirty=dirty,
+                  harness_sha=head, harness_dirty=dirty, harness_checkout=str(checkout),
+                  supplied_binary_path=str(supplied_binary), binary_path=str(binary),
                   github_fixture_sha=SOURCE_SHA, source_mode=args.source,
                   binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                   native_fixture_path=str(native), native_fixture_origin=native_origin,
@@ -651,6 +691,8 @@ def main():
         started = time.monotonic()
         try:
             matrix.run_case(name, args.artifacts / name)
+            check(hashlib.sha256(supplied_binary.read_bytes()).hexdigest() == supplied_digest,
+                  'input CLI binary changed during qualification')
             check(hashlib.sha256(binary.read_bytes()).hexdigest() == report['binary_sha256'],
                   'input CLI binary changed during qualification')
             check(hashlib.sha256(native.read_bytes()).hexdigest() == report['native_fixture_sha256'],
