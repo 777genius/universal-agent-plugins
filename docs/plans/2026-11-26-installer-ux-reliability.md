@@ -33,6 +33,8 @@ store, retry engine, terminal framework, diagnostic command or permission model.
    installation work, with bounded opener execution.
 7. Public-process Skills installation and terminal qualification using existing
    fixtures, production assets, real pipes/PTYS and durable-state oracles.
+8. One machine-readable result across declared-install repair and convergence,
+   retaining already committed repair effects when a later phase fails.
 
 ### Excluded
 
@@ -341,6 +343,12 @@ records classified failures and preserves failed output writes. A further review
 requires authoritative per-binding provenance when projecting healthy native
 rows with missing optional identity in a mixed batch. These reviews are tracked
 separately from actual CI and do not count unexecuted platform lanes as passing.
+
+Actual declared-install regression execution also exposed two JSON documents
+after a successful drift repair followed by convergence. The fix retains typed
+repair presentation until the final result, keeps full convergence, and finalizes
+once on a later early refusal. Failed or short output cannot cause a second
+document. It changes neither the installer transaction nor the JSON field schema.
 
 The recovered local executor builds the production picker assets and runs the
 focused Go and Python controls. Its ordinary process-containment prerequisite

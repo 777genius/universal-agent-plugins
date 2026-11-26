@@ -25,6 +25,12 @@ retry. Recovery and unconfirmed process cleanup continue to stop every retry
 in the affected namespace. Neither an unavailable log nor a broken terminal
 changes an already committed installation into an uncommitted one.
 
+Declared `install --format json` returns one document across recorded-pin repair
+and the subsequent full convergence. Its existing action/result arrays retain
+the completed repairs as well as later work. A failure while preparing the later
+phase still reports those committed repair effects and the overall failure.
+A partially written result is never followed by a second JSON document.
+
 ### Console behavior
 
 | Situation | Expected behavior |

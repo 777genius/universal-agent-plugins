@@ -165,7 +165,7 @@ func TestItemNormalizationAgreesAcrossReportsLogsAndJSON(t *testing.T) {
 		kind   failureKind
 	}{
 		{"failed", failureUnknown}, {"incomplete", failureUnknown}, {"not_attempted", failureSkipped},
-		{"cancelled", failureCanceled}, {"recovery_required", failureRecovery}, {"conflict", failureEnvironmentChange},
+		{string(installer.OutcomeCancelled), failureCanceled}, {"recovery_required", failureRecovery}, {"conflict", failureEnvironmentChange},
 	} {
 		t.Run(tc.status, func(t *testing.T) {
 			items := []agentItem{{Alias: "pdf", ClientID: "codex", Status: tc.status}}

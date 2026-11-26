@@ -56,9 +56,11 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 			var converge func() error
 			converge = func() error {
 				opts.installResult = nil
+				opts.declaredRepairs = nil
 				err := runDependencySyncConverge(cmd, app, opts, lockedOnly, yes, func(convergeApp App) (bool, error) {
 					return repairDeclaredEnvironmentDrift(cmd, convergeApp, opts, yes)
 				})
+				err = finishDeclaredRepairPresentation(cmd, opts, err)
 				// Running install again converges only what is still missing.
 				return retryConverge(cmd, app, opts, err, converge)
 			}
@@ -169,6 +171,10 @@ func applyDeclaredEnvironmentRepairs(cmd *cobra.Command, app App, opts *options,
 	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent}
 	outcomes, applyErr := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), Bindings: prepared}, true)
 	app.finishInstall(opts, cmd.CommandPath(), appliedAgentItems(prepared, outcomes, applyErr))
+	if opts.format == "json" && applyErr == nil {
+		retainDeclaredRepairPresentation(opts, prepared, outcomes)
+		return nil
+	}
 	renderErr := renderDependencyBindingResults(cmd, opts, prepared, outcomes, applyErr)
 	if applyErr != nil {
 		cause := fmt.Errorf("dependency install stopped; inspect binding results and next actions: %w", applyErr)

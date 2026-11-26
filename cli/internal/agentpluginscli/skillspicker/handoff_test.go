@@ -31,7 +31,7 @@ func TestHandoffClosesUnacceptedReviewAndRefusesLateAdmission(t *testing.T) {
 	if closed.Load() != 1 || effects.Load() != 0 {
 		t.Fatalf("closed=%d effects=%d", closed.Load(), effects.Load())
 	}
-	request := httptest.NewRequest("POST", server.origin+"/api/v1/plans/"+plan.PlanId+"/apply", nil)
+	request := httptest.NewRequestWithContext(t.Context(), "POST", server.origin+"/api/v1/plans/"+plan.PlanId+"/apply", http.NoBody)
 	request.Header.Set("Authorization", "Bearer "+server.token)
 	request.Header.Set("Origin", server.origin)
 	response := httptest.NewRecorder()
@@ -97,10 +97,10 @@ func TestHandoffRefusesCurrentPreparationThenAllowsFailedReview(t *testing.T) {
 	}()
 	<-started
 	if server.CloseUnused() {
-		t.Fatal("handoff cancelled in-flight preparation")
+		t.Fatal("handoff canceled in-flight preparation")
 	}
 	if server.ctx.Err() != nil {
-		t.Fatal("refused handoff cancelled server")
+		t.Fatal("refused handoff canceled server")
 	}
 	close(release)
 	if status := <-response; status != 422 {
@@ -142,7 +142,7 @@ func TestHandoffPreservesAcceptedAndCompletedOperation(t *testing.T) {
 	mustDecode(t, body, &accepted)
 	worker := <-started
 	if server.CloseUnused() || worker.Err() != nil {
-		t.Fatal("handoff cancelled accepted operation")
+		t.Fatal("handoff canceled accepted operation")
 	}
 	close(release)
 	eventually(t, func() bool {
@@ -181,7 +181,7 @@ func TestHandoffAndApplyRaceAdmitOnlyOneOwner(t *testing.T) {
 		handoff := make(chan bool, 1)
 		go func() {
 			<-gate
-			request := httptest.NewRequest("POST", "/api/v1/plans/"+plan.PlanId+"/apply", nil)
+			request := httptest.NewRequestWithContext(t.Context(), "POST", "/api/v1/plans/"+plan.PlanId+"/apply", http.NoBody)
 			request.SetPathValue("id", plan.PlanId)
 			response := httptest.NewRecorder()
 			server.apply(response, request)

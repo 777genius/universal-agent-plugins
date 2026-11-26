@@ -37,6 +37,15 @@ class EnvelopeTests(unittest.TestCase):
             with self.subTest(value=changed), self.assertRaises(AssertionError):
                 oracle.envelope(json.dumps(dict(self.valid(), **changed)), 0)
 
+    def test_declared_install_still_requires_one_complete_document(self):
+        output = dict(self.valid(), command='agentplugins install', outcome='completed',
+                      actions=[{'action': 'repair'}, {'action': 'unchanged'}],
+                      results=[{'operation': 'repair', 'outcome': 'completed'}])
+        body = json.dumps(output)
+        self.assertEqual(oracle.envelope(body, 0, command='agentplugins install'), output)
+        with self.assertRaisesRegex(AssertionError, 'exactly one JSON envelope'):
+            oracle.envelope(body + '\n' + body, 0, command='agentplugins install')
+
     def test_missing_and_duplicate_agent_results_are_refused(self):
         for rows in (None, [], [{'status': 'failed'}],
                      [{'targetId': 'codex'}, {'targetId': 'codex'}]):
@@ -276,7 +285,7 @@ class FixtureIsolationTests(unittest.TestCase):
 
     def test_windows_default_keeps_actual_skills_lifecycle_cases(self):
         selected = matrix.selected_cases(None, 'all', 'win32')
-        for required in ('fresh', 'unchanged', 'unchanged-failure', 'partial-json',
+        for required in ('fresh', 'declared-repair-json', 'unchanged', 'unchanged-failure', 'partial-json',
                          'partial-decline', 'partial-retry', 'log-unavailable', 'review-ctrl-c',
                          'review-eof', 'plain-browser', 'explicit-ui'):
             self.assertIn(required, selected)

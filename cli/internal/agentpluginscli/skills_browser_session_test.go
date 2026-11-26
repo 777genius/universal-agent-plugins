@@ -92,7 +92,7 @@ func newBrowserSessionFixture(t *testing.T) browserSessionFixture {
 
 func (fixture browserSessionFixture) request(t *testing.T, method, path, body string, result any) {
 	t.Helper()
-	request, err := http.NewRequest(method, fixture.origin+path, strings.NewReader(body))
+	request, err := http.NewRequestWithContext(t.Context(), method, fixture.origin+path, strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,11 @@ func (fixture browserSessionFixture) request(t *testing.T, method, path, body st
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer response.Body.Close()
+	defer func() {
+		if err := response.Body.Close(); err != nil {
+			t.Errorf("close picker response body: %v", err)
+		}
+	}()
 	if response.StatusCode >= 300 {
 		data, _ := io.ReadAll(response.Body)
 		t.Fatalf("request %s: %d %s", path, response.StatusCode, data)
@@ -205,7 +209,7 @@ func TestBrowserAdmissionDuringFallbackQuestionRetainsBrowserOwner(t *testing.T)
 		t.Fatal("fallback question did not admit browser operation")
 	}
 	if worker.Err() != nil {
-		t.Fatalf("browser operation cancelled during fallback: %v", worker.Err())
+		t.Fatalf("browser operation canceled during fallback: %v", worker.Err())
 	}
 	select {
 	case result := <-finished:
@@ -248,7 +252,7 @@ func TestBrowserInteractionFailuresPreserveAlreadyAcceptedWork(t *testing.T) {
 			}()
 			<-entered
 			if worker.Err() != nil {
-				t.Fatalf("interaction failure cancelled accepted work: %v", worker.Err())
+				t.Fatalf("interaction failure canceled accepted work: %v", worker.Err())
 			}
 			select {
 			case err := <-finished:
@@ -258,7 +262,7 @@ func TestBrowserInteractionFailuresPreserveAlreadyAcceptedWork(t *testing.T) {
 			fixture.complete(t)
 			fixture.server.Close()
 			err := <-finished
-			want := error(io.ErrShortWrite)
+			want := io.ErrShortWrite
 			if kind == "prompt" {
 				want = cause
 			}
@@ -298,7 +302,7 @@ func TestBrowserOpenerChildContextDoesNotOwnAcceptedWork(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 	if worker.Err() != nil {
-		t.Fatalf("opener timeout cancelled accepted work: %v", worker.Err())
+		t.Fatalf("opener timeout canceled accepted work: %v", worker.Err())
 	}
 	fixture.complete(t)
 	fixture.server.Close()

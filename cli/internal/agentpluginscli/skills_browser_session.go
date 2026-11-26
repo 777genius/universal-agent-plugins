@@ -67,7 +67,7 @@ func offerSkillsTerminalFallback(cmd *cobra.Command, app App, opts *options, ser
 	return true, waitAndCloseSkillsPicker(cmd.Context(), server)
 }
 
-// Output/prompt failures do not authorize cancelling browser-owned effects. If
+// Output/prompt failures do not authorize canceling browser-owned effects. If
 // handoff has lost admission, keep that session alive until its owner ends it.
 func skillsBrowserInteractionFailure(ctx context.Context, server *skillspicker.Server, cause error) error {
 	if server.CloseUnused() {

@@ -6,14 +6,14 @@ from pathlib import Path
 from harness import check, hashes
 
 
-def envelope(body, exit_code):
+def envelope(body, exit_code, command='skills add'):
     try:
         value = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError) as error:
         raise AssertionError('stdout must contain exactly one JSON envelope') from error
     check(isinstance(value, dict) and value.get('schema_version') == 1,
           'missing versioned JSON envelope')
-    check(value.get('command') == 'skills add', 'wrong JSON command')
+    check(value.get('command') == command, 'wrong JSON command')
     check(value.get('result') in ('success', 'failure'), 'invalid JSON outcome')
     check((exit_code == 0) == (value['result'] == 'success'),
           'exit status disagrees with JSON result')

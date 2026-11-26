@@ -19,14 +19,14 @@ import tempfile
 import time
 import uuid
 
-from harness import Session, check, clean, prepare_scanner, scanner_options
+from harness import Session, check, clean, hashes, prepare_scanner, scanner_options
 from native_skills import compact
 from skills_fixture import (GITHUB_SOURCE, NATIVE_SOURCE, SOURCE_SHA, SkillsFixture,
                             build_native_fixture)
 from skills_oracles import (durable_tree, envelope, failure_log, installed,
                             items_by_agent, native_mutations, persist)
 
-CASES = ('source-feasibility', 'fresh', 'unchanged', 'unchanged-failure',
+CASES = ('source-feasibility', 'fresh', 'declared-repair-json', 'unchanged', 'unchanged-failure',
          'partial-json', 'partial-decline', 'partial-retry', 'log-unavailable', 'recovery-refusal', 'no-targets',
          'review-decline', 'review-ctrl-c', 'review-eof', 'review-redirect',
          'catalog-redirect', 'catalog-both-redirect', 'plain-browser', 'explicit-ui')
@@ -186,6 +186,65 @@ class Matrix:
         installed(fixture, ('codex', 'cursor'))
         check(any(args[:2] == ['plugin', 'add'] for args in fixture.calls()),
               'native installation protocol was not exercised')
+
+    def case_declared_repair_json(self, fixture, evidence):
+        # Skills add saves a real normalized standard plugin and agreement. Its
+        # missing projection takes the same declared-install repair path as an
+        # authored plugin, without adding source infrastructure or native calls.
+        self.command(fixture, evidence, 'seed-saved-plugin', targets='cursor')
+        before_binding = installed(fixture, ('cursor',))['cursor']
+        target = Path(before_binding['target_locator'])
+        check(target.is_dir() and not target.is_symlink() and
+              target.resolve().is_relative_to((fixture.home / '.cursor/plugins/local').resolve()),
+              'repair fixture does not own the selected Cursor projection')
+        projection = hashes(target)
+        agreement = {name: (fixture.data / name).read_bytes() for name in ('uap.toml', 'uap.lock')}
+        state = json.loads((fixture.data / 'state-v2.json').read_text(encoding='utf-8'))
+        owner = next(receipt for receipt in state['environment_receipts']
+                     if receipt['client_binding_id'] == before_binding['client_binding_id'])
+        shutil.rmtree(target)
+        argv = [str(self.binary), 'install', '--scope', 'user', '--yes', '--format', 'json']
+        result = subprocess.run(argv, cwd=fixture.project, env=fixture.env,
+                                stdin=subprocess.DEVNULL, capture_output=True,
+                                timeout=self.acquisition_timeout)
+        persist(evidence / 'declared-install.command.json', dict(argv=argv, exit=result.returncode))
+        (evidence / 'declared-install.stdout').write_bytes(result.stdout)
+        (evidence / 'declared-install.stderr').write_bytes(result.stderr)
+        check(result.returncode == 0, 'declared install did not restore the missing projection')
+        # json.loads rejects a repair document followed by a convergence document.
+        output = envelope(result.stdout, result.returncode, command='agentplugins install')
+        check(output.get('outcome') == 'completed' and output.get('scope') == 'user',
+              'declared install lost its final successful convergence facts')
+        actions = output.get('actions', [])
+        check([(row.get('action'), row.get('client_id'), row.get('alias')) for row in actions] ==
+              [('repair', 'cursor', owner['alias']), ('unchanged', 'cursor', owner['alias'])],
+              'single result did not retain both repair and final unchanged convergence')
+        native = output.get('results', [])
+        check(len(native) == 1 and native[0].get('operation') == 'repair' and
+              native[0].get('outcome') == 'completed' and native[0].get('client_id') == 'cursor',
+              'single result lost the completed repair or invented another native effect')
+        after_binding = installed(fixture, ('cursor',))['cursor']
+        check(after_binding.get('package_revision') == before_binding.get('package_revision'),
+              'repair changed the recorded immutable package pin')
+        check(projection and hashes(target) == projection,
+              'declared repair did not restore exact owned projection bytes')
+        check(all((fixture.data / name).read_bytes() == body for name, body in agreement.items()),
+              'declared repair rewrote saved manifest or lock bytes')
+        final_state = json.loads((fixture.data / 'state-v2.json').read_text(encoding='utf-8'))
+        after_owner = next(receipt for receipt in final_state['environment_receipts']
+                           if receipt['client_binding_id'] == after_binding['client_binding_id'])
+        authority_keys = ('environment_id', 'alias', 'client_id', 'source_key', 'package_digest')
+        check(all(after_owner.get(key) == owner.get(key) for key in authority_keys),
+              'repair lost the original saved environment/source authority')
+        check(any(receipt.get('phase') == 'committed' and
+                  receipt.get('environment_authority', {}).get('expected_action') == 'repair' and
+                  receipt['environment_authority'].get('source_key') == owner['source_key']
+                  for receipt in after_binding.get('receipts', [])),
+              'restored projection has no committed repair authority')
+        persist(evidence / 'declared-repair-facts.json', dict(
+            fixture='normalized Skill represented as a saved standard plugin',
+            source_authority=after_owner, restored_projection=projection,
+            manifest_lock_unchanged=True))
 
     def case_unchanged(self, fixture, evidence):
         self.command(fixture, evidence, 'seed')
