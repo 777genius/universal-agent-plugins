@@ -143,6 +143,14 @@ class DurableStateTests(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, 'expected package alias'):
             oracle.failure_log(result, self.fixture)
 
+    def test_diagnostic_jsonl_preserves_literal_unicode_line_separators(self):
+        path = self.root / 'diagnostic.jsonl'
+        rows = self.log_rows()
+        rows[1]['detail'] = 'owned path\u0085component\u2028detail\u2029suffix'
+        path.write_text('\n'.join(json.dumps(row, ensure_ascii=False) for row in rows) + '\n',
+                        encoding='utf-8')
+        self.assertEqual(oracle.failure_log(self.diagnostic(path), self.fixture), rows)
+
     def test_readonly_commands_do_not_hide_any_mutation(self):
         reads = [['--version'], ['plugin', 'list', '--json'], ['app-server']]
         writes = [['plugin', 'add', 'demo@market', '--json'],
@@ -173,7 +181,10 @@ class InstallationEvidenceTests(unittest.TestCase):
         cached.parent.mkdir(parents=True)
         cached.write_bytes(self.fixture.skill_bytes)
         self.digest = 'sha256:' + 'a' * 64
-        authority = {'source_key': 'fixture-source', 'client_id': 'codex', 'alias': 'demo',
+        self.source_key = 'https-skill:https://publisher.example:guide'
+        self.declaration = {'website': 'https://publisher.example', 'kind': 'skill', 'skill': 'guide'}
+        self.manifest_targets = ['codex']
+        authority = {'source_key': self.source_key, 'client_id': 'codex', 'alias': 'demo',
                      'environment_id': 'user-default'}
         self.binding = dict(
             client_id='codex', client_binding_id='binding', target_locator=str(self.target),
@@ -182,18 +193,19 @@ class InstallationEvidenceTests(unittest.TestCase):
             receipts=[{'phase': 'committed', 'environment_authority': authority,
                        'client_binding_id': 'binding', 'active_path': str(self.target)}])
         self.owner = dict(alias='demo', client_binding_id='binding', client_id='codex',
-                          source_key='fixture-source', package_digest=self.digest,
+                          source_key=self.source_key, package_digest=self.digest,
                           installation_id='installation', environment_id='user-default',
                           phase='committed')
         self.state = dict(installations=[{'installation_id': 'installation',
                                          'clients': {'binding': self.binding}}],
                           environment_receipts=[self.owner])
         self.save()
-        (self.fixture.data / 'uap.toml').write_text('fixture agreement')
         self.lock = {'lock_version': 1, 'packages': [{
-            'alias': 'demo', 'source_key': 'fixture-source', 'targets': ['codex'],
+            'alias': 'demo', 'source_key': self.source_key, 'targets': ['codex'],
+            'source': {'web': {'url': 'https://publisher.example', 'skill': 'guide'}},
             'tree_digest': self.digest}]}
         self.save_lock()
+        self.save_manifest()
         (self.target / 'plugin.json').write_text(json.dumps({'name': 'demo', 'version': '1.0.0'}),
                                                encoding='utf-8')
         self.registry = dict(cache=str(cache), name='demo', marketplace='fixture-market',
@@ -213,8 +225,70 @@ class InstallationEvidenceTests(unittest.TestCase):
     def save_registry(self):
         (self.root / 'native-registry.json').write_text(json.dumps(self.registry), encoding='utf-8')
 
+    def save_manifest(self):
+        body = 'schema_version = 1\n[targets]\n'
+        body += ''.join(target + ' = ["demo"]\n' for target in self.manifest_targets)
+        body += '[dependencies.demo]\n'
+        body += ''.join(key + ' = ' + json.dumps(value) + '\n'
+                        for key, value in self.declaration.items())
+        (self.fixture.data / 'uap.toml').write_text(body, encoding='utf-8')
+
     def test_complete_matching_native_evidence_is_accepted(self):
         self.assertEqual(oracle.installed(self.fixture, ('codex',))['codex'], self.binding)
+
+    def test_saved_manifest_must_parse_and_retain_versioned_selected_alias(self):
+        path = self.fixture.data / 'uap.toml'
+        valid = path.read_text(encoding='utf-8')
+        for body in ('', 'schema_version = 1\n', 'invalid [ TOML',
+                     valid.replace('schema_version = 1', 'schema_version = true'),
+                     valid.replace('[dependencies.demo]', '[dependencies.other]')):
+            with self.subTest(body=body):
+                path.write_text(body, encoding='utf-8')
+                with self.assertRaisesRegex(AssertionError, 'saved desired intent'):
+                    oracle.installed(self.fixture, ('codex',))
+
+    def test_saved_manifest_source_and_target_must_match_owned_lock(self):
+        path = self.fixture.data / 'uap.toml'
+        valid = path.read_text(encoding='utf-8')
+        for body in (valid.replace('https://publisher.example', 'https://foreign.example'),
+                     valid.replace('skill = "guide"', 'skill = "other"'),
+                     valid.replace('kind = "skill"', 'kind = "plugin"'),
+                     valid.replace('codex = ["demo"]', 'cursor = ["demo"]'),
+                     valid.replace('codex = ["demo"]', 'codex = []'),
+                     valid.replace('codex = ["demo"]', 'codex = ["demo", "demo"]'),
+                     valid.replace('codex = ["demo"]', 'codex = ["other"]')):
+            with self.subTest(body=body):
+                path.write_text(body, encoding='utf-8')
+                with self.assertRaisesRegex(AssertionError, 'saved desired intent'):
+                    oracle.installed(self.fixture, ('codex',))
+
+    def test_saved_github_skill_matches_path_kind_and_exact_selector(self):
+        commit = 'c' * 40
+        self.declaration = {'git': 'owner/repository', 'kind': 'skill', 'skill': 'guide',
+                            'path': 'skills/guide', 'commit': commit}
+        key = 'github-skill:owner/repository:guide:skills/guide'
+        self.owner['source_key'] = key
+        self.binding['receipts'][0]['environment_authority']['source_key'] = key
+        package = self.lock['packages'][0]
+        package.update(source_key=key, source={'git': {
+            'repository': 'owner/repository', 'kind': 'skill', 'skill': 'guide',
+            'path': 'skills/guide', 'requested': {'kind': 'commit', 'value': commit},
+            'commit': commit}})
+        self.save()
+        self.save_lock()
+        self.save_manifest()
+        self.assertEqual(oracle.installed(self.fixture, ('codex',))['codex'], self.binding)
+        self.declaration['git'] = 'https://github.com/owner/repository.git'
+        self.save_manifest()
+        self.assertEqual(oracle.installed(self.fixture, ('codex',))['codex'], self.binding)
+        original = dict(self.declaration)
+        for field, wrong in (('git', 'other/repository'), ('path', 'skills/other'),
+                             ('skill', 'other'), ('commit', 'd' * 40)):
+            with self.subTest(field=field):
+                self.declaration = dict(original, **{field: wrong})
+                self.save_manifest()
+                with self.assertRaisesRegex(AssertionError, 'saved desired intent source'):
+                    oracle.installed(self.fixture, ('codex',))
 
     def test_prepared_native_binding_does_not_qualify_completion(self):
         self.binding['activation'] = 'prepared'
@@ -326,6 +400,7 @@ class RetainedFailureEvidenceTests(unittest.TestCase):
     save = InstallationEvidenceTests.save
     save_lock = InstallationEvidenceTests.save_lock
     save_registry = InstallationEvidenceTests.save_registry
+    save_manifest = InstallationEvidenceTests.save_manifest
 
     def setUp(self):
         InstallationEvidenceTests.setUp(self)
@@ -342,6 +417,7 @@ class RetainedFailureEvidenceTests(unittest.TestCase):
         self.state['environment_receipts'].append(dict(
             self.owner, client_id='cursor', client_binding_id='cursor-binding'))
         self.lock['packages'][0]['targets'] = ['codex', 'cursor']
+        self.manifest_targets = ['codex', 'cursor']
         self.binding.update(activation='failed', verification='failed', policy='allowed')
         self.registry = {'path': str(self.target)}
         self.result = {'result': 'failure', 'status': 'partial', 'items': [
@@ -351,6 +427,7 @@ class RetainedFailureEvidenceTests(unittest.TestCase):
              'status': 'succeeded'}]}
         self.save()
         self.save_lock()
+        self.save_manifest()
         self.save_registry()
 
     def prove(self):
@@ -369,8 +446,19 @@ class RetainedFailureEvidenceTests(unittest.TestCase):
             skill = Path(binding['target_locator']) / 'skills' / self.fixture.skill_name
             (skill / 'reference.txt').write_bytes(resources['reference.txt'])
         self.assertEqual(self.prove(), {'cursor': self.cursor})
+        self.result['items'].append(dict(self.result['items'][0], targetId='claude'))
+        with self.assertRaisesRegex(AssertionError, 'reported targets disagree'):
+            self.prove()
+        self.result['items'].pop()
+        self.assertEqual(self.prove(), {'cursor': self.cursor})
         (self.skill.parent / 'reference.txt').write_bytes(b'changed reference\n')
         with self.assertRaisesRegex(AssertionError, 'complete source'):
+            self.prove()
+
+    def test_failed_owned_target_remains_declared_even_when_only_cursor_succeeded(self):
+        self.manifest_targets = ['cursor']
+        self.save_manifest()
+        with self.assertRaisesRegex(AssertionError, 'saved desired intent targets'):
             self.prove()
 
     def test_failed_ownership_is_never_implicitly_accepted_or_counted_successful(self):
@@ -633,16 +721,16 @@ class FixtureIsolationTests(unittest.TestCase):
             (root / 'native-calls.jsonl').write_text(
                 '\n'.join(json.dumps(row, ensure_ascii=False) for row in calls) + '\n',
                 encoding='utf-8')
-            read_text = Path.read_text
+            open_file = Path.open
             encodings = []
 
-            def observed_read(path, *args, **kwargs):
-                encodings.append(kwargs.get('encoding'))
-                return read_text(path, *args, **kwargs)
+            def observed_open(path, *args, **kwargs):
+                encodings.append((kwargs.get('encoding'), kwargs.get('newline')))
+                return open_file(path, *args, **kwargs)
 
-            with patch.object(Path, 'read_text', observed_read):
+            with patch.object(Path, 'open', observed_open):
                 self.assertEqual(source.SkillsFixture.calls(SimpleNamespace(root=root)), calls)
-            self.assertEqual(encodings, ['utf-8'])
+            self.assertEqual(encodings, [('utf-8', '\n')])
 
     def test_missing_git_fails_instead_of_swapping_source(self):
         with patch.object(source.shutil, 'which', return_value=None):
@@ -727,7 +815,17 @@ class ReportProvenanceTests(unittest.TestCase):
             with self.subTest(supplied=supplied), tempfile.TemporaryDirectory() as temporary:
                 code, report, native = self.run_report(Path(temporary), supplied=supplied)
                 self.assertEqual(code, 0)
-                self.assertEqual(report['native_fixture_path'], str(native.resolve()))
+                executed = Path(report['native_fixture_path'])
+                self.assertEqual(executed.read_bytes(), b'unit-test responder identity')
+                if supplied:
+                    self.assertEqual(report['supplied_native_fixture_path'], str(native.resolve()))
+                    self.assertEqual(executed.parent,
+                                     (Path(temporary) / 'evidence' / 'native-fixture').resolve())
+                    self.assertNotEqual(executed.resolve(), native.resolve())
+                    self.assertFalse(os.path.samefile(executed, native))
+                else:
+                    self.assertEqual(executed, native.resolve())
+                    self.assertIsNone(report['supplied_native_fixture_path'])
                 self.assertEqual(report['native_fixture_origin'], 'supplied' if supplied else 'built')
                 self.assertEqual(report['native_fixture_sha256'],
                                  hashlib.sha256(b'unit-test responder identity').hexdigest())

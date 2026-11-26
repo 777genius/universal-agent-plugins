@@ -2,6 +2,7 @@
 import hashlib
 import json
 from pathlib import Path
+import tomllib
 
 from harness import check, hashes
 
@@ -135,6 +136,7 @@ def installed(fixture, targets, *, retained_failed=(), result=None):
         check(bool(revision.get('tree_digest')) and
               packages[0].get('tree_digest') == revision['tree_digest'],
               'matching locked binding and installed immutable package digest disagree')
+        saved_binding_intent(fixture, packages[0], owner, expected)
         if target in failed:
             retained_native_failure(fixture, binding)
         elif target == 'cursor':
@@ -157,6 +159,69 @@ def installed(fixture, targets, *, retained_failed=(), result=None):
     check((fixture.data / 'uap.toml').is_file(), 'saved desired intent missing')
     check((fixture.data / 'uap.lock').is_file(), 'saved immutable lock missing')
     return {target: actual[target] for target in targets}
+
+
+def saved_binding_intent(fixture, package, owner, targets):
+    """Join this single-Skill qualification's saved portable declaration to its pin."""
+    manifest_path = fixture.data / 'uap.toml'
+    check(manifest_path.is_file(), 'saved desired intent missing')
+    try:
+        manifest = tomllib.loads(manifest_path.read_text(encoding='utf-8'))
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError) as error:
+        raise AssertionError('saved desired intent is not valid TOML') from error
+    alias = owner['alias']
+    check(type(manifest.get('schema_version')) is int and manifest['schema_version'] == 1 and
+          isinstance(manifest.get('dependencies'), dict) and
+          set(manifest['dependencies']) == {alias},
+          'saved desired intent lost its versioned selected alias')
+    check(manifest.get('targets') == {target: [alias] for target in targets} and
+          isinstance(package.get('targets'), list) and
+          len(package['targets']) == len(targets) and set(package['targets']) == targets,
+          'saved desired intent targets disagree with reviewed lock/ownership')
+    source = package.get('source', {})
+    check(isinstance(source, dict) and len(source) == 1,
+          'saved Skill lock lost its unambiguous source')
+    wanted = {'kind': 'skill', 'skill': fixture.skill_name}
+    if 'web' in source:
+        web = source['web']
+        check(isinstance(web, dict) and web.get('skill') == fixture.skill_name and
+              isinstance(web.get('url'), str) and bool(web['url']),
+              'saved Skill lock lost its website selection')
+        wanted['website'] = web['url']
+        source_key = 'https-skill:' + web['url'] + ':' + fixture.skill_name
+    else:
+        git = source.get('git', {})
+        check(isinstance(git, dict) and git.get('kind') == 'skill' and
+              git.get('skill') == fixture.skill_name and bool(git.get('repository')),
+              'saved Skill lock lost its GitHub selection')
+        repository = git['repository'].lower()
+        wanted['git'] = repository
+        if git.get('path'):
+            wanted['path'] = git['path']
+        selector = git.get('requested', {})
+        check(selector.get('kind') in ('commit', 'ref', 'default'),
+              'saved Skill lock lost its requested Git selector')
+        if selector['kind'] != 'default':
+            check(isinstance(selector.get('value'), str) and bool(selector['value']),
+                  'saved Skill lock has no requested Git revision')
+            wanted[selector['kind']] = selector['value']
+        if selector['kind'] == 'commit':
+            check(git.get('commit') == selector['value'],
+                  'saved Skill lock changed the exact requested Git commit')
+        source_key = 'github-skill:' + repository + ':' + fixture.skill_name + ':' + git.get('path', '')
+    declaration = manifest['dependencies'][alias]
+    if isinstance(declaration, dict) and 'git' in wanted:
+        declaration = dict(declaration)
+        endpoint = declaration.get('git')
+        # The production encoder may use its portable repository or canonical
+        # HTTPS endpoint; both have the same SourceKey in environment/model.go.
+        if isinstance(endpoint, str) and endpoint.lower() == 'https://github.com/' + repository + '.git':
+            declaration['git'] = repository
+        elif isinstance(endpoint, str):
+            declaration['git'] = endpoint.lower()
+    check(declaration == wanted and owner['source_key'] == source_key and
+          package['source_key'] == source_key,
+          'saved desired intent source disagrees with selected lock/ownership')
 
 
 def retained_native_failure(fixture, binding):
@@ -229,7 +294,8 @@ def failure_log(result, fixture):
     check(file.resolve().is_relative_to(fixture.root.resolve()), 'log escaped fixture')
     check(file.is_file(), 'result points to a nonexistent log')
     try:
-        entries = [json.loads(line) for line in file.read_text(encoding='utf-8').splitlines()]
+        with file.open(encoding='utf-8', newline='\n') as stream:
+            entries = [json.loads(line) for line in stream]
     except json.JSONDecodeError as error:
         raise AssertionError('diagnostic log is not valid JSON Lines') from error
     check(entries and isinstance(entries[0], dict), 'failed binding log has no run header')

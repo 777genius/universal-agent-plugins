@@ -206,6 +206,7 @@ class Matrix:
     def session(self, argv, fixture, evidence, redirect=None):
         persist(evidence / 'argv.json', argv)
         before = durable_tree(fixture)
+        calls_before = fixture.calls()
         if os.name == 'nt':
             check(redirect is None, 'redirect case requires Unix descriptors')
             session = WindowsSession(argv, fixture, evidence, self.acquisition_timeout)
@@ -213,9 +214,14 @@ class Matrix:
             session = Session(argv, fixture, evidence, self.acquisition_timeout,
                               redirect=redirect, rows=35, cols=120)
         session.durable_before = before
+        session.native_calls_before = calls_before
         return session
 
     def assert_unapplied(self, session, fixture):
+        calls = fixture.calls()
+        before = session.native_calls_before
+        check(calls[:len(before)] == before and not native_mutations(calls[len(before):]),
+              'unconfirmed or canceled interaction invoked a native mutation')
         fixture.unchanged()
         check(durable_tree(fixture) == session.durable_before,
               'unconfirmed or canceled interaction changed durable saved intent/state')
@@ -497,6 +503,8 @@ class Matrix:
             child_owned = True
             persist(evidence / 'owned-native-identity.json', dict(
                 marker=identity, lineage=[dict(role=row['role'], **row['identity']) for row in held]))
+            check(not linux_pidfd_exited(held[0]['fd']),
+                  'owned native responder exited before the requested CLI crash')
             process.kill()  # Popen owns and reaps this exact CLI process.
             try:
                 signal.pidfd_send_signal(held[0]['fd'], signal.SIGKILL)
@@ -695,30 +703,72 @@ def selected_cases(cases, suite, platform):
     return selected
 
 
+# Repository-local overrides can defeat git -C. Keep credential/network and
+# general safety settings (including GIT_CONFIG_NOSYSTEM and NO_LAZY_FETCH).
+GIT_REPOSITORY_OVERRIDES = frozenset(('GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR',
+    'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+    'GIT_GRAFT_FILE', 'GIT_SHALLOW_FILE', 'GIT_NAMESPACE', 'GIT_PREFIX',
+    'GIT_INTERNAL_SUPER_PREFIX', 'GIT_IMPLICIT_WORK_TREE', 'GIT_REPLACE_REF_BASE',
+    'GIT_CONFIG', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT',
+    'GIT_CEILING_DIRECTORIES', 'GIT_DISCOVERY_ACROSS_FILESYSTEM'))
+
+
+def harness_git_environment():
+    return {key: value for key, value in os.environ.items()
+            if key not in GIT_REPOSITORY_OVERRIDES and
+            not key.startswith(('GIT_CONFIG_KEY_', 'GIT_CONFIG_VALUE_'))}
+
+
 def harness_checkout():
     checkout = Path(__file__).resolve().parents[2]
+    env = harness_git_environment()
     try:
         head = subprocess.check_output(
-            ['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True).strip()
+            ['git', '-C', str(checkout), 'rev-parse', 'HEAD'], text=True, env=env).strip()
         dirty = bool(subprocess.check_output(
-            ['git', '-C', str(checkout), 'status', '--porcelain'], text=True))
+            ['git', '-C', str(checkout), 'status', '--porcelain'], text=True, env=env))
     except (OSError, subprocess.CalledProcessError):
         head, dirty = None, None
     return checkout, head, dirty
 
 
-def copy_product_binary(source, artifacts):
-    """Launch only independent bytes held in a new private evidence directory."""
-    directory = artifacts / 'product'
+def open_executable(source):
+    # O_NONBLOCK prevents FIFO/device admission from hanging before fstat.
+    # Copy and hash only this opened regular descriptor, never reopen its path.
+    flags = os.O_RDONLY | getattr(os, 'O_NONBLOCK', 0) | getattr(os, 'O_BINARY', 0)
+    fd = os.open(source, flags)
+    try:
+        check(stat.S_ISREG(os.fstat(fd).st_mode), 'executable input is not a regular file')
+        return os.fdopen(fd, 'rb')
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def executable_digest(path):
+    digest = hashlib.sha256()
+    with open_executable(path) as stream:
+        for block in iter(lambda: stream.read(1 << 20), b''):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def copy_executable(source, artifacts, directory_name, file_name):
+    """Hold independent regular executable bytes in a private evidence directory."""
+    directory = artifacts / directory_name
     directory.mkdir(mode=0o700)
-    binary = directory / ('agentplugins.exe' if os.name == 'nt' else 'agentplugins')
-    with source.open('rb') as original, binary.open('xb') as private:
-        check(stat.S_ISREG(os.fstat(original.fileno()).st_mode), 'CLI input is not a regular file')
+    binary = directory / file_name
+    with open_executable(source) as original, binary.open('xb') as private:
         shutil.copyfileobj(original, private)
     binary.chmod(0o700)
     check(binary.resolve() != source.resolve() and not os.path.samefile(source, binary),
-          'qualification CLI must be independent of the supplied executable')
+          'qualification executable must be independent of the supplied executable')
     return binary
+
+
+def copy_product_binary(source, artifacts):
+    return copy_executable(source, artifacts, 'product',
+                           'agentplugins.exe' if os.name == 'nt' else 'agentplugins')
 
 
 def main():
@@ -743,8 +793,8 @@ def main():
     args.artifacts.mkdir(parents=True, exist_ok=False)
     supplied_binary = args.binary.resolve(strict=True)
     binary = copy_product_binary(supplied_binary, args.artifacts)
-    supplied_digest = hashlib.sha256(supplied_binary.read_bytes()).hexdigest()
-    check(hashlib.sha256(binary.read_bytes()).hexdigest() == supplied_digest,
+    supplied_digest = executable_digest(supplied_binary)
+    check(executable_digest(binary) == supplied_digest,
           'supplied CLI changed while its qualification copy was prepared')
     native = args.native_fixture
     native_origin = 'supplied' if native is not None else 'built'
@@ -754,6 +804,14 @@ def main():
         native = build_native_fixture(
             go, args.artifacts / ('native.exe' if os.name == 'nt' else 'native'))
     native = native.resolve(strict=True)
+    supplied_native = native if native_origin == 'supplied' else None
+    supplied_native_digest = None
+    if supplied_native is not None:
+        native = copy_executable(native, args.artifacts, 'native-fixture',
+                                 'native.exe' if os.name == 'nt' else 'native')
+        supplied_native_digest = executable_digest(supplied_native)
+        check(executable_digest(native) == supplied_native_digest,
+              'supplied native fixture changed while its qualification copy was prepared')
     scanner = prepare_scanner(args)
     matrix = Matrix(binary, native, args.timeout,
                     args.acquisition_timeout, args.source, args.scanner_path)
@@ -762,9 +820,10 @@ def main():
                   harness_sha=head, harness_dirty=dirty, harness_checkout=str(checkout),
                   supplied_binary_path=str(supplied_binary), binary_path=str(binary),
                   github_fixture_sha=SOURCE_SHA, source_mode=args.source,
-                  binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
+                  binary_sha256=executable_digest(binary),
                   native_fixture_path=str(native), native_fixture_origin=native_origin,
-                  native_fixture_sha256=hashlib.sha256(native.read_bytes()).hexdigest(),
+                  supplied_native_fixture_path=str(supplied_native) if supplied_native else None,
+                  native_fixture_sha256=executable_digest(native),
                   native_fixture_embedded_source_sha256=hashlib.sha256(
                       NATIVE_SOURCE.encode('utf-8')).hexdigest(),
                   native_protocol='synthetic; no vendor/model/auth qualification',
@@ -775,11 +834,14 @@ def main():
         started = time.monotonic()
         try:
             matrix.run_case(name, args.artifacts / name)
-            check(hashlib.sha256(supplied_binary.read_bytes()).hexdigest() == supplied_digest,
+            check(executable_digest(supplied_binary) == supplied_digest,
                   'input CLI binary changed during qualification')
-            check(hashlib.sha256(binary.read_bytes()).hexdigest() == report['binary_sha256'],
+            check(executable_digest(binary) == report['binary_sha256'],
                   'input CLI binary changed during qualification')
-            check(hashlib.sha256(native.read_bytes()).hexdigest() == report['native_fixture_sha256'],
+            if supplied_native is not None:
+                check(executable_digest(supplied_native) == supplied_native_digest,
+                      'input native fixture binary changed during qualification')
+            check(executable_digest(native) == report['native_fixture_sha256'],
                   'input native fixture binary changed during qualification')
             row['status'] = 'pass'
         except Exception as error:

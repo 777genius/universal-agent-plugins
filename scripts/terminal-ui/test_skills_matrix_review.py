@@ -164,9 +164,13 @@ class ExecutedProvenanceTests(unittest.TestCase):
                 def run(_name, evidence):
                     evidence.mkdir()
                     launched = Path(runner.call_args.args[0])
+                    launched_native = Path(runner.call_args.args[1])
                     self.assertNotEqual(launched.resolve(strict=True), canonical_supplied)
                     self.assertFalse(os.path.samefile(launched, supplied))
                     self.assertEqual(launched.read_bytes(), b'CLI bytes')
+                    self.assertTrue(launched_native.is_relative_to(artifacts.resolve(strict=True)))
+                    self.assertFalse(os.path.samefile(launched_native, native))
+                    self.assertEqual(launched_native.read_bytes(), b'responder bytes')
                     if mutate:
                         launched.write_bytes(b'changed execution copy')
                 with patch.object(matrix.sys, 'argv', argv), \
@@ -181,7 +185,10 @@ class ExecutedProvenanceTests(unittest.TestCase):
                 self.assertEqual(report['supplied_binary_path'], str(canonical_supplied))
                 self.assertEqual(report['binary_path'], str(expected_copy))
                 self.assertEqual(Path(runner.call_args.args[0]), expected_copy)
-                self.assertEqual(report['native_fixture_path'], str(native.resolve(strict=True)))
+                self.assertEqual(report['supplied_native_fixture_path'], str(native.resolve(strict=True)))
+                self.assertEqual(report['native_fixture_path'], str(runner.call_args.args[1]))
+                self.assertEqual(report['native_fixture_sha256'],
+                                 hashlib.sha256(b'responder bytes').hexdigest())
                 self.assertEqual(report['binary_sha256'], hashlib.sha256(b'CLI bytes').hexdigest())
                 self.assertEqual(report['cases'][0]['status'], 'fail' if mutate else 'pass')
                 if mutate:

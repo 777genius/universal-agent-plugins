@@ -209,7 +209,10 @@ class SkillsFixture(Fixture):
 
     def calls(self):
         path = self.root / 'native-calls.jsonl'
-        return [json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()] if path.exists() else []
+        if not path.exists():
+            return []
+        with path.open(encoding='utf-8', newline='\n') as stream:
+            return [json.loads(line) for line in stream]
 
     def close(self):
         if self.publisher:
