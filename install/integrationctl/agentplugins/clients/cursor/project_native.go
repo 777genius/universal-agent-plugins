@@ -39,7 +39,8 @@ func cursorProjectObjects(stagingRoot string, envelope domain.PackageEnvelope, p
 	layout := cursorComponents(plan.NativeRegistryRoot)
 	objects := []domain.NativeObjectOwnership{}
 	for _, component := range plan.Components {
-		if component.Support == domain.SupportUnsupported {
+		if component.Support == domain.SupportUnsupported ||
+			component.Kind == domain.ComponentExtension && component.Name == cursorToolApprovalNamespace && component.Support == domain.SupportNative {
 			continue
 		}
 		object, err := cursorProjectObject(layout, stagingRoot, envelope, component)

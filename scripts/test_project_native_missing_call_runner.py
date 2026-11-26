@@ -11,19 +11,71 @@ from unittest.mock import patch
 
 from project_native_missing_call_runner import (
     agent_command, digest, installation_id, installed_config, permission_fixture,
-    require_both_preflight_receipts, run_both_preflight, source_build, stage_shared_source,
+    assert_cursor_owned_tool_permission, require_both_preflight_receipts,
+    run_both_preflight, source_build, stage_shared_source, preflight_checkpoint,
 )
 
 
 class RealClientRunnerContractTest(unittest.TestCase):
+    def test_native_selected_inventory_logs_only_safe_status_category(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from project_native_missing_call_runner import native_selected_inventory
+
+        for native_output, expected_category in (
+            (b"foreign_server: ready\n", "selected-server-not-listed"),
+            (b"selected_server: not loaded (needs approval)\n",
+             "selected-server-listed-but-not-ready"),
+        ):
+            with self.subTest(expected_category):
+                with patch("project_native_missing_call_runner.invoke",
+                           return_value=(native_output, b"private native stderr")):
+                    public = StringIO()
+                    with redirect_stdout(public), self.assertRaises(ValueError):
+                        native_selected_inventory(Path("/trusted/native"), Path("/project"),
+                                                  {}, Path("/private"), "selected_server",
+                                                  require_ready=True)
+                    self.assertEqual(public.getvalue(),
+                                     "native-inventory-diagnostic: " + expected_category + "\n")
+                    self.assertNotIn("private native stderr", public.getvalue())
+
+
+    def test_no_auth_checkpoint_separates_written_grant_from_native_readiness(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            preflight_checkpoint(True, "cursor-owned-tool-permission-ok")
+        self.assertEqual(stdout.getvalue(),
+                         "credential-free-preflight-stage: cursor-owned-tool-permission-ok\\n".replace("\\n", "\n"))
+
+    def test_cursor_native_preflight_never_forges_server_enable(self):
+        source = (Path(__file__).parent / "project_native_missing_call_runner.py").read_text()
+        self.assertNotIn('invoke("cursor-enable-one"', source)
+        self.assertIn('require_ready=client == "cursor"', source)
+        self.assertIn('profile = str(work / "home" / ".cursor")', source)
+        self.assertIn('env["CURSOR_CONFIG_DIR"] = profile', source)
+        self.assertIn('env["CURSOR_DATA_DIR"] = profile', source)
+
     def test_exact_named_tool_approval(self):
         with tempfile.TemporaryDirectory() as temp:
             project = Path(temp)
-            permission_fixture("cursor", project, "only_cursor")
-            permissions = json.loads((project / ".cursor" / "cli.json").read_text())["permissions"]
-            self.assertEqual(permissions["allow"], ["Mcp(only_cursor:inspect_runtime)"])
-            self.assertIn("Shell(*)", permissions["deny"])
-            self.assertIn("Read(**/*)", permissions["deny"])
+            with self.assertRaisesRegex(ValueError, "confirmed UAP add"):
+                permission_fixture("cursor", project, "only_cursor")
+            path = project / ".cursor" / "cli.json"
+            path.parent.mkdir()
+            policy = {
+                "permissions": {
+                    "allow": ["Read(DOCS.md)", "Mcp(only_cursor:inspect_runtime)"],
+                    "deny": ["Shell(*)", "Read(**/*)", "Write(**/*)"],
+                },
+            }
+            path.write_text(json.dumps(policy))
+            assert_cursor_owned_tool_permission(project, "only_cursor")
+            policy["permissions"]["allow"] = ["Mcp(*:*)"]
+            path.write_text(json.dumps(policy))
+            with self.assertRaisesRegex(ValueError, "exact UAP tool grant"):
+                assert_cursor_owned_tool_permission(project, "only_cursor")
         with tempfile.TemporaryDirectory() as temp:
             project = Path(temp)
             permission_fixture("qoder", project, "only_qoder")

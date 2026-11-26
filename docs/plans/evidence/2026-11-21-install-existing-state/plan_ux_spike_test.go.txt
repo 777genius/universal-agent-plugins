@@ -1,0 +1,44 @@
+package agentpluginscli
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+)
+
+// Disposable plan evidence: parse proposed remedies through the real Cobra tree.
+func TestPlanUXRemediationParserSpike(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want []domain.ClientID
+	}{
+		{"public-web-remedy", []string{"--target", "codex,chatgptweb"}, []domain.ClientID{domain.ClientCodex, domain.ClientChatGPT}},
+		{"raw-state-web-id-selects-desktop", []string{"--target", "chatgpt"}, []domain.ClientID{domain.ClientCodex}},
+		{"repeated-target-loses-first", []string{"--target", "codex", "--target", "cursor"}, []domain.ClientID{domain.ClientCursor}},
+		{"single-comma-target-preserves-both", []string{"--target", "codex,cursor"}, []domain.ClientID{domain.ClientCodex, domain.ClientCursor}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := NewRoot(App{})
+			command, _, err := root.Find([]string{"remove"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			args := append([]string{"00000000-0000-4000-8000-000000000001"}, tc.args...)
+			args = append(args, "--scope", "project", "--project-root", "/selected/project with spaces", "--dry-run", "--format", "json")
+			if err := command.ParseFlags(args); err != nil {
+				t.Fatal(err)
+			}
+			flag := root.PersistentFlags().Lookup("target").Value.(targetFlagValue)
+			got, err := parseTargetOption(*flag.target)
+			if err != nil || !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("targets=%v err=%v want=%v", got, err, tc.want)
+			}
+			if got := root.PersistentFlags().Lookup("project-root").Value.String(); got != "/selected/project with spaces" {
+				t.Fatalf("project root changed: %q", got)
+			}
+			t.Logf("actual Cobra remove argv: %q -> canonical targets=%v; project root retained exactly", args, got)
+		})
+	}
+}

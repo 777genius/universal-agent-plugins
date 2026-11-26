@@ -227,6 +227,9 @@ active=active, native=native, state=state, public=public, binding=binding, remov
             with patch.object(audit, "call", side_effect=call), patch.dict(audit.AGENT_BINARIES, pi="/inert/pi"), patch.object(audit, "COPILOT_CATALOG_PROBE", side_effect=probe):
                 row = audit.do_case("/inert/agentplugins", "pi", "skill", item, 0, root, {},
                                      **({"pi_skills": mode} if enabled else {}), client_version=version if version is not None else {"status": "reported", "value": "1.5.0", "exit_code": 0})
+            if enabled:
+                self.assertFalse((root / "skill-00" / "project-b").exists(),
+                                 "explicit Pi cohort created the generic foreign project")
             self.audit, self.item = audit, item
             return row
 
@@ -235,6 +238,7 @@ active=active, native=native, state=state, public=public, binding=binding, remov
         self.assertEqual(row["status"], "prepared-lifecycle-passed")
         self.assertEqual(row["public_skill_ready"], {"after-add": False, "repeat-add": False})
         proof = row["pi_project_skill_proof"]
+        self.assertIn("skills/foreign-neighbor/SKILL.md", proof["before"]["native"]["snapshot"])
         self.assertFalse(proof["native_ready"])
         self.assertEqual(proof["native_catalogs"], {})
         self.assertIn(str(self.owned["project"]), proof["trust"]["record"]["projects"])
