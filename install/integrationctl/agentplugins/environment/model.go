@@ -88,6 +88,7 @@ type WebSource struct {
 type LockedWebSource = domain.WebSkillSourceFacts
 
 type Requirement struct {
+	Local    *LocalSource    `json:"local,omitempty"`
 	Web      *WebSource      `json:"web,omitempty"`
 	Archive  *ArchiveSource  `json:"archive,omitempty"`
 	Alias    string          `json:"alias"`
@@ -104,6 +105,7 @@ type Requirements struct {
 }
 
 type LockedSource struct {
+	Local    *LockedLocalSource    `json:"local,omitempty"`
 	Web      *LockedWebSource      `json:"web,omitempty"`
 	Archive  *LockedArchiveSource  `json:"archive,omitempty"`
 	Git      *LockedGitSource      `json:"git,omitempty"`
@@ -262,8 +264,11 @@ func (requirement Requirement) Validate() error {
 	if !validDeclarationKey(requirement.Alias) {
 		return fmt.Errorf("alias %q must match %s", requirement.Alias, aliasPattern)
 	}
-	if sourceCount(requirement.Git != nil, requirement.Registry != nil, requirement.Archive != nil, requirement.Web != nil) != 1 {
-		return errors.New("dependency must contain exactly one git, archive, registry or website source")
+	if sourceCount(requirement.Git != nil, requirement.Registry != nil, requirement.Archive != nil, requirement.Web != nil, requirement.Local != nil) != 1 {
+		return errors.New("dependency must contain exactly one git, archive, registry, website or local source")
+	}
+	if requirement.Local != nil {
+		return requirement.Local.Validate()
 	}
 	if requirement.Web != nil {
 		return requirement.Web.Validate()
@@ -356,28 +361,6 @@ func (requirements Requirements) validateDevelopmentAliases() error {
 		}
 	}
 	return nil
-}
-
-func (requirement Requirement) SourceKey() (string, error) {
-	if err := requirement.Validate(); err != nil {
-		return "", err
-	}
-	if requirement.Web != nil {
-		return "https-skill:" + requirement.Web.URL + ":" + requirement.Web.Skill, nil
-	}
-	if requirement.Git != nil {
-		if requirement.Git.Kind == SkillKind {
-			return "github-skill:" + strings.ToLower(requirement.Git.Repository) + ":" + requirement.Git.Skill + ":" + requirement.Git.Path, nil
-		}
-		if requirement.Git.URL != "" {
-			return sourcespec.Key(sourcespec.KindGit, requirement.Git.URL, requirement.Git.Path), nil
-		}
-		return "github:" + strings.ToLower(requirement.Git.Repository) + ":" + requirement.Git.Path, nil
-	}
-	if requirement.Archive != nil {
-		return sourcespec.Key(sourcespec.KindArchive, requirement.Archive.URL, requirement.Archive.Path), nil
-	}
-	return "directory:" + strings.ToLower(requirement.Registry.Distribution), nil
 }
 
 type manifestIntent struct {
@@ -477,6 +460,12 @@ func (lock Lock) ValidateCompatiblePins(_ Requirements) error {
 }
 
 func validateLockedSelector(requirement Requirement, pkg LockedPackage) error {
+	if sourceCount(pkg.Source.Git != nil, pkg.Source.Registry != nil, pkg.Source.Archive != nil, pkg.Source.Web != nil, pkg.Source.Local != nil) != 1 {
+		return errors.New("locked package requires exactly one source")
+	}
+	if requirement.Local != nil {
+		return validateLockedLocal(requirement, pkg)
+	}
 	if requirement.Web != nil {
 		return validateLockedWeb(requirement, pkg)
 	}

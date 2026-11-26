@@ -32,7 +32,7 @@ func (cache *dependencySnapshotCache) close() {
 }
 
 func lockedDependencySnapshotKey(locked environment.LockedPackage) (dependencySnapshotKey, error) {
-	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil && locked.Source.Web == nil {
+	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil && locked.Source.Web == nil && locked.Source.Local == nil {
 		return dependencySnapshotKey{}, errors.New("locked package has no source")
 	}
 	sourceKey := locked.SourceKey
@@ -42,6 +42,10 @@ func lockedDependencySnapshotKey(locked environment.LockedPackage) (dependencySn
 	key := dependencySnapshotKey{sourceKey: sourceKey, revision: locked.Revision(), algorithm: locked.DigestAlgorithm, digest: locked.TreeDigest}
 	if source := locked.Source.Git; source != nil && source.Kind == environment.SkillKind {
 		key.kind, key.skill, key.requestedPath = source.Kind, source.Skill, source.Path
+		key.rawDigest, key.normalizer = source.RawTreeDigest, source.Normalizer
+	}
+	if source := locked.Source.Local; source != nil {
+		key.kind, key.skill, key.requestedPath = "local-skill", source.Skill, source.Path
 		key.rawDigest, key.normalizer = source.RawTreeDigest, source.Normalizer
 	}
 	if source := locked.Source.Web; source != nil {
@@ -105,7 +109,7 @@ func (app App) acquireLockedSnapshot(ctx context.Context, locked environment.Loc
 }
 
 func lockedDependencySource(locked environment.LockedPackage) (domain.SourceIdentity, error) {
-	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil && locked.Source.Web == nil {
+	if locked.Source.Git == nil && locked.Source.Registry == nil && locked.Source.Archive == nil && locked.Source.Web == nil && locked.Source.Local == nil {
 		return domain.SourceIdentity{}, errors.New("locked package has no source")
 	}
 	return identityFromLocked(locked), nil

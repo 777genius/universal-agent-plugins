@@ -58,7 +58,7 @@ func (source ArchiveSource) Validate() error {
 }
 
 func (requirement Requirement) RequestedSelector() Selector {
-	if requirement.Web != nil {
+	if requirement.Local != nil || requirement.Web != nil {
 		return Selector{Kind: SelectorDefault}
 	}
 	if requirement.Git != nil {
@@ -86,6 +86,9 @@ func validateLockedArchive(requirement Requirement, pkg LockedPackage) error {
 // adopts mutable store provenance or a machine's profile/project paths.
 func (pkg LockedPackage) Requirement() Requirement {
 	r := Requirement{Alias: pkg.Alias}
+	if s := pkg.Source.Local; s != nil {
+		r.Local = &LocalSource{Path: s.Path, Skill: s.Skill}
+	}
 	if s := pkg.Source.Web; s != nil {
 		r.Web = &WebSource{URL: s.URL, Skill: s.Skill}
 	}

@@ -285,7 +285,9 @@ func dependencyIntentEdits(previous, wanted environment.Requirements) []manifest
 // It keeps source-specific serialization separate from intent diffing.
 func manifestDependencyValue(value environment.Requirement) *manifestedit.Dependency {
 	v := &manifestedit.Dependency{}
-	if value.Web != nil {
+	if value.Local != nil {
+		v.Local, v.Kind, v.Skill = value.Local.Path, environment.SkillKind, value.Local.Skill
+	} else if value.Web != nil {
 		v.Website, v.Kind, v.Skill = value.Web.URL, environment.SkillKind, value.Web.Skill
 	} else if value.Git != nil {
 		v.Git = value.Git.Endpoint()

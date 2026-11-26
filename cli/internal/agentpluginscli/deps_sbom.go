@@ -147,6 +147,8 @@ func spdxPackageID(alias string) string {
 
 func sbomSource(pin environment.LockedPackage) string {
 	switch {
+	case pin.Source.Local != nil:
+		return "local-skill"
 	case pin.Source.Git != nil:
 		s := pin.Source.Git
 		if s.Repository != "" {

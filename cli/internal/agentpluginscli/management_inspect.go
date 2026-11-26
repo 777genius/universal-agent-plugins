@@ -28,7 +28,7 @@ func (b *ManagementBackend) Inspect(ctx context.Context) (management.Environment
 	entries := map[string]*management.EnvironmentEntry{}
 	for _, pkg := range locked.Packages {
 		entry := management.EnvironmentEntry{Alias: pkg.Alias, Kind: management.EnvironmentEntryKindPlugin, Source: pkg.SourceKey, Version: pkg.Version, UpdateStatus: management.EnvironmentEntryUpdateStatusCheckUnavailable, Bindings: []management.Binding{}}
-		if pkg.Source.Web != nil || pkg.Source.Git != nil && pkg.Source.Git.Kind == environment.SkillKind {
+		if pkg.Source.Local != nil || pkg.Source.Web != nil || pkg.Source.Git != nil && pkg.Source.Git.Kind == environment.SkillKind {
 			entry.Kind = management.EnvironmentEntryKindSkill
 		}
 		key := dependencyRootKey(requirements, locked, pkg.Alias)
