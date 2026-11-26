@@ -36,6 +36,10 @@ func TestListingSkipsBuiltinRowsWithoutInstallPath(t *testing.T) {
 			rows[0]["installPath"] = localPath
 			return append(rows, managed)
 		}, StatusUnknown},
+		{"malformed-builtin-after-valid-copy", func(rows []map[string]any) []map[string]any {
+			rows[0]["installPath"] = localPath
+			return append(rows, claudeBuiltinRows()[0], managed)
+		}, StatusUnknown},
 		{"builtin-with-project-path", func(rows []map[string]any) []map[string]any {
 			rows[0]["projectPath"] = projectOne
 			return append(rows, managed)
