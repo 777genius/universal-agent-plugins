@@ -1,6 +1,6 @@
 # Installed-package update reliability
 
-Status: reviewed plan v3 with subsequent runtime scope decision recorded below. Production correction scope is A only; intended runtime red is now observed and recorded below. B's public Engine regression passes against unchanged production and demonstrates existing protection, so no B production fix is authorized by this evidence.
+Status: reviewed plan v3, implemented A correction, targeted runtime green and independent implementation review complete; full final-head qualification remains pending. B's public Engine regression passes against unchanged production and demonstrates existing protection, so no B production fix is authorized by this evidence.
 
 ## Goal and baseline
 
@@ -154,3 +154,17 @@ Actual run/fail events reached the intended internal preflight and production-co
 Explicit accepted-risk imperative success passed. A mixed accepted-risk assertion separately assumed the saved Skill DeclaredName was docs, while its actual generated name was skill-hash. The fixture now captures the saved installation identity and checks its persisted docs ownership receipt. The corrected composed regression rerun (`go test -count=1 -timeout=8m -json ./cmd/agentplugins -run '^TestComposedUpdateAllSecurityPreflight$'`, log `/tmp/uap-update-security-red-corrected.jsonl`) passed both explicit-risk acceptance and cleanup journeys while both refusal journeys still failed for the intended unauthorized effects. The earlier oracle error is not product red evidence; these runs are not final qualification.
 
 Production scope remains A only. B remains deferred with an existing-protection regression. Preserve #1115's apply/render/saved diagnostics, implement the minimal preflight authorization boundary, then rerun corrected ordinary tests and all later review/qualification gates.
+
+## Implementation and focused acceptance checkpoint
+
+Red tests were published in `998e0f0cc81654c4aa1ba3f48c4de01d934fa13e`. The production correction is `aa03de9cb7f235ce40d1724c3fd9f57c38bb8f16`, with `update_all.go` blob `7d37a95dbfba9d1029723c59c526056a80fd3385`. Its 21 added lines authorize each changed imperative preparation using actual session options before any batch apply. The shared authorizer retains policy and human input/context/output; batch JSON owns one document and retains the assessment in existing target output fields.
+
+The materialized correction passed the focused ordinary CLI and production-composed regressions: exit 0, 15 test/subtest pass events, no fail/skip (`/tmp/uap-update-security-green.jsonl`). Both new catalog cases also passed the exact tagged selector below: exit 0, seven test/subtest pass events, no fail/skip (`/tmp/uap-update-security-pm.jsonl`). These checks include imperative and mixed-saved refusal without effects, explicit acceptance with independently expected updated payload and lock, human consent once, retained data, foreign files and owned cleanup. The assessment is injected for routing proof; genuine pinned-scanner qualification remains in the existing executable phase.
+
+```sh
+go test -tags=uappm_e2e -count=1 -timeout=12m -json ./cmd/agentplugins -run '^TestPackageManagerInstallE2E/update-all-security-(batch|mixed-saved)-preflight$'
+```
+
+Independent read-only implementation and fixture review of the exact production blob against the red checkpoint found no blocking correctness issue. The review confirmed the complete mixed-batch authorization boundary, actual options, one JSON owner, original human channels, unchanged saved rechecks and preserved #1115 diagnostics. The existing-protection B regression remains the only B change.
+
+Full `make lint` passed after ordinary Git history restored the shallow checkout's missing base: all four whole-file and four changed-line gates reported zero issues, and the baseline check retained 137 exclusion rules with no growth. Full core and final-head CI are separate gates. The restricted local executor's full core run encounters unavailable procfs process-tree observation and Unix-domain socket prerequisites; these failures are not product PASS. Hosted CI must execute the complete gate. PR and merged qualification results are tracked in #1116; no release is included.
