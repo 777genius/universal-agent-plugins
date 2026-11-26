@@ -557,7 +557,7 @@ def checked_playwright_runtime(audit, locator, root):
         require(body is not None and audit.digest(body) == "sha256:" + sha, "closure Playwright executable/config differs from frozen source")
 
 
-PI_STARTUP_STORES = ("auth.json", "models-store.json")
+PI_STARTUP_STORES = ("auth.json", "models-store.json", "mcp-auth.json")
 
 
 def pi_user_startup_scope(case):
@@ -573,10 +573,11 @@ def require_fresh_pi_startup_stores(audit, case, root, selected_root):
 
 
 def pi_startup_store_custody(audit, case, root, selected_root):
-    """Pi1.4 offline Skill RPC creates two empty private stores, never credentials.
+    """Pi1.4 Skill RPC with MCP entries creates three empty private stores.
 
     Pinned upstream 4a080252 auth-storage.ts FileAuthStorageBackend initializes
-    both AuthStorage and FileModelsStore with literal {} on their first read.
+    AuthStorage, FileModelsStore and MCP OAuth storage with literal {} on first
+    read. Empty startup files do not prove credentials or an OAuth connection.
     Keep their identities and metadata after add; names alone grant no authority.
     """
     require(pi_user_startup_scope(case), "Pi startup stores require the user Skill closure")

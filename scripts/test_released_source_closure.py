@@ -515,6 +515,8 @@ class FrozenProducerWorktreeTests(unittest.TestCase):
 
 
 class PiStartupStoreTests(unittest.TestCase):
+    STORE_NAMES = ("auth.json", "models-store.json", "mcp-auth.json")
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
@@ -537,7 +539,7 @@ class PiStartupStoreTests(unittest.TestCase):
         closure.require_fresh_pi_startup_stores(audit, self.case, self.root, self.selected)
 
     def create_stores(self):
-        for name in closure.PI_STARTUP_STORES:
+        for name in self.STORE_NAMES:
             path = self.selected / name
             path.write_bytes(b"{}")
             path.chmod(0o600)
@@ -555,6 +557,7 @@ class PiStartupStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unowned native sibling"):
             self.namespace()
         baseline = self.custody()
+        self.assertEqual(set(baseline), set(self.STORE_NAMES))
         self.namespace(baseline)
         for owner in self.owners.values(): owner["locator"].rmdir()
         (self.selected / "skills/campaign-planning").rmdir()
@@ -563,7 +566,7 @@ class PiStartupStoreTests(unittest.TestCase):
         self.namespace(baseline, removed=True)
 
     def test_existing_foreign_stores_are_not_adopted(self):
-        for name in closure.PI_STARTUP_STORES:
+        for name in self.STORE_NAMES:
             with self.subTest(name=name):
                 path = self.selected / name
                 path.write_bytes(b"{}")
@@ -573,60 +576,76 @@ class PiStartupStoreTests(unittest.TestCase):
 
     def test_content_and_additional_siblings_are_refused(self):
         self.create_stores()
-        baseline = self.custody()
-        for content in (b'{"token":"foreign"}', b"{}\n", b"[]"):
-            with self.subTest(content=content):
-                (self.selected / "auth.json").write_bytes(content)
-                with self.assertRaisesRegex(ValueError, "not empty"): self.custody()
-        (self.selected / "auth.json").write_bytes(b"{}")
+        for name in self.STORE_NAMES:
+            path = self.selected / name
+            for content in (b'{"token":"foreign"}', b"{}\n", b"[]"):
+                with self.subTest(name=name, content=content):
+                    path.write_bytes(content)
+                    with self.assertRaisesRegex(ValueError, "not empty"): self.custody()
+            path.write_bytes(b"{}")
         baseline = self.custody()
         (self.selected / "extra.json").write_bytes(b"{}")
         with self.assertRaisesRegex(ValueError, "unowned native sibling"): self.namespace(baseline)
 
     def test_missing_or_directory_store_cannot_become_custody(self):
         self.create_stores()
-        baseline = self.custody()
-        path = self.selected / "models-store.json"
-        path.unlink()
-        with self.assertRaises(OSError): self.namespace(baseline)
-        path.mkdir()
-        with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
+        for name in self.STORE_NAMES:
+            with self.subTest(name=name):
+                baseline = self.custody()
+                path = self.selected / name
+                path.unlink()
+                with self.assertRaises(OSError): self.namespace(baseline)
+                path.mkdir()
+                with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
+                path.rmdir()
+                path.write_bytes(b"{}")
+                path.chmod(0o600)
 
     def test_same_bytes_replacement_and_metadata_drift_are_refused(self):
         self.create_stores()
-        baseline = self.custody()
-        path = self.selected / "auth.json"
-        replacement = self.selected / "replacement"
-        replacement.write_bytes(b"{}")
-        replacement.chmod(0o600)
-        replacement.replace(path)
-        with self.assertRaisesRegex(ValueError, "changed after add"): self.namespace(baseline)
-        baseline = self.custody()
-        info = path.stat()
-        os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns + 1000000000))
-        with self.assertRaisesRegex(ValueError, "changed after add"): self.namespace(baseline)
+        for name in self.STORE_NAMES:
+            with self.subTest(name=name):
+                baseline = self.custody()
+                path = self.selected / name
+                replacement = self.selected / "replacement"
+                replacement.write_bytes(b"{}")
+                replacement.chmod(0o600)
+                replacement.replace(path)
+                with self.assertRaisesRegex(ValueError, "changed after add"): self.namespace(baseline)
+                baseline = self.custody()
+                info = path.stat()
+                os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns + 1000000000))
+                with self.assertRaisesRegex(ValueError, "changed after add"): self.namespace(baseline)
 
     def test_nonprivate_mode_and_links_are_refused(self):
         self.create_stores()
-        path = self.selected / "auth.json"
-        if os.name != "nt":
-            path.chmod(0o644)
-            with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
-            path.chmod(0o600)
-        linked = self.root / "linked"
-        try:
-            os.link(path, linked)
-        except OSError:
-            self.skipTest("host cannot create hardlinks")
-        with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
-        linked.unlink()
-        path.unlink()
-        linked.write_bytes(b"{}")
-        try:
-            path.symlink_to(linked)
-        except OSError:
-            self.skipTest("host cannot create symlinks")
-        with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
+        for name in self.STORE_NAMES:
+            with self.subTest(name=name):
+                path = self.selected / name
+                if os.name != "nt":
+                    path.chmod(0o644)
+                    with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
+                    path.chmod(0o600)
+                linked = self.root / (name + ".linked")
+                try:
+                    try:
+                        os.link(path, linked)
+                    except OSError:
+                        self.skipTest("host cannot create hardlinks")
+                    with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
+                    linked.unlink()
+                    path.unlink()
+                    linked.write_bytes(b"{}")
+                    try:
+                        path.symlink_to(linked)
+                    except OSError:
+                        self.skipTest("host cannot create symlinks")
+                    with self.assertRaisesRegex(ValueError, "private owned regular"): self.custody()
+                finally:
+                    path.unlink(missing_ok=True)
+                    linked.unlink(missing_ok=True)
+                    path.write_bytes(b"{}")
+                    path.chmod(0o600)
 
     def test_scope_and_held_read_replacement_are_refused(self):
         self.create_stores()
@@ -635,16 +654,18 @@ class PiStartupStoreTests(unittest.TestCase):
             with self.subTest(fields=fields), self.assertRaisesRegex(ValueError, "user Skill closure"):
                 closure.pi_startup_store_custody(audit, {**self.case, **fields}, self.root, self.selected)
         original = closure.held_read
-        def replacing(*args, **kwargs):
-            body = original(*args, **kwargs)
-            path = args[1]
-            replacement = self.root / "new-store"
-            replacement.write_bytes(body)
-            replacement.chmod(0o600)
-            replacement.replace(path)
-            return body
-        with mock.patch.object(closure, "held_read", side_effect=replacing):
-            with self.assertRaisesRegex(ValueError, "changed during custody"): self.custody()
+        for name in self.STORE_NAMES:
+            def replacing(*args, **kwargs):
+                body = original(*args, **kwargs)
+                path = args[1]
+                if path.name == name:
+                    replacement = self.root / "new-store"
+                    replacement.write_bytes(body)
+                    replacement.chmod(0o600)
+                    replacement.replace(path)
+                return body
+            with self.subTest(name=name), mock.patch.object(closure, "held_read", side_effect=replacing):
+                with self.assertRaisesRegex(ValueError, "changed during custody"): self.custody()
 
 
 if __name__ == "__main__":
