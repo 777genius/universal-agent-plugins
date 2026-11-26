@@ -120,11 +120,21 @@ func (s *projectListScan) record(entry map[string]any) bool {
 		s.suppressed, s.observation.untrusted = true, trust
 		return true
 	}
-	row, valid := parseProjectListRow(entry, s.query.project)
+	// The CLI lists plugins from unrelated projects, even when queried
+	// from this project. Only the managed @skills-dir candidate must be
+	// bound to the selected root; foreign rows still need valid metadata.
+	expectedProject := ""
+	if id == s.query.name+"@skills-dir" {
+		expectedProject = s.query.project
+	}
+	row, valid := parseProjectListRow(entry, expectedProject)
 	if !valid {
 		return false
 	}
 	identity := id + "\x00" + row.scope + "\x00" + row.path
+	if project, present := entry["projectPath"].(string); present {
+		identity += "\x00" + project
+	}
 	if s.seen[identity] {
 		return false
 	}
@@ -204,7 +214,7 @@ func exactAbsolute(path string) bool { return filepath.IsAbs(path) && filepath.C
 
 func knownClaudeScope(scope string) bool {
 	switch scope {
-	case "user", "project", "local", "managed":
+	case "user", "project", "local", "managed", "synced":
 		return true
 	}
 	return false
@@ -233,7 +243,7 @@ func validProjectListMetadata(entry map[string]any, project string) bool {
 		}
 	}
 	if path, exists := entry["projectPath"]; exists {
-		if text, ok := path.(string); !ok || !exactAbsolute(text) || text != project {
+		if text, ok := path.(string); !ok || !exactAbsolute(text) || (project != "" && text != project) {
 			return false
 		}
 	}
