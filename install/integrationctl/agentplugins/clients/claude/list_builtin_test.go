@@ -95,7 +95,7 @@ func TestListingRejectsMalformedUserProjectIdentity(t *testing.T) {
 		name string
 		row  map[string]any
 	}{
-		{"user-row-with-project", map[string]any{"id": "x@market", "scope": "user", "enabled": true, "installPath": foreign, "projectPath": t.TempDir()}},
+		{"user-row-with-relative-project", map[string]any{"id": "x@market", "scope": "user", "enabled": true, "installPath": foreign, "projectPath": "relative"}},
 		{"local-row-with-nonabsolute-project", map[string]any{"id": "x@market", "scope": "local", "enabled": true, "installPath": foreign, "projectPath": "relative"}},
 		{"local-row-with-nonstring-project", map[string]any{"id": "x@market", "scope": "local", "enabled": true, "installPath": foreign, "projectPath": true}},
 		{"unknown-scope", map[string]any{"id": "x@market", "scope": "future-scope", "enabled": true, "installPath": foreign}},
@@ -223,5 +223,43 @@ func TestListingsRejectProjectMetadataOnNonProjectRows(t *testing.T) {
 				t.Fatalf("invalid project metadata classified as %v", got)
 			}
 		})
+	}
+}
+
+func TestUserScopedRowsMayCarryCanonicalProjectPath(t *testing.T) {
+	active := filepath.Join(t.TempDir(), "config", "skills", "demo-managed")
+	foreign := filepath.Join(t.TempDir(), "cache", "x", "1.0.0")
+	projectOne := filepath.Join(t.TempDir(), "projects", "one")
+	projectTwo := filepath.Join(t.TempDir(), "projects", "two")
+	other := map[string]any{
+		"id": "x@market", "scope": "user", "enabled": true,
+		"installPath": foreign, "projectPath": projectOne,
+	}
+	managed := func(project any) map[string]any {
+		row := map[string]any{
+			"id": "demo@skills-dir", "scope": "user", "enabled": true,
+			"installPath": active,
+		}
+		if project != nil {
+			row["projectPath"] = project
+		}
+		return row
+	}
+	body, err := json.Marshal([]map[string]any{other, managed(nil)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := PluginStatusFromList(body, "demo", active); got != StatusInstalled {
+		t.Fatalf("valid user-scope project metadata made list unknown: %v, %s", got, body)
+	}
+
+	// A projectPath must not turn two reports of the same managed user
+	// installation into two distinct install identities.
+	body, err = json.Marshal([]map[string]any{managed(projectOne), managed(projectTwo)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := PluginStatusFromList(body, "demo", active); got != StatusUnknown {
+		t.Fatalf("duplicate managed user rows with differing projectPath were accepted: %v", got)
 	}
 }
