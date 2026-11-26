@@ -251,6 +251,7 @@ class CrashWindowTests(unittest.TestCase):
                     patch.object(matrix.sys, 'platform', 'linux'), \
                     patch.object(matrix.os, 'pidfd_open', create=True), \
                     patch.object(matrix.os, 'close'), \
+                    patch.object(matrix.signal, 'SIGKILL', 9, create=True), \
                     patch.object(matrix.signal, 'pidfd_send_signal', create=True), \
                     patch.object(matrix.select, 'poll', create=True) as poll, \
                     patch.object(matrix.subprocess, 'Popen', return_value=process), \

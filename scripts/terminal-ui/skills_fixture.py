@@ -380,7 +380,11 @@ func main() {
         output(object{})
         return
     }
-    if len(args) >= 4 && strings.Join(args[:3]," ") == "plugin marketplace update" {
+    if len(args) == 5 && strings.Join(args[:3]," ") == "plugin marketplace update" {
+        if args[4] != "--json" || state["marketplace"] != args[3] {
+            fmt.Fprintln(os.Stderr,"synthetic marketplace is not registered")
+            os.Exit(97)
+        }
         output(object{})
         return
     }
