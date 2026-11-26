@@ -165,10 +165,9 @@ def installed(fixture, targets, *, retained_failed=(), prepared_targets=(), resu
                       binding.get('authentication') == 'not_required',
                       'synthetic Codex protocol did not prove native Skill completion')
             registry = json.loads((fixture.root / 'native-registry.json').read_text(encoding='utf-8'))
-            native_registration(path, registry)
-            cache = Path(registry['cache']).resolve()
-            check(cache.is_relative_to(fixture.root.resolve()), 'native cache escaped fixture')
+            cache = native_cache(fixture, path, registry)
             cached = cache / 'skills' / fixture.skill_name / 'SKILL.md'
+            check(cached.resolve().is_relative_to(cache), 'native cached Skill escaped its cache')
             check(cached.read_bytes() == body, 'native discovered cache has different Skill bytes')
             if target in prepared:
                 check(hashes(cached.parent) == hashes(skill.parent),
@@ -300,6 +299,26 @@ def native_registration(path, registry):
                row.get('installed') is True and row.get('enabled') is True and
                Path(row.get('source', {}).get('path', '')).resolve() == path.resolve()]
     check(len(matches) == 1, 'native package is not registered as installed and enabled')
+    return marketplace, name, version
+
+
+def native_cache(fixture, path, registry):
+    marketplace, name, version = native_registration(path, registry)
+    native_home = Path(getattr(fixture, 'env', {}).get('CODEX_HOME', fixture.home / '.codex')).resolve()
+    check(native_home.is_relative_to(fixture.root.resolve()), 'native profile escaped fixture')
+    check(all(isinstance(part, str) and part not in ('', '.', '..') and
+              not any(char in part for char in '/\\:') for part in (marketplace, name, version)),
+          'native cache location has invalid package components')
+    cache_root = native_home / 'plugins' / 'cache'
+    expected = (cache_root / marketplace / name / version).resolve()
+    managed = path.resolve()
+    check(not expected.is_relative_to(managed) and not managed.is_relative_to(expected),
+          'native cache aliases managed projection')
+    cache = Path(registry.get('cache', '')).resolve()
+    check(expected.is_relative_to(cache_root) and cache == expected,
+          'native cache location does not match the selected native profile and package')
+    check(cache.is_dir(), 'native profile cache is missing')
+    return cache
 
 
 def native_mutations(calls):

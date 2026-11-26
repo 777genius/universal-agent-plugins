@@ -29,6 +29,7 @@ class PreparedRestartTests(unittest.TestCase):
             path.mkdir(parents=True)
         self.foreign = self.fixture.home / 'foreign.txt'
         self.foreign.write_bytes(b'foreign bytes')
+        self.foreign_before = matrix.Matrix.recovery_foreign_entries((self.foreign,))
         (self.root / 'pause-add').write_text('owned crash nonce', encoding='utf-8')
         (self.root / 'native-registry.json').write_text(json.dumps(
             dict(marketplace='owned-market', spec='selected@owned-market')), encoding='utf-8')
@@ -73,6 +74,8 @@ class PreparedRestartTests(unittest.TestCase):
                 mutations.pop()
             if self.fault == 'native-extra':
                 mutations.append(['plugin', 'remove', 'selected@owned-market', '--json'])
+            if self.fault == 'native-duplicate':
+                mutations.append(list(mutations[-1]))
             if self.fault == 'native-foreign':
                 mutations[1][2] = 'foreign@foreign-market'
             self.calls.extend(mutations)
@@ -82,6 +85,8 @@ class PreparedRestartTests(unittest.TestCase):
                 self.binding['receipts'][0]['operation_id'] = 'replacement-operation'
             if self.fault == 'foreign-clobbered':
                 self.foreign.write_bytes(b'clobbered bytes')
+            if self.fault == 'foreign-symlink':
+                self.replace_foreign_with_same_bytes_symlink()
             self.write_state()
             action = dict(action='repair', alias='selected-skill', client_id='codex',
                 installation_id='installation-id', binding_id='binding-id', package_digest='tree-pin')
@@ -101,7 +106,8 @@ class PreparedRestartTests(unittest.TestCase):
                 patch.object(matrix.subprocess, 'run', side_effect=self.public_command):
             try:
                 matrix.Matrix('private-cli', 'private-native', acquisition_timeout=12).\
-                    complete_interrupted_activation_repair(self.fixture, self.evidence)
+                    complete_interrupted_activation_repair(self.fixture, self.evidence,
+                                                           self.foreign_before)
             finally:
                 self.oracle_calls = installed.call_args_list
 
@@ -140,6 +146,68 @@ class PreparedRestartTests(unittest.TestCase):
                 self.fault = fault
                 with self.assertRaises(AssertionError):
                     self.complete()
+
+    def replace_foreign_with_same_bytes_symlink(self):
+        target = self.root / 'same-foreign-bytes.txt'
+        target.write_bytes(self.foreign.read_bytes())
+        self.foreign.unlink()
+        try:
+            self.foreign.symlink_to(target)
+        except OSError as error:
+            if isinstance(error, PermissionError) or getattr(error, 'winerror', None) == 1314:
+                self.skipTest('symlink creation requires host permission: ' + str(error))
+            raise
+
+    def test_foreign_snapshot_is_persisted_before_cli_launch(self):
+        self.fixture.control = lambda *_args: None
+        self.fixture.args = lambda _binary: ['private-cli']
+
+        def launch(*_args, **_kwargs):
+            snapshot = json.loads((self.evidence / 'foreign-before-launch.json').read_text(
+                encoding='utf-8'))
+            paths = (self.fixture.home / 'foreign-user-é.txt',
+                     self.fixture.project / 'foreign-project-é.txt')
+            self.assertEqual(set(snapshot), {str(path) for path in paths})
+            self.assertEqual(snapshot, matrix.Matrix.recovery_foreign_entries(paths))
+            self.assertTrue(all(row['type'] == 'regular' for row in snapshot.values()))
+            raise RuntimeError('stop before actual subprocess launch')
+
+        with patch.object(matrix.sys, 'platform', 'linux'), \
+                patch.object(matrix, 'os', SimpleNamespace(pidfd_open=object())), \
+                patch.object(matrix, 'signal', SimpleNamespace(pidfd_send_signal=object())), \
+                patch.object(matrix.subprocess, 'Popen', side_effect=launch):
+            with self.assertRaisesRegex(RuntimeError, 'stop before actual subprocess launch'):
+                matrix.Matrix('private-cli', 'private-native').case_interrupted_activation_repair(
+                    self.fixture, self.evidence)
+
+    def test_postcrash_foreign_corruption_is_rejected_before_restart(self):
+        for fault in ('bytes', 'symlink', 'missing', 'directory'):
+            with self.subTest(fault=fault):
+                self.prepare_fixture()
+                if fault == 'bytes':
+                    self.foreign.write_bytes(b'foreign postcrash corruption')
+                elif fault == 'symlink':
+                    self.replace_foreign_with_same_bytes_symlink()
+                else:
+                    self.foreign.unlink()
+                    if fault == 'directory':
+                        self.foreign.mkdir()
+                with self.assertRaises((AssertionError, FileNotFoundError)):
+                    self.complete()
+                self.assertEqual(self.commands, [])
+                self.assertEqual(self.oracle_calls, [])
+
+    def test_repair_cannot_replace_foreign_regular_entry_with_same_bytes_symlink(self):
+        self.fault = 'foreign-symlink'
+        with self.assertRaisesRegex(AssertionError, 'foreign entry type'):
+            self.complete()
+        self.assertEqual([argv[1] for argv in self.commands], ['info', 'repair'])
+
+    def test_duplicate_allowed_native_effect_fails_exact_sequence(self):
+        self.fault = 'native-duplicate'
+        with self.assertRaisesRegex(AssertionError, 'exactly the recorded marketplace/plugin once'):
+            self.complete()
+        self.assertEqual(self.calls[-1], self.calls[-2])
 
 
 if __name__ == '__main__':

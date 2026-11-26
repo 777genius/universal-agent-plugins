@@ -176,7 +176,7 @@ class InstallationEvidenceTests(unittest.TestCase):
         self.skill = self.target / 'skills' / 'guide' / 'SKILL.md'
         self.skill.parent.mkdir(parents=True)
         self.skill.write_bytes(self.fixture.skill_bytes)
-        cache = self.root / 'native-cache'
+        cache = self.fixture.home / '.codex' / 'plugins' / 'cache' / 'fixture-market' / 'demo' / '1.0.0'
         cached = cache / 'skills' / 'guide' / 'SKILL.md'
         cached.parent.mkdir(parents=True)
         cached.write_bytes(self.fixture.skill_bytes)
@@ -374,6 +374,65 @@ class InstallationEvidenceTests(unittest.TestCase):
         cached.write_bytes(b'changed native cache\n')
         with self.assertRaisesRegex(AssertionError, 'cache has different Skill bytes'):
             oracle.installed(self.fixture, ('codex',))
+
+    def assert_cache_refused_for_active_and_prepared(self, reason):
+        for prepared in (False, True):
+            with self.subTest(prepared=prepared):
+                self.binding.update(scope='user', authentication='not_required', policy='allowed',
+                    activation='prepared' if prepared else 'active',
+                    verification='package_validated' if prepared else 'installation_verified')
+                self.save()
+                with self.assertRaisesRegex(AssertionError, reason):
+                    oracle.installed(self.fixture, () if prepared else ('codex',),
+                                     prepared_targets=('codex',) if prepared else ())
+
+    def test_intact_registration_cannot_substitute_managed_projection_for_missing_cache(self):
+        cache = Path(self.registry['cache'])
+        shutil.rmtree(cache)
+        self.registry['cache'] = str(self.target)
+        self.save_registry()
+        self.assertFalse(cache.exists())
+        self.assertTrue(self.registry['installed'][0]['installed'])
+        self.assert_cache_refused_for_active_and_prepared('native cache location')
+
+    def test_same_bytes_in_unrelated_cache_do_not_prove_native_profile_delivery(self):
+        cache = Path(self.registry['cache'])
+        other = self.root / 'unrelated-cache'
+        shutil.move(str(cache), other)
+        self.registry['cache'] = str(other)
+        self.save_registry()
+        self.assert_cache_refused_for_active_and_prepared('native cache location')
+
+    def test_intact_registry_without_native_profile_cache_is_not_delivery(self):
+        shutil.rmtree(Path(self.registry['cache']))
+        self.assert_cache_refused_for_active_and_prepared('native profile cache is missing')
+
+    @unittest.skipUnless(os.name == 'posix', 'POSIX directory symlink alias control')
+    def test_expected_native_cache_symlink_cannot_alias_managed_projection(self):
+        cache = Path(self.registry['cache'])
+        shutil.rmtree(cache)
+        cache.symlink_to(self.target, target_is_directory=True)
+        self.assertEqual(cache.resolve(), self.target.resolve())
+        self.assert_cache_refused_for_active_and_prepared('aliases managed projection')
+        cache.unlink()
+        shutil.copytree(self.target, cache)
+        cached = cache / 'skills' / 'guide' / 'SKILL.md'
+        cached.unlink()
+        cached.symlink_to(self.skill)
+        self.assert_cache_refused_for_active_and_prepared('native cached Skill escaped its cache')
+
+    def test_explicit_native_profile_anchors_cache_independently_of_registry(self):
+        cache = Path(self.registry['cache'])
+        profile = self.root / 'private-native-profile'
+        moved = profile / 'plugins' / 'cache' / 'fixture-market' / 'demo' / '1.0.0'
+        moved.parent.mkdir(parents=True)
+        shutil.move(str(cache), moved)
+        self.fixture.env = {'CODEX_HOME': str(profile)}
+        self.registry['cache'] = str(moved)
+        self.save_registry()
+        self.assertEqual(set(oracle.installed(self.fixture, ('codex',))), {'codex'})
+        self.fixture.env['CODEX_HOME'] = str(self.fixture.home / '.codex')
+        self.assert_cache_refused_for_active_and_prepared('native cache location')
 
     def test_lock_digest_in_comment_or_other_entry_cannot_qualify_binding(self):
         package = self.lock['packages'][0]
@@ -595,6 +654,8 @@ class RetainedFailureEvidenceTests(unittest.TestCase):
 
     def setUp(self):
         InstallationEvidenceTests.setUp(self)
+        # This boundary fails before native add, so retain no successful cache.
+        shutil.rmtree(self.fixture.home / '.codex' / 'plugins' / 'cache')
         self.cursor = copy.deepcopy(self.binding)
         cursor_path = self.root / 'cursor' / 'demo'
         shutil.copytree(self.target, cursor_path)

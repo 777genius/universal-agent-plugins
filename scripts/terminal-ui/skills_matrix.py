@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import select
 import signal
@@ -33,7 +34,19 @@ CASES = ('source-feasibility', 'fresh', 'declared-repair-json', 'unchanged', 'un
          'catalog-redirect', 'catalog-both-redirect', 'plain-browser', 'explicit-ui')
 BROWSER_CASES = frozenset(('catalog-redirect', 'catalog-both-redirect', 'plain-browser', 'explicit-ui'))
 QUESTION = r'Install these Skills\? \[Y/n\] '
-RETRY = r'Retry [^\r\n]*\? \[Y/n\]'
+RETRY = r'Retry +[^\x00-\x1f\x7f-\x9f]*\? +\[Y/n\]'
+RETRY_CONPTY_CAPTURE = r'Retry[^\r\n]*\? *\[Y/n\]'
+
+
+def retry_prompt_visible(data):
+    # ConPTY may encode an interior blank as cursor-forward. Only this retry
+    # readiness check treats that movement as spacing; shared clean() and raw
+    # evidence remain unchanged. Other controls stay in the candidate and fail
+    # RETRY, because erasure/backward movement can destroy its visible text.
+    # Collapse spacing width instead of allocating from an escape parameter.
+    spaced = re.sub(rb'\x1b\[[0-9]*C', b' ', bytes(data))
+    styled = re.sub(rb'\x1b\[[0-9;:]*m', b'', spaced)
+    return re.search(RETRY, styled.decode('utf-8', 'replace')) is not None
 
 
 class WindowsSession:
@@ -82,6 +95,14 @@ class WindowsSession:
 
     def wait(self, pattern, _label, after=0):
         self.terminal.timeout = self.timeout
+        if pattern == RETRY:
+            # The common ConPTY waiter strips cursor movement. Wait for all
+            # prompt characters, then require spacing in the original capture
+            # before allowing the caller to send an answer.
+            offset = self.terminal.wait(RETRY_CONPTY_CAPTURE, after=after)
+            check(retry_prompt_visible(self.raw[after:]),
+                  'retry prompt lacks complete visible spacing')
+            return offset
         return self.terminal.wait(pattern, after=after)
 
     def send(self, keys):
@@ -504,6 +525,15 @@ class Matrix:
               'diagnostic reporting overwrote the obstructing file')
         installed(fixture, ('cursor',), retained_failed=('codex',))
 
+    @staticmethod
+    def recovery_foreign_entries(paths):
+        entries = {}
+        for path in paths:
+            check(stat.S_ISREG(path.lstat().st_mode),
+                  'interrupted apply or repair changed foreign entry type')
+            entries[str(path)] = dict(type='regular', bytes_hex=path.read_bytes().hex())
+        return entries
+
     def case_interrupted_activation_repair(self, fixture, evidence):
         # Hold exact native child identity before crashing the CLI. The responder
         # does not spawn children, so a pidfd covers the sole active native effect.
@@ -516,6 +546,8 @@ class Matrix:
                    fixture.project / 'foreign-project-é.txt': b'foreign project bytes\n'}
         for path, body in foreign.items():
             path.write_bytes(body)
+        foreign_before = self.recovery_foreign_entries(foreign)
+        persist(evidence / 'foreign-before-launch.json', foreign_before)
         nonce = uuid.uuid4().hex
         fixture.control('pause-add', nonce)
         argv = fixture.args(self.binary)
@@ -587,11 +619,12 @@ class Matrix:
                 cleanup_errors=cleanup_errors))
             if cleanup_errors:
                 raise RuntimeError(f'{primary!r}; uncertain fixture cleanup: {cleanup_errors}')
-        self.complete_interrupted_activation_repair(fixture, evidence)
-        check(all(path.read_bytes() == body for path, body in foreign.items()),
-              'interrupted apply or repair changed foreign bytes')
+        self.complete_interrupted_activation_repair(fixture, evidence, foreign_before)
 
-    def complete_interrupted_activation_repair(self, fixture, evidence):
+    def complete_interrupted_activation_repair(self, fixture, evidence, foreign_before):
+        foreign_paths = [Path(path) for path in foreign_before]
+        check(self.recovery_foreign_entries(foreign_paths) == foreign_before,
+              'interrupted apply changed foreign entries before repair')
         # Codex user CLI registration follows the committed directory swap.
         # It has no pending physical journal/native-intent contract here. The
         # separate mandatory public-CLI/OS crash gates qualify journal recovery.
@@ -648,6 +681,8 @@ class Matrix:
             ['plugin', 'add', registry['spec'], '--json']]
         calls = len(fixture.calls())
         repaired = run('explicit-repair', 'repair', ('--target', 'codex', '--yes'))
+        check(self.recovery_foreign_entries(foreign_paths) == foreign_before,
+              'explicit repair changed foreign entries')
         actions, results = repaired.get('actions', []), repaired.get('results', [])
         check(repaired.get('outcome') == 'completed' and repaired.get('scope') == 'user' and
               len(actions) == 1 and actions[0].get('action') == 'repair' and
@@ -684,6 +719,8 @@ class Matrix:
         durable_after['state-v2.json'] = durable_before['state-v2.json']
         check(durable_after == durable_before, 'repair rewrote package, lock, native or foreign bytes')
         inspect('repaired-info', 'active', 'installation_verified')
+        check(self.recovery_foreign_entries(foreign_paths) == foreign_before,
+              'explicit repair changed foreign entries')
         persist(evidence / 'interrupted-activation-repair-facts.json', dict(
             installation_id=installation_id, binding_id=key,
             recorded_before='prepared/package_validated',
