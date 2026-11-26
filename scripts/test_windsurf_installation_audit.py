@@ -357,6 +357,32 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             self.assertTrue(transport.verifier.closed)
             return result, pins
 
+    def test_non_native_git_source_uses_independent_installation_pin(self):
+        source, identity = selected(self.fixtures, 21)
+        self.assertEqual(identity, "sanity")
+        # Ordinary fixture setup patches all Git sources into the native map,
+        # which hid the real Full30 KeyError. Keep Sanity outside that cohort.
+        native_pins = {key: value for key, value in self.pins.items() if key != source}
+        observer_globals = self.audit["WINDSURF_INSTALLATION"]["WindsurfInstallationAudit"].__init__.__globals__
+        pins = {source: self.pins[source]}
+        with (patch.object(installation, "GLOBAL_SKILL_CASES", native_pins),
+              patch.object(installation, "INSTALLATION_GIT_PINS", pins),
+              patch.dict(observer_globals, {"GLOBAL_SKILL_CASES": native_pins,
+                                           "INSTALLATION_GIT_PINS": pins}),
+              TemporaryDirectory() as temporary):
+            observer, _ = self.fixture(Path(temporary).resolve())
+            row = self.row(21)
+            proof = self.finish(observer, row)
+            self.assertEqual(proof["source_projection"]["tree_digest"], pins[source]["tree_digest"])
+            self.assertFalse(proof["native_runtime_qualified"])
+            self.assertNotIn(source, native_pins)
+            for changed in (source + "-unreviewed", source.rsplit("@", 1)[0] + "@" + "0" * 40):
+                with self.assertRaises(ValueError):
+                    installation.independent_source_pin(self.fixtures, changed)
+            with patch.object(installation, "INSTALLATION_GIT_PINS", {}):
+                with self.assertRaises(ValueError):
+                    installation.independent_source_pin(self.fixtures, source)
+
     def test_all_exact_slots_preserve_prepared_active_and_five_negatives(self):
         proofs = []
         for index in range(30):

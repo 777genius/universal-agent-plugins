@@ -31,6 +31,14 @@ ACTIVE_SLOTS = {22: "sre-extension", 25: "claude-scientific-writer",
                 26: "elements-of-style", 29: "recipe-skills"}
 COMPONENT_REFUSALS = {23: "itential-builder", 24: "google-cloud-storage",
                      27: "cometchat-skills", 28: "uizze-ui-slop"}
+# Installation-only Git source; never part of the four native pure-Skill cases.
+# Independently framed from the exact Git archive and confirmed with the existing
+# packagedigest.Builder + loader authority (130 entries, no links/gitlinks).
+INSTALLATION_GIT_PINS = {
+    "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320": {
+        "tree_digest": "sha256:c02e90a28469ff7c67ac1bdae28bee66c4f280aac4f7f00e48509d0522b565c2",
+        "manifest_digest": "sha256:3014016b8d78767b677a5a0b0ce05c03260caa15ecca6ff2efbecf79cf89a661"},
+}
 CLIENT_VERSION = "devin 3000.12.57 (96542e930752)"
 CLI_VERSION = "agentplugins 0.1.115"
 ROOT = Path(__file__).resolve().parents[1]
@@ -204,6 +212,19 @@ def ordinary(path):
     info = path.lstat()
     require(stat.S_ISDIR(info.st_mode) and path.resolve(strict=True) == path)
     return info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid
+
+
+def independent_source_pin(fixtures, source):
+    """Select only fixture-bound signed or independently pinned Git bytes."""
+    require(source in fixtures["plugin_aliases"])
+    if source.startswith("github:"):
+        pin = GLOBAL_SKILL_CASES.get(source) or INSTALLATION_GIT_PINS.get(source)
+    else:
+        pin = fixtures["signed_release_pins"].get(source)
+    require(type(pin) is dict and all(type(pin.get(key)) is str
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", pin[key])
+            for key in ("tree_digest", "manifest_digest")))
+    return pin
 
 
 def selected(fixtures, index):
@@ -930,7 +951,7 @@ class WindsurfInstallationAudit:
                     and locked.get("manifest_digest") == "sha256:" + sha(compact(intent)))
             require(origin.get("repository", "").lower() == repo.lower()
                     and origin.get("package_subpath", "") == subpath)
-            independent = GLOBAL_SKILL_CASES[source] if source.startswith("github:") else fixtures["signed_release_pins"][source]
+            independent = independent_source_pin(fixtures, source)
             require(all(revision.get(key) == independent[key] for key in ("tree_digest", "manifest_digest")))
             source_relative = "store/packages/agentplugins-tree-sha256-v1/" + independent["tree_digest"][7:] + "/package"
             source_observation = saved["sources"][source_relative]
@@ -1101,7 +1122,7 @@ def summary(report, fixtures, *, fixture_sha256):
                             "removal_verified", "post_list_schema_valid"))
                         and row.get("post_removal_leftovers") == [])
                 projection = proof.get("source_projection")
-                independent = GLOBAL_SKILL_CASES[source] if source.startswith("github:") else fixtures["signed_release_pins"][source]
+                independent = independent_source_pin(fixtures, source)
                 require(type(projection) is dict and set(projection) == {"tree_digest", "manifest_digest", "delivery_digest"}
                         and all(projection.get(key) == independent[key] for key in ("tree_digest", "manifest_digest"))
                         and type(projection.get("delivery_digest")) is str
