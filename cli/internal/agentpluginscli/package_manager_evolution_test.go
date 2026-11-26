@@ -19,14 +19,22 @@ import (
 
 func packageManagerEvolutionCases() map[string]func(*testing.T) {
 	return map[string]func(*testing.T){
-		"graph-edge-replacement":     pmEvolutionReplaceEdges,
-		"old-cache-new-lock":         pmEvolutionOldCacheNewLock,
-		"graph-update-failure-retry": pmEvolutionFailedUpdate,
-		"cascade-remove-drift":       pmEvolutionRemoveDrift,
-		"prune-drift-after-lock":     pmEvolutionPruneDrift,
+		"graph-edge-replacement":      pmEvolutionReplaceEdges,
+		"old-cache-new-lock":          pmEvolutionOldCacheNewLock,
+		"graph-update-failure-retry":  pmEvolutionFailedUpdate,
+		"cascade-remove-drift":        pmEvolutionRemoveDrift,
+		"prune-drift-after-lock":      pmEvolutionPruneDrift,
 		"git-pull-shared-owner-drift": pmEvolutionPostPullSharedOwnerAndDrift,
-		"competing-lock-writers":     pmEvolutionCompetingWriters,
-		"selective-cache-hydration":  pmEvolutionSelectiveHydration,
+		"competing-lock-writers":      pmEvolutionCompetingWriters,
+		"selective-cache-hydration":   pmEvolutionSelectiveHydration,
+		// Public command integration with composed fixtures and controlled ports;
+		// these cases do not establish native-client qualification.
+		"update-all-actual-outcomes":      TestUpdateAllCountsActualNoChangeAfterProjectionReview,
+		"repeat-add-project-guidance":     TestPublicRepeatAddGuidanceKeepsProjectContext,
+		"update-add-process-contention":   TestUpdateRefusesConcurrentAddAndRetriesAfterExit,
+		"update-attention-classification": TestPublicOrdinaryUpdateClassifiesFailureWithoutLogs,
+		"update-mixed-peer-attention":     TestPublicOrdinaryUpdateMixedAttentionPreservesSuccessfulPeer,
+		"update-apply-output-causes":      TestPublicOrdinaryUpdateJoinsApplyAndOutputFailures,
 	}
 }
 

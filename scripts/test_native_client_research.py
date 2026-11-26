@@ -47,7 +47,7 @@ class PortableReadTests(unittest.TestCase):
 @unittest.skipUnless(os.name == "posix", "requires POSIX process-group signaling")
 class GroupCleanupTests(unittest.TestCase):
     def process(self, returncode):
-        process = Mock(spec=["pid", "poll"], pid=43210)
+        process = Mock(spec=["pid", "poll", "wait"], pid=43210)
         process.poll.return_value = returncode
         return process
 
@@ -59,16 +59,61 @@ class GroupCleanupTests(unittest.TestCase):
                     research.kill_group(process)
                 kill.assert_called_once_with(43210, research.signal.SIGKILL)
                 process.poll.assert_not_called()
+                process.wait.assert_not_called()
 
     def test_permission_error_with_live_child_preserves_original_failure(self):
         process = self.process(None)
+        process.wait.side_effect = subprocess.TimeoutExpired(["owned-child"], 5)
         denied = PermissionError(errno.EPERM, "original group refusal")
         with patch.object(research.os, "killpg", side_effect=denied) as kill:
             with self.assertRaises(PermissionError) as raised:
                 research.kill_group(process)
         self.assertIs(raised.exception, denied)
         process.poll.assert_called_once_with()
+        process.wait.assert_called_once_with(timeout=5)
         kill.assert_called_once_with(43210, research.signal.SIGKILL)
+
+    def test_permission_error_waits_for_exiting_child_then_requires_original_group_absence(self):
+        process = self.process(None)
+        denied = PermissionError(errno.EPERM, "exiting group")
+
+        def reap(*, timeout):
+            self.assertEqual(timeout, 5)
+            process.pid = 54321
+            return 0
+
+        process.wait.side_effect = reap
+        with patch.object(research.os, "killpg", side_effect=[denied, ProcessLookupError(errno.ESRCH, "missing group")]) as kill:
+            research.kill_group(process)
+        process.poll.assert_called_once_with()
+        process.wait.assert_called_once_with(timeout=5)
+        self.assertEqual(kill.call_args_list, [call(43210, research.signal.SIGKILL), call(43210, 0)])
+
+    def test_reaped_late_child_does_not_admit_present_or_ambiguous_group(self):
+        for outcome in (None, PermissionError(errno.EPERM, "probe refusal"), OSError(errno.EIO, "probe error")):
+            with self.subTest(outcome=outcome):
+                process = self.process(None)
+                process.wait.return_value = 0
+                denied = PermissionError(errno.EPERM, "original group refusal")
+                with patch.object(research.os, "killpg", side_effect=[denied, outcome]) as kill:
+                    with self.assertRaises(PermissionError) as raised:
+                        research.kill_group(process)
+                self.assertIs(raised.exception, denied)
+                process.wait.assert_called_once_with(timeout=5)
+                self.assertEqual(kill.call_args_list, [call(43210, research.signal.SIGKILL), call(43210, 0)])
+
+    def test_wait_failure_or_interruption_is_not_hidden_by_absence_probe(self):
+        for failure in (OSError(errno.EIO, "wait failure"), RuntimeError("unexpected wait failure"), KeyboardInterrupt("interrupted wait")):
+            with self.subTest(failure=type(failure).__name__):
+                process = self.process(None)
+                process.wait.side_effect = failure
+                denied = PermissionError(errno.EPERM, "original group refusal")
+                with patch.object(research.os, "killpg", side_effect=denied) as kill:
+                    with self.assertRaises(type(failure)) as raised:
+                        research.kill_group(process)
+                self.assertIs(raised.exception, failure)
+                process.wait.assert_called_once_with(timeout=5)
+                kill.assert_called_once_with(43210, research.signal.SIGKILL)
 
     def test_exited_child_accepts_only_absence_of_original_group(self):
         process = self.process(0)
@@ -82,6 +127,7 @@ class GroupCleanupTests(unittest.TestCase):
         with patch.object(research.os, "killpg", side_effect=[denied, ProcessLookupError(errno.ESRCH, "missing group")]) as kill:
             research.kill_group(process)
         process.poll.assert_called_once_with()
+        process.wait.assert_not_called()
         self.assertEqual(kill.call_args_list, [call(43210, research.signal.SIGKILL), call(43210, 0)])
 
     def test_present_or_ambiguous_group_preserves_original_permission_failure(self):
@@ -176,6 +222,30 @@ class CaptureTests(unittest.TestCase):
             with patch.object(research.os, "killpg", side_effect=signal_unreaped_group):
                 research.kill_group(process)
             self.assertEqual(process.returncode, 0)
+
+    def test_group_permission_error_waits_for_owned_child_exiting_after_poll(self):
+        signal_group = os.killpg
+        denied = PermissionError(errno.EPERM, "leader exit transition")
+        with subprocess.Popen([sys.executable, "-c", "import sys; sys.stdin.buffer.read()"],
+                              stdin=subprocess.PIPE, start_new_session=True) as process:
+            poll = process.poll
+
+            def begin_exit():
+                result = poll()
+                self.assertIsNone(result, "owned child must still wait for EOF")
+                process.stdin.close()
+                return result
+
+            def deny_kill(pid, signum):
+                if signum == research.signal.SIGKILL:
+                    raise denied
+                return signal_group(pid, signum)
+
+            with patch.object(process, "poll", side_effect=begin_exit), patch.object(research.os, "killpg", side_effect=deny_kill) as kill:
+                research.kill_group(process)
+            self.assertEqual(process.returncode, 0)
+            self.assertEqual(kill.call_args_list, [
+                call(process.pid, research.signal.SIGKILL), call(process.pid, 0)])
 
     def test_group_permission_error_remains_an_error_for_live_or_denied_group(self):
         for exited in (False, True):

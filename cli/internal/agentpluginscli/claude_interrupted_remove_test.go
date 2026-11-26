@@ -149,8 +149,13 @@ func interruptClaudeAfterStateCommit(t *testing.T, f cliFixture, skills, wantErr
 	interrupted := f
 	interrupted.app.StateStore = cancelAfterCommitDecision{Store: f.store, cancel: cancel}
 	_, _, err := executeCLIContext(ctx, interrupted, args...)
-	if err == nil || !strings.Contains(err.Error(), wantErr) || !errors.Is(err, context.Canceled) {
+	var groupErr *transaction.GroupError
+	if !errors.As(err, &groupErr) || groupErr.Phase != transaction.GroupFailureCommitted || !strings.Contains(groupErr.Error(), wantErr) || !errors.Is(err, context.Canceled) {
 		t.Fatalf("%s was not interrupted at finalization: %v", args[0], err)
+	}
+	state, loadErr := f.store.Load()
+	if loadErr != nil || !hasStateCommittedReceipt(state) {
+		t.Fatalf("%s cancellation did not retain its durable commit decision: state=%+v err=%v", args[0], state, loadErr)
 	}
 	if leftovers := interruptedClaudeLeftovers(t, f, skills); len(leftovers) != 2 {
 		t.Fatalf("fixture did not leave a backup and an open journal: %v", leftovers)

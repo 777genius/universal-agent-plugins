@@ -68,7 +68,7 @@ func (e *Engine) compatibilityChecks(req Request, target usecase.AddInput) ([]us
 			continue
 		}
 		facts := TargetFacts{ClientID: binding.ClientID, ConfigRoot: req.ClientConfigRoot,
-			NativeConfigRoot: req.ClientNativeConfigRoot, Executable: req.ClientExecutable, Version: req.ClientVersion}
+			NativeConfigRoot: req.ClientNativeConfigRoot, Executable: req.ClientExecutable, Version: req.ClientVersion, Surfaces: req.ClientSurfaces}
 		if binding.ClientID != req.ClientID {
 			var ok bool
 			facts, ok = known[binding.ClientID]
