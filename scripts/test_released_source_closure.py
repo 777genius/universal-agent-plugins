@@ -23,7 +23,7 @@ class ClosureTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.root = Path(self.tmp.name)
+        self.root = Path(self.tmp.name).resolve(strict=True)
         self.pins = closure.pins_for(audit)
         p = self.pins["marketing-kit"]
         self.case = {"name": "marketing-kit", "client": "antigravity", "scope": "user",
@@ -493,11 +493,11 @@ class FrozenProducerWorktreeTests(unittest.TestCase):
     def assert_removed(self):
         frozen = self.directory / "policy-producer"
         self.assertFalse(frozen.exists())
-        self.assertNotIn(str(frozen), self.command("worktree", "list", "--porcelain"))
+        self.assertNotIn(f"worktree {frozen.as_posix()}", self.command("worktree", "list", "--porcelain", "-z").split("\0"))
 
     def test_success_cleanup_removes_real_git_registration(self):
         context = self.build()
-        self.assertIn(str(context["frozen"]), self.command("worktree", "list", "--porcelain"))
+        self.assertIn(f"worktree {context['frozen'].as_posix()}", self.command("worktree", "list", "--porcelain", "-z").split("\0"))
         closure.cleanup(self.api, context)
         self.assert_removed()
 
