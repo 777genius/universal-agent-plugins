@@ -152,10 +152,10 @@ def require_owned_residuals(audit, residuals, allowed):
     """Keep the refusal actionable without exposing unsafe names or file data."""
     unexpected = set(residuals) - allowed
     if unexpected:
-        # Reuse the audit's bounded safe-relative-name projection. The reason
-        # suffix is observation data, never part of the native path authority.
-        paths = {value.partition(": ")[0]: True for value in unexpected}
-        diagnostic = audit["copilot_snapshot_delta"]({}, paths)
+        # A literal filename can end in the same text as a scanner reason.
+        # Project complete observations: unsafe names and reason-bearing rows
+        # remain hash-only rather than publishing a guessed safe prefix.
+        diagnostic = audit["copilot_snapshot_delta"]({}, {value: True for value in unexpected})
         diagnostic["unexpected_residual_count"] = len(unexpected)
         raise ValueError("Claude cache retirement has unowned native residuals: "
                          + json.dumps(diagnostic, sort_keys=True))

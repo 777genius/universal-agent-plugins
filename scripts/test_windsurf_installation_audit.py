@@ -176,6 +176,53 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             os.utime(binary, ns=(info.st_atime_ns, info.st_mtime_ns))
             self.assertNotEqual(before["runtime_authority"], observer.saved_image()["runtime_authority"])
 
+    def test_retained_runtime_cannot_rebind_original_source_or_data_receipt(self):
+        for mutation in ("unchanged", "coherent-source", "source-binding", "package-binding",
+                         "coherent-receipt", "source-replacement"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                runtime, state = self.author_runtime(observer)
+                record = state["installations"][0]
+                receipt_id, receipt = next(iter(record["data_receipts"].items()))
+                physical = receipt["physical_backend_id"]
+                source_digest = record["source"]["tree_digest"]
+                source = observer.data / "store/packages/agentplugins-tree-sha256-v1" / source_digest[7:] / "package"
+                active = observer.data / "managed/clients/windsurf" / physical
+                active.mkdir(parents=True); (active / "plugin.json").write_bytes((source / "plugin.json").read_bytes())
+                record["package"] = {"manifest_digest": "sha256:" + "a" * 64}
+                record["clients"] = {"bound": {"client_id": "windsurf", "physical_artifact_id": physical,
+                    "data_receipt_id": receipt_id, "target_locator": str(active),
+                    "package_revision": {"tree_digest": source_digest}}}
+                record.pop("data_retained")
+                state_path = observer.data / "state-v2.json"
+                state_path.write_text(json.dumps(state))
+                original = observer.saved_image()
+                observer.saved_observations.append(original)
+                shutil.rmtree(active)
+                record.update(clients={}, data_retained=True)
+                if mutation == "coherent-source":
+                    files = {path.relative_to(source).as_posix(): path.read_bytes()
+                             for path in source.rglob("*") if path.is_file()}
+                    files["README.md"] = b"Different self-consistent source with the same runtime lock.\n"
+                    replacement_digest = source_pin(files)["tree_digest"]
+                    replacement = source.parent.parent / replacement_digest[7:] / "package"
+                    for name, body in files.items():
+                        path = replacement / name; path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(body)
+                    record["source"]["tree_digest"] = replacement_digest
+                elif mutation == "source-binding": record["source"]["repository"] = "unrelated/source"
+                elif mutation == "package-binding": record["package"]["manifest_digest"] = "sha256:" + "b" * 64
+                elif mutation == "coherent-receipt":
+                    receipt["created_at"] = "2026-11-26T00:00:00Z"
+                    (runtime.parent.parent / ".agentplugins-data-owner.json").write_text(json.dumps(receipt))
+                elif mutation == "source-replacement":
+                    held = source.with_name("previous-package"); source.rename(held); shutil.copytree(held, source)
+                state_path.write_text(json.dumps(state))
+                if mutation == "unchanged":
+                    retained = observer.saved_image()
+                    self.assertEqual(retained["runtime_authority"], original["runtime_authority"])
+                else:
+                    with self.assertRaises(ValueError): observer.saved_image()
+
     def test_runtime_reader_preserves_all_original_custody_entry_exclusions(self):
         for excluded in (".git", ".uap-integrations.lock", ".plugin-kit-ai.lock"):
             with self.subTest(excluded=excluded), TemporaryDirectory() as temporary:

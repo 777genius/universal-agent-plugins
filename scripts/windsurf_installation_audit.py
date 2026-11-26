@@ -426,12 +426,27 @@ class WindsurfInstallationAudit:
                             and binding.get("data_receipt_id") == receipt_id for binding in bindings.values()))
                 else:
                     require(record.get("data_retained") is True)
+                original = None
+                if self.saved_observations:
+                    originals = self.saved_observations[0]["documents"]["state-v2.json"]["installations"]
+                    matches = [row for row in originals if row.get("installation_id") == record["installation_id"]]
+                    require(len(matches) == 1)
+                    original = matches[0]
+                    # Removal may clear clients and update lifecycle timestamps;
+                    # it cannot rebind retained data to another source or owner.
+                    keys = ("installation_id", "declared_name", "source", "package", "data_receipts")
+                    require(encoded({key: record.get(key) for key in keys}, 1 << 20)
+                            == encoded({key: original.get(key) for key in keys}, 1 << 20))
                 tree_digest = record.get("source", {}).get("tree_digest")
                 require(type(tree_digest) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", tree_digest))
                 source_relative = "store/packages/agentplugins-tree-sha256-v1/" + tree_digest[7:] + "/package"
                 with member(data_fd, source_relative) as source_fd:
                     source_image = frame(source_fd)
                     require(immutable_source_digest(source_fd, source_image) == tree_digest)
+                    if original is not None:
+                        pinned = self.saved_observations[0]["sources"].get(source_relative)
+                        require(type(pinned) is dict and pinned["digest"] == tree_digest
+                                and pinned["image"] == source_image)
                     source_runtime = "io.github.777genius.agentplugins/runtime/"
                     config = strict_json(read_file(source_fd, source_runtime + "runtime.json")[0])
                     package_body = read_file(source_fd, source_runtime + "package.json")[0]

@@ -365,6 +365,37 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             self.assertEqual(subject.fds, [])
             self.assertEqual(residuals, self.scan(f))
 
+    def test_unowned_residual_diagnostics_preserve_complete_observations_without_prefixes(self):
+        with self.fixture() as f:
+            subject = self.capture(f)
+            self.retire(f)
+            unsafe = ("visible: private-name", "visible: private-name\nline", "visible: unreadable extra",
+                      "visible: unreadable", "visible: symlink", "visible: directory", "visible: unscanned-too-large")
+            for name in unsafe:
+                (f["profile"] / name).write_text('{"name":"marketing-kit"}')
+            unsafe_link = "visible: private-link"
+            (f["profile"] / unsafe_link).symlink_to("missing-target")
+            (f["profile"] / "large.bin").write_bytes(b"x" * ((1 << 20) + 1))
+            (f["profile"] / "marketing-kit").mkdir()
+            (f["profile"] / "safe.json").write_text('{"name":"marketing-kit"}')
+            residuals = self.scan(f)
+            with self.assertRaisesRegex(ValueError, "unowned native residuals: ") as raised:
+                subject.finish(f["cleanup"], residuals, lambda: self.scan(f))
+            detail = json.loads(str(raised.exception).split(": ", 1)[1])
+            items = {row["key_sha256"]: row for row in detail["items"]}
+            hash_only = [".claude/" + name for name in unsafe] + [
+                ".claude/" + unsafe_link + ": symlink", ".claude/large.bin: unscanned-too-large",
+                ".claude/marketing-kit: directory"]
+            for observation in hash_only:
+                digest = hashlib.sha256(observation.encode()).hexdigest()
+                self.assertIn(digest, items)
+                self.assertNotIn("key", items[digest])
+            readable = {row["key"] for row in detail["items"] if "key" in row}
+            self.assertEqual(readable, {".claude/safe.json"})
+            self.assertEqual(detail["unexpected_residual_count"], len(hash_only) + 1)
+            self.assertEqual(subject.fds, [])
+            self.assertEqual(residuals, self.scan(f))
+
     def test_exact_four_cache_custody_optional_marker_and_raw_findings_preserved(self):
         for marker in (False, True):
             with self.subTest(marker=marker), self.fixture() as f:
