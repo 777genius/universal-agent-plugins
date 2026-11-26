@@ -55,6 +55,22 @@ func TestNativeSSHGitWithIsolatedKeysAndHostVerification(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = packagedigest.Remove(snapshot)
+	// Raw Skills share authentication and immutable fetches, with stricter
+	// subtree completeness than ordinary plugin acquisition.
+	source.Path = "skills/demo"
+	snapshot, err = acquirer.AcquireGitSkill(t.Context(), source, commit, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = packagedigest.Remove(snapshot)
+	tree, err := acquirer.OpenGitTree(t.Context(), source, commit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tree.Entry(t.Context(), "skills/demo/SKILL.md"); err != nil {
+		t.Fatal(err)
+	}
+	_ = tree.Close()
 	scp, err := sourcespec.Parse(current.Username + "@uap-source-fixture:" + filepath.Join(root, "repo.git"))
 	if err != nil {
 		t.Fatal(err)

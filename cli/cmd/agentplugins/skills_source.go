@@ -5,6 +5,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/skillsource"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 // SkillsAcquirer preserves the configured Git runner/repository mapping while
@@ -15,7 +16,7 @@ func (acquirer lazySourceAcquirer) SkillsAcquirer(scratch string) skillsource.Ac
 	if scratch != "" {
 		source.TempRoot = scratch
 	}
-	return skillsource.Acquirer{Acquirer: source}
+	return skillsource.Acquirer{Acquirer: source, NativeGit: true}
 }
 
 func (acquirer lazySourceAcquirer) ResolveGitHubSkill(ctx context.Context, repository, revision, expected, requested, previous string) (string, error) {
@@ -39,4 +40,15 @@ func (acquirer lazySourceAcquirer) AcquireGitHubSkillVerified(ctx context.Contex
 		return domain.PackageSnapshot{}, err
 	}
 	return acquirer.acquirer.AcquireGitHubSkillVerified(ctx, repository, revision, subpath, digest)
+}
+
+func (acquirer lazySourceAcquirer) ResolveGitSkill(ctx context.Context, source skillsource.Source, expected, requested, previous string) (string, error) {
+	return acquirer.SkillsAcquirer("").ResolveGitSkill(ctx, source, expected, requested, previous)
+}
+
+func (acquirer lazySourceAcquirer) AcquireGitSkill(ctx context.Context, source sourcespec.Git, commit, digest string) (domain.PackageSnapshot, error) {
+	if err := acquirer.prepare(); err != nil {
+		return domain.PackageSnapshot{}, err
+	}
+	return acquirer.acquirer.AcquireGitSkill(ctx, source, commit, digest)
 }

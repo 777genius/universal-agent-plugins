@@ -128,6 +128,13 @@ func (source *rootFetchSource) AcquireGitHubSkill(ctx context.Context, repositor
 	return source.Acquirer.AcquireGitHubSkill(ctx, repository, commit, path)
 }
 
+func (source *rootFetchSource) AcquireGitSkill(ctx context.Context, spec sourcespec.Git, commit, digest string) (domain.PackageSnapshot, error) {
+	if err := source.read(ctx, "skill", spec.Repository+"//"+spec.Path); err != nil {
+		return domain.PackageSnapshot{}, err
+	}
+	return source.Acquirer.AcquireGitSkill(ctx, spec, commit, digest)
+}
+
 func (source *rootFetchSource) readsOf(read string) int {
 	source.mu.Lock()
 	defer source.mu.Unlock()

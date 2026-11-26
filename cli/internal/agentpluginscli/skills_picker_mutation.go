@@ -44,7 +44,7 @@ func (s *skillsCatalogSession) selection(candidate skillsource.Candidate) Skills
 	case s.source.Commit:
 		selector = environment.Selector{Kind: environment.SelectorCommit, Value: s.source.Commit}
 	}
-	return SkillsSelection{Repository: s.source.Repository, Commit: s.source.Commit, Path: candidate.Path, Name: candidate.Name, CandidateID: candidate.ID, Selector: selector}
+	return SkillsSelection{Repository: s.source.Repository, URL: s.source.URL, Commit: s.source.Commit, Path: candidate.Path, Name: candidate.Name, CandidateID: candidate.ID, Selector: selector}
 }
 
 type skillsPickerPrepared struct{ *PreparedSkillsBatch }

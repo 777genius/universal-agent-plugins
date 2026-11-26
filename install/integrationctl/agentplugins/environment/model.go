@@ -367,7 +367,7 @@ func (requirement Requirement) SourceKey() (string, error) {
 	}
 	if requirement.Git != nil {
 		if requirement.Git.Kind == SkillKind {
-			return "github-skill:" + strings.ToLower(requirement.Git.Repository) + ":" + requirement.Git.Skill + ":" + requirement.Git.Path, nil
+			return requirement.Git.skillSourceKey(), nil
 		}
 		if requirement.Git.URL != "" {
 			return sourcespec.Key(sourcespec.KindGit, requirement.Git.URL, requirement.Git.Path), nil

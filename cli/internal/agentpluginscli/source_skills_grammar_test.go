@@ -35,10 +35,25 @@ func TestSourceTransportAndSkillIntentEditRoundTrip(t *testing.T) {
 }
 
 func TestStandaloneSkillFieldsRefuseOtherTransportFamilies(t *testing.T) {
-	for _, source := range []string{"git='https://git.example/tools.git'", "archive='https://packages.example/tools.zip'", "registry='uap'\ndistribution='acme/pdf'\nrelease=1", "version='1.2.3'"} {
+	for _, source := range []string{"archive='https://packages.example/tools.zip'", "registry='uap'\ndistribution='acme/pdf'\nrelease=1", "version='1.2.3'"} {
 		body := []byte("schema_version=1\n[dependencies.pdf]\nkind='skill'\nskill='pdf'\n" + source + "\n")
 		if _, err := readDependencyManifestBytes("uap.toml", body); err == nil {
 			t.Fatalf("standalone Skill fields accepted on %s", source)
 		}
+	}
+}
+
+func TestStandaloneGenericGitSkillIntentRoundTrip(t *testing.T) {
+	body := []byte("schema_version=1\n[dependencies.pdf]\nkind='skill'\nskill='pdf'\ngit='ssh://git@git.example/team/tools.git'\npath='skills/pdf'\nref='main'\n[targets]\ncodex=['pdf']\n")
+	requirements, err := readDependencyManifestBytes("uap.toml", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requirements.Dependencies["pdf"].Git.URL != "ssh://git@git.example/team/tools.git" {
+		t.Fatal("generic endpoint lost")
+	}
+	key, err := requirements.Dependencies["pdf"].SourceKey()
+	if err != nil || key == "" {
+		t.Fatal(key, err)
 	}
 }
