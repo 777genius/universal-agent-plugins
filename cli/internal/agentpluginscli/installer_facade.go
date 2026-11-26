@@ -3,11 +3,13 @@ package agentpluginscli
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"slices"
 
 	"github.com/spf13/cobra"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
@@ -77,7 +79,7 @@ func runInstallerFacadeLocalAdd(ctx context.Context, cmd *cobra.Command, app App
 	defer cleanup()
 	prepared, err := staging.Installer.Prepare(ctx, request)
 	if err != nil {
-		return err
+		return localAddPrepareError(app, opts, selected.ClientID, err)
 	}
 	defer func() { _ = prepared.Close() }()
 	plan := prepared.Plan()
@@ -102,6 +104,21 @@ func runInstallerFacadeLocalAdd(ctx context.Context, cmd *cobra.Command, app App
 		applyErr = renderErr
 	}
 	return applyErr
+}
+
+// Keep contextual advice as prose: a preparation refusal does not establish a
+// saved alias or portable shell command for the existing installation.
+func localAddPrepareError(app App, opts *options, target domain.ClientID, cause error) error {
+	if opts.format != "human" || !errors.Is(cause, installer.ErrUpdateRequired) || errors.Is(cause, domain.ErrRetainedRevisionChange) {
+		return cause
+	}
+	context := "user scope"
+	if app.scope() == domain.ScopeProject {
+		context = "project scope at " + app.ProjectRoot
+	}
+	summary := fmt.Sprintf("This installation requires an explicit update. Review an update for the same installation on %s in %s.",
+		prompt.SafeText(publicCLITargetName(target)), prompt.SafeText(context))
+	return installFailureWithCause{summary: summary, cause: cause}
 }
 
 func requiredFacadeComponents(envelope domain.PackageEnvelope) []string {

@@ -75,7 +75,7 @@ func TestPublicRepeatAddGuidanceKeepsProjectContext(t *testing.T) {
 	plugin := writeNamedCLIPlugin(t, "demo", "1.0.0")
 	project := fixture.project
 	if stdout, _, err := fixture.execute(false, "add", plugin, "--target", "claude", "--scope", "project", "--project-root", project, "--no-save", "--yes"); err != nil {
-		t.Fatalf("seed same-name Project sibling: %v\n%s", err, stdout)
+		t.Fatalf("seed Project installation: %v\n%s", err, stdout)
 	}
 	before := installedProjection(t, fixture.cliFixture)
 	userBefore := installedProjection(t, user)
@@ -86,7 +86,7 @@ func TestPublicRepeatAddGuidanceKeepsProjectContext(t *testing.T) {
 		t.Fatalf("changed-source repeat lost typed update refusal: %v", err)
 	}
 	if !reflect.DeepEqual(before, installedProjection(t, fixture.cliFixture)) || !reflect.DeepEqual(userBefore, installedProjection(t, user)) {
-		t.Fatal("refused repeat changed a same-name User or Project binding")
+		t.Fatal("refused repeat changed a retained lifecycle projection")
 	}
 	public := stdout + stderr + err.Error()
 	t.Logf("repeat refusal: %s", public)

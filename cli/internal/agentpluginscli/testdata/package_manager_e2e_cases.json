@@ -44,7 +44,13 @@
     "prune-drift-after-lock",
     "competing-lock-writers",
     "selective-cache-hydration",
-    "git-pull-shared-owner-drift"
+    "git-pull-shared-owner-drift",
+    "update-all-actual-outcomes",
+    "repeat-add-project-guidance",
+    "update-add-process-contention",
+    "update-attention-classification",
+    "update-mixed-peer-attention",
+    "update-apply-output-causes"
   ],
   "adversarial": [
     "foreign-native-settings",
