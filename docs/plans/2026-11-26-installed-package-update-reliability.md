@@ -1,6 +1,6 @@
 # Installed-package update reliability
 
-Status: plan v3. R1 and R2 dispositions are incorporated. Ready for red regressions only after successful clean artifact readback; no production or test files have changed under this plan yet. No runtime PASS is claimed.
+Status: reviewed plan v3 with subsequent runtime scope decision recorded below. Production correction scope is A only; intended runtime red is now observed and recorded below. B's public Engine regression passes against unchanged production and demonstrates existing protection, so no B production fix is authorized by this evidence.
 
 ## Goal and baseline
 
@@ -124,3 +124,33 @@ These are estimates, not targets; prefer cohesive minimal changes over extra abs
 Root independently verified clean v3 readback. A subsequent path recheck of PR #1115 at `58cbcb338e1e31c0e88b80d8cd00b872dced6736` confirms overlap in `cli/internal/agentpluginscli/update_all.go`, `update_all_saved.go`, and added `update_all_diagnostics*` files. Its changes concern applyAll failure reporting, renderUpdateAll human attention/output error handling, and appliedAgentItems in applySaved. It does not add batch security authorization or alter preflightAll/classifyInstallation; installer confirmation.go remains untouched. This supersedes any earlier implication that update-all production paths do not overlap.
 
 Our boundary remains an update-specific authorization helper and a preflight call. Preserve #1115's apply/render/saved diagnostic behavior and recheck/reconcile current main before final merge. This records newly observed overlap without expanding scope or restarting the completed plan reviews. Ordinary red regressions are next; production changes remain subject to intended red evidence. The local executor is currently unavailable; use the already planned execution fallback without retrying it.
+
+## Runtime scope decision after B reproduction attempt
+
+This section supersedes prospective B implementation steps above; historical v1–v3 reviews remain unchanged. Current production correction scope is A only: installed-package batch update security authorization. B has no demonstrated defect and its production fix is deferred. Retain one public Engine regression protecting the existing stale-update refusal; private semantic tests are removed.
+
+Root's runtime evidence used unchanged production baseline `ce789138a393bffd7e6d001c0e4f8aec05e47773` in the checkout at plan-only commit `e4458fb0dc6f646c9eb51459694af628606b1fd1`. `TestUpdateStalePreparedLocalRevision` explicitly verified zero SelectedDelivery and nil ProfileAuthority, prepared A/B, applied B, and observed stale A refused with ErrPlanChanged / OutcomeConflict / plan_changed. B's payload/native bytes, state, receipts and effect counts were preserved; freshly prepared A succeeded. Existing confirmationPlanner compares PreviousNativeObjects, including managed_package_directory.ManagedDigest, and provides the protection the initial hypothesis overlooked.
+
+From `install/integrationctl/agentplugins/`, the following command passed all three selected tests with exit code 0:
+
+```sh
+go test -count=1 -v ./installer -run '^TestUpdate(StalePreparedLocalRevision|CopiedPackageWithNewDigest|StalePlanChanged)$'
+```
+
+Retained public Engine regression blob: `47b94c3f24032f9b18279123f4ff52bf4e64a022`. This passing regression demonstrates existing protection, not a failing-before reproduction or a new B production fix. Do not implement the proposed PackageRevision comparison on this evidence.
+
+A runtime red evidence is recorded in the following section. Existing #1115 overlap boundaries, ordinary red execution requirements, authorization acceptance criteria, independent implementation review, final-head CI and merged six-platform qualification remain in force.
+
+## A runtime red evidence before production changes
+
+Root executed new ordinary regressions against unchanged production HEAD `e4458fb0dc6f646c9eb51459694af628606b1fd1`. From `cli/`, the command below exited 1; retained log: `/tmp/uap-update-security-red.jsonl`.
+
+```sh
+PATH=/workspace/scratch/344235915a64/toolchains/go1.26.11/go/bin:$PATH GOTOOLCHAIN=local GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null go test -count=1 -timeout=8m -json ./internal/agentpluginscli ./cmd/agentplugins -run '^(TestUpdateAllSecurity(Preflight|HumanConsent)|TestComposedUpdateAllSecurityPreflight)$'
+```
+
+Actual run/fail events reached the intended internal preflight and production-composed imperative/mixed refusal assertions. Preview left state unchanged and targeted beta update correctly refused, establishing that the fixture assessment and targeted policy were active. The batch then incorrectly returned nil error, result success and status completed: two imperative items updated in the imperative journey, and three items including saved docs updated in the mixed journey. Installed state, native bytes and receipts changed, and native activation occurred. The imperative human decline case also observed no security prompt and ignored the intended rejection. These are intended product red failures supporting A's batch-preflight correction.
+
+Explicit accepted-risk imperative success passed. A mixed accepted-risk assertion separately assumed the saved Skill DeclaredName was docs, while its actual generated name was skill-hash. The fixture now captures the saved installation identity and checks its persisted docs ownership receipt. The corrected composed regression rerun (`go test -count=1 -timeout=8m -json ./cmd/agentplugins -run '^TestComposedUpdateAllSecurityPreflight$'`, log `/tmp/uap-update-security-red-corrected.jsonl`) passed both explicit-risk acceptance and cleanup journeys while both refusal journeys still failed for the intended unauthorized effects. The earlier oracle error is not product red evidence; these runs are not final qualification.
+
+Production scope remains A only. B remains deferred with an existing-protection regression. Preserve #1115's apply/render/saved diagnostics, implement the minimal preflight authorization boundary, then rerun corrected ordinary tests and all later review/qualification gates.

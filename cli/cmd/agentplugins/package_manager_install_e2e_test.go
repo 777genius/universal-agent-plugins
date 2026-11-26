@@ -13,19 +13,21 @@ var pmInstallCaseInventory []byte
 
 func TestPackageManagerInstallE2E(t *testing.T) {
 	cases := map[string]func(*testing.T){
-		"no-save-first-repeat-remove":          pmInstallNoSaveLifecycle,
-		"selected-target-ownership":            pmInstallSelectedTargetOwnership,
-		"component-set-replacement":            pmInstallComponentReplacement,
-		"foreign-skill-collision":              pmInstallForeignSkillCollision,
-		"cross-target-foreign-skill-collision": pmInstallCrossTargetForeignSkillCollision,
-		"foreign-disabled-mcp-collision":       pmInstallForeignDisabledMCPCollision,
-		"malformed-native-config":              pmInstallMalformedNativeConfig,
-		"drift-recorded-pin-repair":            pmInstallDriftRecordedPinRepair,
-		"preview-and-decline":                  pmInstallPreviewAndDecline,
-		"rich-cold-restore-isolation":          pmInstallRichColdRestoreIsolation,
-		"unmanaged-source-refusal":             pmInstallUnmanagedSourceRefusal,
-		"foreign-environment-refusal":          pmInstallForeignEnvironmentRefusal,
-		"dependency-ownership-refusal":         pmInstallDependencyOwnershipRefusal,
+		"no-save-first-repeat-remove":               pmInstallNoSaveLifecycle,
+		"selected-target-ownership":                 pmInstallSelectedTargetOwnership,
+		"component-set-replacement":                 pmInstallComponentReplacement,
+		"foreign-skill-collision":                   pmInstallForeignSkillCollision,
+		"cross-target-foreign-skill-collision":      pmInstallCrossTargetForeignSkillCollision,
+		"foreign-disabled-mcp-collision":            pmInstallForeignDisabledMCPCollision,
+		"malformed-native-config":                   pmInstallMalformedNativeConfig,
+		"drift-recorded-pin-repair":                 pmInstallDriftRecordedPinRepair,
+		"preview-and-decline":                       pmInstallPreviewAndDecline,
+		"rich-cold-restore-isolation":               pmInstallRichColdRestoreIsolation,
+		"unmanaged-source-refusal":                  pmInstallUnmanagedSourceRefusal,
+		"foreign-environment-refusal":               pmInstallForeignEnvironmentRefusal,
+		"dependency-ownership-refusal":              pmInstallDependencyOwnershipRefusal,
+		"update-all-security-batch-preflight":       pmInstallUpdateAllSecurityBatchPreflight,
+		"update-all-security-mixed-saved-preflight": pmInstallUpdateAllSecurityMixedSavedPreflight,
 	}
 	var ids []string
 	if err := json.Unmarshal(pmInstallCaseInventory, &ids); err != nil {
