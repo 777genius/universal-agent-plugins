@@ -77,6 +77,85 @@ class PlatformIdentityTests(unittest.TestCase):
                     with self.subTest(changes=changes), self.assertRaises(ValueError):
                         artifacts.windows_identity(SimpleNamespace(**(vars(info) | changes)))
 
+    def test_filename_mode_authority_is_explicit_and_keeps_other_fields_exact(self):
+        import stat
+        base = dict(st_dev=1, st_ino=2, st_mode=stat.S_IFREG | 0o666, st_nlink=1,
+                    st_size=3, st_mtime_ns=4, st_ctime_ns=5, st_birthtime_ns=6,
+                    st_file_attributes=32, st_reparse_tag=0)
+        opened = SimpleNamespace(**base)
+        named = SimpleNamespace(**(base | {"st_mode": stat.S_IFREG | 0o777, "st_ctime_ns": 9}))
+        with patch.object(artifacts, "WINDOWS", True):
+            self.assertFalse(artifacts.same_opened(named, opened))
+            for filename in ("shim.cmd", "SHIM.EXE", "a.bat", "a.com", ".exe"):
+                self.assertTrue(artifacts.same_opened(named, opened, path=Path(filename)))
+            for filename in ("config.json", "exe", "a.exe.txt"):
+                self.assertFalse(artifacts.same_opened(named, opened, path=Path(filename)))
+            self.assertFalse(artifacts.same_opened(opened, named, path=Path("shim.cmd")))
+            partial = SimpleNamespace(**(base | {"st_mode": base["st_mode"] | 0o100}))
+            self.assertFalse(artifacts.same_opened(named, partial, path=Path("shim.cmd")))
+            for mode in (stat.S_IFREG | 0o766, stat.S_IFREG | 0o555, stat.S_IFREG | 0o4777):
+                self.assertFalse(artifacts.same_opened(SimpleNamespace(**(vars(named) | {"st_mode": mode})),
+                                                     opened, path=Path("shim.cmd")))
+            readonly = base | {"st_mode": stat.S_IFREG | 0o444, "st_file_attributes": 33}
+            self.assertTrue(artifacts.same_opened(SimpleNamespace(**(readonly | {"st_mode": stat.S_IFREG | 0o555})),
+                                                 SimpleNamespace(**readonly), path=Path("shim.cmd")))
+            for field in ("st_dev", "st_ino", "st_nlink", "st_size", "st_mtime_ns", "st_birthtime_ns", "st_file_attributes"):
+                with self.subTest(field=field):
+                    changed = SimpleNamespace(**(base | {field: base[field] + 1}))
+                    self.assertFalse(artifacts.same_opened(named, changed, path=Path("shim.cmd")))
+        with patch.object(artifacts, "WINDOWS", False):
+            self.assertFalse(artifacts.same_opened(named, opened, path=Path("shim.cmd")))
+
+    def test_scoped_snapshot_hashes_real_held_shim_with_windows_metadata_domains(self):
+        import hashlib
+        from test_live_install_audit_env import load_audit
+        audit = load_audit()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            shim = root / "npm-runtime/locked/node_modules/.bin/playwright-mcp.cmd"
+            shim.parent.mkdir(parents=True)
+            body = b"@echo inert fixture\r\n"
+            shim.write_bytes(body)
+            (root / ".agentplugins-data-owner.json").write_bytes(b"{}")
+            real_lstat, real_fstat = Path.lstat, os.fstat
+            def named_info(path):
+                info = win_info(real_lstat(path))
+                if path.suffix == ".cmd":
+                    info.st_mode = (info.st_mode & ~0o777) | 0o777
+                return info
+            def opened_info(fd):
+                info = win_info(real_fstat(fd), held=True)
+                info.st_mode = (info.st_mode & ~0o777) | 0o666
+                return info
+            helpers = {"open_member": lambda path: os.open(path, os.O_RDONLY | getattr(os, "O_BINARY", 0)),
+                       "same_opened": artifacts.same_opened, "identity": artifacts.identity}
+            with patch.object(artifacts, "WINDOWS", True), patch.object(Path, "lstat", named_info), \
+                    patch.object(os, "fstat", opened_info), patch.object(audit, "NATIVE_ARTIFACTS", helpers):
+                # The old exact comparison falsely refused this actual held file.
+                with patch.dict(helpers, same_opened=lambda a, b, **kw: artifacts.same_opened(a, b)):
+                    self.assertEqual(audit.native_file_digest(shim), "unreadable")
+                self.assertEqual(audit.native_file_digest(shim), hashlib.sha256(body).hexdigest())
+                # Marker permissions are unchanged in both Windows metadata domains.
+                (root / ".agentplugins-data-owner.json").chmod(0o666)
+                snapshot = audit.scoped_snapshot([root])
+                self.assertIn(hashlib.sha256(body).hexdigest(), snapshot.values())
+                for domain in ("held", "path"):
+                    for field in ("st_dev", "st_ino", "st_mode", "st_nlink", "st_size", "st_mtime_ns",
+                                  "st_ctime_ns", "st_birthtime_ns", "st_file_attributes", "st_reparse_tag"):
+                        with self.subTest(domain=domain, field=field):
+                            calls = [0]
+                            def changed(value):
+                                calls[0] += 1
+                                if calls[0] == 2:
+                                    setattr(value, field, getattr(value, field) + 1)
+                                return value
+                            if domain == "held":
+                                with patch.object(os, "fstat", lambda fd: changed(opened_info(fd))):
+                                    self.assertEqual(audit.native_file_digest(shim), "unreadable")
+                            else:
+                                with patch.object(Path, "lstat", lambda path: changed(named_info(path))):
+                                    self.assertEqual(audit.native_file_digest(shim), "unreadable")
+
     def test_root_member_and_held_reparse_are_refused(self):
         for where in ("root", "member", "held"):
             with self.subTest(where=where), tempfile.TemporaryDirectory() as temp:

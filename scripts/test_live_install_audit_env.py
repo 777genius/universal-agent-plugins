@@ -11317,6 +11317,41 @@ class CodexPluginSQLiteLifecycleTest(unittest.TestCase):
 
 @unittest.skipUnless(sys.platform == "win32", "owned file capture requires Windows jobs")
 class WindowsOwnedFileCaptureContracts(unittest.TestCase):
+    def test_native_snapshot_reads_filename_execute_shims_and_readonly_files(self):
+        import stat
+        audit = load_audit()
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            runtime = root / "plugin-data/playwright/npm-runtime/locked/node_modules/.bin"
+            runtime.mkdir(parents=True)
+            body = b"inert Windows snapshot fixture\r\n"
+            paths = []
+            try:
+                for suffix in ("cmd", "exe", "bat", "com", "json"):
+                    for readonly in (False, True):
+                        path = runtime / (str(readonly) + "." + suffix)
+                        path.write_bytes(body)
+                        paths.append(path)
+                        path.chmod(0o444 if readonly else 0o666)
+                        named = path.lstat()
+                        fd = audit.NATIVE_ARTIFACTS["open_member"](path)
+                        try:
+                            opened = os.fstat(fd)
+                            self.assertTrue(audit.NATIVE_ARTIFACTS["same_opened"](named, opened, path=path))
+                            if suffix != "json":
+                                self.assertEqual(named.st_mode, opened.st_mode | 0o111)
+                                self.assertFalse(opened.st_mode & 0o111)
+                                self.assertFalse(audit.NATIVE_ARTIFACTS["same_opened"](named, opened))
+                            self.assertEqual(stat.S_IMODE(opened.st_mode), 0o444 if readonly else 0o666)
+                        finally:
+                            os.close(fd)
+                        self.assertEqual(audit.native_file_digest(path), hashlib.sha256(body).hexdigest())
+                snapshot = audit.scoped_snapshot([root])
+                self.assertEqual(sum(value == hashlib.sha256(body).hexdigest() for value in snapshot.values()), 10)
+            finally:
+                for path in paths:
+                    path.chmod(0o666)
+
     def environment(self, root):
         env = {key: value for key, value in os.environ.items()
                if key.upper() in {"PATH", "SYSTEMROOT", "WINDIR"}}
@@ -11333,8 +11368,8 @@ class WindowsOwnedFileCaptureContracts(unittest.TestCase):
         api.OpenProcess.argtypes, api.OpenProcess.restype = [W.DWORD, W.BOOL, W.DWORD], W.HANDLE
         api.WaitForSingleObject.argtypes, api.WaitForSingleObject.restype = [W.HANDLE, W.DWORD], W.DWORD
         api.CloseHandle.argtypes, api.CloseHandle.restype = [W.HANDLE], W.BOOL
-        for exit_leader in (False, True):
-            with self.subTest(exit_leader=exit_leader), TemporaryDirectory() as temporary:
+        for capture_full, exit_leader in ((False, False), (False, True), (True, False), (True, True)):
+            with self.subTest(capture_full=capture_full, exit_leader=exit_leader), TemporaryDirectory() as temporary:
                 root = Path(temporary).resolve()
                 audit = load_audit()
                 gate, ready = root / "release-owned", root / "owned-ready"
@@ -11358,7 +11393,8 @@ class WindowsOwnedFileCaptureContracts(unittest.TestCase):
                 try:
                     with ThreadPoolExecutor(max_workers=1) as worker:
                         future = worker.submit(audit.call, [sys.executable, "-c", body],
-                                               self.environment(root), root, timeout=3, capture_files=True)
+                                               self.environment(root), root, timeout=3,
+                                               capture_files=True, capture_full=capture_full)
                         try:
                             deadline = time.monotonic() + 3
                             while not ready.exists():
@@ -11390,7 +11426,7 @@ class WindowsOwnedFileCaptureContracts(unittest.TestCase):
                     self.assertEqual(result["timeout"], not exit_leader, facts)
                     if exit_leader:
                         self.assertTrue(refusal, facts)
-                    else:
+                    elif not capture_full:
                         self.assertIn("timeout-owned-bytes", result["stdout_tail"])
                         diagnostic = result["owned_timeout_diagnostic"]
                         self.assertEqual(diagnostic["status"], "observed-unqualified")
@@ -11508,23 +11544,20 @@ class WindowsOwnedFileCaptureContracts(unittest.TestCase):
                 self.assertEqual(closed, expected)
                 self.assertTrue(all(0 <= milliseconds <= 5000 for _, milliseconds in waited))
 
-    def test_closed_success_keeps_exact_json_and_full_capture_uses_old_runner(self):
+    def test_closed_success_keeps_exact_json_in_both_owned_capture_modes(self):
         audit = load_audit()
         with TemporaryDirectory() as temporary:
             root = Path(temporary).resolve()
             command = [sys.executable, "-c", "print('{\"result\":\"success\"}')"]
-            result = audit.call(command, self.environment(root), root, timeout=5, capture_files=True)
-            self.assertEqual(result["_json"], {"result": "success"})
-            self.assertEqual(result["exit_code"], 0)
-            self.assertFalse(result["timeout"])
-            def completed(*_args, **kwargs):
-                kwargs["stdout"].write(b'{"result":"success"}')
-                return subprocess.CompletedProcess(command, 0)
-            with patch.object(audit, "_windows_file_call", side_effect=AssertionError("wrong runner")), \
-                    patch.object(audit.subprocess, "run", side_effect=completed):
-                result = audit.call(command, self.environment(root), root, timeout=5, capture_full=True)
-            self.assertEqual(result["stdout_full"], '{"result":"success"}')
-            self.assertEqual(result["exit_code"], 0)
+            for capture_full in (False, True):
+                with self.subTest(capture_full=capture_full):
+                    result = audit.call(command, self.environment(root), root, timeout=5,
+                                        capture_files=True, capture_full=capture_full)
+                    self.assertEqual(result["_json"], {"result": "success"})
+                    self.assertEqual(result["exit_code"], 0)
+                    self.assertFalse(result["timeout"])
+                    if capture_full:
+                        self.assertEqual(result["stdout_full"], '{"result":"success"}' + os.linesep)
 
 
 class GeminiFixtureClock:

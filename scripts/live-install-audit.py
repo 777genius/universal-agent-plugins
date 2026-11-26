@@ -374,8 +374,7 @@ def call(argv, env, cwd, timeout=105, capture_files=False, capture_full=False):
                 raise OSError("private output capture root unavailable")
             with (tempfile.TemporaryFile(mode="w+b", dir=scratch) as stdout_file,
                   tempfile.TemporaryFile(mode="w+b", dir=scratch) as stderr_file):
-                runner = (_windows_file_call if sys.platform == "win32" and not capture_full
-                          else subprocess.run)
+                runner = _windows_file_call if sys.platform == "win32" else subprocess.run
                 try:
                     p = runner(argv, cwd=cwd, env=env, stdout=stdout_file,
                                stderr=stderr_file, stdin=subprocess.DEVNULL,
@@ -542,7 +541,7 @@ def native_file_digest(path, *, failure_facts=None):
             opened = os.fstat(descriptor)
             if not stat.S_ISREG(opened.st_mode):
                 return "non-regular"
-            if not NATIVE_ARTIFACTS["same_opened"](initial, opened):
+            if not NATIVE_ARTIFACTS["same_opened"](initial, opened, path=path):
                 return unreadable("opened-identity-changed")
             sha, remaining = hashlib.sha256(), opened.st_size + 1
             while remaining:
@@ -2586,7 +2585,7 @@ def copilot_settings_windows_descriptor(path, initial, expected):
         raise
 
 
-def copilot_settings_read(path, case_root):
+def copilot_settings_read(path, case_root, *, max_bytes=1 << 20):
     """Read bounded owned bytes through descriptors, never a replaced symlink."""
     descriptors = []
     try:
@@ -2599,7 +2598,7 @@ def copilot_settings_read(path, case_root):
             return None, "unsafe-path"
         expected = canonical_root / relative
         initial = path.lstat()
-        if not stat.S_ISREG(initial.st_mode) or initial.st_size > 1 << 20:
+        if not stat.S_ISREG(initial.st_mode) or initial.st_size > max_bytes:
             return None, "not-regular-or-too-large"
         if initial.st_nlink != 1 or not path_inside_case(path, case_root):
             return None, "unsafe-path"
@@ -2636,11 +2635,11 @@ def copilot_settings_read(path, case_root):
                 or identity != (current.st_dev, current.st_ino)
                 or not path_inside_case(path, case_root)):
             return None, "unsafe-path"
-        if opened.st_size > 1 << 20:
+        if opened.st_size > max_bytes:
             return None, "not-regular-or-too-large"
         with os.fdopen(os.dup(descriptor), "rb") as stream:
-            body = stream.read((1 << 20) + 1)
-        if len(body) > 1 << 20:
+            body = stream.read(max_bytes + 1)
+        if len(body) > max_bytes:
             return None, "not-regular-or-too-large"
         return body.decode("utf-8"), None
     except FileNotFoundError:

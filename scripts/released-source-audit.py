@@ -20,6 +20,7 @@ import tempfile
 import tomllib
 import urllib.request
 import zipfile
+from types import SimpleNamespace
 from datetime import datetime, timezone
 
 import yaml
@@ -37,6 +38,11 @@ MAX_NATIVE_ARCHIVE_BYTES = 200 << 20
 # Digest-pinned AGY 1.5.3 payloads are 246837648 (Linux), 208900592 (macOS),
 # and 225159320 (Windows) bytes. Their compressed archives are all below 200 MiB.
 MAX_NATIVE_EXECUTABLE_BYTES = 256 << 20
+AUDIT_DIAGNOSTIC_FILES = (
+    "released-source-audit.py", "released_source_closure.py",
+    "released_source_npm.py", "live-install-audit.py", "run-native-client-matrix.py",
+)
+AUDIT_DIAGNOSTIC_OPERATIONS = {"add", "info", "list", "update", "repair", "remove"}
 
 
 def module(name, filename):
@@ -53,6 +59,38 @@ native = module("source_native_matrix", "run-native-client-matrix.py")
 def require(value, message):
     if not value:
         raise ValueError(message)
+
+
+def bounded_failure_location(error, trace=()):
+    """Keep at most four owned locations from the first 64 traceback frames."""
+    allowed = {str(ROOT / "scripts" / name): name for name in AUDIT_DIAGNOSTIC_FILES}
+    locations, frame = [], error.__traceback__
+    for _ in range(64):
+        if frame is None:
+            break
+        name = allowed.get(frame.tb_frame.f_code.co_filename)
+        if name is not None:
+            locations.append({"file": name, "line": frame.tb_lineno})
+        frame = frame.tb_next
+    row = trace[-1] if type(trace) in (list, tuple) and trace else None
+    operation = row.get("operation") if type(row) is dict else None
+    return {"failure_location": locations[-4:],
+            "last_operation": (operation if type(operation) is str
+                               and operation in AUDIT_DIAGNOSTIC_OPERATIONS else None)}
+
+
+def compact_report(report):
+    cases = []
+    for row in report["cases"]:
+        item = {"channel": row.get("channel"), **{key: row[key] for key in
+                ("client", "scope", "name", "status")}}
+        if row["status"] == "failed":
+            item.update({key: row.get(key) for key in ("failure_location", "last_operation")})
+        cases.append(item)
+    result = {"status": report["status"], "cases": cases}
+    if report["status"] == "failed":
+        result.update({key: report.get(key) for key in ("failure_location", "last_operation")})
+    return result
 
 
 def digest(body):
@@ -163,14 +201,70 @@ def protected_scope_snapshot(root, scope, native_root):
     return observed
 
 
-def read_saved_record(path):
+def protected_scope_changes(before, after, root, scope, native_root):
+    """Describe only bounded disposable-relative paths; never include values."""
+    documents = root / ("project" if scope == "user" else "uap-data")
+    state = documents / ".uap" if scope == "user" else documents
+    directories = [native_root, *[state / name for name in
+                   ("managed", "operations-v2", "plugin-data", "installer-tmp", "clients")]]
+
+    def safe_path(section, key):
+        if not isinstance(key, str):
+            return "<redacted>"
+        path = None
+        if section == "files":
+            path = key
+        else:
+            match = re.fullmatch(r"(?:metadata|directory|link|root-kind|root-link):(\d+)(?::(.*))?", key)
+            if match and int(match.group(1)) < len(directories):
+                path = str(directories[int(match.group(1))].relative_to(root) / (match.group(2) or ""))
+            else:
+                for directory in directories:
+                    prefix = directory.name + "/"
+                    if key.startswith(prefix):
+                        path = str(directory.relative_to(root) / key[len(prefix):])
+                        break
+        if path is not None:
+            path = path.replace("\\", "/")
+        if (path is None or len(path) > 200 or not re.fullmatch(r"[A-Za-z0-9._/-]+", path)
+                or path.startswith("/") or any(part in ("", ".", "..") for part in path.split("/"))):
+            return "<redacted>"
+        return path
+
+    changes, total = [], 0
+    for section in ("directories", "files"):
+        old, new = before[section], after[section]
+        for key in sorted(set(old) | set(new)):
+            if key not in old or key not in new or old[key] != new[key]:
+                kind = "added" if key not in old else "removed" if key not in new else "changed"
+                field = "metadata" if section == "directories" and isinstance(key, str) and key.startswith("metadata:") else "entry"
+                total += 1
+                if len(changes) < 32:
+                    try:
+                        path = safe_path(section, key)
+                    except ValueError:
+                        path = "<redacted>"
+                    entry = {"path": path, "kind": kind, "field": field}
+                    if kind == "changed" and field == "metadata":
+                        left, right = old[key], new[key]
+                        labels = ("mode", "device", "inode", "mtime")
+                        if isinstance(left, (list, tuple)) and isinstance(right, (list, tuple)) and len(left) == len(right):
+                            entry["changed_fields"] = [name for name, a, b in zip(labels, left, right) if a != b]
+                    elif kind == "changed" and section == "files" and isinstance(old[key], dict) and isinstance(new[key], dict):
+                        labels = ("digest", "mtime_ns", "inode", "mode")
+                        entry["changed_fields"] = [name for name in labels if old[key].get(name) != new[key].get(name)]
+                    changes.append(entry)
+    return {"entries": changes, "total": total, "truncated": total > len(changes)}
+
+
+def read_saved_record(path, *, max_bytes=1 << 20):
     """Read owned manifest/lock/state bytes only after a held identity join."""
     try:
         before = path.lstat()
     except FileNotFoundError:
         return None, None
     require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
-            and 0 <= before.st_size <= 1 << 20,
+            and 0 <= before.st_size <= max_bytes,
             "protected saved record must be a bounded single-link regular file")
     # Windows os.read must not translate CRLF before the exact size/digest join.
     flags = (os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -198,6 +292,70 @@ def read_saved_record(path):
         return bytes(body), before
     finally:
         os.close(fd)
+
+
+def declared_runtime_lineage(root, case):
+    """Bounded, untrusted state hints; this never establishes signed provenance."""
+    unresolved = {"status": "unresolved", "reason": "state_unavailable_or_invalid"}
+    def reject_constant(_):
+        raise ValueError("non-finite JSON number")
+    try:
+        require(case.get("scope") in ("user", "project"), "unknown scope")
+        path = root / ("uap-data" if case["scope"] == "user" else "project/.uap") / "state-v2.json"
+        before = path.lstat()
+        # This existing reader holds every POSIX ancestor by no-follow dirfd;
+        # on Windows it verifies the opened handle's final path. Unsupported
+        # platforms fail closed rather than falling back to pathname reads.
+        body, status = live.copilot_settings_read(path, root)
+        require(status is None and isinstance(body, str), "state unavailable")
+        after = path.lstat()
+        require(os.path.samestat(before, after) and before.st_mode == after.st_mode
+                and before.st_nlink == after.st_nlink == 1 and before.st_size == after.st_size
+                and before.st_mtime_ns == after.st_mtime_ns and before.st_ctime_ns == after.st_ctime_ns,
+                "state changed while observed")
+        state = json.loads(body, object_pairs_hook=live._unique_json_object, parse_constant=reject_constant)
+        require(isinstance(state, dict) and type(state.get("schema_version")) is int
+                and state["schema_version"] == 5 and isinstance(state.get("installations"), list), "invalid state")
+        records = state["installations"]
+        children = {"777genius/notion": "notion", "777genius/hubspot-crm": "hubspot-crm",
+                    "777genius/playwright-bridge": "playwright"}
+        entries = []
+        for record in records[:8]:
+            require(isinstance(record, dict), "invalid installation")
+            origin = record.get("origin_mode")
+            require(origin in ("direct", "directory"), "unknown origin")
+            directory = record.get("directory")
+            if origin == "direct":
+                require(directory is None and isinstance(record.get("source"), dict), "invalid direct source")
+                source, expected = record["source"], case["source"]
+                match = (record.get("declared_name") == "marketing-kit"
+                         and source.get("repository") == expected["repository"]
+                         and source.get("package_subpath") == expected["path"]
+                         and source.get("resolved_revision") == expected["revision"])
+                entries.append({"origin_mode": "direct", "distribution_id": None,
+                                "snapshot_schema": None, "snapshot_sequence": None,
+                                "snapshot_digest": None, "expected_identity_match": match,
+                                "identity_basis": "direct_source_coordinates"})
+                continue
+            require(isinstance(directory, dict), "missing directory origin")
+            distribution = directory.get("distribution_id")
+            schema, sequence, snapshot_digest = (directory.get("snapshot_schema"),
+                directory.get("snapshot_sequence"), directory.get("snapshot_digest"))
+            require(isinstance(distribution, str) and type(schema) is int and schema in (1, 2)
+                    and type(sequence) is int and 0 < sequence < 1 << 64
+                    and isinstance(snapshot_digest, str)
+                    and re.fullmatch(r"sha256:[0-9a-f]{64}", snapshot_digest), "invalid snapshot identity")
+            known = distribution if distribution in {*children, "777genius/marketing-kit"} else "<other>"
+            entries.append({"origin_mode": "directory", "distribution_id": known,
+                            "snapshot_schema": schema, "snapshot_sequence": sequence,
+                            "snapshot_digest": snapshot_digest,
+                            "expected_identity_match": distribution in children
+                                and record.get("declared_name") == children[distribution],
+                            "identity_basis": "distribution_id_and_declared_name"})
+        return {"status": "unresolved", "reason": "unverified_local_state", "declared_only": True,
+                "total_installations": len(records), "truncated": len(records) > 8, "records": entries}
+    except Exception:
+        return unresolved
 
 
 def protected_saved_record(path):
@@ -291,6 +449,9 @@ def checked_native_materialization(selected_root, locator, case, binding, root):
             and Path(binding["target_locator"]) == locator, "native proof differs from the selected binding")
     in_case(selected_root, root)
     in_case(locator, root)
+    if client == "pi":
+        closure = module("source_pi_native_inventory", "released_source_closure.py")
+        closure.checked_native_inventory(SimpleNamespace(**globals()), locator, root, "notion", client="pi")
     objects = binding.get("native_objects", [])
     require(isinstance(objects, list) and all(isinstance(item, dict) for item in objects),
             "native ownership is malformed")
@@ -494,12 +655,342 @@ def check_unrelated_native_mcp(control, root):
 
 
 
-def run_case(binary, case, root, executable):
+class PiProjectTrustOracle:
+    """Frozen Project hook, admitted only after independent native owner proof."""
+
+    def __init__(self, root, native_root, verified_owners=None):
+        self.root, self.native = root, native_root
+        self.project = root / "project"
+        self.hook = native_root / "extensions/agentplugins-project-trust"
+        self.phase, self.installed, self.validated_hook = "fresh", None, None
+        self.owner_verifier = verified_owners
+        self.directories = (native_root / "extensions", self.hook)
+        self.files = tuple(self.hook / name for name in
+                           ("index.ts", "projects.json", "index.ts.agentplugins.lock",
+                            "projects.json.agentplugins.lock"))
+        self.anchors = {}
+        require(not any(path.exists() or path.is_symlink() for path in self.directories),
+                "Pi trust fixture must start without a hook namespace")
+        self.anchor(native_root)
+        self.resource_audit = module("source_pi_skill_contract", "pi_project_skill_audit.py")
+
+    def anchor(self, path):
+        while path != self.root.parent:
+            in_case(path, self.root)
+            info = path.lstat()
+            require(stat.S_ISDIR(info.st_mode) and not path.is_symlink(),
+                    "Pi trust ancestor is not a real directory")
+            stamp = (info.st_mode, info.st_dev, info.st_ino)
+            require(self.anchors.setdefault(path, stamp) == stamp, "Pi trust ancestor replaced")
+            path = path.parent
+
+    def read(self, path):
+        self.anchor(path.parent)
+        body, before = read_saved_record(in_case(path, self.root))
+        require(body is not None, "Pi trust file is absent")
+        self.anchor(path.parent)
+        # The same custody reader used for protected state holds ancestors and
+        # checks final handle paths on Windows. Join its bytes to the file read.
+        text, error = live.copilot_settings_read(path, self.root)
+        require(error is None and isinstance(text, str) and text.encode("utf-8") == body,
+                "Pi trust held read differs")
+        after = path.lstat()
+        require(os.path.samestat(before, after) and before.st_mode == after.st_mode
+                and before.st_size == after.st_size and before.st_mtime_ns == after.st_mtime_ns,
+                "Pi trust file replaced")
+        return body
+
+    def tree_digest(self, path):
+        image = {}
+        total_bytes = 0
+        def walk(directory, prefix=""):
+            nonlocal total_bytes
+            self.anchor(directory)
+            for child in sorted(directory.iterdir(), key=lambda p: p.name.encode("utf-8")):
+                relative = prefix + child.name
+                info = child.lstat()
+                if stat.S_ISDIR(info.st_mode) and not child.is_symlink():
+                    image[relative] = ("dir",)
+                    walk(child, relative + "/")
+                else:
+                    body = self.read(child)
+                    total_bytes += len(body)
+                    require(total_bytes <= 64 << 20, "Pi trust tree exceeds byte bound")
+                    image[relative] = ("file", hashlib.sha256(body).hexdigest())
+                require(len(image) <= 16384, "Pi trust tree exceeds entry bound")
+        walk(path)
+        # Reuse the existing frozen Go/JS trust framing, not Skill digest framing.
+        adapter = type("TrustReader", (), {"bytes": lambda _, p: self.read(p)})()
+        return self.resource_audit.PiProjectSkillAudit.trust_digest(adapter, path, image)
+
+    @staticmethod
+    def value_digest(value):
+        # Frozen framing for the independently checked string/list transport
+        # objects below. Unused numeric and boolean values stay unsupported.
+        def frame(item):
+            if type(item) is str:
+                body = item.encode("utf-8")
+                return b"s" + str(len(body)).encode() + b":" + body
+            if type(item) is list:
+                return b"a" + str(len(item)).encode() + b":" + b"".join(frame(v) for v in item)
+            require(type(item) is dict and all(type(k) is str for k in item), "unsupported Pi trust value")
+            keys = sorted(item, key=lambda k: k.encode("utf-8"))
+            return b"o" + str(len(keys)).encode() + b":" + b"".join(frame(k) + frame(item[k]) for k in keys)
+        return digest(frame(value))
+
+    def verified_owners(self, case):
+        """Use authenticated four-owner closure proof, or the exact Notion proof."""
+        if self.owner_verifier is not None:
+            owners = self.owner_verifier(self, case)
+            require(type(owners) is dict and len(owners) == 4, "Pi closure owners are incomplete")
+            return owners
+        _, binding, _ = checked_binding(state_file(self.root, "project"), case)
+        locator = in_case(Path(binding["target_locator"]), self.root)
+        checked_native_materialization(self.project / ".pi", locator, case, binding, self.root)
+        physical = binding["physical_artifact_id"]
+        require(re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", physical) is not None,
+                "Pi trust owner is not a portable artifact")
+        require(locator == self.project / ".pi/extensions" / physical,
+                "Pi trust owner is not the selected project package")
+        return {physical: {
+            "extensions": {physical: self.tree_digest(locator)}, "skills": {},
+            "mcp_servers": {"notion": self.value_digest({"url": "https://mcp.notion.com/mcp"})}}}
+
+    def validate_installed(self, case):
+        owners = self.verified_owners(case)
+        record = json.loads(self.read(self.hook / "projects.json"),
+                            object_pairs_hook=live._unique_json_object,
+                            parse_constant=lambda _: require(False, "non-finite Pi trust JSON"))
+        expected = {"schema_version": 1, "projects": {str(self.project): owners}}
+        require(type(record.get("schema_version")) is int and record == expected,
+                "Pi trust record differs from verified project ownership")
+        hook = self.read(self.hook / "index.ts")
+        # Same exact frozen literal as pi_project_skill_audit.py trust_check().
+        require(len(hook) == 9078 and hashlib.sha256(hook).hexdigest() ==
+                "eb4fa44cb880e1df05e42356f7e4bef9efef4abad82495cdfc87867b76b90a73",
+                "Pi trust hook differs from frozen release")
+        return hook
+
+    def allowed_image(self, removed=False):
+        paths = (*self.directories, *self.files)
+        for directory in self.directories:
+            self.anchor(directory)
+        require(set(self.hook.iterdir()) == set(self.files[2:] if removed else self.files),
+                "Pi trust namespace contains foreign entries")
+        image = {}
+        for path in paths:
+            if removed and path in self.files[:2]:
+                require(not path.exists() and not path.is_symlink(), "Pi trust record survived removal")
+                continue
+            info = path.lstat()
+            directory = path in self.directories
+            expected_mode = ((0o777 if directory else 0o666) if os.name == "nt"
+                             else (0o700 if directory else 0o600))
+            require((stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode))
+                    and not path.is_symlink() and stat.S_IMODE(info.st_mode) == expected_mode,
+                    "Pi trust path kind or mode changed")
+            self.anchor(path if directory else path.parent)
+            body = None if directory else self.read(path)
+            if path in self.files[2:]:
+                require(body == b"", "Pi trust writer lock is not inert")
+            image[path] = (info.st_mode, info.st_dev, info.st_ino,
+                           None if directory else info.st_mtime_ns, body)
+        return image
+
+    def project_snapshot(self, current):
+        # Remove only exact validated owned keys; every sibling and all saved
+        # User state remain in the original full protected snapshot.
+        require(self.installed is not None and self.phase in ("installed", "removed"),
+                "Pi trust snapshot has no admitted image")
+        result = {"files": current["files"], "directories": dict(current["directories"])}
+        for path in (*self.directories, *self.files):
+            relative = path.relative_to(self.native)
+            content, directory, metadata = (self.native.name + "/" + str(relative),
+                                           "directory:0:" + relative.as_posix(),
+                                           "metadata:0:" + relative.as_posix())
+            if self.phase == "removed" and path in self.files[:2]:
+                require(all(key not in result["directories"] for key in (content, directory, metadata)),
+                        "Pi trust removed file appeared in the observed snapshot")
+            else:
+                image = self.installed[path]
+                expected_metadata = image[:3] if path in self.directories else image[:4]
+                require(result["directories"].get(metadata) == expected_metadata,
+                        "Pi trust snapshot metadata differs from the admitted image")
+                if path in self.directories:
+                    require(result["directories"].get(directory) == "present" and content not in result["directories"],
+                            "Pi trust snapshot directory differs from the admitted image")
+                else:
+                    require(result["directories"].get(content) == hashlib.sha256(image[-1]).hexdigest()
+                            and directory not in result["directories"],
+                            "Pi trust snapshot bytes differ from the admitted image")
+            for key in (content, directory, metadata):
+                result["directories"].pop(key, None)
+        return result
+
+    def observe(self, operation, result, current, case):
+        require(type(result.get("exit_code")) is int and result["exit_code"] == 0
+                and result.get("timeout") is False, "Pi trust transition requires successful operation")
+        if self.phase == "fresh":
+            require(operation == "add", "Pi trust appeared outside confirmed add")
+            hook = self.validate_installed(case)
+            image = self.allowed_image()
+            require(image[self.files[0]][-1] == hook, "Pi trust admitted hook differs from validated bytes")
+            self.installed, self.phase, self.validated_hook = image, "installed", hook
+        elif self.phase == "installed":
+            require(operation in ("info", "list", "update", "repair", "remove"),
+                    "unexpected Pi trust phase")
+            if operation == "remove":
+                require(self.installed[self.files[0]][-1] == self.validated_hook,
+                        "Pi trust admitted hook differs from validated bytes")
+                image = self.allowed_image(removed=True)
+                require(all(value == self.installed[path] for path, value in image.items()),
+                        "Pi trust cleanup changed retained identities")
+                self.phase = "removed"
+            else:
+                self.validate_installed(case)
+                require(self.allowed_image() == self.installed,
+                        "Pi trust changed after confirmed add")
+        else:
+            require(operation == "list", "Pi trust operation after removal")
+            image = self.allowed_image(removed=True)
+            require(all(value == self.installed[path] for path, value in image.items()),
+                    "Pi trust residue changed")
+        return self.project_snapshot(current)
+
+
+def checked_pi_closure_native(oracle, closure, case, selected_root, alias, owner):
+    """One authenticated closure member, exact native object and transport."""
+    binding, locator = owner["binding"], owner["locator"]
+    physical = binding.get("physical_artifact_id")
+    require(case["client"] == "pi" and type(physical) is str
+            and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", physical)
+            and locator == selected_root / "extensions" / physical,
+            "Pi closure physical placement differs")
+    require(not any((locator / name).exists() or (locator / name).is_symlink()
+                    for name in ("index.ts", "index.js", ".agentplugins-pi.json", "package.json")),
+            "Pi closure package acquired an unowned native entrypoint")
+    closure.checked_native_inventory(SimpleNamespace(**globals()), locator, oracle.root, alias, client="pi")
+    objects = binding.get("native_objects")
+    require(type(objects) is list and len(objects) == 2 and all(type(v) is dict for v in objects),
+            "Pi closure native ownership inventory differs")
+    packages = [v for v in objects if v.get("kind") == "managed_package_directory"]
+    require(len(packages) == 1, "Pi closure managed package owner missing")
+    package = packages[0]
+    require(package.get("object_id") == "package:pi:" + physical
+            and package.get("logical_name") == alias and Path(package.get("path", "")) == locator
+            and package.get("protection_class") == "managed" and not package.get("user_modified")
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", package.get("managed_digest", "")),
+            "Pi closure managed package owner differs")
+    receipts = binding.get("receipts", [])
+    require(type(receipts) is list and any(type(receipt) is dict and receipt.get("phase") == "committed"
+            and receipt.get("active_path") == str(locator)
+            and receipt.get("client_binding_id") == binding.get("client_binding_id")
+            and receipt.get("after_digest") == package["managed_digest"] for receipt in receipts),
+            "Pi closure package has no committed native receipt")
+    member = next(v for v in objects if v is not package)
+    trust = {"extensions": {physical: oracle.tree_digest(locator)}, "skills": {}, "mcp_servers": {}}
+    if alias == "marketing-kit":
+        kind = "pi_" + case["scope"] + "_skill_directory"
+        path = selected_root / "skills/campaign-planning"
+        require(member.get("kind") == kind and member.get("object_id") == kind + ":campaign-planning"
+                and member.get("logical_name") == "campaign-planning"
+                and member.get("source_relative") == "skills/campaign-planning"
+                and Path(member.get("path", "")) == path, "Pi closure Skill ownership differs")
+        require(set(path.iterdir()) == {path / "SKILL.md"}
+                and set((locator / "skills/campaign-planning").iterdir()) == {locator / "skills/campaign-planning/SKILL.md"},
+                "Pi closure Skill contains unreviewed resources")
+        require(set((selected_root / "skills").iterdir()) == {path}
+                and set((locator / "skills").iterdir()) == {locator / "skills/campaign-planning"},
+                "Pi closure exposes an unreviewed Skill")
+        for skill in (path / "SKILL.md", locator / "skills/campaign-planning/SKILL.md"):
+            require(digest(oracle.read(skill)) == "sha256:42ffb5ea182abd0c710735a28e6f6989cc8a4e125642f1d954dabd2e10ca76b1",
+                    "Pi closure Skill differs from immutable source")
+        body = oracle.read(path / "SKILL.md")
+        image = {"SKILL.md": ("file", (path / "SKILL.md").lstat().st_mode,
+                              None, None, None, len(body), hashlib.sha256(body).hexdigest())}
+        adapter = type("SkillReader", (), {"bytes": lambda _, p: oracle.read(p)})()
+        require(member.get("managed_digest") == oracle.resource_audit.PiProjectSkillAudit.skill_digest(adapter, path, image),
+                "Pi closure Skill receipt digest differs from native bytes")
+        trust["skills"]["campaign-planning"] = oracle.tree_digest(path)
+    else:
+        kind = "pi_" + case["scope"] + "_mcp_server"
+        path = selected_root / "mcp.json"
+        require(member.get("kind") == kind and member.get("object_id") == kind + ":" + alias
+                and member.get("logical_name") == alias and Path(member.get("path", "")) == path,
+                "Pi closure MCP ownership differs")
+        if alias in ("notion", "hubspot-crm"):
+            entry = {"url": {"notion": "https://mcp.notion.com/mcp", "hubspot-crm": "https://mcp.hubspot.com"}[alias]}
+        else:
+            require(alias == "playwright", "unknown Pi closure member")
+            entry = closure.checked_playwright_transport(SimpleNamespace(**globals()), case, oracle.root, owner)
+        document = json.loads(oracle.read(path), object_pairs_hook=live._unique_json_object)
+        require(type(document) is dict and type(document.get("mcpServers")) is dict
+                and set(document) == {"mcpServers"}
+                and set(document["mcpServers"]) == {FOREIGN_NATIVE_MCP, "notion", "hubspot-crm", "playwright"}
+                and document["mcpServers"].get(alias) == entry, "Pi closure MCP transport differs: " + alias)
+        trust["mcp_servers"][alias] = oracle.value_digest(entry)
+    require(member.get("protection_class") == "managed" and not member.get("user_modified")
+            and re.fullmatch(r"sha256:[0-9a-f]{64}", member.get("managed_digest", "")),
+            "Pi closure native member lacks ownership")
+    return {"content_verified": True, "physical": physical, "trust_owner": trust,
+            "path": path.relative_to(oracle.root).as_posix()}
+
+
+def prepare_policy_context(directory, evidence_dir, target):
+    """One frozen-source verifier build, separate from the released CLI."""
+    closure = module("source_closure", "released_source_closure.py")
+    context = closure.prepare(SimpleNamespace(**globals()), directory, evidence_dir)
+    context["target"] = target
+    return context
+
+
+def cleanup_policy_context(context):
+    module("source_closure", "released_source_closure.py").cleanup(SimpleNamespace(**globals()), context)
+
+
+def failure_scope_changes(root, case, protected_root, protected, pi_trust):
+    """Retain scope evidence after an earlier oracle failure, without admission."""
+    current = protected_scope_snapshot(root, case["scope"], protected_root)
+    if pi_trust is not None and pi_trust.installed is not None:
+        try:
+            # Only a previously admitted, still-identical owned image may be
+            # excluded. A fresh or changed hook remains in the full snapshot.
+            if pi_trust.phase == "installed":
+                pi_trust.validate_installed(case)
+                require(pi_trust.allowed_image() == pi_trust.installed,
+                        "Pi trust changed before failure observation")
+            else:
+                require(pi_trust.phase == "removed", "Pi trust ownership is unverified")
+                image = pi_trust.allowed_image(removed=True)
+                require(all(value == pi_trust.installed[path] for path, value in image.items()),
+                        "Pi trust residue changed before failure observation")
+            require(pi_trust.installed[pi_trust.files[0]][-1] == pi_trust.validated_hook,
+                    "Pi trust admitted hook differs from validated bytes")
+            current = pi_trust.project_snapshot(current)
+        except Exception:
+            pass  # Unverified entries remain visible; the original error wins.
+    if current != protected:
+        return protected_scope_changes(protected, current, root, case["scope"], protected_root)
+    return None
+
+
+def run_case(binary, case, root, executable, policy_context=None, command_env=None):
     root.mkdir()
     home, project, data = (root / name for name in ("home", "project", "uap-data"))
     for path in (home, project, data):
         path.mkdir()
     env = live.isolated_client_env(home, root, data)
+    if command_env:
+        require(set(command_env) <= {"PATH", "NPM_CONFIG_CACHE", "NPM_CONFIG_PREFIX", "NPM_CONFIG_USERCONFIG",
+                                     "NPM_CONFIG_GLOBALCONFIG", "NPM_CONFIG_REGISTRY", "NPM_CONFIG_IGNORE_SCRIPTS"}
+                and all(type(value) is str for value in command_env.values()),
+                "npm command environment would replace case isolation")
+        env.update(command_env)
+    require(not any("PROOF" in key for key in env), "proof-mode environment is forbidden for released CLI")
+    command = [str(part) for part in binary] if isinstance(binary, (list, tuple)) else [str(binary)]
+    require(bool(command) and (not isinstance(binary, (list, tuple))
+            or len(command) == 2 and all(Path(part).is_absolute() for part in command)),
+            "public npm command prefix is not absolute")
     env["HERMES_HOME"] = str(home / ".hermes")
     if executable:
         env["PATH"] = str(executable.parent) + os.pathsep + env.get("PATH", "")
@@ -509,7 +1000,7 @@ def run_case(binary, case, root, executable):
     project_native.mkdir()
     sentinels = [home / "foreign.txt", project / "foreign.txt", native_root / "foreign.txt", project_native / "foreign.txt"]
     for path in sentinels:
-        path.write_text("unmanaged source audit neighbor\n", encoding="utf-8")
+        path.write_bytes(b"unmanaged source audit neighbor\n")
     foreign_mcp_control = seed_unrelated_native_mcp(
         native_root if case["scope"] == "user" else project_native, case["client"], root)
     live.initialize_project_skill_git_root(project, env, root)
@@ -517,38 +1008,158 @@ def run_case(binary, case, root, executable):
     if case["scope"] == "project":
         scope += ["--project-root", str(project)]
     trace = []
+    scope_changes = None
     saved_root = data if case["scope"] == "user" else project
     documents = [saved_root / "uap.toml", saved_root / "uap.lock"]
+    closure = None
+    closure_state = {"authorities": {}, "owners": None, "proofs": None, "identity": None,
+                     "native_baseline": None, "data_baseline": None, "removed": False, "startup_stores": None}
+    pi_native = None
+
+    def refresh_closure(stage, result):
+        require(policy_context is not None, "authenticated runtime policy context unavailable")
+        api = SimpleNamespace(**globals())
+        authority = closure.authorize(api, policy_context, root, case, stage)
+        closure_state["authorities"][stage] = authority
+        if result["exit_code"] != 0:
+            require(stage == "add" and authority.get("policy_status") == "ineligible",
+                    "failed closure operation is not an authenticated policy refusal")
+            return
+        owners = closure.checked_closure(api, case, root, documents, authority)
+        verifier = (lambda alias, owner: checked_pi_closure_native(pi_native, closure, case, selected_root, alias, owner)
+                    if case["client"] == "pi" else
+                    closure.checked_member_native(api, case, root, selected_root, alias, owner))
+        proofs = closure.checked_native(api, owners, verifier)
+        if stage == "add" and closure.pi_user_startup_scope(case):
+            closure_state["startup_stores"] = closure.pi_startup_store_custody(api, case, root, selected_root)
+        closure.checked_namespace(api, case, root, selected_root, owners,
+                                 startup_stores=closure_state["startup_stores"])
+        identity = {alias: (owner["installation"]["installation_id"], owner["binding"]["client_binding_id"],
+                            owner["binding"]["physical_artifact_id"], str(owner["locator"]))
+                    for alias, owner in owners.items()}
+        require(closure_state["identity"] in (None, identity), "closure changed saved installation identity")
+        closure_state.update(owners=owners, proofs=proofs, identity=identity)
+        if stage == "add":
+            closure_state["native_baseline"] = live.snapshot([selected_root], include_directories=True)
+            closure_state["data_baseline"] = closure.data_custody(api, case, root, owners)
+
+    def verified_pi_owners(oracle, selected_case):
+        require(selected_case == case and closure_state["owners"] is not None
+                and set(closure_state["proofs"]) == set(live.MARKETING_KIT_DISTRIBUTIONS),
+                "Pi trust has no independently authenticated closure")
+        return {proof["physical"]: proof["trust_owner"] for proof in closure_state["proofs"].values()}
 
     def run(operation, selector=None, success=True):
-        argv = [str(binary), operation, *([selector] if selector else []), "--target", case["client"], *scope, "--format", "json"]
+        nonlocal scope_changes
+        argv = [*command, operation, *([selector] if selector else []), "--target", case["client"], *scope, "--format", "json"]
         if operation in ("add", "update", "repair", "remove"):
             argv += ["--yes"]
         for path in (root, home, project, data, native_root, project_native):
             in_case(path, root)
-        result = live.call(argv, env, project, 180, capture_files=True, capture_full=not success)
+        result = live.call(argv, env, project, 180, capture_files=True,
+                           capture_full=not success or case["expected"] == "dependency-closure")
         parsed = result.pop("_json", None)
         trace.append({"operation": operation, "argv": argv, **result})
         for path in sentinels:
             require(live.preserved_regular_text(path, "unmanaged source audit neighbor\n", root), "foreign state changed")
         check_unrelated_native_mcp(foreign_mcp_control, root)
-        require(protected_scope_snapshot(root, case["scope"], protected_root) == protected,
-                operation + " changed the other scope")
-        if success:
-            require(result["exit_code"] == 0 and not result.get("timeout") and isinstance(parsed, dict), operation + " did not complete")
+        if closure_state["startup_stores"] is not None:
+            require(closure.pi_startup_store_custody(SimpleNamespace(**globals()), case, root, selected_root)
+                    == closure_state["startup_stores"], "Pi startup stores changed after add")
+        if case["expected"] == "dependency-closure" and operation in ("add", "update", "repair"):
+            require(type(result.get("exit_code")) is int and result.get("timeout") is False,
+                    "closure operation did not finish")
+            refresh_closure(operation, result)
+        if case["expected"] == "dependency-closure" and operation == "remove" and result.get("exit_code") == 0:
+            closure_state["removed"] = True
+        if (case["expected"] == "dependency-closure" and closure_state["native_baseline"] is not None
+                and operation in ("info", "list", "update", "repair")
+                and not closure_state["removed"]):
+            require(live.snapshot([selected_root], include_directories=True) == closure_state["native_baseline"],
+                    "closure operation changed native resources")
+        if (case["expected"] == "dependency-closure" and closure_state["data_baseline"] is not None
+                and operation in ("info", "list", "update", "repair", "remove")):
+            require(closure.data_custody(SimpleNamespace(**globals()), case, root, closure_state["owners"])
+                    == closure_state["data_baseline"], "closure operation changed retained data")
+        current = protected_scope_snapshot(root, case["scope"], protected_root)
+        if pi_trust is not None and result.get("exit_code") == 0:
+            current = pi_trust.observe(operation, result, current, case)
+        if current != protected:
+            scope_changes = protected_scope_changes(protected, current, root, case["scope"], protected_root)
+            raise ValueError(operation + " changed the other scope")
+        if success or result.get("exit_code") == 0:
+            require(result["exit_code"] == 0 and not result.get("timeout")
+                    and isinstance(parsed, dict) and parsed.get("result") == "success",
+                    operation + " did not complete successfully")
         return parsed, result
 
     selected_root = native_root if case["scope"] == "user" else project_native
     protected_root = project_native if case["scope"] == "user" else native_root
     protected = protected_scope_snapshot(root, case["scope"], protected_root)
-    before = live.snapshot([selected_root])
+    pi_trust = None
+    before = live.snapshot([selected_root], include_directories=True)
     try:
-        _, added = run("add", case["selector"], case["expected"] != "dependency-refusal")
-        if case["expected"] == "dependency-refusal":
+        if case["expected"] == "dependency-closure":
+            require(case["name"] == "marketing-kit" and policy_context is not None,
+                    "authenticated closure prerequisites unavailable")
+            closure = module("source_closure_case", "released_source_closure.py")
+            if closure.pi_user_startup_scope(case):
+                closure.require_fresh_pi_startup_stores(SimpleNamespace(**globals()), case, root, selected_root)
+            if case["client"] == "pi":
+                pi_native = PiProjectTrustOracle(root, native_root, verified_pi_owners)
+                if case["scope"] == "project":
+                    pi_trust = pi_native
+        if (case["client"], case["scope"], case["name"], case["expected"]) == (
+                "pi", "project", "notion", "materialized-lifecycle"):
+            pi_trust = PiProjectTrustOracle(root, native_root)
+        _, added = run("add", case["selector"], case["expected"] not in ("dependency-refusal", "dependency-closure"))
+        if case["expected"] == "dependency-closure":
+            authority = closure_state["authorities"]["add"]
+            if added["exit_code"] != 0:
+                refusal = checked_dependency_refusal(added, case)
+                closure.checked_refusal_authority(SimpleNamespace(**globals()), case, authority, refusal)
+                require(authority.get("policy_status") == "ineligible"
+                        and refusal["distribution"] in authority.get("ineligible_distributions", []),
+                        "refusal differs from authenticated ineligible policy")
+                require(not state_file(root, case["scope"]).get("installations")
+                        and not state_file(root, case["scope"]).get("environment_receipts"),
+                        "refused closure left owned state")
+                require(not any(path.exists() or path.is_symlink() for path in documents)
+                        and live.snapshot([selected_root], include_directories=True) == before,
+                        "refused closure published native or saved effects")
+                outcome = {"status": "expected-dependency-refusal", "refusal": refusal,
+                           "authenticated_policy": closure_state["authorities"]}
+            else:
+                require(closure_state["owners"] is not None, "successful closure lacks authenticated owners")
+                installed_owners = closure_state["owners"]
+                initial_native = live.snapshot([selected_root], include_directories=True)
+                require(initial_native != before, "closure native materialization not observed")
+                for owner in installed_owners.values():
+                    run("info", owner["installation"]["installation_id"])
+                run("list")
+                for stage in ("update", "repair"):
+                    run(stage, "marketing-kit")
+                    require(live.snapshot([selected_root], include_directories=True) == initial_native,
+                            "immutable closure operation changed native resources")
+                proofs = closure_state["proofs"]
+                run("remove", "marketing-kit")
+                listed, _ = run("list")
+                require(listed.get("data", {}).get("installations") == [], "removed closure is still listed")
+                retained_data = closure.checked_cleanup(SimpleNamespace(**globals()), installed_owners,
+                                                       selected_root, case, root, documents,
+                                                       startup_stores=closure_state["startup_stores"])
+                outcome = {"status": "materialized-closure-lifecycle-passed", "native_content": proofs,
+                           "authenticated_policy": closure_state["authorities"],
+                           "owned_aliases": sorted(installed_owners), "update": "immutable-no-change",
+                           "repair": "healthy-repair", "native_cleanup": "all-four-native-owners-absent",
+                           "retained_data": retained_data}
+        elif case["expected"] == "dependency-refusal":
+            if type(added.get("exit_code")) is int and added["exit_code"] == 0 and added.get("timeout") is False:
+                raise ValueError("successful closure is inconclusive: runtime signed policy and full owned lifecycle are unverified")
             refusal = checked_dependency_refusal(added, case)
             require(not state_file(root, case["scope"]).get("installations"), "refused closure left managed installation")
             require(not any(path.exists() for path in documents), "refused closure published saved state")
-            require(live.snapshot([selected_root]) == before, "refused closure mutated native state")
+            require(live.snapshot([selected_root], include_directories=True) == before, "refused closure mutated native state")
             outcome = {"status": "expected-dependency-refusal", "refusal": refusal}
         else:
             installation, binding, receipt = checked_binding(state_file(root, case["scope"]), case)
@@ -587,11 +1198,32 @@ def run_case(binary, case, root, executable):
                        "native_files_after_add": len(native_after), "native_cleanup": cleanup,
                        "saved_intent": saved_intent, "native_content": native_content,
                        "update": "immutable-no-change", "repair": "healthy-repair"}
-        require(protected_scope_snapshot(root, case["scope"], protected_root) == protected, "other scope changed")
+        current = protected_scope_snapshot(root, case["scope"], protected_root)
+        if pi_trust is not None and closure_state["authorities"].get("add", {}).get("policy_status") != "ineligible":
+            require(pi_trust.phase == "removed", "Pi trust lifecycle is incomplete")
+            current = pi_trust.observe("list", trace[-1], current, case)
+        if current != protected:
+            scope_changes = protected_scope_changes(protected, current, root, case["scope"], protected_root)
+            raise ValueError("other scope changed")
         return {**case, **outcome, "trace": trace, "activation_qualified": False, "runtime_qualified": False}
     except Exception as error:
-        return {**case, "status": "failed", "reason": str(error), "trace": trace,
-                "activation_qualified": False, "runtime_qualified": False}
+        outcome = {**case, "status": "failed", "reason": str(error), "trace": trace,
+                   "activation_qualified": False, "runtime_qualified": False,
+                   **bounded_failure_location(error, trace)}
+        if scope_changes is None:
+            try:
+                scope_changes = failure_scope_changes(root, case, protected_root, protected, pi_trust)
+            except Exception as scope_error:
+                outcome["protected_scope_observation"] = {
+                    "status": "failed", **bounded_failure_location(scope_error)}
+        if scope_changes is not None:
+            outcome["protected_scope_changes"] = scope_changes
+        if (case.get("expected") in ("dependency-refusal", "dependency-closure") and case.get("name") == "marketing-kit"
+                and trace and trace[0].get("operation") == "add"
+                and type(trace[0].get("exit_code")) is int and trace[0]["exit_code"] == 0
+                and trace[0].get("timeout") is False):
+            outcome["declared_runtime_lineage"] = declared_runtime_lineage(root, case)
+        return outcome
 
 
 def main():
@@ -618,18 +1250,68 @@ def main():
             snapshot = authenticated_snapshot(directory)
             binary, report["installer"] = native.provision_release(ROOT, directory, args.target, RELEASE_TAG, RELEASE_COMMIT, REPOSITORY)
             executable, report["native_client"] = provision_native(args.client, args.target, directory, args.native_bin)
-            scopes = ("user",) if args.client == "hermes" else ("user", "project")
-            for scope in scopes:
-                for distribution, refusal in (("777genius/notion", False), ("777genius/marketing-kit", True)):
-                    case = source_case(snapshot, distribution, 1, args.client, scope, refusal)
-                    report["cases"].append(run_case(binary, case, directory / f'{case["name"]}-{scope}', executable))
-            require(all(case["status"] != "failed" for case in report["cases"]), "some exact-source lifecycle cases failed")
-            report["status"] = "passed"
+            policy_context, policy_failure = None, None
+            try:
+                policy_context = prepare_policy_context(directory, args.report_dir / "verified-public-policy", args.target)
+            except Exception as error:
+                policy_failure = {"status": "failed", "prerequisite": "frozen-closure-policy",
+                                  "reason": str(error), **bounded_failure_location(error)}
+                report["policy_prerequisite"] = policy_failure.copy()
+                # prepare preserves the original build error when its own
+                # worktree cleanup also fails. Retain bounded notes only in the
+                # full receipt, outside case summaries and compact stdout.
+                notes = getattr(error, "__notes__", ())
+                if type(notes) in (list, tuple):
+                    retained = [note[:2048] for note in notes[:4] if type(note) is str]
+                    if retained:
+                        report["policy_prerequisite"]["notes"] = retained
+            body_failed = False
+            try:
+                scopes = ("user",) if args.client == "hermes" else ("user", "project")
+                for channel in ("binary", "npm"):
+                    command, command_env = binary, None
+                    if channel == "npm":
+                        # Retain the independently verified binary results even if
+                        # the required public npm acquisition cannot complete.
+                        npm = module("source_public_npm", "released_source_npm.py").provision(
+                            SimpleNamespace(**globals()), directory, args.target,
+                            release_context={"binary": binary, "proof": report["installer"]})
+                        report["npm"] = npm["proof"]
+                        command, command_env = npm["command"], npm.get("env")
+                    for scope in scopes:
+                        for distribution, refusal in (("777genius/notion", False), ("777genius/marketing-kit", True)):
+                            case = source_case(snapshot, distribution, 1, args.client, scope, refusal)
+                            case["channel"] = channel
+                            if case["name"] == "marketing-kit":
+                                case["expected"] = "dependency-closure"
+                            if case["name"] == "marketing-kit" and policy_failure is not None:
+                                report["cases"].append({**case, **policy_failure, "trace": [],
+                                                        "activation_qualified": False, "runtime_qualified": False})
+                                continue
+                            report["cases"].append(run_case(command, case, directory / f'{channel}-{case["name"]}-{scope}', executable,
+                                                            policy_context=policy_context, command_env=command_env))
+                require(all(case["status"] != "failed" for case in report["cases"]), "some exact-source lifecycle cases failed")
+                report["status"] = "passed"
+            except BaseException:
+                body_failed = True
+                raise
+            finally:
+                if policy_context is not None:
+                    try:
+                        cleanup_policy_context(policy_context)
+                    except Exception as error:
+                        report["policy_cleanup"] = {"status": "failed", "reason": str(error),
+                                                    **bounded_failure_location(error)}
+                        report["status"] = "failed"
+                        if not body_failed:
+                            raise
+
     except Exception as error:
         report["reason"] = str(error)
+        report.update(bounded_failure_location(error))
     finally:
         (args.report_dir / "receipt.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-    print(json.dumps({"status": report["status"], "cases": [{"client": row["client"], "scope": row["scope"], "name": row["name"], "status": row["status"]} for row in report["cases"]]}))
+    print(json.dumps(compact_report(report)))
     return 0 if report["status"] == "passed" else 1
 
 

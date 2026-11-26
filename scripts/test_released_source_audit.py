@@ -18,6 +18,114 @@ audit = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(audit)
 
 
+def assert_no_private_path(test, value, private_path):
+    """Inspect decoded strings so Windows JSON escaping cannot hide a leak."""
+    if isinstance(value, str):
+        test.assertNotIn(str(private_path), value)
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            assert_no_private_path(test, key, private_path)
+            assert_no_private_path(test, item, private_path)
+    elif isinstance(value, list):
+        for item in value:
+            assert_no_private_path(test, item, private_path)
+
+
+class FailureLocationDiagnosticTests(unittest.TestCase):
+    def make_error(self, filename, depth=0):
+        namespace = {}
+        exec(compile("def fail(n):\n if n: return fail(n-1)\n raise ValueError('PRIVATE_ERROR_CANARY')\n",
+                     filename, "exec"), namespace)
+        try:
+            namespace["fail"](depth)
+        except ValueError as error:
+            return error
+        self.fail("fixture did not fail")
+
+    def test_compact_failure_keeps_canaries_only_in_original_receipt(self):
+        error = self.make_error(str(audit.ROOT / "scripts/released_source_closure.py"))
+        trace = [{"operation": "add", "argv": ["PRIVATE_ARGV_CANARY"],
+                  "stderr_full": "PRIVATE_STREAM_CANARY", "cwd": "PRIVATE_PATH_CANARY"}]
+        row = {"channel": "binary", "client": "pi", "scope": "user",
+               "name": "marketing-kit", "status": "failed",
+               "reason": str(error), "trace": trace, **audit.bounded_failure_location(error, trace)}
+        report = {"status": "failed", "cases": [row], "reason": "PRIVATE_OUTER_CANARY"}
+        before = json.dumps(report)
+        compact = audit.compact_report(report)
+        stdout = json.dumps(compact)
+        self.assertEqual(json.dumps(report), before)
+        for canary in ("PRIVATE_ERROR_CANARY", "PRIVATE_ARGV_CANARY",
+                       "PRIVATE_STREAM_CANARY", "PRIVATE_OUTER_CANARY", "PRIVATE_PATH_CANARY"):
+            self.assertIn(canary, before)
+            self.assertNotIn(canary, stdout)
+        assert_no_private_path(self, compact, audit.ROOT)
+        self.assertEqual(compact["cases"][0]["last_operation"], "add")
+        self.assertEqual(compact["cases"][0]["failure_location"][-1],
+                         {"file": "released_source_closure.py", "line": 3})
+
+    def test_same_basename_outside_exact_owned_path_is_omitted(self):
+        error = self.make_error("/PRIVATE_PATH_CANARY/released_source_closure.py")
+        result = audit.bounded_failure_location(error)
+        self.assertEqual(result, {"failure_location": [], "last_operation": None})
+        self.assertNotIn("PRIVATE_PATH_CANARY", json.dumps(result))
+
+    def test_malformed_or_unknown_trace_operations_do_not_mask_error(self):
+        error = self.make_error("/outside.py")
+        for trace in (None, {}, "PRIVATE_TRACE_CANARY", [], [None], [[]],
+                      [{"operation": []}], [{"operation": {}}],
+                      [{"operation": 7}], [{"operation": "PRIVATE_OPERATION_CANARY"}]):
+            with self.subTest(trace=trace):
+                self.assertIsNone(audit.bounded_failure_location(error, trace)["last_operation"])
+
+    def test_locations_are_bounded_to_last_four_owned_frames(self):
+        error = self.make_error(str(audit.ROOT / "scripts/released_source_closure.py"), depth=10)
+        result = audit.bounded_failure_location(error)
+        self.assertEqual(len(result["failure_location"]), 4)
+        self.assertTrue(all(row["file"] == "released_source_closure.py"
+                            and type(row["line"]) is int and row["line"] > 0
+                            and set(row) == {"file", "line"} for row in result["failure_location"]))
+        self.assertEqual(result["failure_location"][-1]["line"], 3)
+
+    def test_main_failure_keeps_exit_and_original_reason_private(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            native = base / "hermes"
+            native.write_text("fixture", encoding="utf-8")
+            args = SimpleNamespace(client="hermes", target="linux-amd64",
+                                   native_bin=native, report_dir=base / "receipt")
+            reason = "PRIVATE_MAIN_CANARY " + str(base)
+            with mock.patch.object(audit.argparse.ArgumentParser, "parse_args", return_value=args), \
+                 mock.patch.object(audit.native, "require_hosted"), \
+                 mock.patch.object(audit, "authenticated_snapshot", side_effect=ValueError(reason)), \
+                 mock.patch("sys.stdout", new_callable=io.StringIO) as output, \
+                 mock.patch.dict(os.environ, {"RUNNER_TEMP": str(base)}):
+                exit_code = audit.main()
+            receipt = json.loads((args.report_dir / "receipt.json").read_text())
+            compact = json.loads(output.getvalue())
+            self.assertEqual(exit_code, 1)
+            self.assertEqual(receipt["status"], "failed")
+            self.assertEqual(compact["status"], "failed")
+            self.assertEqual(receipt["reason"], reason)
+            self.assertEqual(receipt["cases"], [])
+            self.assertEqual(compact["cases"], [])
+            self.assertIsNone(compact["last_operation"])
+            self.assertNotIn("reason", compact)
+            self.assertNotIn("PRIVATE_MAIN_CANARY", output.getvalue())
+            assert_no_private_path(self, compact, base)
+            self.assertTrue(compact["failure_location"])
+            self.assertTrue(all(row["file"] == "released-source-audit.py"
+                                for row in compact["failure_location"]))
+
+
+class DiagnosticPrivacyAssertionTests(unittest.TestCase):
+    def test_windows_backslash_leak_is_detected_after_json_roundtrip(self):
+        private = r"C:\Users\private-owner\case"
+        leaked = json.loads(json.dumps({"nested": [{"path": private + r"\state.json"}]}))
+        with self.assertRaises(AssertionError):
+            assert_no_private_path(self, leaked, private)
+        assert_no_private_path(self, {"nested": [{"path": "<redacted>"}]}, private)
+
+
 def snapshot():
     return {"revocations": [], "evidence": [], "distributions": [{
         "id": "fixture/portable", "status": "active", "releases": [{
@@ -182,6 +290,9 @@ class SemanticProofTests(unittest.TestCase):
         locator = native_root / "plugins/notion" if client == "antigravity" else self.root / (client + "-managed-" + scope)
         locator.mkdir(parents=True, exist_ok=True)
         native_root.mkdir(exist_ok=True)
+        if client == "pi":
+            for name in ("README.md", "plugin.json", "mcp.json"):
+                (locator / name).write_text("{}", encoding="utf-8")
         binding = {"client_id": client, "scope": scope, "target_locator": str(locator), "physical_artifact_id": "notion-physical",
                    "native_objects": [{"object_id": "package:" + client + ":notion-physical", "kind": "managed_package_directory",
                         "logical_name": "notion", "path": str(locator), "protection_class": "managed", "managed_digest": "sha256:" + "d" * 64}]}
@@ -311,6 +422,27 @@ class SemanticProofTests(unittest.TestCase):
             binding = {**args[3], "scope": "project"}
             with self.assertRaises(ValueError):
                 audit.checked_native_materialization(*args[:3], binding, self.root)
+
+    def test_direct_pi_user_and_project_require_reviewed_package_inventory(self):
+        for scope in ("user", "project"):
+            with self.subTest(scope=scope):
+                args, _, _, _ = self.native("pi", scope)
+                audit.checked_native_materialization(*args)
+                extra = args[1] / "skills/extra/SKILL.md"
+                extra.parent.mkdir(parents=True)
+                extra.write_text("inert unreviewed Skill", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    audit.checked_native_materialization(*args)
+                extra.unlink()
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    audit.checked_native_materialization(*args)
+                extra.parent.rmdir()
+                extra.parent.parent.rmdir()
+                audit.checked_native_materialization(*args)
+                reviewed = args[1] / "README.md"
+                reviewed.unlink()
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    audit.checked_native_materialization(*args)
 
     def test_antigravity_manifest_default_load_contract_is_required(self):
         args, _, _, _ = self.native("antigravity")
@@ -614,6 +746,305 @@ class RefusalTests(unittest.TestCase):
             audit.checked_dependency_refusal(output, self.selected)
 
 
+class RuntimeLineageDiagnosticTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.selected = {**case(), "expected": "dependency-refusal", "name": "marketing-kit",
+                         "distribution": "777genius/marketing-kit"}
+        self.path = self.root / "project/.uap/state-v2.json"
+        self.path.parent.mkdir(parents=True)
+
+    def make_state(self):
+        source = self.selected["source"]
+        records = [{"origin_mode": "direct", "declared_name": "marketing-kit",
+                    "source": {"repository": source["repository"], "package_subpath": source["path"],
+                               "resolved_revision": source["revision"], "private": "secret-source"}}]
+        for name, distribution in (("notion", "777genius/notion"), ("hubspot-crm", "777genius/hubspot-crm"),
+                                   ("playwright", "777genius/playwright-bridge")):
+            records.append({"origin_mode": "directory", "declared_name": name,
+                            "directory": {"distribution_id": distribution, "snapshot_schema": 1,
+                                          "snapshot_sequence": 49, "snapshot_digest": "sha256:" + "a" * 64,
+                                          "private": "/secret/private/path"}})
+        return {"schema_version": 5, "installations": records}
+
+    def write_state(self, state):
+        self.path.write_text(json.dumps(state), encoding="utf-8")
+
+    def observe(self):
+        return audit.declared_runtime_lineage(self.root, self.selected)
+
+    def test_only_unverified_allowlisted_facts_are_returned(self):
+        self.write_state(self.make_state())
+        result = self.observe()
+        self.assertEqual(result["status"], "unresolved")
+        self.assertEqual(result["reason"], "unverified_local_state")
+        self.assertTrue(result["declared_only"])
+        self.assertEqual(len(result["records"]), 4)
+        self.assertTrue(all(record["expected_identity_match"] for record in result["records"]))
+        self.assertEqual(result["records"][1]["snapshot_sequence"], 49)
+        self.assertEqual(result["records"][1]["snapshot_digest"], "sha256:" + "a" * 64)
+        self.assertNotIn("secret", json.dumps(result))
+        assert_no_private_path(self, result, self.root)
+        self.assertNotIn(self.selected["source"]["repository"], json.dumps(result))
+
+    def test_missing_malformed_duplicate_and_oversize_are_unresolved(self):
+        self.assertEqual(self.observe()["reason"], "state_unavailable_or_invalid")
+        for body in ('{', '{"schema_version":5,"installations":[],"installations":[]}',
+                     '{"schema_version":5,"installations":[{"directory":{"x":1,"x":2}}]}',
+                     '{"schema_version":5,"installations":[],"ignored":NaN}',
+                     '{"schema_version":5,"installations":[],"ignored":{"nested":Infinity}}',
+                     '{"schema_version":5,"installations":[],"ignored":[-Infinity]}',
+                     '{"schema_version":5,"installations":' + ' ' * (1 << 20) + '[]}'):
+            with self.subTest(prefix=body[:50]):
+                self.path.write_text(body, encoding="utf-8")
+                self.assertEqual(self.observe(), {"status": "unresolved", "reason": "state_unavailable_or_invalid"})
+
+    def test_symlink_state_is_unresolved(self):
+        outside = self.root / "outside-state.json"
+        outside.write_text(json.dumps(self.make_state()), encoding="utf-8")
+        try:
+            self.path.symlink_to(outside)
+        except OSError as error:
+            self.skipTest(str(error))
+        self.assertEqual(self.observe()["reason"], "state_unavailable_or_invalid")
+
+    def test_hardlink_state_is_unresolved(self):
+        outside = self.root / "outside-state.json"
+        outside.write_text(json.dumps(self.make_state()), encoding="utf-8")
+        try:
+            os.link(outside, self.path)
+        except OSError as error:
+            self.skipTest(str(error))
+        self.assertEqual(self.observe()["reason"], "state_unavailable_or_invalid")
+
+    @unittest.skipUnless(os.open in os.supports_dir_fd and hasattr(os, "O_DIRECTORY")
+                         and hasattr(os, "O_NOFOLLOW"), "held directory descriptors unavailable")
+    def test_swapped_ancestor_is_not_read_or_disclosed(self):
+        self.write_state(self.make_state())
+        with tempfile.TemporaryDirectory() as foreign:
+            foreign_dir = Path(foreign)
+            other = self.make_state()
+            other["installations"][1]["directory"]["snapshot_sequence"] = 987654
+            (foreign_dir / "state-v2.json").write_text(json.dumps(other), encoding="utf-8")
+            original_open = os.open
+            swapped = []
+            def intercepted(name, *args, **kwargs):
+                if name == ".uap" and kwargs.get("dir_fd") is not None and not swapped:
+                    self.path.parent.rename(self.root / "project/original-uap")
+                    self.path.parent.symlink_to(foreign_dir, target_is_directory=True)
+                    swapped.append(True)
+                return original_open(name, *args, **kwargs)
+            with mock.patch.object(audit.live.os, "open", side_effect=intercepted) as hooked:
+                with mock.patch.object(audit.live.os, "supports_dir_fd", {hooked}):
+                    result = self.observe()
+            self.assertTrue(swapped)
+            self.assertEqual(result, {"status": "unresolved", "reason": "state_unavailable_or_invalid"})
+            self.assertNotIn("987654", json.dumps(result))
+            assert_no_private_path(self, result, foreign)
+
+    def test_bounded_unknown_and_mismatched_identities_are_redacted(self):
+        value = self.make_state()
+        value["installations"][0]["source"]["repository"] = "secret-foreign"
+        value["installations"][1]["directory"]["distribution_id"] = "/secret/foreign"
+        value["installations"] += [copy.deepcopy(value["installations"][2]) for _ in range(9)]
+        self.write_state(value)
+        result = self.observe()
+        self.assertEqual(len(result["records"]), 8)
+        self.assertEqual(result["total_installations"], 13)
+        self.assertTrue(result["truncated"])
+        self.assertFalse(result["records"][0]["expected_identity_match"])
+        self.assertEqual(result["records"][1]["distribution_id"], "<other>")
+        self.assertFalse(result["records"][1]["expected_identity_match"])
+        self.assertNotIn("secret", json.dumps(result))
+
+    def test_invalid_snapshot_fields_are_unresolved(self):
+        for field, replacement in (("snapshot_digest", "sha256:secret"), ("snapshot_sequence", True),
+                                   ("snapshot_sequence", 1 << 64), ("snapshot_schema", 7)):
+            value = self.make_state()
+            value["installations"][1]["directory"][field] = replacement
+            self.write_state(value)
+            with self.subTest(field=field, replacement=replacement):
+                self.assertEqual(self.observe()["reason"], "state_unavailable_or_invalid")
+
+    def test_state_changed_after_held_read_is_unresolved(self):
+        self.write_state(self.make_state())
+        original_read = audit.live.copilot_settings_read
+        def changed(path, root):
+            result = original_read(path, root)
+            path.write_text('{"schema_version":5,"installations":[]}', encoding="utf-8")
+            return result
+        with mock.patch.object(audit.live, "copilot_settings_read", side_effect=changed):
+            self.assertEqual(self.observe()["reason"], "state_unavailable_or_invalid")
+
+    def test_user_scope_reads_only_the_case_owned_user_state(self):
+        self.write_state(self.make_state())
+        user = {**self.selected, "scope": "user"}
+        self.assertEqual(audit.declared_runtime_lineage(self.root, user)["reason"],
+                         "state_unavailable_or_invalid")
+        path = self.root / "uap-data/state-v2.json"
+        path.parent.mkdir()
+        path.write_text(json.dumps(self.make_state()), encoding="utf-8")
+        self.assertEqual(audit.declared_runtime_lineage(self.root, user)["reason"], "unverified_local_state")
+
+    def test_successful_add_includes_unresolved_lineage_and_stays_failed(self):
+        root = self.root / "case"
+        state = self.make_state()
+        def fake_add(*args, **kwargs):
+            path = root / "project/.uap/state-v2.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(state), encoding="utf-8")
+            return {"exit_code": 0, "timeout": False, "_json": {"result": "success"},
+                    "stdout_tail": "", "stderr_tail": ""}
+        with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+             mock.patch.object(audit.live, "call", side_effect=fake_add):
+            receipt = audit.run_case(Path("/test-only-cli"), self.selected, root, None)
+        self.assertEqual(receipt["status"], "failed")
+        self.assertIn("inconclusive", receipt["reason"])
+        self.assertEqual(receipt["declared_runtime_lineage"]["status"], "unresolved")
+        self.assertEqual(len(receipt["declared_runtime_lineage"]["records"]), 4)
+        self.assertFalse(receipt["runtime_qualified"])
+
+    def test_scope_mismatch_reason_is_not_masked_by_lineage(self):
+        root = self.root / "case"
+        before = {"directories": {"metadata:0:foreign": (1, 2, 3, 4)}, "files": {}}
+        after = {"directories": {"metadata:0:foreign": (1, 2, 3, 5)}, "files": {}}
+        def fake_add(*args, **kwargs):
+            path = root / "project/.uap/state-v2.json"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(self.make_state()), encoding="utf-8")
+            return {"exit_code": 0, "timeout": False, "_json": {"result": "success"},
+                    "stdout_tail": "", "stderr_tail": ""}
+        with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+             mock.patch.object(audit.live, "call", side_effect=fake_add), \
+             mock.patch.object(audit, "protected_scope_snapshot", side_effect=[before, after]):
+            receipt = audit.run_case(Path("/test-only-cli"), self.selected, root, None)
+        self.assertEqual(receipt["status"], "failed")
+        self.assertEqual(receipt["reason"], "add changed the other scope")
+        self.assertIn("protected_scope_changes", receipt)
+        self.assertEqual(receipt["declared_runtime_lineage"]["status"], "unresolved")
+
+
+class ProtectedScopeDiagnosticTests(unittest.TestCase):
+    def test_unreadable_failure_observation_preserves_original_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "case"
+            before = {"directories": {}, "files": {}}
+            with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+                 mock.patch.object(audit.live, "call", side_effect=ValueError("original command failure")), \
+                 mock.patch.object(audit, "protected_scope_snapshot", side_effect=[
+                     before, ValueError("unreadable private scope " + temporary)]):
+                receipt = audit.run_case(Path("/test-only-cli"), case(), root, None)
+            self.assertEqual(receipt["status"], "failed")
+            self.assertEqual(receipt["reason"], "original command failure")
+            self.assertEqual(receipt["protected_scope_observation"]["status"], "failed")
+            self.assertNotIn("protected_scope_changes", receipt)
+            assert_no_private_path(self, receipt["protected_scope_observation"], temporary)
+
+    def test_bounded_paths_redact_values_and_distinguish_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            native = root / "home/.pi/agent"
+            before = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 4)}, "files": {}}
+            after = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 5),
+                                      "link:0:../../PRIVATE": "secret link destination"},
+                     "files": {f"uap-data/entry-{index}": {"digest": "private-value"}
+                               for index in range(40)}}
+            result = audit.protected_scope_changes(before, after, root, "project", native)
+            self.assertEqual(result["total"], 42)
+            self.assertEqual(len(result["entries"]), 32)
+            self.assertTrue(result["truncated"])
+            self.assertIn({"path": "home/.pi/agent/foreign.json", "kind": "changed",
+                           "field": "metadata", "changed_fields": ["mtime"]}, result["entries"])
+            self.assertIn({"path": "<redacted>", "kind": "added", "field": "entry"}, result["entries"])
+            encoded = json.dumps(result)
+            assert_no_private_path(self, result, temporary)
+            self.assertNotIn("private-value", encoded)
+            self.assertNotIn("secret link destination", encoded)
+            self.assertNotIn("PRIVATE", encoded)
+
+    def test_scope_mismatch_remains_failure_with_redacted_receipt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "case"
+            before = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 4)}, "files": {}}
+            after = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 5)}, "files": {}}
+            result = {"exit_code": 0, "timeout": False, "_json": {"result": "success"},
+                      "stdout_tail": "", "stderr_tail": ""}
+            with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+                 mock.patch.object(audit.live, "call", return_value=result), \
+                 mock.patch.object(audit, "protected_scope_snapshot", side_effect=[before, after]):
+                receipt = audit.run_case(Path("/test-only-cli"), case(), root, None)
+            self.assertEqual(receipt["status"], "failed")
+            self.assertEqual(receipt["reason"], "add changed the other scope")
+            changes = receipt["protected_scope_changes"]
+            self.assertEqual(changes["entries"][0]["changed_fields"], ["mtime"])
+            assert_no_private_path(self, changes, temporary)
+            before = json.dumps(receipt)
+            compact = audit.compact_report({"status": "failed", "cases": [receipt]})
+            self.assertEqual(json.dumps(receipt), before)
+            self.assertEqual(receipt["trace"][-1]["exit_code"], 0)
+            self.assertEqual(receipt["reason"], "add changed the other scope")
+            self.assertEqual(compact["cases"][0]["status"], "failed")
+            self.assertEqual(compact["cases"][0]["last_operation"], "add")
+            self.assertNotIn("reason", compact["cases"][0])
+            self.assertNotIn("trace", compact["cases"][0])
+            assert_no_private_path(self, compact, temporary)
+
+    def test_successful_dependency_add_remains_inconclusive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "case"
+            selected = {**case(), "expected": "dependency-refusal"}
+            result = {"exit_code": 0, "timeout": False, "_json": {"result": "success"},
+                      "stdout_tail": "", "stderr_tail": ""}
+            with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+                 mock.patch.object(audit.live, "call", return_value=result):
+                receipt = audit.run_case(Path("/test-only-cli"), selected, root, None)
+            self.assertEqual(receipt["status"], "failed")
+            self.assertIn("inconclusive", receipt["reason"])
+            self.assertFalse(receipt["activation_qualified"])
+
+    def test_exact_refusal_still_requires_no_scope_mutation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "case"
+            selected = {**case(), "expected": "dependency-refusal", "name": "marketing-kit",
+                        "distribution": "777genius/marketing-kit"}
+            message = "agentplugins: dependency conflict for directory:777genius/notion: marketing-kit version 0.1.0"
+            result = {"exit_code": 1, "timeout": False, "_json": None, "stdout_full": "",
+                      "stderr_full": message, "stdout_tail": "", "stderr_tail": message}
+            with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+                 mock.patch.object(audit.live, "call", return_value=result):
+                receipt = audit.run_case(Path("/test-only-cli"), selected, root, None)
+            self.assertEqual(receipt["status"], "expected-dependency-refusal")
+            self.assertEqual(receipt["refusal"]["distribution"], "777genius/notion")
+            self.assertNotIn("protected_scope_changes", receipt)
+
+    def test_exact_refusal_with_changed_protected_scope_is_a_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "case"
+            selected = {**case(), "expected": "dependency-refusal", "name": "marketing-kit",
+                        "distribution": "777genius/marketing-kit"}
+            message = "agentplugins: dependency conflict for directory:777genius/notion: marketing-kit version 0.1.0"
+            result = {"exit_code": 1, "timeout": False, "_json": None, "stdout_full": "",
+                      "stderr_full": message, "stdout_tail": "", "stderr_tail": message}
+            before = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 4)}, "files": {}}
+            after = {"directories": {"metadata:0:foreign.json": (1, 2, 3, 5)}, "files": {}}
+            observations = []
+            def snapshot(*args):
+                observations.append(None)
+                return before if len(observations) == 1 else after
+            with mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+                 mock.patch.object(audit.live, "call", return_value=result), \
+                 mock.patch.object(audit, "protected_scope_snapshot", side_effect=snapshot):
+                receipt = audit.run_case(Path("/test-only-cli"), selected, root, None)
+            self.assertEqual(receipt["status"], "failed")
+            self.assertEqual(receipt["reason"], "add changed the other scope")
+            self.assertEqual(receipt["trace"][-1]["exit_code"], 1)
+            self.assertEqual(receipt["protected_scope_changes"]["entries"][0]["changed_fields"], ["mtime"])
+            self.assertFalse(receipt["activation_qualified"])
+            assert_no_private_path(self, receipt["protected_scope_changes"], temporary)
+
+
 class NativeExtractionTests(unittest.TestCase):
     @staticmethod
     def archive(kind, size=64, names=None, symlink=False, prefix=None):
@@ -751,6 +1182,905 @@ class NativeCleanupTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 audit.checked_native_cleanup(native, case(), {}, root)
 
+
+
+
+class PiProjectTrustTests(unittest.TestCase):
+    # Frozen .116 hook fixture, not a generated-marker approximation.
+    HOOK = b"// Generated by Universal Agent Plugins: Pi project trust hook, schema 1.\n// Answers \"yes\" only for a project recorded by a confirmed UAP installation\n// whose .pi holds nothing but UAP-managed resources with unchanged content,\n// when Pi has no saved decision or non-default policy for it. Everything else,\n// including any error, stays \"undecided\" so Pi's own trust flow decides.\nimport { createHash } from \"node:crypto\";\nimport { closeSync, constants, fstatSync, lstatSync, openSync, readdirSync, readFileSync, realpathSync } from \"node:fs\";\nimport { homedir } from \"node:os\";\nimport { basename, dirname, join, resolve } from \"node:path\";\nimport { fileURLToPath } from \"node:url\";\n\nconst LIMIT = 4194304;\nconst TREE_ENTRIES = 16384;\nconst TREE_BYTES = 67108864;\nconst SURFACES = [\"extensions\", \"skills\", \"prompts\", \"themes\"];\nconst ENTRIES = new Set([...SURFACES, \"mcp.json\", \"mcp.json.agentplugins.lock\"]);\nconst OWNED = [\"extensions\", \"skills\", \"prompts\", \"themes\", \"mcp_servers\"];\n\nfunction comparable(path) {\n  const full = resolve(path);\n  return process.platform === \"win32\" ? full.toLowerCase() : full;\n}\n\nfunction kind(path) {\n  try {\n    const info = lstatSync(path);\n    return info.isDirectory() ? \"directory\" : info.isFile() ? \"file\" : \"other\";\n  } catch (error) {\n    if (error && error.code === \"ENOENT\") return \"absent\";\n    throw error;\n  }\n}\n\nfunction object(value) {\n  return typeof value === \"object\" && value !== null && !Array.isArray(value);\n}\n\nfunction document(path, absent) {\n  const found = kind(path);\n  if (found === \"absent\" && absent !== undefined) return absent;\n  if (found !== \"file\" || lstatSync(path).size > LIMIT) throw new Error(\"unexpected trust input\");\n  const value = JSON.parse(readFileSync(path, \"utf8\").replace(/^\\uFEFF/, \"\"));\n  if (!object(value)) throw new Error(\"unexpected trust input\");\n  return value;\n}\n\nfunction bytewise(left, right) {\n  return Buffer.compare(Buffer.from(left), Buffer.from(right));\n}\n\nfunction fileDigest(path, budget) {\n  const fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));\n  try {\n    const info = fstatSync(fd);\n    budget.bytes += info.size;\n    if (!info.isFile() || info.nlink !== 1 || budget.bytes > TREE_BYTES) throw new Error(\"owned file is not plain\");\n    const body = readFileSync(fd);\n    if (body.length !== info.size) throw new Error(\"owned file changed\");\n    return createHash(\"sha256\").update(body).digest(\"hex\");\n  } finally {\n    closeSync(fd);\n  }\n}\n\nfunction walk(directory, relative, hash, budget) {\n  for (const name of readdirSync(directory).sort(bytewise)) {\n    if (++budget.entries > TREE_ENTRIES) throw new Error(\"owned resource is too large\");\n    const path = join(directory, name);\n    const child = relative ? relative + \"/\" + name : name;\n    const found = kind(path);\n    if (found === \"directory\") {\n      hash.update(\"d\\0\" + child + \"\\0\");\n      walk(path, child, hash, budget);\n    } else if (found === \"file\") {\n      hash.update(\"f\\0\" + child + \"\\0\" + fileDigest(path, budget) + \"\\0\");\n    } else {\n      throw new Error(\"owned resource holds a link or special file\");\n    }\n  }\n}\n\nfunction treeDigest(root) {\n  if (kind(root) !== \"directory\") throw new Error(\"owned resource is not a directory\");\n  const hash = createHash(\"sha256\");\n  walk(root, \"\", hash, { entries: 0, bytes: 0 });\n  return \"sha256:\" + hash.digest(\"hex\");\n}\n\nfunction frame(value, hash) {\n  if (value === null) hash.update(\"n\");\n  else if (value === true || value === false) hash.update(value ? \"t\" : \"f\");\n  else if (typeof value === \"number\") {\n    const bits = Buffer.alloc(8);\n    bits.writeDoubleBE(value);\n    hash.update(\"d\" + bits.toString(\"hex\"));\n  } else if (typeof value === \"string\") {\n    const bytes = Buffer.from(value, \"utf8\");\n    hash.update(\"s\" + bytes.length + \":\");\n    hash.update(bytes);\n  } else if (Array.isArray(value)) {\n    hash.update(\"a\" + value.length + \":\");\n    for (const item of value) frame(item, hash);\n  } else if (object(value)) {\n    const keys = Object.keys(value).sort(bytewise);\n    hash.update(\"o\" + keys.length + \":\");\n    for (const key of keys) {\n      frame(key, hash);\n      frame(value[key], hash);\n    }\n  } else throw new Error(\"unsupported value\");\n}\n\nfunction valueDigest(value) {\n  const hash = createHash(\"sha256\");\n  frame(value, hash);\n  return \"sha256:\" + hash.digest(\"hex\");\n}\n\nfunction owned(config, owners) {\n  const names = Object.fromEntries(OWNED.map((surface) => [surface, new Map()]));\n  for (const [artifact, entry] of Object.entries(owners)) {\n    if (!object(entry)) throw new Error(\"invalid owner\");\n    // A removed installation leaves no live package directory to vouch for.\n    if (kind(join(config, \"extensions\", artifact)) !== \"directory\") continue;\n    for (const surface of OWNED) {\n      const recorded = entry[surface] ?? {};\n      if (!object(recorded)) throw new Error(\"invalid owner\");\n      for (const [name, digest] of Object.entries(recorded)) {\n        if (typeof digest !== \"string\" || (names[surface].has(name) && names[surface].get(name) !== digest)) throw new Error(\"invalid owner\");\n        names[surface].set(name, digest);\n      }\n    }\n  }\n  return names;\n}\n\nfunction onlyOwned(project, owners) {\n  const config = join(project, \".pi\");\n  if (kind(config) !== \"directory\") return false;\n  const names = owned(config, owners);\n  if (readdirSync(config).some((name) => !ENTRIES.has(name))) return false;\n  for (const surface of SURFACES) {\n    const directory = join(config, surface);\n    const found = kind(directory);\n    if (found === \"absent\") continue;\n    if (found !== \"directory\") return false;\n    for (const name of readdirSync(directory)) {\n      if (!names[surface].has(name) || treeDigest(join(directory, name)) !== names[surface].get(name)) return false;\n    }\n  }\n  const mcp = document(join(config, \"mcp.json\"), {});\n  if (Object.keys(mcp).some((key) => key !== \"mcpServers\")) return false;\n  const servers = mcp.mcpServers ?? {};\n  if (!object(servers)) return false;\n  for (const [name, entry] of Object.entries(servers)) {\n    if (!names.mcp_servers.has(name) || valueDigest(entry) !== names.mcp_servers.get(name)) return false;\n  }\n  let home = resolve(process.env.HOME || homedir());\n  try {\n    home = realpathSync(home);\n  } catch {}\n  const userSkills = comparable(join(home, \".agents\", \"skills\"));\n  for (let directory = project; ; directory = dirname(directory)) {\n    const skills = join(directory, \".agents\", \"skills\");\n    if (comparable(skills) !== userSkills && kind(skills) !== \"absent\") return false;\n    if (dirname(directory) === directory) return true;\n  }\n}\n\nfunction leftToHook(agent, project) {\n  // A saved trust.json decision or a non-default policy belongs to Pi.\n  const settings = document(join(agent, \"settings.json\"), {});\n  if (settings.defaultProjectTrust === \"always\" || settings.defaultProjectTrust === \"never\") return false;\n  const saved = document(join(agent, \"trust.json\"), {});\n  for (let directory = project; ; directory = dirname(directory)) {\n    for (const [path, decision] of Object.entries(saved)) {\n      if ((decision === true || decision === false) && comparable(path) === comparable(directory)) return false;\n    }\n    if (dirname(directory) === directory) return true;\n  }\n}\n\nfunction agentDir() {\n  // Pi's own agent directory: PI_CODING_AGENT_DIR with ~ and file:// support,\n  // otherwise ~/.pi/agent. Other spellings stay unmatched and undecided.\n  const configured = process.env.PI_CODING_AGENT_DIR;\n  if (!configured) return join(homedir(), \".pi\", \"agent\");\n  if (configured === \"~\") return homedir();\n  if (configured.startsWith(\"~/\") || (process.platform === \"win32\" && configured.startsWith(\"~\\\\\"))) return join(homedir(), configured.slice(2));\n  if (configured.startsWith(\"file://\")) return fileURLToPath(configured);\n  return resolve(configured);\n}\n\nfunction decide(cwd) {\n  const hook = dirname(realpathSync(fileURLToPath(import.meta.url)));\n  if (basename(hook) !== \"agentplugins-project-trust\" || basename(dirname(hook)) !== \"extensions\") return false;\n  // Answer only for the profile the hook was installed into. Another profile\n  // reaching it through a symlinked extensions directory keeps its own trust.\n  const agent = agentDir();\n  if (kind(join(agent, \"extensions\")) !== \"directory\" || comparable(realpathSync(agent)) !== comparable(dirname(dirname(hook)))) return false;\n  const recorded = document(join(hook, \"projects.json\"));\n  if (recorded.schema_version !== 1 || !object(recorded.projects)) return false;\n  const project = realpathSync(resolve(cwd));\n  const matches = Object.entries(recorded.projects).filter(([root]) => comparable(root) === comparable(project));\n  if (matches.length !== 1 || !object(matches[0][1])) return false;\n  return leftToHook(agent, project) && onlyOwned(project, matches[0][1]);\n}\n\nexport default function agentPluginsProjectTrust(pi) {\n  pi.on(\"project_trust\", (event) => {\n    try {\n      return { trusted: typeof event?.cwd === \"string\" && decide(event.cwd) ? \"yes\" : \"undecided\" };\n    } catch {\n      return { trusted: \"undecided\" };\n    }\n  });\n}\n"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.native = self.root / "home/.pi/agent"
+        self.native.mkdir(parents=True)
+        self.project = self.root / "project"
+        self.project.mkdir()
+        self.locator = self.project / ".pi/extensions/notion-owner"
+        self.locator.mkdir(parents=True)
+        (self.locator / "plugin.json").write_text("{}", encoding="utf-8")
+        self.oracle = audit.PiProjectTrustOracle(self.root, self.native)
+        self.case = {**case(), "name": "notion"}
+        self.binding = {"target_locator": str(self.locator), "physical_artifact_id": "notion-owner"}
+        self.success = {"exit_code": 0, "timeout": False}
+        self.original = audit.protected_scope_snapshot(self.root, "project", self.native)
+        self.addCleanup(mock.patch.stopall)
+        mock.patch.object(audit, "checked_binding", return_value=({}, self.binding, {})).start()
+        mock.patch.object(audit, "checked_native_materialization", return_value={}).start()
+        mock.patch.object(audit, "state_file", return_value={}).start()
+
+    def install(self):
+        self.oracle.hook.mkdir(parents=True, mode=0o700, exist_ok=True)
+        self.oracle.hook.parent.chmod(0o700)
+        self.oracle.hook.chmod(0o700)
+        self.record = {"schema_version": 1, "projects": {str(self.project): {"notion-owner": {
+            "extensions": {"notion-owner": self.oracle.tree_digest(self.locator)},
+            "skills": {}, "mcp_servers": {"notion": self.oracle.value_digest(
+                {"url": "https://mcp.notion.com/mcp"})}}}}}
+        for path, body in ((self.oracle.files[0], self.HOOK),
+                           (self.oracle.files[1], json.dumps(self.record).encode()),
+                           (self.oracle.files[2], b""), (self.oracle.files[3], b"")):
+            path.write_bytes(body)
+            path.chmod(0o600)
+
+    def observe(self, operation="add", result=None):
+        current = audit.protected_scope_snapshot(self.root, "project", self.native)
+        return self.oracle.observe(operation, self.success if result is None else result, current, self.case)
+
+    def rewrite_record(self):
+        self.oracle.files[1].write_text(json.dumps(self.record), encoding="utf-8")
+
+    def test_owned_hook_has_exact_phase_lifecycle_and_foreign_snapshot(self):
+        (self.native / "foreign.txt").write_text("foreign", encoding="utf-8")
+        self.original = audit.protected_scope_snapshot(self.root, "project", self.native)
+        self.install()
+        self.assertEqual(self.observe(), self.original)
+        for operation in ("info", "list", "update", "repair"):
+            self.assertEqual(self.observe(operation), self.original)
+        for path in self.oracle.files[:2]:
+            path.unlink()
+        self.assertEqual(self.observe("remove"), self.original)
+        self.assertEqual(self.observe("list"), self.original)
+        self.assertEqual(self.oracle.phase, "removed")
+
+    def test_failure_scope_diagnostic_filters_only_unchanged_admitted_hook(self):
+        self.install()
+        self.observe()
+        changed = self.root / "uap-data/uap.toml"
+        changed.parent.mkdir()
+        changed.write_text("private contents", encoding="utf-8")
+        result = audit.failure_scope_changes(
+            self.root, self.case, self.native, self.original, self.oracle)
+        self.assertEqual([entry["path"] for entry in result["entries"]], ["uap-data/uap.toml"])
+        self.assertEqual(self.oracle.phase, "installed")
+        self.assertNotIn("private contents", json.dumps(result))
+        changed.unlink()
+        for path in self.oracle.files[:2]:
+            path.unlink()
+        self.observe("remove")
+        self.assertIsNone(audit.failure_scope_changes(
+            self.root, self.case, self.native, self.original, self.oracle))
+        self.assertEqual(self.oracle.phase, "removed")
+
+    def test_failure_scope_diagnostic_retains_unverified_or_changed_hook(self):
+        self.install()
+        fresh = audit.failure_scope_changes(
+            self.root, self.case, self.native, self.original, self.oracle)
+        self.assertTrue(any(entry["path"].endswith("/index.ts") for entry in fresh["entries"]))
+        self.assertEqual(self.oracle.phase, "fresh")
+        self.observe()
+        self.oracle.files[0].write_bytes(b"unverified replacement")
+        changed = audit.failure_scope_changes(
+            self.root, self.case, self.native, self.original, self.oracle)
+        self.assertTrue(any(entry["path"].endswith("/index.ts") for entry in changed["entries"]))
+        self.assertEqual(self.oracle.phase, "installed")
+
+    def test_observed_changed_hook_cannot_be_hidden_by_restoring_before_validation(self):
+        self.install()
+        self.observe()
+        hook = self.oracle.files[0]
+        original_snapshot = audit.protected_scope_snapshot
+        def changed_then_restored(*args):
+            stamp = hook.stat()
+            hook.write_bytes(b"observed unreviewed hook")
+            changed = original_snapshot(*args)
+            hook.write_bytes(self.HOOK)
+            os.utime(hook, ns=(stamp.st_atime_ns, stamp.st_mtime_ns))
+            return changed
+        with mock.patch.object(audit, "protected_scope_snapshot", side_effect=changed_then_restored):
+            changes = audit.failure_scope_changes(
+                self.root, self.case, self.native, self.original, self.oracle)
+        self.assertTrue(any(entry["path"].endswith("/index.ts") for entry in changes["entries"]))
+        self.assertEqual(self.oracle.phase, "installed")
+        captured = changed_then_restored(self.root, "project", self.native)
+        with self.assertRaisesRegex(ValueError, "snapshot (bytes|metadata) differs"):
+            self.oracle.observe("info", self.success, captured, self.case)
+
+    def test_hook_replacement_between_validation_and_image_is_refused_before_admission(self):
+        self.install()
+        original = self.oracle.allowed_image
+        def replaced_image(*args, **kwargs):
+            self.oracle.files[0].write_bytes(b"inert unvalidated hook")
+            return original(*args, **kwargs)
+        with mock.patch.object(self.oracle, "allowed_image", side_effect=replaced_image):
+            with self.assertRaisesRegex(ValueError, "admitted hook differs"):
+                self.observe()
+        self.assertEqual(self.oracle.phase, "fresh")
+        self.assertIsNone(self.oracle.installed)
+        self.assertIsNone(self.oracle.validated_hook)
+
+    def test_remove_refuses_stored_hook_bytes_that_were_not_validated(self):
+        self.install()
+        self.observe()
+        hook = self.oracle.files[0]
+        stamp = self.oracle.installed[hook]
+        self.oracle.installed[hook] = (*stamp[:-1], b"inert unvalidated hook")
+        for path in self.oracle.files[:2]:
+            path.unlink()
+        with self.assertRaisesRegex(ValueError, "admitted hook differs"):
+            self.observe("remove")
+        self.assertEqual(self.oracle.phase, "installed")
+
+    def test_forged_hook_marker_is_not_ownership(self):
+        self.install()
+        self.oracle.files[0].write_bytes(self.HOOK.replace(b"node:crypto", b"evil:crypto"))
+        with self.assertRaisesRegex(ValueError, "frozen release"):
+            self.observe()
+
+    def test_wrong_project_owner_and_resource_digest_are_refused(self):
+        for mutation in ("project", "owner", "digest", "extra", "schema"):
+            with self.subTest(mutation=mutation):
+                self.install()
+                owners = self.record["projects"][str(self.project)]
+                if mutation == "project":
+                    self.record["projects"][str(self.root / "elsewhere")] = self.record["projects"].pop(str(self.project))
+                elif mutation == "owner":
+                    owners["foreign"] = owners.pop("notion-owner")
+                elif mutation == "digest":
+                    owners["notion-owner"]["extensions"]["notion-owner"] = "sha256:" + "0" * 64
+                elif mutation == "extra":
+                    owners["notion-owner"]["mcp_servers"]["foreign"] = "sha256:" + "0" * 64
+                else:
+                    self.record["schema_version"] = True
+                self.rewrite_record()
+                with self.assertRaises(ValueError):
+                    self.observe()
+
+    def test_foreign_hook_entry_and_mutated_inert_lock_are_refused(self):
+        self.install()
+        foreign = self.oracle.hook / "index.js"
+        foreign.write_text("foreign", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "foreign"):
+            self.observe()
+        foreign.unlink()
+        self.oracle.files[2].write_bytes(b"foreign lock")
+        with self.assertRaisesRegex(ValueError, "inert"):
+            self.observe()
+
+    def test_foreign_user_mutation_is_not_projected_out(self):
+        self.install()
+        self.assertEqual(self.observe(), self.original)
+        (self.native / "trust.json").write_text("{}", encoding="utf-8")
+        self.assertNotEqual(self.observe("info"), self.original)
+
+    def test_wrong_phase_failed_add_and_missing_cleanup_are_refused(self):
+        self.install()
+        for operation, output in (("repair", self.success), ("add", {"exit_code": 1, "timeout": False}),
+                                  ("add", {"exit_code": 0, "timeout": True})):
+            with self.assertRaises(ValueError):
+                self.observe(operation, output)
+        self.observe()
+        with self.assertRaises(ValueError):
+            self.observe("remove")
+        with self.assertRaises(ValueError):
+            self.observe("add")
+
+    @unittest.skipIf(os.name == "nt", "POSIX mode and symlink fixture")
+    def test_links_modes_and_replaced_directory_are_refused(self):
+        self.install()
+        path = self.oracle.files[0]
+        body = path.read_bytes()
+        path.unlink()
+        outside = self.root / "outside"
+        outside.write_bytes(body)
+        path.symlink_to(outside)
+        with self.assertRaises(ValueError):
+            self.observe()
+        path.unlink()
+        path.write_bytes(body)
+        path.chmod(0o644)
+        with self.assertRaisesRegex(ValueError, "mode"):
+            self.observe()
+        path.chmod(0o600)
+        self.observe()
+        old = self.oracle.hook.with_name("old-hook")
+        self.oracle.hook.rename(old)
+        self.oracle.hook.mkdir(mode=0o700)
+        with self.assertRaisesRegex(ValueError, "replaced"):
+            self.observe("info")
+
+    def test_equal_bytes_replacement_after_add_is_refused(self):
+        self.install()
+        self.observe()
+        path = self.oracle.files[0]
+        replacement = self.root / "replacement"
+        replacement.write_bytes(path.read_bytes())
+        replacement.chmod(0o600)
+        replacement.replace(path)
+        with self.assertRaisesRegex(ValueError, "changed after"):
+            self.observe("repair")
+
+    def test_replacement_during_held_read_is_refused(self):
+        self.install()
+        path = self.oracle.files[0]
+        original = audit.live.copilot_settings_read
+        def replace_after_read(selected, root):
+            value = original(selected, root)
+            if selected == path:
+                replacement = self.root / "racing-replacement"
+                replacement.write_bytes(path.read_bytes())
+                replacement.chmod(0o600)
+                replacement.replace(path)
+            return value
+        with mock.patch.object(audit.live, "copilot_settings_read", side_effect=replace_after_read):
+            with self.assertRaisesRegex(ValueError, "replaced"):
+                self.observe()
+
+    def test_duplicate_trust_key_and_extra_foreign_owner_are_refused(self):
+        self.install()
+        valid = json.dumps(self.record)
+        self.rewrite_record()
+        # Keep an independent fresh phase for the duplicate-key check so it
+        # reaches the parser rather than the already-installed mutation guard.
+        fresh = copy.copy(self.oracle)
+        self.observe()
+        duplicate = valid.replace('"schema_version": 1', '"schema_version": 1, "schema_version": 1', 1)
+        self.assertNotEqual(duplicate, valid)
+        self.oracle.files[1].write_text(duplicate, encoding="utf-8")
+        self.oracle = fresh
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            self.observe()
+
+    def test_valid_trust_owner_with_additional_foreign_owner_is_refused_from_fresh_phase(self):
+        self.install()
+        owners = self.record["projects"][str(self.project)]
+        owners["foreign-owner"] = copy.deepcopy(owners["notion-owner"])
+        self.assertIn("notion-owner", owners)
+        self.assertEqual(self.oracle.phase, "fresh")
+        self.rewrite_record()
+        with self.assertRaisesRegex(ValueError, "verified project ownership"):
+            self.observe()
+        self.assertEqual(self.oracle.phase, "fresh")
+        self.assertIsNone(self.oracle.installed)
+
+    @unittest.skipIf(os.name == "nt", "POSIX hardlink fixture")
+    def test_hardlinked_hook_is_refused(self):
+        self.install()
+        os.link(self.oracle.files[0], self.root / "hook-hardlink")
+        with self.assertRaisesRegex(ValueError, "single-link"):
+            self.observe()
+
+    def test_tree_and_value_framing_match_frozen_contract(self):
+        import hashlib
+        expected = hashlib.sha256(b"f\0plugin.json\0" +
+                                  hashlib.sha256(b"{}").hexdigest().encode() + b"\0").hexdigest()
+        self.assertEqual(self.oracle.tree_digest(self.locator), "sha256:" + expected)
+        self.assertEqual(self.oracle.value_digest({"url": "https://mcp.notion.com/mcp"}),
+                         audit.digest(b"o1:s3:urls26:https://mcp.notion.com/mcp"))
+
+
+
+
+class PiClosureNativeTests(unittest.TestCase):
+    CAMPAIGN = "---\nname: campaign-planning\ndescription: Plan a marketing campaign, content calendar or landing-page launch using an audience brief, existing Notion content, HubSpot CRM insights and Playwright checks.\n---\n\n# Campaign planning\n\nUse this workflow when the user requests a campaign plan, content calendar,\nlaunch brief or landing-page marketing review.\n\n## Establish the brief\n\nStart from the information the user supplied. Identify the product or offer,\naudience, objective, channels, dates, budget and brand constraints. Ask only for\nmissing details that would materially change the plan. Mark estimates and\nassumptions explicitly; never invent customer research or campaign results.\n\n## Gather relevant evidence\n\n- **Notion:** find the user's relevant brand guidelines, product notes and\n  existing campaign material. Cite the pages used. Draft a content calendar in\n  the answer; create or edit Notion pages when the user requests saving it.\n- **HubSpot CRM:** read authorized aggregate pipeline and audience context to\n  inform personas and channel priorities. This planning workflow uses read\n  tools; it does not create contacts, send campaigns or update CRM records.\n  Do not copy a contact database into the campaign plan.\n- **Playwright:** inspect the requested landing page for message consistency,\n  primary calls to action, mobile layout and obvious broken navigation. Report\n  observed issues with the page URL and evidence. Do not submit live forms or\n  create purchases as part of a review.\n\nUse only the integrations relevant to the request. If a workspace connection\nis unavailable, continue from the brief and identify the missing evidence.\nInstalling a plugin does not supply Notion or HubSpot account authorization.\n\n## Produce a usable plan\n\nKeep the result proportional to the campaign. Include:\n\n1. Objective, audience, offer and evidence-backed assumptions.\n2. The main message and two or three supporting content themes.\n3. A channel calendar with date, asset, owner and call to action.\n4. Draft copy for the highest-priority asset.\n5. Landing-page issues and the smallest useful changes.\n6. Success measures, their data source and the next review date.\n\nDistinguish proposed work from completed actions. Link supporting Notion pages\nand reviewed URLs. Planning does not itself publish content or contact leads;\nperform those actions only when they are part of the user's explicit request.\n"
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        native = self.root / "home/.pi/agent"
+        native.mkdir(parents=True)
+        (self.root / "project").mkdir()
+        self.selected = self.root / "project/.pi"
+        self.selected.mkdir()
+        self.oracle = audit.PiProjectTrustOracle(self.root, native)
+        self.case = {"client": "pi", "scope": "project"}
+        self.closure = audit.module("source_closure_pi_fixture", "released_source_closure.py")
+        runtime_patch = mock.patch.object(self.closure, "checked_playwright_runtime")
+        self.runtime_mock = runtime_patch.start()
+        self.addCleanup(runtime_patch.stop)
+        self.owners = {}
+        self.entries = {
+            audit.FOREIGN_NATIVE_MCP: {"url": "https://foreign.invalid/mcp", "enabled": False},
+            "notion": {"url": "https://mcp.notion.com/mcp"},
+            "hubspot-crm": {"url": "https://mcp.hubspot.com"}}
+        for alias in audit.live.MARKETING_KIT_DISTRIBUTIONS:
+            installation_id = "installation-" + alias
+            physical = alias + "-" + audit.hashlib.sha256(installation_id.encode()).hexdigest()[:12]
+            locator = self.selected / "extensions" / physical
+            locator.mkdir(parents=True)
+            (locator / "plugin.json").write_text("{}", encoding="utf-8")
+            (locator / "README.md").write_text("inert reviewed file", encoding="utf-8")
+            if alias == "marketing-kit":
+                for name in ("SOURCES.md", "uap.toml"):
+                    (locator / name).write_text("inert reviewed file", encoding="utf-8")
+            else:
+                (locator / "mcp.json").write_text("{}", encoding="utf-8")
+            if alias == "playwright":
+                (locator / "NOTICE").write_text("inert reviewed file", encoding="utf-8")
+                runtime = locator / "io.github.777genius.agentplugins/runtime"
+                runtime.mkdir(parents=True)
+                for name in ("launcher.mjs", "package.json", "package-lock.json", "runtime.json"):
+                    (runtime / name).write_text("inert reviewed runtime", encoding="utf-8")
+            package = {"object_id": "package:pi:" + physical, "kind": "managed_package_directory",
+                       "logical_name": alias, "path": str(locator), "protection_class": "managed",
+                       "managed_digest": "sha256:" + "a" * 64}
+            if alias == "marketing-kit":
+                path = self.selected / "skills/campaign-planning"
+                path.mkdir(parents=True)
+                source = locator / "skills/campaign-planning"
+                source.mkdir(parents=True)
+                for directory in (path, source):
+                    (directory / "SKILL.md").write_bytes(self.CAMPAIGN.encode())
+                body = self.CAMPAIGN.encode()
+                image = {"SKILL.md": ("file", (path / "SKILL.md").lstat().st_mode,
+                                      None, None, None, len(body), audit.hashlib.sha256(body).hexdigest())}
+                adapter = type("SkillReader", (), {"bytes": lambda _, p: p.read_bytes()})()
+                md = self.oracle.resource_audit.PiProjectSkillAudit.skill_digest(adapter, path, image)
+                kind = "pi_project_skill_directory"
+                member = {"kind": kind, "object_id": kind + ":campaign-planning", "logical_name": "campaign-planning",
+                          "source_relative": "skills/campaign-planning", "path": str(path),
+                          "managed_digest": md, "protection_class": "managed"}
+            else:
+                kind = "pi_project_mcp_server"
+                member = {"kind": kind, "object_id": kind + ":" + alias, "logical_name": alias,
+                          "path": str(self.selected / "mcp.json"), "managed_digest": "sha256:" + "b" * 64,
+                          "protection_class": "managed"}
+            binding = {"client_binding_id": alias, "physical_artifact_id": physical,
+                       "native_objects": [package, member], "receipts": [{"phase": "committed",
+                       "client_binding_id": alias, "active_path": str(locator), "after_digest": package["managed_digest"]}]}
+            self.owners[alias] = {"binding": binding, "locator": locator,
+                                  "installation": {"declared_name": alias, "installation_id": installation_id}}
+        locator = self.owners["playwright"]["locator"]
+        owner = self.owners["playwright"]
+        installation_id = owner["installation"]["installation_id"]
+        physical = owner["binding"]["physical_artifact_id"]
+        data = self.root / "project/.uap/plugin-data" / physical
+        data.mkdir(parents=True, mode=0o700)
+        data.chmod(0o700)
+        receipt_id = "data_" + audit.hashlib.sha256(
+            (installation_id + "\0" + physical + "\0project").encode()).hexdigest()[:24]
+        receipt = {"data_receipt_id": receipt_id, "physical_backend_id": physical,
+                   "scope": "project", "locator": str(data), "state": "owned",
+                   "ownership_digest": "sha256:" + audit.hashlib.sha256(
+                       ("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + str(data)).encode()).hexdigest()}
+        owner["installation"]["data_receipts"] = {receipt_id: receipt}
+        owner["binding"]["data_receipt_id"] = receipt_id
+        (data / ".agentplugins-data-owner.json").write_text(json.dumps(receipt), encoding="utf-8")
+        (data / ".agentplugins-data-owner.json").chmod(0o600)
+        self.entries["playwright"] = {"command": "node", "args": [
+            str(locator) + "/io.github.777genius.agentplugins/runtime/launcher.mjs"],
+            "env": {"PLUGIN_ROOT": str(locator), "PLUGIN_DATA": str(data)}, "cwd": str(locator)}
+        self.config()
+
+    def config(self):
+        (self.selected / "mcp.json").write_text(json.dumps({"mcpServers": self.entries}), encoding="utf-8")
+
+    def check(self, alias):
+        return audit.checked_pi_closure_native(self.oracle, self.closure, self.case, self.selected,
+                                               alias, self.owners[alias])
+
+    def test_all_four_exact_native_owners_produce_trust_map(self):
+        proofs = {alias: self.check(alias) for alias in self.owners}
+        self.assertTrue(all(p["content_verified"] is True for p in proofs.values()))
+        self.assertEqual(set(proofs["marketing-kit"]["trust_owner"]["skills"]), {"campaign-planning"})
+        for alias in ("notion", "hubspot-crm", "playwright"):
+            self.assertEqual(set(proofs[alias]["trust_owner"]["mcp_servers"]), {alias})
+        self.runtime_mock.assert_called_once()
+
+    def test_wrong_transport_and_extra_native_server_are_refused(self):
+        self.entries["playwright"]["args"].append("--evil")
+        self.config()
+        with self.assertRaisesRegex(ValueError, "transport"):
+            self.check("playwright")
+        self.entries["foreign-extra"] = {"command": "evil"}
+        self.config()
+        with self.assertRaisesRegex(ValueError, "transport"):
+            self.check("notion")
+
+    def test_complete_playwright_transport_refuses_missing_extra_and_changed_fields(self):
+        original = copy.deepcopy(self.entries["playwright"])
+        for fault in ("missing-env", "missing-root", "missing-data", "extra-env", "wrong-root",
+                      "wrong-data", "missing-cwd", "wrong-cwd", "extra-field", "extra-arg"):
+            with self.subTest(fault=fault):
+                entry = copy.deepcopy(original)
+                if fault == "missing-env":
+                    del entry["env"]
+                elif fault in ("missing-root", "missing-data"):
+                    del entry["env"]["PLUGIN_ROOT" if fault == "missing-root" else "PLUGIN_DATA"]
+                elif fault == "extra-env":
+                    entry["env"]["FOREIGN"] = "extra"
+                elif fault in ("wrong-root", "wrong-data"):
+                    entry["env"]["PLUGIN_ROOT" if fault == "wrong-root" else "PLUGIN_DATA"] += "-foreign"
+                elif fault == "missing-cwd":
+                    del entry["cwd"]
+                elif fault == "wrong-cwd":
+                    entry["cwd"] += "-foreign"
+                elif fault == "extra-field":
+                    entry["enabled"] = True
+                else:
+                    entry["args"].append("--evil")
+                self.entries["playwright"] = entry
+                self.config()
+                with self.assertRaisesRegex(ValueError, "transport"):
+                    self.check("playwright")
+
+    def test_extra_native_object_wrong_scope_or_missing_receipt_are_refused(self):
+        binding = self.owners["notion"]["binding"]
+        original = copy.deepcopy(binding)
+        for mutation in ("object", "scope", "receipt"):
+            binding.clear()
+            binding.update(copy.deepcopy(original))
+            if mutation == "object":
+                binding["native_objects"].append(copy.deepcopy(binding["native_objects"][0]))
+            elif mutation == "scope":
+                binding["native_objects"][1]["kind"] = "pi_user_mcp_server"
+            else:
+                binding["receipts"] = []
+            with self.assertRaises(ValueError):
+                self.check("notion")
+
+    def test_forged_skill_digest_extra_skill_and_entrypoint_are_refused(self):
+        member = self.owners["marketing-kit"]["binding"]["native_objects"][1]
+        before = member["managed_digest"]
+        member["managed_digest"] = "sha256:" + "f" * 64
+        with self.assertRaisesRegex(ValueError, "digest"):
+            self.check("marketing-kit")
+        member["managed_digest"] = before
+        path = self.selected / "skills/foreign"
+        path.mkdir()
+        with self.assertRaisesRegex(ValueError, "unreviewed Skill"):
+            self.check("marketing-kit")
+        foreign = self.owners["notion"]["locator"] / "index.ts"
+        foreign.write_text("evil", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "entrypoint"):
+            self.check("notion")
+
+    def test_each_reviewed_package_inventory_refuses_extra_skill_and_empty_directory(self):
+        for alias, owner in self.owners.items():
+            with self.subTest(alias=alias):
+                self.check(alias)
+                extra = owner["locator"] / "skills/extra/SKILL.md"
+                extra.parent.mkdir(parents=True)
+                extra.write_text("inert unreviewed Skill", encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    self.check(alias)
+                extra.unlink()
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    self.check(alias)
+                extra.parent.rmdir()
+                if alias != "marketing-kit":
+                    extra.parent.parent.rmdir()
+                self.check(alias)
+
+    def test_missing_reviewed_package_file_is_refused(self):
+        for alias, owner in self.owners.items():
+            with self.subTest(alias=alias):
+                path = owner["locator"] / "README.md"
+                body = path.read_bytes()
+                path.unlink()
+                with self.assertRaisesRegex(ValueError, "inventory differs"):
+                    self.check(alias)
+                path.write_bytes(body)
+                self.check(alias)
+
+    def test_playwright_source_oracle_failure_prevents_native_proof(self):
+        self.runtime_mock.side_effect = ValueError("forged source")
+        with self.assertRaisesRegex(ValueError, "forged source"):
+            self.check("playwright")
+
+
+class ClosureLifecycleIntegrationTests(unittest.TestCase):
+    def selected(self):
+        pin = audit.live.MARKETING_KIT_SIGNED_CLOSURE["777genius/marketing-kit"]
+        return {"name": "marketing-kit", "distribution": "777genius/marketing-kit", "client": "hermes",
+                "scope": "user", "expected": "dependency-closure", "components": ["skills"],
+                "selector": "github:fixture", "source": {"repository": pin["repository"],
+                "revision": pin["resolved_revision"], "path": pin["package_path"]},
+                "tree_digest": pin["tree_digest"], "manifest_digest": pin["manifest_digest"]}
+
+    def exercise(self, *, policy="eligible", error=None, retain_child=False, missing_native=False, partial_saved=False, malformed_operation=None, malformed_result=None, retained_mutation=None, native_error_stage=None, protected_mutation_stage=None):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name).resolve() / "case"
+        calls, stages, owners, events = [], [], {}, []
+        selected = self.selected()
+        helper = SimpleNamespace()
+        real_closure = audit.module("real_cleanup_contract", "released_source_closure.py")
+        def retain_data(record, physical):
+            directory = root / "uap-data/plugin-data" / physical
+            directory.mkdir(parents=True, mode=0o700, exist_ok=True)
+            receipt_id = "data_" + audit.hashlib.sha256(
+                (record["installation_id"] + "\0" + physical + "\0user").encode()).hexdigest()[:24]
+            receipt = {"data_receipt_id": receipt_id, "physical_backend_id": physical,
+                       "scope": "user", "locator": str(directory), "state": "owned",
+                       "ownership_digest": audit.digest(("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + str(directory)).encode())}
+            record["data_receipts"] = {receipt_id: receipt}
+            marker = directory / ".agentplugins-data-owner.json"
+            marker.write_bytes(json.dumps(receipt).encode() + b"\n")
+            marker.chmod(0o600)
+            return receipt_id, directory
+        def authorize(api, context, case_root, case, stage):
+            stages.append(stage)
+            events.append(("authorize", stage))
+            self.assertEqual(events[-2], ("cli-completed", stage))
+            if error is not None:
+                raise ValueError(error)
+            return {"policy_status": policy, "ineligible_distributions": ["777genius/notion"]}
+        def join(*args):
+            return owners
+        def native(api, joined, verifier):
+            if missing_native or native_error_stage is not None and stages[-1] == native_error_stage:
+                raise ValueError("native content incomplete")
+            return {alias: {"content_verified": True} for alias in joined}
+        def cli(argv, env, project, *args, **kwargs):
+            operation = argv[1]
+            events.append(("cli", operation))
+            calls.append((operation, argv[2] if operation in ("info", "update", "repair", "remove") else None))
+            data = root / "uap-data"
+            if operation == "add" and policy == "eligible":
+                native = root / "home/.hermes"
+                skill = native / "skills/campaign-planning"
+                skill.mkdir(parents=True)
+                (skill / "SKILL.md").write_text("fixture", encoding="utf-8")
+                (native / "config.yaml").write_text(audit.yaml.safe_dump({"mcp_servers": {
+                    audit.FOREIGN_NATIVE_MCP: {"command": "echo", "args": ["unrelated-native-audit"]},
+                    "notion": {}, "hubspot-crm": {}, "playwright": {}}}), encoding="utf-8")
+                for alias in audit.live.MARKETING_KIT_DISTRIBUTIONS:
+                    physical = alias + "-" + audit.hashlib.sha256(alias.encode()).hexdigest()[:12]
+                    locator = root / "home/.hermes/plugins" / physical
+                    locator.mkdir(parents=True)
+                    (locator / "plugin.json").write_text("{}", encoding="utf-8")
+                    owners[alias] = {"installation": {"installation_id": alias, "declared_name": alias},
+                        "binding": {"client_binding_id": alias, "physical_artifact_id": physical},
+                        "locator": locator}
+                    if alias == "playwright":
+                        receipt_id, directory = retain_data(owners[alias]["installation"], physical)
+                        owners[alias]["binding"]["data_receipt_id"] = receipt_id
+                        (directory / "retained.txt").write_bytes(b"persistent caller data\n")
+                (data / "uap.toml").write_text('schema_version=1\n[dependencies]\nmarketing-kit="github:fixture"\n[targets]\nhermes=["marketing-kit"]\n', encoding="utf-8")
+                packages = [{"alias": alias, "source_key": selected["selector"] if alias == "marketing-kit"
+                             else "directory:" + distribution}
+                            for alias, distribution in audit.live.MARKETING_KIT_DISTRIBUTIONS.items()]
+                (data / "uap.lock").write_text(json.dumps({"lock_version": 1, "packages": packages}), encoding="utf-8")
+            if operation == protected_mutation_stage:
+                (root / "project/uap.toml").write_text("unexpected protected state", encoding="utf-8")
+                config = root / "home/.hermes/config.yaml"
+                value = audit.yaml.safe_load(config.read_text(encoding="utf-8"))
+                value["mcp_servers"]["notion"] = {"url": "https://unreviewed.invalid"}
+                config.write_text(audit.yaml.safe_dump(value), encoding="utf-8")
+            if operation == "remove":
+                native = root / "home/.hermes"
+                (native / "skills/campaign-planning/SKILL.md").unlink()
+                (native / "skills/campaign-planning").rmdir()
+                (native / "config.yaml").write_text(audit.yaml.safe_dump({"mcp_servers": {
+                    audit.FOREIGN_NATIVE_MCP: {"command": "echo", "args": ["unrelated-native-audit"]}}}), encoding="utf-8")
+                for owner in owners.values():
+                    (owner["locator"] / "plugin.json").unlink()
+                    owner["locator"].rmdir()
+                locked = json.loads((data / "uap.lock").read_text(encoding="utf-8"))
+                retained = [item for item in locked["packages"] if item["alias"] == "notion"] if retain_child else []
+                self.assertEqual(len(retained), 1 if retain_child else 0)
+                (data / "uap.toml").write_text('schema_version=1\n[dependencies]\n[targets]\n', encoding="utf-8")
+                (data / "uap.lock").write_text(json.dumps({"lock_version": 1, "packages": retained}), encoding="utf-8")
+                records = []
+                for alias, owner in owners.items():
+                    record = copy.deepcopy(owner["installation"])
+                    if not record.get("data_receipts"):
+                        retain_data(record, owner["binding"]["physical_artifact_id"])
+                    record.update(clients={}, data_retained=True)
+                    records.append(record)
+                if retained_mutation == "missing":
+                    records.pop()
+                elif retained_mutation == "extra":
+                    records.append(copy.deepcopy(records[0]))
+                elif retained_mutation == "binding":
+                    records[0]["clients"] = {"foreign": {"materialization": "materialized"}}
+                elif retained_mutation == "flag":
+                    records[0]["data_retained"] = False
+                elif retained_mutation == "source":
+                    records[0]["source"] = {"repository": "foreign"}
+                elif retained_mutation == "receipt":
+                    next(iter(records[0]["data_receipts"].values()))["locator"] = str(root / "foreign")
+                elif retained_mutation == "data_bytes":
+                    receipt = next(iter(owners["playwright"]["installation"]["data_receipts"].values()))
+                    (Path(receipt["locator"]) / "retained.txt").write_bytes(b"changed\n")
+                elif retained_mutation == "new_data_file":
+                    receipt = next(iter(records[0]["data_receipts"].values()))
+                    (Path(receipt["locator"]) / "foreign.txt").write_bytes(b"unreviewed\n")
+                (data / "state-v2.json").write_text(json.dumps({"schema_version": 5,
+                    "installations": records}), encoding="utf-8")
+            refused = operation == "add" and policy == "ineligible"
+            if refused and partial_saved:
+                (data / "uap.toml").write_text('schema_version=1\n', encoding="utf-8")
+            events.append(("cli-completed", operation))
+            envelope = {"result": "success", "data": {"installations": []}}
+            if operation == malformed_operation:
+                envelope = {"data": {"installations": []}}
+                if malformed_result is not None:
+                    envelope["result"] = malformed_result
+            return {"exit_code": 1 if refused else 0, "timeout": False,
+                    "_json": envelope,
+                    "stdout_full": "", "stderr_full": ("agentplugins: dependency conflict for directory:777genius/notion: marketing-kit version 1.0.0" if refused else ""),
+                    "stdout_tail": "", "stderr_tail": ""}
+        helper.authorize = authorize
+        helper.checked_closure = join
+        helper.checked_native = native
+        helper.checked_cleanup = real_closure.checked_cleanup
+        helper.data_custody = real_closure.data_custody
+        helper.pi_user_startup_scope = real_closure.pi_user_startup_scope
+        helper.require_fresh_pi_startup_stores = real_closure.require_fresh_pi_startup_stores
+        helper.pi_startup_store_custody = real_closure.pi_startup_store_custody
+        helper.checked_member_native = lambda *args: {"content_verified": True}
+        helper.checked_namespace = real_closure.checked_namespace
+        helper.held_read = lambda api, path, case_root: path.read_bytes()
+        helper.checked_refusal_authority = lambda *args: None
+        original_module = audit.module
+        with mock.patch.object(audit, "module", side_effect=lambda name, filename: helper if filename == "released_source_closure.py" else original_module(name, filename)), \
+             mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+             mock.patch.object(audit.live, "call", side_effect=cli), \
+             mock.patch.object(audit, "checked_dependency_refusal", return_value={"distribution": "777genius/notion"}):
+            outcome = audit.run_case(Path("/fixture-cli"), selected, root, None, policy_context={"verified": True})
+        return outcome, calls, stages
+
+    def test_complete_closure_exercises_all_ids_and_reauthenticates_mutations(self):
+        def windows_write_text(path, data, encoding=None, errors=None, newline=None):
+            with path.open("w", encoding=encoding, errors=errors, newline="\r\n" if newline is None else newline) as stream:
+                return stream.write(data)
+        # Model Windows text-mode newline translation even on POSIX hosts.
+        with mock.patch.object(Path, "write_text", autospec=True, side_effect=windows_write_text):
+            outcome, calls, stages = self.exercise()
+        self.assertEqual(outcome["status"], "materialized-closure-lifecycle-passed", outcome.get("reason"))
+        self.assertEqual(stages, ["add", "update", "repair"])
+        self.assertEqual([target for op, target in calls if op == "info"], list(audit.live.MARKETING_KIT_DISTRIBUTIONS))
+        self.assertIn(("update", "marketing-kit"), calls)
+        self.assertIn(("repair", "marketing-kit"), calls)
+        self.assertIn(("remove", "marketing-kit"), calls)
+        self.assertEqual(outcome["native_cleanup"], "all-four-native-owners-absent")
+        self.assertEqual(set(outcome["retained_data"]), set(audit.live.MARKETING_KIT_DISTRIBUTIONS))
+        self.assertTrue(all(value["state"] == "owned" for value in outcome["retained_data"].values()))
+        self.assertFalse(outcome["runtime_qualified"])
+
+    def test_remove_requires_exact_retained_owners_and_preserves_existing_data(self):
+        for mutation in ("missing", "extra", "binding", "flag", "source", "receipt", "data_bytes", "new_data_file"):
+            with self.subTest(mutation=mutation):
+                outcome, _, _ = self.exercise(retained_mutation=mutation)
+                self.assertEqual(outcome["status"], "failed")
+                self.assertIn("retained data" if mutation != "receipt" else "data state receipt", outcome["reason"])
+
+    def test_authentication_missing_native_and_retained_child_lock_fail_closed(self):
+        for kwargs, reason in (({"error": "bad signature"}, "bad signature"),
+                               ({"missing_native": True}, "native content incomplete"),
+                               ({"retain_child": True}, "retained locked child")):
+            with self.subTest(kwargs=kwargs):
+                outcome, _, _ = self.exercise(**kwargs)
+                self.assertEqual(outcome["status"], "failed")
+                self.assertIn(reason, outcome["reason"])
+
+    def test_native_failure_keeps_simultaneous_protected_scope_changes(self):
+        outcome, calls, _ = self.exercise(native_error_stage="update", protected_mutation_stage="update")
+        self.assertEqual(outcome["status"], "failed")
+        self.assertEqual(outcome["reason"], "native content incomplete")
+        self.assertEqual(calls[-1], ("update", "marketing-kit"))
+        self.assertEqual(outcome["last_operation"], "update")
+        self.assertEqual([entry["path"] for entry in outcome["protected_scope_changes"]["entries"]],
+                         ["project/uap.toml"])
+        self.assertFalse(outcome["activation_qualified"])
+        self.assertFalse(outcome["runtime_qualified"])
+
+    def test_authenticated_ineligible_refusal_has_no_effects(self):
+        outcome, calls, stages = self.exercise(policy="ineligible")
+        self.assertEqual(outcome["status"], "expected-dependency-refusal", outcome.get("reason"))
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(stages, ["add"])
+
+    def test_zero_exit_add_and_info_require_success_envelope(self):
+        for operation in ("add", "info"):
+            for result in (None, "error"):
+                with self.subTest(operation=operation, result=result):
+                    outcome, _, _ = self.exercise(malformed_operation=operation, malformed_result=result)
+                    self.assertEqual(outcome["status"], "failed")
+                    self.assertIn(operation, outcome["reason"])
+
+    def test_authenticated_ineligible_partial_saved_write_is_refused(self):
+        outcome, calls, stages = self.exercise(policy="ineligible", partial_saved=True)
+        self.assertEqual(outcome["status"], "failed")
+        self.assertIn("published native or saved effects", outcome["reason"])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(stages, ["add"])
+
+    def test_new_closure_without_runtime_context_never_runs_cli(self):
+        with tempfile.TemporaryDirectory() as temporary, \
+             mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+             mock.patch.object(audit.live, "call") as cli:
+            outcome = audit.run_case(Path("/fixture-cli"), self.selected(), Path(temporary) / "case", None)
+        self.assertEqual(outcome["status"], "failed")
+        self.assertIn("prerequisites", outcome["reason"])
+        cli.assert_not_called()
+
+
+
+
+class PairedChannelTests(unittest.TestCase):
+    def test_public_npm_prefix_executes_wrapper_for_actual_operation(self):
+        selected = ClosureLifecycleIntegrationTests().selected()
+        selected["expected"] = "dependency-refusal"
+        output = {"exit_code": 1, "timeout": False, "stdout_full": "", "stderr_full": "",
+                  "_json": None, "stdout_tail": "", "stderr_tail": ""}
+        prefix = [str(Path("/absolute-node").absolute()), str(Path("/public-package/bin/agentplugins.js").absolute())]
+        with tempfile.TemporaryDirectory() as temporary, \
+             mock.patch.object(audit.live, "initialize_project_skill_git_root"), \
+             mock.patch.object(audit.live, "call", return_value=output) as call, \
+             mock.patch.object(audit, "checked_dependency_refusal", return_value={"distribution": "777genius/notion"}):
+            result = audit.run_case(prefix, selected, Path(temporary) / "case", None)
+        self.assertEqual(result["status"], "expected-dependency-refusal")
+        self.assertEqual(call.call_args.args[0][:3], [*prefix, "add"])
+        self.assertEqual(result["trace"][0]["argv"][:3], [*prefix, "add"])
+
+    def test_main_runs_both_channels_with_fresh_roots_and_one_policy_build(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            base = Path(temporary)
+            native = base / "hermes"
+            native.write_text("fixture", encoding="utf-8")
+            args = SimpleNamespace(client="hermes", target="linux-amd64", native_bin=native, report_dir=base / "receipt")
+            prefix = [str(base / "node"), str(base / "public/bin/agentplugins.js")]
+            context = {"frozen": "verified"}
+            npm = SimpleNamespace(provision=mock.Mock(return_value={"command": prefix, "proof": {"verified": True},
+                                                                   "env": {"PATH": str(base)}}))
+            calls = []
+            def selected(snapshot, distribution, sequence, client, scope, refusal):
+                return {"name": "notion" if distribution.endswith("/notion") else "marketing-kit",
+                        "client": client, "scope": scope, "expected": "dependency-refusal" if refusal else "materialized-lifecycle"}
+            def run(command, case, root, executable, policy_context=None, command_env=None):
+                calls.append((command, case.copy(), root, policy_context, command_env))
+                return {**case, "status": "materialized-lifecycle-passed"}
+            with mock.patch.object(audit.argparse.ArgumentParser, "parse_args", return_value=args), \
+                 mock.patch.object(audit.native, "require_hosted"), \
+                 mock.patch.object(audit.native, "provision_release", return_value=(base / "binary", {"verified": True})), \
+                 mock.patch.object(audit, "authenticated_snapshot", return_value={}), \
+                 mock.patch.object(audit, "provision_native", return_value=(native, {"verified": True})), \
+                 mock.patch.object(audit, "prepare_policy_context", return_value=context) as prepare, \
+                 mock.patch.object(audit, "cleanup_policy_context") as cleanup, \
+                 mock.patch.object(audit, "module", return_value=npm), \
+                 mock.patch.object(audit, "source_case", side_effect=selected), \
+                 mock.patch.object(audit, "run_case", side_effect=run), \
+                 mock.patch("sys.stdout", new_callable=io.StringIO), \
+                 mock.patch.dict(os.environ, {"RUNNER_TEMP": str(base)}):
+                self.assertEqual(audit.main(), 0)
+            prepare.assert_called_once()
+            cleanup.assert_called_once_with(context)
+            npm.provision.assert_called_once()
+            self.assertEqual(len(calls), 4)
+            self.assertEqual({c[2].name for c in calls}, {"binary-notion-user", "binary-marketing-kit-user",
+                                                        "npm-notion-user", "npm-marketing-kit-user"})
+            self.assertTrue(all(c[3] is context for c in calls))
+            self.assertTrue(all(c[0] == prefix for c in calls if c[1]["channel"] == "npm"))
+            self.assertTrue(all(c[4] == {"PATH": str(base)} for c in calls if c[1]["channel"] == "npm"))
+            self.assertTrue(all(c[4] is None for c in calls if c[1]["channel"] == "binary"))
+            self.assertTrue(all(c[1]["expected"] == "dependency-closure" for c in calls if c[1]["name"] == "marketing-kit"))
+            receipt = json.loads((args.report_dir / "receipt.json").read_text())
+            self.assertEqual({c["channel"] for c in receipt["cases"]}, {"binary", "npm"})
+
+    def main_prerequisite_fixture(self, client, *, prepare_error=None, npm_error=None, cleanup_error=None):
+        from contextlib import ExitStack
+        with tempfile.TemporaryDirectory() as temporary, ExitStack() as stack:
+            base = Path(temporary)
+            native = base / "native"
+            native.write_text("fixture")
+            args = SimpleNamespace(client=client, target="linux-amd64", native_bin=native, report_dir=base / "receipt")
+            context, calls, events = {"frozen": "verified"}, [], []
+            def selected(snapshot, distribution, sequence, client, scope, refusal):
+                return {"name": distribution.split("/")[-1], "client": client, "scope": scope,
+                        "expected": "dependency-refusal" if refusal else "materialized-lifecycle"}
+            def run(command, case, root, executable, **kwargs):
+                self.assertTrue(root.parent.is_dir())
+                calls.append(case.copy())
+                events.append("case")
+                return {**case, "status": "materialized-lifecycle-passed"}
+            def cleanup(context):
+                directory = prepare.call_args.args[0]
+                self.assertTrue(directory.is_dir(), "cleanup must precede temporary directory removal")
+                events.append("cleanup")
+                if cleanup_error:
+                    raise cleanup_error
+            npm = SimpleNamespace(provision=mock.Mock(side_effect=npm_error,
+                return_value={"command": ["node", "wrapper.js"], "proof": {}, "env": {}}))
+            patches = [mock.patch.object(audit.argparse.ArgumentParser, "parse_args", return_value=args),
+                       mock.patch.object(audit.native, "require_hosted"),
+                       mock.patch.object(audit.native, "provision_release", return_value=(base / "binary", {})),
+                       mock.patch.object(audit, "authenticated_snapshot", return_value={}),
+                       mock.patch.object(audit, "provision_native", return_value=(native, {})),
+                       mock.patch.object(audit, "module", return_value=npm),
+                       mock.patch.object(audit, "source_case", side_effect=selected),
+                       mock.patch.object(audit, "run_case", side_effect=run),
+                       mock.patch("sys.stdout", new_callable=io.StringIO),
+                       mock.patch.dict(os.environ, {"RUNNER_TEMP": str(base)})]
+            for patch in patches:
+                stack.enter_context(patch)
+            prepare = stack.enter_context(mock.patch.object(audit, "prepare_policy_context", return_value=context,
+                                                             side_effect=prepare_error))
+            cleaned = stack.enter_context(mock.patch.object(audit, "cleanup_policy_context", side_effect=cleanup))
+            code = audit.main()
+            receipt = json.loads((args.report_dir / "receipt.json").read_text())
+            directory = prepare.call_args.args[0]
+            self.assertFalse(directory.exists())
+            return code, receipt, calls, events, cleaned.call_count
+
+    def test_main_policy_failure_keeps_independent_notion_cases_for_every_scope_and_channel(self):
+        for client in audit.CLIENTS:
+            with self.subTest(client=client):
+                code, receipt, calls, events, cleaned = self.main_prerequisite_fixture(
+                    client, prepare_error=ValueError("frozen build timed out"))
+                scopes = {"user"} if client == "hermes" else {"user", "project"}
+                expected = {(channel, scope) for channel in ("binary", "npm") for scope in scopes}
+                self.assertEqual(code, 1)
+                self.assertEqual(receipt["status"], "failed")
+                self.assertEqual({(c["channel"], c["scope"]) for c in calls}, expected)
+                self.assertTrue(all(c["name"] == "notion" for c in calls))
+                marketing = [c for c in receipt["cases"] if c["name"] == "marketing-kit"]
+                self.assertEqual({(c["channel"], c["scope"]) for c in marketing}, expected)
+                for case in marketing:
+                    self.assertEqual(case["status"], "failed")
+                    self.assertEqual(case["reason"], "frozen build timed out")
+                    self.assertEqual(case["prerequisite"], "frozen-closure-policy")
+                    self.assertEqual(case["trace"], [])
+                    self.assertFalse(case["activation_qualified"])
+                    self.assertFalse(case["runtime_qualified"])
+                self.assertEqual(cleaned, 0)
+
+    def test_main_policy_prepare_retains_bounded_cleanup_notes_and_original_reason(self):
+        failure = ValueError("original frozen build timed out")
+        failure.add_note("frozen policy worktree cleanup failed: retained linked worktree")
+        for index in range(8):
+            failure.add_note(str(index) + "x" * 4096)
+        code, receipt, calls, events, cleaned = self.main_prerequisite_fixture("pi", prepare_error=failure)
+        self.assertEqual(code, 1)
+        prerequisite = receipt["policy_prerequisite"]
+        self.assertEqual(prerequisite["reason"], "original frozen build timed out")
+        self.assertEqual(len(prerequisite["notes"]), 4)
+        self.assertTrue(all(len(note) <= 2048 for note in prerequisite["notes"]))
+        self.assertIn("cleanup failed", prerequisite["notes"][0])
+        self.assertTrue(all("notes" not in case for case in receipt["cases"]))
+        self.assertNotIn("notes", json.dumps(audit.compact_report(receipt)))
+        self.assertEqual(cleaned, 0)
+
+    def test_main_policy_cleanup_precedes_temp_removal_on_success_and_failure(self):
+        for failure in (None, ValueError("original npm acquisition failed")):
+            with self.subTest(failure=failure):
+                code, receipt, calls, events, cleaned = self.main_prerequisite_fixture("pi", npm_error=failure)
+                self.assertEqual(cleaned, 1)
+                self.assertEqual(events[-1], "cleanup")
+                self.assertEqual(code, 1 if failure else 0)
+                if failure:
+                    self.assertEqual(receipt["reason"], str(failure))
+
+    def test_main_cleanup_failure_reports_failure_and_preserves_original_error(self):
+        for failure in (None, ValueError("original npm acquisition failed")):
+            with self.subTest(failure=failure):
+                code, receipt, calls, events, cleaned = self.main_prerequisite_fixture(
+                    "pi", npm_error=failure, cleanup_error=ValueError("cleanup failed"))
+                self.assertEqual(code, 1)
+                self.assertEqual(cleaned, 1)
+                self.assertEqual(receipt["reason"], str(failure) if failure else "cleanup failed")
+                self.assertEqual(receipt["policy_cleanup"]["reason"], "cleanup failed")
+
+    def test_npm_env_cannot_replace_case_home(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            with self.assertRaisesRegex(ValueError, "isolation"):
+                audit.run_case([str(Path("/node").absolute()), str(Path("/wrapper.js").absolute())],
+                               ClosureLifecycleIntegrationTests().selected(), Path(temporary) / "case", None,
+                               command_env={"HOME": "/foreign"})
 
 if __name__ == "__main__":
     unittest.main()

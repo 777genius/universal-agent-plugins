@@ -21,6 +21,11 @@ import tempfile
 import threading
 import io
 import zipfile
+from runpy import run_path
+
+
+WINDOWS_OPENED_MODE_EQUAL = run_path(
+    str(Path(__file__).resolve().parents[1] / "native_client_project_artifacts.py"))["windows_opened_mode_equal"]
 
 
 NAME = "uap-agy-native-smoke"
@@ -341,14 +346,9 @@ def public_opened_equal(path, named, opened):
         return named_id == opened_id
     if any(type(value) is not int or value <= 0 for value in (named_id[9], opened_id[9])):
         return False
-    if named_id[2] != opened_id[2]:
-        extension = path.name.rpartition(".")
-        # CPython adds these filename-derived bits only to path stat, not fstat.
-        if (opened_id[2] & 0o111 or not extension[1]
-                or extension[2].lower() not in ("exe", "bat", "cmd", "com")
-                or named_id[2] != opened_id[2] | 0o111):
-            return False
-        named_id = named_id[:2] + (opened_id[2],) + named_id[3:]
+    if not WINDOWS_OPENED_MODE_EQUAL(path, named_id[2], opened_id[2]):
+        return False
+    named_id = named_id[:2] + (opened_id[2],) + named_id[3:]
     # CPython 3.12 path ctime aliases birthtime; handle ctime is change time.
     return named_id[:8] + named_id[9:] == opened_id[:8] + opened_id[9:]
 
