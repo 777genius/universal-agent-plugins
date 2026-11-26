@@ -8,7 +8,7 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import skills_matrix as matrix
 
@@ -247,23 +247,37 @@ class CrashWindowTests(unittest.TestCase):
                 self.assertEqual(events, ['identity-written'])
                 events.append('responder-exited')
                 return True
+            # Model the complete Linux kernel API used by this refusal path.
+            # Windows select has neither poll nor POLLIN; no host constant or
+            # actual process handle may leak into this portable fault control.
+            poller = Mock()
+            poller.poll.return_value = [(30, 1)]
+            linux_select = SimpleNamespace(poll=Mock(return_value=poller), POLLIN=1)
+            linux_os = SimpleNamespace(pidfd_open=Mock(), close=Mock())
+            linux_signal = SimpleNamespace(SIGKILL=9, pidfd_send_signal=Mock())
             with patch.object(matrix.uuid, 'uuid4', return_value=SimpleNamespace(hex='nonce')), \
                     patch.object(matrix.sys, 'platform', 'linux'), \
-                    patch.object(matrix.os, 'pidfd_open', create=True), \
-                    patch.object(matrix.os, 'close'), \
-                    patch.object(matrix.signal, 'SIGKILL', 9, create=True), \
-                    patch.object(matrix.signal, 'pidfd_send_signal', create=True), \
-                    patch.object(matrix.select, 'poll', create=True) as poll, \
+                    patch.object(matrix, 'os', linux_os), \
+                    patch.object(matrix, 'signal', linux_signal), \
+                    patch.object(matrix, 'select', linux_select), \
                     patch.object(matrix.subprocess, 'Popen', return_value=process), \
                     patch.object(matrix, 'hold_native_lineage', return_value=held), \
                     patch.object(matrix, 'persist', side_effect=persist), \
-                    patch.object(matrix, 'linux_pidfd_exited', side_effect=exited):
-                poll.return_value.poll.return_value = [(30, 1)]
+                    patch.object(matrix, 'linux_pidfd_exited', side_effect=exited) as pidfd_exited:
                 with self.assertRaisesRegex(AssertionError, 'responder exited before'):
                     matrix.Matrix('cli', 'native').case_recovery_refusal(fixture, evidence)
             # The only CLI kill is finally-owned cleanup after refusal, not the
             # requested crash which could otherwise produce a false qualification.
             self.assertEqual(events, ['identity-written', 'responder-exited', 'cli-kill'])
+            pidfd_exited.assert_called_once_with(30)
+            self.assertEqual(linux_signal.pidfd_send_signal.call_args_list,
+                             [call(30, 9), call(20, 9)])
+            self.assertEqual(poller.register.call_args_list, [call(30, 1), call(20, 1)])
+            self.assertEqual(poller.poll.call_args_list, [call(3000), call(3000)])
+            self.assertEqual(linux_os.close.call_args_list, [call(30), call(20)])
+            cleanup = json.loads((evidence / 'crash-cleanup.json').read_text(encoding='utf-8'))
+            self.assertEqual(cleanup, dict(cli_reaped=True, native_identity_confirmed=True,
+                                          lineage_roles=['native', 'supervisor'], cleanup_errors=[]))
 
 
 if __name__ == '__main__':
