@@ -5,6 +5,7 @@ test('homepage raster images are valid served WebP, not PNG fallbacks', async ({
   const monitor = page.locator('.registry-restore__monitor');
   await monitor.scrollIntoViewIfNeeded();
   await expect(monitor).toHaveAttribute('src', /\.webp(?:$|\?)/);
+  await monitor.evaluate((node) => (node as HTMLImageElement).decode());
   await expect.poll(() => monitor.evaluate((node) => (node as HTMLImageElement).naturalWidth))
     .toBeGreaterThan(0);
 

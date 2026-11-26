@@ -1859,10 +1859,11 @@ func TestCLIAddAndUpdatePersistConvergedNegativeObservationBeforeConfirmation(t 
 		if err := fixture.store.Save(state); err != nil {
 			t.Fatal(err)
 		}
+		negativeEvidence := errors.New("recognized negative client evidence")
 		observer := &cliObservedActivator{outcome: domain.ActivationOutcome{
 			Activation: domain.ActivationFailed, Authentication: domain.AuthenticationNotRequired,
 			Policy: domain.PolicyAllowed, Verification: domain.VerificationFailed, AuthoritativeObservation: true,
-		}, err: errors.New("recognized negative client evidence")}
+		}, err: negativeEvidence}
 		fixture.app.Lifecycle.Activator = observer
 		selector := plugin
 		if command == "update" {
@@ -1870,8 +1871,11 @@ func TestCLIAddAndUpdatePersistConvergedNegativeObservationBeforeConfirmation(t 
 		}
 		args := []string{command, selector, "--target", "copilot"}
 		stdout, _, commandErr := fixture.execute(true, args...)
-		if commandErr == nil || !strings.Contains(commandErr.Error(), "recognized negative client evidence") {
+		if !errors.Is(commandErr, negativeEvidence) {
 			t.Fatalf("%s error=%v output=%q", command, commandErr, stdout)
+		}
+		if command == "update" && (strings.Contains(stdout+commandErr.Error(), negativeEvidence.Error()) || !strings.Contains(stdout, "Needs attention")) {
+			t.Fatalf("update lost classified attention or exposed private observation detail: %v\n%s", commandErr, stdout)
 		}
 		if observer.calls != 1 || strings.Contains(stdout, "Apply this") {
 			t.Fatalf("%s verifier calls=%d output=%q", command, observer.calls, stdout)
