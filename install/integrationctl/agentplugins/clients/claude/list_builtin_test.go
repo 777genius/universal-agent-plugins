@@ -227,19 +227,25 @@ func TestProjectMetadataMustBeCanonicalOnEverySupportedScope(t *testing.T) {
 			}
 		})
 	}
-	t.Run("builtin", func(t *testing.T) {
-		row := map[string]any{
-			"id": "cc-plugin-privacy@builtin", "scope": "user", "enabled": true,
-			"projectPath": fixture.root,
-		}
-		body, err := json.Marshal([]map[string]any{fixture.selected, row})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got := observeClaudeProjectList(body, "demo", fixture.active, fixture.root, fixture.user); got.state != projectListUnknown {
-			t.Fatalf("builtin row with unsupported projectPath became %+v", got)
-		}
-	})
+	for _, field := range []string{"installPath", "projectPath"} {
+		t.Run("malformed-builtin-"+field, func(t *testing.T) {
+			row := map[string]any{
+				"id": "cc-plugin-privacy@builtin", "scope": "user", "enabled": true,
+			}
+			if field == "installPath" {
+				row[field] = filepath.Join(t.TempDir(), "builtin")
+			} else {
+				row[field] = fixture.root
+			}
+			body, err := json.Marshal([]map[string]any{fixture.selected, row})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := observeClaudeProjectList(body, "demo", fixture.active, fixture.root, fixture.user); got.state != projectListUnknown {
+				t.Fatalf("malformed builtin row became %+v", got)
+			}
+		})
+	}
 }
 
 func TestUserScopedRowsMayCarryCanonicalProjectPath(t *testing.T) {
