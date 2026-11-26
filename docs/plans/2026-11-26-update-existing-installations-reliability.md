@@ -1,6 +1,6 @@
 # Update and Existing Installation Reliability Plan
 
-Status: v2 — R1 incorporated; R2 and v3 required before implementation or test execution.
+Status: v3 — R1 and R2 complete; no reproduction, test or production pass claimed.
 Date: 2026-11-26
 Repository: `777genius/universal-agent-plugins`
 Baseline: `main` at `4903e6794f29ce7f2c39bfd054bf37c5bf654f79`
@@ -14,8 +14,8 @@ Preserve #1104 existing-installation diagnosis, #1115 install outcomes/console U
 R1 used read-only source and existing-test inspection; no candidate has been reproduced or tested in this work yet.
 
 1. Publish v1 and complete R1: done; dispositions appear below.
-2. Publish immutable v2 and independently review it as R2.
-3. Resolve R2 findings and publish v3 before production changes, new regressions or test execution.
+2. Publish immutable v2 and independently review it as R2: done.
+3. Resolve R2 findings in this v3; publication completes the planning gate before implementation or tests.
 4. Reproduce only the bounded candidates below; retain only demonstrated failures or missing safe UX.
 5. Keep final implementation review and merge qualification separate from planning reviews.
 
@@ -30,6 +30,17 @@ R1 used read-only source and existing-test inspection; no candidate has been rep
 - Accepted: preserve precommit versus durable/refresh partial cancellation outcomes; never assume blanket no change.
 - Accepted: use existing presenters, result context and helpers; incomplete targeting authority requires safe prose.
 - Accepted: qualification means full four-platform final-PR and full six-platform actual-merge product execution.
+
+## R2 findings and dispositions
+
+- Accepted: candidate A must bypass the real prepared-no-change shortcut through supported lifecycle/refresh behavior; no artificial private flags or fixture branches.
+- Accepted: `NoChange` and `Mutated == false` are distinct; assess per-target, durable and native effects.
+- Accepted: candidate B needs a supported saved alias or imperative selector, selected public target and explicit effective scope; a physical InstallationID is not automatically a saved alias.
+- Accepted: project guidance requires a validated absolute project root; no `--yes` or automatic repair/force.
+- Accepted: `quoteResumeArgument` is POSIX-specific; use it only with established shell semantics, otherwise use safe contextual prose.
+- Accepted: candidate C must preserve both operation and rendering failures through the existing typed output wrapper/`errors.Join` convention.
+- Accepted: public mixed-outcome regression must retain typed causes with diagnostics disabled and truthful successful/failed/not-attempted states.
+- Accepted: external package-manager documentation informs UX principles only, not resolution or overwrite policy.
 
 ## Existing authority and audited route
 
@@ -47,27 +58,32 @@ A truthful unchanged result describes actual work; legitimate observations or ne
 
 ### A. Update-all outcome counts
 
-Hypothesis: `update_all.go` `applyAll` may report updated and increment `Updated` for a nil-error apply whose authoritative result is `NoChange`/`Mutated == false`.
-Public oracle: add an unchanged command-bearing source, then run `update --all` against identical bytes.
-The fixture must realistically reach pending `projection_refresh` and demonstrate that no actual refresh is required.
-Compare human/JSON counts and status with the authoritative result, native effects, files and state; allow legitimate lifecycle observations.
+Hypothesis: `update_all.go` `applyAll` may report updated and increment `Updated` after a nil-error apply whose actual result does not justify that claim.
+Identical sources often stop at `prepared.noChange`; a repeat add/update alone does not establish this defect.
+Prove that supported public lifecycle/projection-refresh state reaches apply and then authoritative no-change, without private flags or artificial fixture branches.
+`NoChange` and `Mutated == false` are not equivalent: assess per-target results, durable changes and native effects.
+Compare human/JSON counts and status with those effects, files and state; allow legitimate lifecycle observations.
 Add a mixed changed/no-change control so one real update cannot hide a miscount.
-If the public route cannot produce the mismatch, retain existing behavior and record the hypothesis as unconfirmed.
+If existing locks/rechecks make the mismatch unreachable, stop candidate A and record it as unconfirmed.
 
 ### B. Scoped recovery guidance
 
 Hypothesis: `install_failure.go` generic repair/update suggestions may omit the selector or scope needed to address the original installation safely.
-Public oracle: create same-name User and Project installations, trigger the applicable diagnostic, and copy its emitted command from another working directory.
-Verify the command preserves original identity, client, scope and project; the sibling installation must remain untouched.
-Fix only the existing presenter using authoritative result context and `quoteResumeArgument` where applicable.
-Do not expand the global classifier or introduce a command builder; when complete authority is unavailable, use safe explanatory prose.
+Public oracle: create same-name User and Project installations and trigger the applicable diagnostic.
+Execute its supported actual argv/runner/shell from another working directory, simulating independent user review/consent before any mutation; leave the sibling untouched.
+Copyable guidance requires an authoritative supported saved alias or imperative selector, selected public target, explicit effective `--scope user` or `--scope project`, and a validated absolute `--project-root` for project scope.
+A physical InstallationID is not automatically a valid saved alias; never add `--yes` or automatic repair/force.
+Fix only the existing presenter using authoritative context; reuse POSIX `quoteResumeArgument` only when shell semantics are established.
+Otherwise use contextual safe prose; do not expand the global classifier or introduce shell/command-builder architecture.
 
 ### C. Ordinary-update attention presentation
 
 Hypothesis: ordinary `runUpdateMany` may expose raw `applyErr` without the classified attention presentation available to `--all`.
 Reproduce through the public command and show an actionable presentation difference before changing anything.
 Reuse `imperativeUpdateAgentItems` and current finishing logic only where the authoritative result supports it.
-Preserve the underlying cause, exit behavior and exactly one compatible JSON result document.
+Also investigate the current loss of `renderErr` when `applyErr` is nonnil: preserve both through the existing typed output wrapper/`errors.Join` convention.
+Use a public mixed peer-success plus failure/not-attempted case with diagnostics disabled; assert retained typed causes and accurate states.
+Preserve exactly one compatible JSON document, without extra fields, documentation promises, retry or exit-policy changes.
 Do not broaden error classification or change update continuation policy.
 
 ## Behavior matrix and evidence disposition
@@ -124,6 +140,13 @@ Queued, running, cancelled, skipped or evidence-only jobs do not establish produ
 Wait normally; avoid duplicate dispatches, unnecessary reruns and constraint bypasses.
 Respect current Go file/function/complexity limits without baseline growth.
 
+## Official UX references
+
+- [pip install](https://pip.pypa.io/en/stable/cli/pip_install/): prefer an installed version unless upgrade is requested.
+- [Homebrew upgrade](https://docs.brew.sh/Manpage#upgrade-options-installed_formulainstalled_cask-): make targeted upgrade and preview intent explicit.
+
+Use these only for truthful, explicit, reviewable UX; do not import Brew install auto-upgrade, force or resolver behavior, or add a dry-run flag.
+
 ## Acceptance, stopping and revised estimates
 
 Every selected correction needs a public reproduction, minimal fix and meaningful passing verification.
@@ -132,7 +155,7 @@ Stop expansion when evidence would require architecture changes, destructive rec
 Ask for a decision only when existing authority and user instructions cannot resolve the contract.
 Ordinary merge is already authorized, subject to genuine review and qualification gates.
 
-Estimates reflect read-only R1 findings, not reproduction or passing tests.
+Estimates reflect read-only R1/R2 findings, not reproduction or passing tests.
 
 | Dimension | Revised provisional estimate |
 | --- | --- |
