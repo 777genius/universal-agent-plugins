@@ -183,6 +183,7 @@ class InstallationEvidenceTests(unittest.TestCase):
         self.digest = 'sha256:' + 'a' * 64
         self.source_key = 'https-skill:https://publisher.example:guide'
         self.declaration = {'website': 'https://publisher.example', 'kind': 'skill', 'skill': 'guide'}
+        self.fixture.expected_source = dict(self.declaration)
         self.manifest_targets = ['codex']
         authority = {'source_key': self.source_key, 'client_id': 'codex', 'alias': 'demo',
                      'environment_id': 'user-default'}
@@ -263,20 +264,7 @@ class InstallationEvidenceTests(unittest.TestCase):
                     oracle.installed(self.fixture, ('codex',))
 
     def test_saved_github_skill_matches_path_kind_and_exact_selector(self):
-        commit = 'c' * 40
-        self.declaration = {'git': 'owner/repository', 'kind': 'skill', 'skill': 'guide',
-                            'path': 'skills/guide', 'commit': commit}
-        key = 'github-skill:owner/repository:guide:skills/guide'
-        self.owner['source_key'] = key
-        self.binding['receipts'][0]['environment_authority']['source_key'] = key
-        package = self.lock['packages'][0]
-        package.update(source_key=key, source={'git': {
-            'repository': 'owner/repository', 'kind': 'skill', 'skill': 'guide',
-            'path': 'skills/guide', 'requested': {'kind': 'commit', 'value': commit},
-            'commit': commit}})
-        self.save()
-        self.save_lock()
-        self.save_manifest()
+        self.configure_github_source()
         self.assertEqual(oracle.installed(self.fixture, ('codex',))['codex'], self.binding)
         self.declaration['git'] = 'https://github.com/owner/repository.git'
         self.save_manifest()
@@ -289,6 +277,75 @@ class InstallationEvidenceTests(unittest.TestCase):
                 self.save_manifest()
                 with self.assertRaisesRegex(AssertionError, 'saved desired intent source'):
                     oracle.installed(self.fixture, ('codex',))
+
+    def configure_github_source(self):
+        commit = 'c' * 40
+        self.declaration = {'git': 'owner/repository', 'kind': 'skill', 'skill': 'guide',
+                            'path': 'skills/guide', 'commit': commit}
+        self.fixture.expected_source = dict(self.declaration)
+        key = 'github-skill:owner/repository:guide:skills/guide'
+        self.owner['source_key'] = key
+        self.binding['receipts'][0]['environment_authority']['source_key'] = key
+        package = self.lock['packages'][0]
+        package.update(source_key=key, source={'git': {
+            'repository': 'owner/repository', 'kind': 'skill', 'skill': 'guide',
+            'path': 'skills/guide', 'requested': {'kind': 'commit', 'value': commit},
+            'commit': commit}})
+        self.save()
+        self.save_lock()
+        self.save_manifest()
+
+    def test_same_bytes_consistent_foreign_website_cannot_replace_requested_origin(self):
+        self.fixture.publisher = SimpleNamespace(files={'SKILL.md': self.fixture.skill_bytes})
+        foreign = 'https://foreign.example'
+        key = 'https-skill:' + foreign + ':guide'
+        self.declaration['website'] = foreign
+        package = self.lock['packages'][0]
+        package['source']['web']['url'] = foreign
+        package['source_key'] = key
+        self.owner['source_key'] = key
+        self.binding['receipts'][0]['environment_authority']['source_key'] = key
+        self.save()
+        self.save_lock()
+        self.save_manifest()
+        with self.assertRaisesRegex(AssertionError, 'saved origin differs from requested fixture source'):
+            oracle.installed(self.fixture, ('codex',))
+
+    def test_same_bytes_consistent_git_origin_selector_and_path_cannot_replace_request(self):
+        self.configure_github_source()
+        requested = dict(self.fixture.expected_source)
+        package = self.lock['packages'][0]
+        original_git = copy.deepcopy(package['source']['git'])
+        for field, wrong in (('repository', 'foreign/repository'), ('commit', 'd' * 40),
+                             ('path', 'skills/foreign'), ('selector', 'ref'), ('selector', 'default')):
+            with self.subTest(field=field, wrong=wrong):
+                git = copy.deepcopy(original_git)
+                self.declaration = dict(requested)
+                if field == 'selector':
+                    git['requested'] = {'kind': wrong}
+                    del self.declaration['commit']
+                    if wrong == 'ref':
+                        git['requested']['value'] = requested['commit']
+                        self.declaration['ref'] = requested['commit']
+                else:
+                    git[field] = wrong
+                    self.declaration[{'repository': 'git'}.get(field, field)] = wrong
+                    if field == 'commit':
+                        git['requested']['value'] = wrong
+                key = 'github-skill:' + git['repository'] + ':guide:' + git['path']
+                package.update(source={'git': git}, source_key=key)
+                self.owner['source_key'] = key
+                self.binding['receipts'][0]['environment_authority']['source_key'] = key
+                self.save()
+                self.save_lock()
+                self.save_manifest()
+                with self.assertRaisesRegex(AssertionError, 'saved origin differs from requested fixture source'):
+                    oracle.installed(self.fixture, ('codex',))
+
+    def test_missing_independent_source_descriptor_fails_closed(self):
+        del self.fixture.expected_source
+        with self.assertRaisesRegex(AssertionError, 'no independent expected source descriptor'):
+            oracle.installed(self.fixture, ('codex',))
 
     def test_prepared_native_binding_does_not_qualify_completion(self):
         self.binding['activation'] = 'prepared'

@@ -15,11 +15,13 @@ import ssl
 import subprocess
 import sys
 import threading
+from types import MappingProxyType
 
 from harness import Fixture, check
 
 SOURCE_SHA = 'ce789138a393bffd7e6d001c0e4f8aec05e47773'
-GITHUB_SOURCE = '777genius/universal-agent-plugins@' + SOURCE_SHA
+GITHUB_REPOSITORY = '777genius/universal-agent-plugins'
+GITHUB_SOURCE = GITHUB_REPOSITORY + '@' + SOURCE_SHA
 GITHUB_PATH = 'tests/fixtures/uap_apm/skills/benchmark-note'
 GITHUB_SKILL_BLOB = '1341ca3c10621a9e5e25304cca19144c6b54fa3b'
 SKILL_BODY = ('---\nname: console-proof\ndescription: Read an inert fixture note\n---\n'
@@ -178,12 +180,17 @@ class SkillsFixture(Fixture):
             self.source_flags = ['--skill', 'console-proof']
             self.skill_name, self.skill_bytes = 'console-proof', SKILL_BODY.encode()
             self.skill_blob = None
+            self.expected_source = MappingProxyType(
+                {'website': self.source, 'kind': 'skill', 'skill': self.skill_name})
         elif source == 'github':
             public_git_environment(self)
             self.source = GITHUB_SOURCE
             self.source_flags = ['--path', GITHUB_PATH]
             self.skill_name, self.skill_bytes = 'benchmark-note', None
             self.skill_blob = GITHUB_SKILL_BLOB
+            self.expected_source = MappingProxyType({
+                'git': GITHUB_REPOSITORY, 'commit': SOURCE_SHA, 'path': GITHUB_PATH,
+                'kind': 'skill', 'skill': self.skill_name})
         else:
             raise AssertionError('unknown source fixture')
         if native_binary:

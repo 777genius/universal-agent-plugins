@@ -222,6 +222,9 @@ def saved_binding_intent(fixture, package, owner, targets):
     check(declaration == wanted and owner['source_key'] == source_key and
           package['source_key'] == source_key,
           'saved desired intent source disagrees with selected lock/ownership')
+    expected_source = getattr(fixture, 'expected_source', None)
+    check(expected_source is not None, 'fixture has no independent expected source descriptor')
+    check(wanted == expected_source, 'saved origin differs from requested fixture source')
 
 
 def retained_native_failure(fixture, binding):
