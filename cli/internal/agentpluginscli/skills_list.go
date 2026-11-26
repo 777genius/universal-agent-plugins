@@ -37,9 +37,12 @@ type skillsListReport struct {
 func newSkillsListCommand(app App, opts *options) *cobra.Command {
 	var ref, folder string
 	command := &cobra.Command{
-		Use:   "list <owner/repository or GitHub/HTTPS source>",
+		Use:   "list <owner/repository or Git/HTTPS source>",
 		Short: "Read-only, bounded discovery of source Skills for scripts and agents",
-		Args:  cobra.ExactArgs(1),
+		Example: "  agentplugins skills list owner/private-repository --path skills/review\n" +
+			"  agentplugins skills list 'ssh://git@git.example/team/skills.git#refs/heads/main//skills/review'\n" +
+			"  agentplugins skills list https://publisher.example",
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateCommonOptions(opts); err != nil {
 				return err
