@@ -1,10 +1,10 @@
 package agentpluginscli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -142,6 +142,7 @@ func renderAgentAttention(writer io.Writer, reports []agentReport, logPath, retr
 	if len(failed) == 0 {
 		return nil
 	}
+	writer = &planWriter{writer: writer}
 	theme := terminaltheme.For(writer)
 	if _, err := fmt.Fprintf(writer, "\n%s\n", theme.Text(terminaltheme.Warning, "Needs attention")); err != nil {
 		return err
@@ -213,9 +214,10 @@ func retryHintFor(cmd *cobra.Command, reports []agentReport) string {
 // installOutcome is the finished result of one apply, kept on the command's
 // options so renderers and the retry step share it.
 type installOutcome struct {
-	Agents  []agentReport
-	Items   []agentItem
-	LogFile string
+	Agents      []agentReport
+	Items       []agentItem
+	LogFile     string
+	logWriteErr error
 }
 
 // bindingJSON is the machine-readable per-binding result, so a consumer can tell
@@ -251,27 +253,10 @@ func (outcome *installOutcome) failedAgents() []agentReport {
 // technical log when anything did not succeed.
 func (app App) finishInstall(opts *options, command string, items []agentItem) *installOutcome {
 	outcome := &installOutcome{Agents: reportByAgent(items), Items: items}
-	outcome.LogFile = app.recordInstallRun(command, 1+opts.retryAttempt, agentLogEntries(items))
+	diagnostic := app.recordInstallRun(command, 1+opts.retryAttempt, agentLogEntries(items))
+	outcome.LogFile, outcome.logWriteErr = diagnostic.Path, diagnostic.WriteErr
 	opts.installResult = outcome
 	return outcome
-}
-
-// recordInstallRun saves the technical record of a run that did not fully
-// succeed and returns its path. A logging problem must never change an
-// installation's result, so failures here are swallowed.
-func (app App) recordInstallRun(command string, attempt int, entries []installlog.Entry) string {
-	if app.InstallLogDir == "" {
-		return ""
-	}
-	run := installlog.Run{Command: command, Version: app.Version, Scope: string(app.scope()), Attempt: attempt, Entries: entries}
-	if !run.Failed() {
-		return ""
-	}
-	path, err := installlog.Write(app.InstallLogDir, run, time.Now())
-	if err != nil {
-		return ""
-	}
-	return path
 }
 
 func agentLogEntries(items []agentItem) []installlog.Entry {
@@ -368,8 +353,11 @@ func (app App) recordGroupOutcome(cmd *cobra.Command, opts *options, combined *a
 		return app.explainRefusedGroup(cmd, opts, items, cause)
 	}
 	outcome := app.finishInstall(opts, "add", items)
-	if outcome.LogFile != "" && opts.format == "human" {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(outcome.LogFile))
+	if opts.format == "human" {
+		if outcome.LogFile == "" {
+			protectUnrecordedGroupDetails(combined, items)
+		}
+		return errors.Join(humanInstallApplyError(opts.format, outcome, cause), installOutputError(renderInstallRecord(cmd.ErrOrStderr(), outcome)))
 	}
 	return cause
 }
@@ -431,8 +419,8 @@ func runUpdateAllRetryable(cmd *cobra.Command, app App, opts *options) error {
 // chain in the install log and puts only the plain cause in the public error.
 // Retrying is not offered automatically: nothing was applied, and the same
 // command is the retry. Every other refusal keeps its own error and writes no
-// log; so does a refusal whose log could not be written, because the technical
-// chain would otherwise be lost. Machine-readable output keeps the full error.
+// log. When logging is disabled or fails, the same fixed machine explanation
+// remains safe to show. Machine-readable output keeps the full error.
 func (app App) explainRefusedGroup(cmd *cobra.Command, opts *options, items []agentItem, cause error) error {
 	failure := describeSyncFailure(cause)
 	switch failure.Kind {
@@ -443,10 +431,8 @@ func (app App) explainRefusedGroup(cmd *cobra.Command, opts *options, items []ag
 	for index := range items {
 		items[index].failure = failure
 	}
-	path := app.recordInstallRun("add", 1+opts.retryAttempt, agentLogEntries(items))
-	if path == "" {
-		return cause
-	}
-	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(path))
-	return installFailureWithCause{summary: strings.TrimSuffix(failure.Summary, "."), cause: cause}
+	diagnostic := app.recordInstallRun("add", 1+opts.retryAttempt, agentLogEntries(items))
+	outcome := &installOutcome{Agents: reportByAgent(items), Items: items, LogFile: diagnostic.Path, logWriteErr: diagnostic.WriteErr}
+	safe := installFailureWithCause{summary: strings.TrimSuffix(failure.Summary, "."), cause: cause}
+	return errors.Join(safe, installOutputError(renderInstallRecord(cmd.ErrOrStderr(), outcome)))
 }

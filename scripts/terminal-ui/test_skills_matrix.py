@@ -94,6 +94,82 @@ class DurableStateTests(unittest.TestCase):
         self.assertEqual(oracle.native_mutations(reads + writes), writes)
 
 
+class InstallationEvidenceTests(unittest.TestCase):
+    """These test oracle sensitivity, not a simulated installer success."""
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.fixture = SimpleNamespace(
+            root=self.root, home=self.root / 'home', project=self.root / 'project',
+            data=self.root / 'data', skill_name='guide', skill_bytes=b'original Skill bytes\n',
+            skill_blob=None, publisher=None)
+        self.fixture.data.mkdir()
+        self.target = self.root / 'managed' / 'demo'
+        self.skill = self.target / 'skills' / 'guide' / 'SKILL.md'
+        self.skill.parent.mkdir(parents=True)
+        self.skill.write_bytes(self.fixture.skill_bytes)
+        cache = self.root / 'native-cache'
+        cached = cache / 'skills' / 'guide' / 'SKILL.md'
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.fixture.skill_bytes)
+        self.digest = 'sha256:' + 'a' * 64
+        authority = {'source_key': 'fixture-source', 'client_id': 'codex'}
+        self.binding = dict(
+            client_id='codex', client_binding_id='binding', target_locator=str(self.target),
+            materialization='materialized', activation='active', authentication='not_required',
+            verification='installation_verified', package_revision={'tree_digest': self.digest},
+            receipts=[{'phase': 'committed', 'environment_authority': authority}])
+        self.owner = dict(client_binding_id='binding', client_id='codex',
+                          source_key='fixture-source', package_digest=self.digest)
+        self.state = dict(installations=[{'clients': {'binding': self.binding}}],
+                          environment_receipts=[self.owner])
+        self.save()
+        (self.fixture.data / 'uap.toml').write_text('fixture agreement')
+        (self.fixture.data / 'uap.lock').write_text('tree_digest = "' + self.digest + '"\n')
+        (self.root / 'native-registry.json').write_text(json.dumps({'cache': str(cache)}))
+
+    def save(self):
+        (self.fixture.data / 'state-v2.json').write_text(json.dumps(self.state))
+
+    def test_complete_matching_native_evidence_is_accepted(self):
+        self.assertEqual(oracle.installed(self.fixture, ('codex',))['codex'], self.binding)
+
+    def test_prepared_native_binding_does_not_qualify_completion(self):
+        self.binding['activation'] = 'prepared'
+        self.save()
+        with self.assertRaisesRegex(AssertionError, 'native Skill completion'):
+            oracle.installed(self.fixture, ('codex',))
+
+    def test_wrong_receipt_digest_and_authority_are_rejected(self):
+        self.owner['package_digest'] = 'sha256:' + 'b' * 64
+        self.save()
+        with self.assertRaisesRegex(AssertionError, 'digest disagree'):
+            oracle.installed(self.fixture, ('codex',))
+        self.owner['package_digest'] = self.digest
+        self.binding['receipts'][0]['environment_authority']['source_key'] = 'foreign-source'
+        self.save()
+        with self.assertRaisesRegex(AssertionError, 'source/client authority'):
+            oracle.installed(self.fixture, ('codex',))
+
+    def test_native_cache_and_pinned_source_cannot_disagree(self):
+        self.skill.write_bytes(b'changed projection\n')
+        with self.assertRaisesRegex(AssertionError, 'Skill bytes changed'):
+            oracle.installed(self.fixture, ('codex',))
+        self.skill.write_bytes(self.fixture.skill_bytes)
+        registry = json.loads((self.root / 'native-registry.json').read_text())
+        cached = Path(registry['cache']) / 'skills' / 'guide' / 'SKILL.md'
+        cached.write_bytes(b'changed native cache\n')
+        with self.assertRaisesRegex(AssertionError, 'cache has different Skill bytes'):
+            oracle.installed(self.fixture, ('codex',))
+
+    def test_pinned_github_object_is_checked_independently_of_fixture_body(self):
+        self.fixture.skill_bytes = None
+        self.fixture.skill_blob = '0' * 40
+        with self.assertRaisesRegex(AssertionError, 'immutable pinned source blob'):
+            oracle.installed(self.fixture, ('codex',))
+
+
 @unittest.skipUnless(sys.platform == 'linux', 'Linux-only SSL_CERT_FILE source fixture')
 class PublisherTrustTests(unittest.TestCase):
     def setUp(self):
@@ -159,10 +235,24 @@ class FixtureIsolationTests(unittest.TestCase):
     def test_windows_default_keeps_actual_skills_lifecycle_cases(self):
         selected = matrix.selected_cases(None, 'all', 'win32')
         for required in ('fresh', 'unchanged', 'unchanged-failure', 'partial-json',
-                         'partial-decline', 'partial-retry', 'review-ctrl-c',
+                         'partial-decline', 'partial-retry', 'log-unavailable', 'review-ctrl-c',
                          'review-eof', 'plain-browser', 'explicit-ui'):
             self.assertIn(required, selected)
         self.assertNotIn('review-redirect', selected)
+
+    def test_real_journal_pidfd_control_is_selected_only_on_linux_by_default(self):
+        self.assertIn('recovery-refusal', matrix.selected_cases(None, 'all', 'linux'))
+        self.assertNotIn('recovery-refusal', matrix.selected_cases(None, 'all', 'darwin'))
+        self.assertNotIn('recovery-refusal', matrix.selected_cases(None, 'all', 'win32'))
+        self.assertEqual(matrix.selected_cases(['recovery-refusal'], 'all', 'darwin'),
+                         ['recovery-refusal'])
+
+    def test_source_kind_is_explicit_for_every_platform_and_browser_control(self):
+        self.assertEqual(matrix.source_for_case('fresh', 'auto', 'linux'), 'publisher')
+        self.assertEqual(matrix.source_for_case('fresh', 'auto', 'darwin'), 'github')
+        self.assertEqual(matrix.source_for_case('fresh', 'auto', 'win32'), 'github')
+        self.assertEqual(matrix.source_for_case('fresh', 'github', 'linux'), 'github')
+        self.assertEqual(matrix.source_for_case('plain-browser', 'publisher', 'linux'), 'github')
 
     def test_website_cannot_stand_in_for_catalog_browser_coverage(self):
         self.assertEqual(matrix.BROWSER_CASES,

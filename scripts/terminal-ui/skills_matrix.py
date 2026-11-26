@@ -11,6 +11,8 @@ import json
 import os
 from pathlib import Path
 import shutil
+import select
+import signal
 import subprocess
 import sys
 import tempfile
@@ -24,7 +26,7 @@ from skills_oracles import (durable_tree, envelope, failure_log, installed,
                             items_by_agent, native_mutations, persist)
 
 CASES = ('source-feasibility', 'fresh', 'unchanged', 'unchanged-failure',
-         'partial-json', 'partial-decline', 'partial-retry', 'no-targets',
+         'partial-json', 'partial-decline', 'partial-retry', 'log-unavailable', 'recovery-refusal', 'no-targets',
          'review-decline', 'review-ctrl-c', 'review-eof', 'review-redirect',
          'catalog-redirect', 'plain-browser', 'explicit-ui')
 BROWSER_CASES = frozenset(('catalog-redirect', 'plain-browser', 'explicit-ui'))
@@ -131,13 +133,20 @@ class Matrix:
 
     def run_case(self, name, evidence):
         evidence.mkdir()
-        source = self.source
-        if source == 'auto':
-            source = 'publisher' if sys.platform == 'linux' else 'github'
-        if name in BROWSER_CASES:
-            source = 'github'
+        source = source_for_case(name, self.source, sys.platform)
+        if name == 'recovery-refusal':
+            check(sys.platform == 'linux', 'recovery process identity fixture requires Linux pidfd')
         with tempfile.TemporaryDirectory(prefix='skills-console-é-') as temporary:
             fixture = SkillsFixture(temporary, self.native, self.scanner, source)
+            source_info = dict(source_kind=fixture.source_kind,
+                               requested_source=fixture.source)
+            if fixture.publisher:
+                source_info['publisher_files_sha256'] = {
+                    name: hashlib.sha256(body).hexdigest()
+                    for name, body in fixture.publisher.files.items()}
+            else:
+                source_info['github_fixture_sha'] = SOURCE_SHA
+            persist(evidence / 'source.json', source_info)
             try:
                 method = getattr(self, 'case_' + name.replace('-', '_'))
                 method(fixture, evidence)
@@ -177,6 +186,8 @@ class Matrix:
         result = self.command(fixture, evidence, 'repeat')
         check(items_by_agent(result)['codex']['status'] == 'unchanged',
               'repeat lost no-op status')
+        check(result.get('readiness') == 'ready', 'repeat lacks current native readiness evidence')
+        check(['app-server'] in fixture.calls()[calls:], 'repeat did not observe native Skills')
         check(durable_tree(fixture) == before, 'unchanged repeat rewrote durable bytes')
         check(not native_mutations(fixture.calls()[calls:]),
               'unchanged repeat mutated native registry')
@@ -195,7 +206,9 @@ class Matrix:
             # a successful unchanged result with unverified readiness.
             manifest = fixture.data / 'uap.toml'
             reviewed_bytes = manifest.read_bytes()
-            manifest.write_bytes(reviewed_bytes + b'\n# changed after review\n')
+            tampered_bytes = reviewed_bytes + b'\n# changed after review\n'
+            manifest.write_bytes(tampered_bytes)
+            tampered_state = durable_tree(fixture)
             session.send(b'y\n')
             session.wait(RETRY, 'retry-ready')
             check('Needs attention' in clean(session.raw),
@@ -204,6 +217,8 @@ class Matrix:
             session.finish(1)
         finally:
             session.close()
+        check(manifest.read_bytes() == tampered_bytes, 'refused command clobbered changed input')
+        check(durable_tree(fixture) == tampered_state, 'refused command changed durable bytes')
         manifest.write_bytes(reviewed_bytes)
         check(durable_tree(fixture) == before, 'failed no-op changed durable installation')
         check(not native_mutations(fixture.calls()[calls:]),
@@ -231,6 +246,7 @@ class Matrix:
             session.wait(RETRY, 'retry-ready')
             check('Needs attention' in clean(session.raw), 'partial result is not explained')
             at_retry = len(fixture.calls())
+            healthy = installed(fixture, ('cursor',))['cursor']
             session.send(b'y\n' if retry else b'n\n')
             session.finish(0 if retry else 1)
             if retry:
@@ -243,13 +259,141 @@ class Matrix:
                       'declined retry performed effects')
         finally:
             session.close()
-        installed(fixture, ('cursor', 'codex') if retry else ('cursor',))
+        final = installed(fixture, ('cursor', 'codex') if retry else ('cursor',))
+        check(final['cursor'] == healthy, 'retry rewrote the already healthy binding or receipts')
 
     def case_partial_decline(self, fixture, evidence):
         self.partial_interactive(fixture, evidence, False)
 
     def case_partial_retry(self, fixture, evidence):
         self.partial_interactive(fixture, evidence, True)
+
+    def case_log_unavailable(self, fixture, evidence):
+        # A regular file is portable ENOTDIR evidence, including as root. Do not
+        # rely on chmod permissions, which differ on Windows and privileged hosts.
+        blocked = fixture.data / 'logs'
+        blocked.write_bytes(b'diagnostic-directory-obstructed-by-owned-fixture\n')
+        fixture.control('fail-add')
+        argv = fixture.args(self.binary, targets='codex,cursor', yes=False, json_output=False)
+        session = self.session(argv + ['--plain', '--color=never'], fixture, evidence)
+        try:
+            self.review(session, fixture)
+            session.send(b'y\n')
+            session.wait(RETRY, 'retry-after-log-failure')
+            text = clean(session.raw)
+            check('Needs attention' in text, 'log failure removed per-agent explanation')
+            check('Technical details could not be saved.' in text,
+                  'diagnostic save failure was not disclosed')
+            check('Failure codes:' in text, 'missing-log fallback lost classified failure codes')
+            check('Technical details: ' not in text, 'failure pointed to a nonexistent log')
+            check('synthetic native protocol refused operation' not in text,
+                  'missing-log fallback exposed raw provider output')
+            at_retry = len(fixture.calls())
+            session.send(b'n\n')
+            session.finish(1)
+            check(not native_mutations(fixture.calls()[at_retry:]),
+                  'declining retry after log failure performed another mutation')
+        finally:
+            session.close()
+        check(blocked.read_bytes() == b'diagnostic-directory-obstructed-by-owned-fixture\n',
+              'diagnostic reporting overwrote the obstructing file')
+        installed(fixture, ('cursor',))
+
+    def case_recovery_refusal(self, fixture, evidence):
+        # Hold exact native child identity before crashing the CLI. The responder
+        # does not spawn children, so a pidfd covers the sole active native effect.
+        # No process-group ancestry assumption or fabricated journal is used.
+        check(sys.platform == 'linux' and hasattr(os, 'pidfd_open') and
+              hasattr(signal, 'pidfd_send_signal'), 'Linux pidfd support is required')
+        nonce = uuid.uuid4().hex
+        fixture.control('pause-add', nonce)
+        argv = fixture.args(self.binary)
+        persist(evidence / 'crash-command.json', argv)
+        process = subprocess.Popen(argv, cwd=fixture.project, env=fixture.env,
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE)
+        child_fd, child_owned = None, False
+        primary = None
+        try:
+            marker = fixture.root / 'native-add-paused'
+            deadline = time.monotonic() + self.acquisition_timeout
+            while not marker.exists() and process.poll() is None:
+                check(time.monotonic() < deadline, 'native effect marker was not reached')
+                time.sleep(0.02)
+            check(process.poll() is None, 'CLI exited before native effect pause')
+            identity = json.loads(marker.read_text(encoding='utf-8'))
+            check(identity.get('nonce') == nonce and
+                  identity.get('ppid') == process.pid and
+                  isinstance(identity.get('pid'), int) and identity['pid'] > 1,
+                  'native marker does not identify this owned CLI child')
+            child_fd = os.pidfd_open(identity['pid'])
+            actual_executable = Path(os.readlink(f'/proc/{identity["pid"]}/exe')).resolve()
+            expected_executable = (fixture.bin / 'codex').resolve()
+            check(actual_executable == expected_executable and
+                  Path(identity['executable']).resolve() == expected_executable,
+                  'native marker PID is not this fixture executable')
+            child_owned = True
+            poller = select.poll()
+            poller.register(child_fd, select.POLLIN)
+            check(not poller.poll(0), 'native fixture exited before crash control')
+            persist(evidence / 'owned-native-identity.json', identity)
+            process.kill()  # Popen owns and reaps this exact CLI process.
+            try:
+                signal.pidfd_send_signal(child_fd, signal.SIGKILL)
+            except ProcessLookupError:
+                pass  # Parent-death cleanup can have already ended this child.
+            check(poller.poll(3000), 'owned native process did not exit')
+            stdout, stderr = process.communicate(timeout=3)
+            (evidence / 'crash.stdout').write_bytes(stdout)
+            (evidence / 'crash.stderr').write_bytes(stderr)
+            check(process.returncode == -signal.SIGKILL, 'CLI crash control did not execute')
+        except BaseException as error:
+            primary = error
+            raise
+        finally:
+            cleanup_errors = []
+            if child_fd is not None:
+                try:
+                    if child_owned:
+                        try:
+                            signal.pidfd_send_signal(child_fd, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        poller = select.poll()
+                        poller.register(child_fd, select.POLLIN)
+                        check(poller.poll(3000), 'native child cleanup could not be confirmed')
+                except Exception as error:
+                    cleanup_errors.append(repr(error))
+                finally:
+                    os.close(child_fd)
+            try:
+                if process.poll() is None:
+                    process.kill()
+                process.communicate(timeout=3)
+            except Exception as error:
+                cleanup_errors.append(repr(error))
+            persist(evidence / 'crash-cleanup.json', dict(
+                cli_reaped=process.poll() is not None, native_identity_confirmed=child_owned,
+                cleanup_errors=cleanup_errors))
+            if cleanup_errors:
+                raise RuntimeError(f'{primary!r}; uncertain fixture cleanup: {cleanup_errors}')
+        operations = fixture.data / 'operations-v2'
+        journals = list(operations.glob('*.json'))
+        check(journals, 'crash did not produce an actual installer operation journal')
+        for journal in journals:
+            # Retain the exact product-generated journal, without fabricating or
+            # rewriting its state schema to make refusal occur.
+            shutil.copyfile(journal, evidence / ('interrupted-' + journal.name))
+        before, calls = durable_tree(fixture), len(fixture.calls())
+        result = self.command(fixture, evidence, 'recovery-refused', expect=1)
+        check(result.get('code') == 'RECOVERY_REQUIRED' or
+              result.get('error', {}).get('code') == 'RECOVERY_REQUIRED',
+              'unfinished native operation did not produce a typed recovery refusal')
+        check(not result.get('error', {}).get('retryable', False),
+              'recovery refusal offered an ordinary retry')
+        check(durable_tree(fixture) == before, 'recovery refusal changed interrupted state')
+        check(not native_mutations(fixture.calls()[calls:]),
+              'unfinished recovery started another native mutation')
 
     def canceled_review(self, fixture, evidence, action, redirect=None):
         argv = fixture.args(self.binary, targets='cursor', yes=False, json_output=False)
@@ -346,11 +490,21 @@ def install_opener(fixture, native):
     (fixture.bin / name).chmod(0o700)
 
 
+def source_for_case(name, requested, platform):
+    if name in BROWSER_CASES:
+        return 'github'
+    if requested != 'auto':
+        return requested
+    return 'publisher' if platform == 'linux' else 'github'
+
+
 def selected_cases(cases, suite, platform):
     if cases:
         return cases
     selected = [name for name in CASES if suite == 'all' or
                 (name in BROWSER_CASES) == (suite == 'browser')]
+    if platform != 'linux':
+        selected = [name for name in selected if name != 'recovery-refusal']
     if platform == 'win32':
         selected = [name for name in selected if name not in ('review-redirect', 'catalog-redirect')]
     return selected
@@ -393,12 +547,13 @@ def main():
         head, dirty = None, None
     report = dict(schema_version=1, product_sha=args.product_sha,
                   harness_sha=head, harness_dirty=dirty,
-                  source_fixture_sha=SOURCE_SHA, source_mode=args.source,
+                  github_fixture_sha=SOURCE_SHA, source_mode=args.source,
                   binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                   native_protocol='synthetic; no vendor/model/auth qualification',
                   scanner=scanner, platform=sys.platform, cases=[])
     for name in selected_cases(args.case, args.suite, sys.platform):
-        row = dict(case=name, status='fail')
+        row = dict(case=name, status='fail',
+                   source_kind=source_for_case(name, args.source, sys.platform))
         started = time.monotonic()
         try:
             matrix.run_case(name, args.artifacts / name)
@@ -407,6 +562,9 @@ def main():
             row['status'] = 'pass'
         except Exception as error:
             row['error'] = repr(error)
+        source_path = args.artifacts / name / 'source.json'
+        if source_path.is_file():
+            row.update(json.loads(source_path.read_text(encoding='utf-8')))
         row['elapsed_seconds'] = round(time.monotonic() - started, 3)
         report['cases'].append(row)
         persist(args.artifacts / 'report.json', report)

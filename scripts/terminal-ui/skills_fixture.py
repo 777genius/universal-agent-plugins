@@ -18,7 +18,8 @@ from harness import Fixture, check
 
 SOURCE_SHA = 'ce789138a393bffd7e6d001c0e4f8aec05e47773'
 GITHUB_SOURCE = '777genius/universal-agent-plugins@' + SOURCE_SHA
-GITHUB_PATH = 'examples/skills/docs-only-review/skills/review-checklist'
+GITHUB_PATH = 'tests/fixtures/uap_apm/skills/benchmark-note'
+GITHUB_SKILL_BLOB = '1341ca3c10621a9e5e25304cca19144c6b54fa3b'
 SKILL_BODY = ('---\nname: console-proof\ndescription: Read an inert fixture note\n---\n'
               'Read reference.txt. Do not execute commands or contact services.\n')
 
@@ -122,11 +123,13 @@ class SkillsFixture(Fixture):
             self.source = self.publisher.url
             self.source_flags = ['--skill', 'console-proof']
             self.skill_name, self.skill_bytes = 'console-proof', SKILL_BODY.encode()
+            self.skill_blob = None
         elif source == 'github':
             public_git_environment(self)
             self.source = GITHUB_SOURCE
             self.source_flags = ['--path', GITHUB_PATH]
-            self.skill_name, self.skill_bytes = 'review-checklist', None
+            self.skill_name, self.skill_bytes = 'benchmark-note', None
+            self.skill_blob = GITHUB_SKILL_BLOB
         else:
             raise AssertionError('unknown source fixture')
         if native_binary:
@@ -186,6 +189,7 @@ import (
     "os"
     "path/filepath"
     "strings"
+    "time"
 )
 
 type object = map[string]any
@@ -296,6 +300,7 @@ func main() {
             "source":object{"source":"local","path":path}}}
         state["cache"], state["name"], state["spec"] = cache, parts[0], args[2]
         write(statePath,state)
+        pauseAfterNativeAdd()
         output(object{})
         return
     }
@@ -317,6 +322,25 @@ func main() {
     }
     fmt.Fprintln(os.Stderr,"unsupported synthetic protocol",args)
     os.Exit(97)
+}
+
+func pauseAfterNativeAdd() {
+    control := filepath.Join(root,"pause-add")
+    nonce, err := os.ReadFile(control)
+    if os.IsNotExist(err) { return }
+    if err != nil { panic(err) }
+    executable, err := os.Executable()
+    if err != nil { panic(err) }
+    marker := filepath.Join(root,"native-add-paused")
+    write(marker+".pending", object{
+        "pid":os.Getpid(),"ppid":os.Getppid(),"executable":executable,"nonce":string(nonce)})
+    if err := os.Rename(marker+".pending",marker); err != nil { panic(err) }
+    deadline := time.Now().Add(30*time.Second)
+    for time.Now().Before(deadline) {
+        if _, err := os.Stat(control); os.IsNotExist(err) { return }
+        time.Sleep(20*time.Millisecond)
+    }
+    panic("fixture pause deadline expired")
 }
 
 func rpc() {

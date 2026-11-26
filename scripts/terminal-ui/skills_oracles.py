@@ -60,6 +60,7 @@ def bindings(fixture):
 
 def installed(fixture, targets):
     actual = bindings(fixture)
+    state = json.loads((fixture.data / 'state-v2.json').read_text(encoding='utf-8'))
     check(set(actual) == set(targets), f'durable targets {set(actual)}, expected {set(targets)}')
     for target, binding in actual.items():
         path = Path(binding['target_locator'])
@@ -69,8 +70,44 @@ def installed(fixture, targets):
               'binding has no committed receipt')
         skill = path / 'skills' / fixture.skill_name / 'SKILL.md'
         check(skill.is_file(), 'selected Skill missing from native package')
+        body = skill.read_bytes()
         if fixture.skill_bytes:
-            check(skill.read_bytes() == fixture.skill_bytes, 'installed Skill bytes changed')
+            check(body == fixture.skill_bytes, 'installed Skill bytes changed')
+        if fixture.skill_blob:
+            header = ('blob ' + str(len(body)) + '\0').encode()
+            check(hashlib.sha1(header + body, usedforsecurity=False).hexdigest() == fixture.skill_blob,
+                  'GitHub Skill bytes differ from the immutable pinned source blob')
+        if fixture.publisher:
+            expected = {name: hashlib.sha256(data).hexdigest()
+                        for name, data in fixture.publisher.files.items()}
+            check(hashes(skill.parent) == expected, 'Skill resource tree differs from complete source')
+        owner = next((receipt for receipt in state.get('environment_receipts', [])
+                      if receipt.get('client_binding_id') == binding['client_binding_id']), None)
+        check(owner is not None and owner.get('client_id') == target,
+              'native binding has no matching saved environment ownership receipt')
+        revision = binding.get('package_revision', {})
+        check(owner.get('package_digest') == revision.get('tree_digest'),
+              'receipt and installed immutable package digest disagree')
+        committed = [receipt for receipt in binding.get('receipts', [])
+                     if receipt.get('phase') == 'committed']
+        check(any(receipt.get('environment_authority', {}).get('source_key') ==
+                  owner.get('source_key') and
+                  receipt.get('environment_authority', {}).get('client_id') == target
+                  for receipt in committed),
+              'committed native receipt lost its reviewed source/client authority')
+        lock = (fixture.data / 'uap.lock').read_text(encoding='utf-8')
+        check(revision.get('tree_digest', 'missing-digest') in lock,
+              'installed package digest does not occur in the saved immutable lock')
+        if target == 'codex':
+            check(binding.get('activation') == 'active' and
+                  binding.get('verification') == 'installation_verified' and
+                  binding.get('authentication') == 'not_required',
+                  'synthetic Codex protocol did not prove native Skill completion')
+            registry = json.loads((fixture.root / 'native-registry.json').read_text())
+            cache = Path(registry['cache']).resolve()
+            check(cache.is_relative_to(fixture.root.resolve()), 'native cache escaped fixture')
+            cached = cache / 'skills' / fixture.skill_name / 'SKILL.md'
+            check(cached.read_bytes() == body, 'native discovered cache has different Skill bytes')
     check((fixture.data / 'uap.toml').is_file(), 'saved desired intent missing')
     check((fixture.data / 'uap.lock').is_file(), 'saved immutable lock missing')
     return actual

@@ -102,7 +102,13 @@ func renderInstallAttention(cmd *cobra.Command, opts *options) error {
 	if result == nil || len(result.failedAgents()) == 0 {
 		return nil
 	}
-	return renderAgentAttention(cmd.OutOrStdout(), result.Agents, result.LogFile, retryHintFor(cmd, result.Agents))
+	if err := renderAgentAttention(cmd.OutOrStdout(), result.Agents, result.LogFile, retryHintFor(cmd, result.Agents)); err != nil {
+		return err
+	}
+	if result.LogFile == "" {
+		return renderInstallDiagnostic(cmd.OutOrStdout(), installDiagnostic{WriteErr: result.logWriteErr}, result.Agents)
+	}
+	return nil
 }
 
 func renderDependencyHumanResults(cmd *cobra.Command, opts *options, actions []dependencyAction, out []dependencyResultDTO) error {
@@ -117,7 +123,7 @@ func renderDependencyHumanResults(cmd *cobra.Command, opts *options, actions []d
 	}
 	for _, result := range out {
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s for %s: %s %s\n", humanDependencyVerb(result.Operation),
-			prompt.SafeText(dependencyResultAlias(opts.installResult, result)), prompt.SafeText(reviewClientName(domain.ClientID(result.ClientID))), result.Outcome, result.Reason); err != nil {
+			prompt.SafeText(dependencyResultAlias(opts.installResult, result)), prompt.SafeText(reviewClientName(domain.ClientID(result.ClientID))), result.Outcome, dependencyHumanResultReason(opts, result)); err != nil {
 			return err
 		}
 		for _, next := range result.NextActions {

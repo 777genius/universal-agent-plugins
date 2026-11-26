@@ -114,7 +114,7 @@ func TestDependencyHumanResultsUsePairedIdentityAndKeepGuidance(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := out.String()
-	for _, want := range []string{"Install beta for Claude Code: incomplete client apply failed", "Install alpha for Claude Code: completed", "Install alpha for OpenAI Codex: completed", "Installation: id-beta (beta)\n", "Installation: id-alpha (alpha)\n", "Manual: " + a.ManualActions[0], "Next: authenticate review existing authentication"} {
+	for _, want := range []string{"Install beta for Claude Code: incomplete The installation did not complete for this agent.", "Install alpha for Claude Code: completed", "Install alpha for OpenAI Codex: completed", "Installation: id-beta (beta)\n", "Installation: id-alpha (alpha)\n", "Manual: " + a.ManualActions[0], "Next: authenticate review existing authentication"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing paired result/guidance %q: %q", want, text)
 		}
