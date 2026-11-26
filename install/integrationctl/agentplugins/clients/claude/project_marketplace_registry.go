@@ -191,6 +191,9 @@ func inspectClaudeMarketplacePlugin(body []byte, name, physical, active, project
 			return claudeMarketplaceObservation{}
 		}
 		identity := id + "\x00" + row.scope + "\x00" + row.path
+		if projectPath, present := entry["projectPath"].(string); present && (row.scope == "local" || row.scope == "project") {
+			identity += "\x00" + projectPath
+		}
 		if seen[identity] {
 			return claudeMarketplaceObservation{}
 		}
