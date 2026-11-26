@@ -191,26 +191,21 @@ func TestClaude21332NativeListingWithDisabledAndEnabledManagedPlugin(t *testing.
 	}
 }
 
-func TestListingsRejectProjectMetadataOnNonProjectRows(t *testing.T) {
+func TestProjectMetadataMustBeCanonicalOnEverySupportedScope(t *testing.T) {
 	fixture := projectListFixture(t)
-	for _, scope := range []string{"user", "managed", "synced", "builtin"} {
+	for _, scope := range []string{"user", "managed", "synced"} {
 		t.Run(scope, func(t *testing.T) {
 			row := map[string]any{
 				"id": "x@market", "scope": scope, "enabled": true,
 				"installPath": filepath.Join(t.TempDir(), "plugin"),
-				"projectPath": fixture.root,
-			}
-			if scope == "builtin" {
-				row["id"] = "cc-plugin-privacy@builtin"
-				row["scope"] = "user"
-				delete(row, "installPath")
+				"projectPath": "relative",
 			}
 			body, err := json.Marshal([]map[string]any{fixture.selected, row})
 			if err != nil {
 				t.Fatal(err)
 			}
 			if got := observeClaudeProjectList(body, "demo", fixture.active, fixture.root, fixture.user); got.state != projectListUnknown {
-				t.Fatalf("invalid project metadata became %+v", got)
+				t.Fatalf("relative project metadata became %+v", got)
 			}
 			body, err = json.Marshal([]map[string]any{row, {
 				"id": "demo@skills-dir", "scope": "user", "enabled": true,
@@ -220,10 +215,23 @@ func TestListingsRejectProjectMetadataOnNonProjectRows(t *testing.T) {
 				t.Fatal(err)
 			}
 			if got := PluginStatusFromList(body, "demo", fixture.active); got != StatusUnknown {
-				t.Fatalf("invalid project metadata classified as %v", got)
+				t.Fatalf("relative project metadata classified as %v", got)
 			}
 		})
 	}
+	t.Run("builtin", func(t *testing.T) {
+		row := map[string]any{
+			"id": "cc-plugin-privacy@builtin", "scope": "user", "enabled": true,
+			"projectPath": fixture.root,
+		}
+		body, err := json.Marshal([]map[string]any{fixture.selected, row})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := observeClaudeProjectList(body, "demo", fixture.active, fixture.root, fixture.user); got.state != projectListUnknown {
+			t.Fatalf("builtin row with unsupported projectPath became %+v", got)
+		}
+	})
 }
 
 func TestUserScopedRowsMayCarryCanonicalProjectPath(t *testing.T) {
@@ -261,5 +269,22 @@ func TestUserScopedRowsMayCarryCanonicalProjectPath(t *testing.T) {
 	}
 	if got := PluginStatusFromList(body, "demo", active); got != StatusUnknown {
 		t.Fatalf("duplicate managed user rows with differing projectPath were accepted: %v", got)
+	}
+
+	// Unrelated global rows must also remain unique; metadata from separate
+	// projects cannot turn duplicate user-scope identities into two installs.
+	first, second := map[string]any{
+		"id": "other@market", "scope": "user", "enabled": true,
+		"installPath": foreign, "projectPath": projectOne,
+	}, map[string]any{
+		"id": "other@market", "scope": "user", "enabled": false,
+		"installPath": foreign, "projectPath": projectTwo,
+	}
+	body, err = json.Marshal([]map[string]any{first, second, managed(nil)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := PluginStatusFromList(body, "demo", active); got != StatusUnknown {
+		t.Fatalf("duplicate unrelated user rows with differing projectPath were accepted: %v", got)
 	}
 }
