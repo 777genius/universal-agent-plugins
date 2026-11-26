@@ -99,7 +99,9 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 		if !valid || !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return StatusUnknown, false, false
 		}
-		identity += "\x00" + path
+		if scope == "local" || scope == "project" {
+			identity += "\x00" + path
+		}
 	}
 	if _, duplicate := seen[identity]; duplicate {
 		return StatusUnknown, false, false
