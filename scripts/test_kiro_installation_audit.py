@@ -141,6 +141,12 @@ def clear_state(observer, kind):
         for binding in record["clients"].values():
             shutil.rmtree(binding["target_locator"])
     state.write_text('{"schema_version":5,"installations":[]}')
+    if kind == "skill":
+        (observer.project / "uap.toml").write_text("schema_version = 1\n")
+        (observer.project / "uap.lock").write_text(json.dumps({"lock_version": 1,
+            "manifest_digest": "sha256:2110fb382f40916fd7f7b674ece50f3969d1ad918fd7e316b863085f3cef0613",
+            "packages": []}))
+
 
 
 class KiroInstallationTests(unittest.TestCase):
@@ -251,6 +257,53 @@ class KiroInstallationTests(unittest.TestCase):
             with patch.object(prepared.os, "open", side_effect=checked_open):
                 with self.assertRaises(ValueError):
                     observer.read_bytes(receipt)
+
+    def test_saved_removal_requires_empty_held_project_receipts(self):
+        for position, mutation in ((4, "missing"), (4, "malformed-lock"), (4, "manifest-schema"),
+                                   (4, "residual-dependency"), (4, "residual-target"), (4, "foreign-lock"),
+                                   (4, "symlink"), (4, "hardlink"), (5, "same-byte-replacement"),
+                                   (5, "same-byte-rewrite"), (5, "missing"), (5, "foreign-lock")):
+            with self.subTest(position=position, mutation=mutation), tempfile.TemporaryDirectory() as directory:
+                observer = self.fixture(Path(directory).resolve(), "skill")
+                original, calls = observer.observe, []
+                manifest, lock = observer.project / "uap.toml", observer.project / "uap.lock"
+                def adversarial(argv, outcome):
+                    index = len(calls)
+                    calls.append(index)
+                    if index == position:
+                        if mutation == "missing":
+                            lock.unlink()
+                        elif mutation == "malformed-lock":
+                            lock.write_text("not a lock")
+                        elif mutation == "manifest-schema":
+                            manifest.write_text("schema_version = true")
+                        elif mutation == "residual-dependency":
+                            manifest.write_text('schema_version = 1\n[dependencies]\nforeign = "x"')
+                        elif mutation == "residual-target":
+                            manifest.write_text('schema_version = 1\n[targets]\nkiro = ["foreign"]')
+                        elif mutation == "foreign-lock":
+                            document = json.loads(lock.read_bytes())
+                            document["packages"] = [{"alias": "foreign"}]
+                            lock.write_text(json.dumps(document))
+                        elif mutation == "symlink":
+                            foreign = lock.with_suffix(".foreign")
+                            lock.rename(foreign)
+                            lock.symlink_to(foreign)
+                        elif mutation == "hardlink":
+                            os.link(lock, lock.with_suffix(".foreign"))
+                        elif mutation == "same-byte-replacement":
+                            replacement = lock.with_suffix(".new")
+                            replacement.write_bytes(lock.read_bytes())
+                            replacement.replace(lock)
+                        elif mutation == "same-byte-rewrite":
+                            info = lock.stat()
+                            lock.write_bytes(lock.read_bytes())
+                            os.utime(lock, ns=(info.st_atime_ns, info.st_mtime_ns))
+                    return original(argv, outcome)
+                observer.observe = adversarial
+                with self.assertRaises((ValueError, OSError)):
+                    self.finish(observer, "skill", 0, raw("skill", 0, observer.project))
+                self.assertEqual(len(calls), position + 1)
 
     def test_all_sources_keep_exact_states_and_complete_six_envelopes(self):
         for kind in ("plugin", "skill"):

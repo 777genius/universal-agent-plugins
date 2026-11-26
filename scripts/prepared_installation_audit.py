@@ -13,6 +13,7 @@ import os
 import re
 import stat
 import sys
+import tomllib
 from pathlib import Path, PurePosixPath
 
 
@@ -579,6 +580,38 @@ class KiroInstallationAudit:
     def read_document(self, path):
         return json.loads(self.read_bytes(path), object_pairs_hook=kiro_unique_pairs, parse_constant=kiro_nonfinite)
 
+    def verify_removed_saved_state(self):
+        """Retain both empty Project receipts from removal through final list."""
+        paths = [self.project / name for name in ("uap.toml", "uap.lock")]
+        try:
+            for path in paths:
+                if path not in self.protected_files:
+                    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+                    try:
+                        info = os.fstat(fd)
+                        body = self.held_bytes(fd)
+                        kiro_require(info.st_nlink == 1)
+                    except BaseException:
+                        os.close(fd)
+                        raise
+                    self.protected_files[path] = (fd, info, body)
+                fd, expected, _ = self.protected_files[path]
+                kiro_require(path.lstat().st_ctime_ns == os.fstat(fd).st_ctime_ns == expected.st_ctime_ns)
+            self.guard()
+            manifest = tomllib.loads(self.protected_files[paths[0]][2].decode("utf-8", errors="strict"))
+            lock = json.loads(self.protected_files[paths[1]][2], object_pairs_hook=kiro_unique_pairs,
+                              parse_constant=kiro_nonfinite)
+            empty_intent = "sha256:" + hashlib.sha256(b'{"schema_version":1,"dependencies":null,"targets":null}').hexdigest()
+            kiro_require(exact(manifest.get("schema_version"), 1)
+                         and set(manifest) <= {"schema_version", "dependencies", "dev-dependencies", "targets"}
+                         and all(exact(manifest.get(key, {}), {}) for key in ("dependencies", "dev-dependencies", "targets"))
+                         and exact(lock, {"lock_version": 1, "manifest_digest": empty_intent, "packages": []}))
+            for path in paths:
+                fd, expected, _ = self.protected_files[path]
+                kiro_require(path.lstat().st_ctime_ns == os.fstat(fd).st_ctime_ns == expected.st_ctime_ns)
+        except (OSError, UnicodeError) as error:
+            raise ValueError("Kiro saved removal receipts are unavailable") from error
+
     def tree_contents(self, root):
         self.directory(root)
         before = self.audit["scoped_snapshot"]((root,))
@@ -716,6 +749,8 @@ class KiroInstallationAudit:
                                      and not any(type(binding) is not dict or binding.get("client_id") == "kiro"
                                                  for binding in record["clients"].values())
                                      for record in state["installations"]))
+        if positive and len(self.observations) >= 4 and self.kind == "skill":
+            self.verify_removed_saved_state()
         self.observations.append((list(argv), copy.deepcopy(outcome), image))
 
     def finish(self, row, item, index, fixtures):
@@ -756,6 +791,8 @@ class KiroInstallationAudit:
             public = None
         else:
             kiro_require(len(self.observations) == 6)
+            if self.kind == "skill":
+                self.verify_removed_saved_state()
             ids = row.get("matched_installation_ids")
             kiro_require(type(ids) is list and len(ids) == 1)
             selector = ids[0]
