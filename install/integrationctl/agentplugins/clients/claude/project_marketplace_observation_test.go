@@ -40,6 +40,7 @@ func TestClaudeProjectMarketplaceNativeSchemas(t *testing.T) {
 			case "untrusted-with-exact-install":
 				rows = append(rows, map[string]any{"id": "(suppressed)@skills-dir", "version": "unknown", "scope": "project", "enabled": false, "installPath": "", "notes": []string{claudeUntrustedProjectNote}})
 			case "malformed-builtin":
+				rows = append(claudeBuiltinRows(), row)
 				rows = append(rows, map[string]any{"id": "cc-plugin-privacy@builtin", "scope": "user", "enabled": true, "installPath": filepath.Join(t.TempDir(), "builtin")})
 			case "unrelated-other-project":
 				rows = append(rows, map[string]any{"id": "foreign@other", "version": "1.0.0", "scope": "project", "projectPath": filepath.Join(filepath.Dir(r.Plan.TargetContext.ProjectRoot), "B"), "installPath": filepath.Join(r.Client.ConfigRoot, "plugins/cache/other/foreign/1.0.0"), "enabled": false})
