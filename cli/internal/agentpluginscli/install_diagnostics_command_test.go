@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
@@ -76,9 +77,9 @@ func decodeOneDiagnosticEnvelope(t *testing.T, output string) map[string]any {
 	return envelope
 }
 
-// This runs NewRoot with the real HTTPS publisher, immutable package store,
-// saved intent and receipts. The only injected failure is the existing
-// prepublication readiness seam; native inventory refuses mutation on replay.
+// Human coverage runs NewRoot and injects failure only when the reviewed plan
+// is confirmed. JSON uses the accepted-batch application boundary, since it has
+// no interactive confirmation hook. Both use real HTTPS, store and receipts.
 func TestSkillsCommandUnavailableLogPreservesFailureAndDurableState(t *testing.T) {
 	for _, mode := range []string{"disabled", "unwritable"} {
 		for _, format := range []string{"human", "json"} {
@@ -87,17 +88,42 @@ func TestSkillsCommandUnavailableLogPreservesFailureAndDurableState(t *testing.T
 				app := journey.cli.app
 				private := "opaque-native-output-932817"
 				cause := fmt.Errorf("%s: %w", private, fs.ErrPermission)
-				guard := &unclosedSkillsStore{Store: journey.cli.store, failure: cause}
+				guard := &unclosedSkillsStore{Store: journey.cli.store}
 				app.StateStore = guard
 				app.InstallLogDir = diagnosticLogDirectory(t, mode)
 				before := savedSkillsDurableTree(t, app.DependenciesRoot)
 				var output, stderr bytes.Buffer
 				app.Output, app.ErrorOutput = &output, &stderr
-				command := NewRoot(app)
-				args := []string{"skills", "add", request.Selections[0].Website, "--skill", "pdf", "--target", "codex", "--no-ui", "--yes", "--scope", "user", "--format", format}
-				command.SetArgs(args)
-				err := command.ExecuteContext(t.Context())
-				if !errors.Is(err, cause) || !errors.Is(err, fs.ErrPermission) || guard.checks != 1 {
+				args := []string{"skills", "add", request.Selections[0].Website, "--skill", "pdf", "--target", "codex", "--no-ui", "--plain", "--scope", "user", "--format", format}
+				checksBeforeApply := 0
+				var err error
+				if format == "json" {
+					prepared, prepareErr := app.PrepareSkills(t.Context(), request)
+					if prepareErr != nil {
+						t.Fatal(prepareErr)
+					}
+					defer prepared.Close()
+					checksBeforeApply, guard.failure = guard.checks, cause
+					command, _, _ := retryTestCommand(t)
+					command.SetOut(&output)
+					command.SetErr(&stderr)
+					err = applySkillsWithRecovery(command, app, &options{format: "json", scope: "user"}, prepared, false)
+				} else {
+					app.Terminal = true
+					confirmed := false
+					app.Prompter = fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
+						if confirmed {
+							return prompt.ConfirmationResult{Accepted: false}, nil
+						}
+						confirmed = true
+						checksBeforeApply, guard.failure = guard.checks, cause
+						return prompt.ConfirmationResult{Accepted: true}, nil
+					}}
+					command := NewRoot(app)
+					command.SetArgs(args)
+					err = command.ExecuteContext(t.Context())
+				}
+				if !errors.Is(err, cause) || !errors.Is(err, fs.ErrPermission) || guard.checks-checksBeforeApply != 1 {
 					t.Fatalf("command lost its cause or replayed the failed apply: checks=%d err=%v", guard.checks, err)
 				}
 				if runner.mutations != 0 || !reflect.DeepEqual(before, savedSkillsDurableTree(t, app.DependenciesRoot)) {

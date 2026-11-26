@@ -1,6 +1,7 @@
 package agentpluginscli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -167,14 +168,13 @@ func applyDeclaredEnvironmentRepairs(cmd *cobra.Command, app App, opts *options,
 	}
 	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent}
 	outcomes, applyErr := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), Bindings: prepared}, true)
-	app.finishInstall(opts, cmd.CommandPath(), outcomeAgentItems(outcomes))
-	if renderErr := renderDependencyResults(cmd, opts, prepared, environment.Results(outcomes), applyErr); renderErr != nil && applyErr == nil {
-		return renderErr
-	}
+	app.finishInstall(opts, cmd.CommandPath(), appliedAgentItems(prepared, outcomes, applyErr))
+	renderErr := renderDependencyBindingResults(cmd, opts, prepared, outcomes, applyErr)
 	if applyErr != nil {
-		return fmt.Errorf("dependency install stopped; inspect binding results and next actions: %w", applyErr)
+		cause := fmt.Errorf("dependency install stopped; inspect binding results and next actions: %w", applyErr)
+		return errors.Join(humanInstallApplyError(opts.format, opts.installResult, cause), installOutputError(renderErr))
 	}
-	return nil
+	return installOutputError(renderErr)
 }
 
 // Only the argumentless install verb infers a project, and only in the exact

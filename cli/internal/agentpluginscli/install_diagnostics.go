@@ -9,6 +9,8 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/installlog"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/usecase"
 )
 
@@ -120,22 +122,63 @@ func retainGroupApplyCause(summary, cause error) error {
 	return retainUnclosedInstallCause(summary, cause)
 }
 
-// Only the human view of a failed binding may replace its provider reason.
-// Exact result/binding identity supplies the classification; JSON and native
-// facts keep their established content, and successful peers are unchanged.
-func dependencyHumanResultReason(opts *options, result dependencyResultDTO) string {
+// A failed native result may copy the provider error into its reason, next
+// actions and manual instructions. With no private log, its detached human view
+// uses fixed classification only. JSON/native facts and healthy peers survive.
+func dependencyHumanResult(opts *options, result dependencyResultDTO) dependencyResultDTO {
 	outcome := opts.installResult
-	if outcome == nil || outcome.LogFile != "" {
-		return result.Reason
+	if outcome != nil && outcome.LogFile != "" {
+		return result
 	}
-	for _, item := range outcome.Items {
-		if item.installationID == result.InstallationID && item.ClientID == result.ClientID {
-			if failure := normalizeAgentItem(item).failure; failure != nil {
-				return failure.Summary
-			}
+	if result.bindingStatus == environment.BindingApplied || result.bindingStatus == environment.BindingUnchanged {
+		return result
+	}
+	failure := result.bindingFailure
+	if result.bindingStatus == "" {
+		if outcome == nil {
+			return result
+		}
+		failure = pairedDependencyFailure(outcome, result)
+		failed := result.Outcome != string(installer.OutcomeCompleted) && result.Outcome != string(installer.OutcomeUnchanged)
+		if failure == nil && !failed {
+			return result
 		}
 	}
-	return result.Reason
+	if failure == nil {
+		kind := failureKindOfOutcome(installer.Outcome(result.Outcome))
+		failure = &installFailure{Kind: kind}
+		failure.Summary, failure.Next, failure.Retryable = applyFailureWording(kind)
+	}
+	result.Reason = failure.Summary
+	if result.Outcome == string(installer.OutcomeCompleted) || result.Outcome == string(installer.OutcomeUnchanged) {
+		result.Outcome = "failed"
+	}
+	result.NextActions, result.ManualActions = nil, nil
+	return result
+}
+
+// Missing or ambiguous native identity cannot choose another binding's cause.
+func pairedDependencyFailure(outcome *installOutcome, result dependencyResultDTO) *installFailure {
+	if result.InstallationID == "" || result.ClientID == "" {
+		return nil
+	}
+	var failure *installFailure
+	matches := 0
+	anyFailed := false
+	for _, item := range outcome.Items {
+		if item.installationID == result.InstallationID && item.ClientID == result.ClientID {
+			matches++
+			failure = normalizeAgentItem(item).failure
+			anyFailed = anyFailed || failure != nil
+		}
+	}
+	if matches == 1 {
+		return failure
+	}
+	if anyFailed {
+		return describeSyncFailure(nil)
+	}
+	return nil
 }
 
 // A missing private log must not expose the same provider chain through the

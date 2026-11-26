@@ -12,6 +12,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
 func TestSkillsReviewGroupsActionsWithoutHidingWarningsOrPaths(t *testing.T) {
@@ -107,31 +108,46 @@ func TestSkillsReviewAcknowledgesOnlyAcceptedHumanConfirmationBeforeProgress(t *
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			const acknowledgment = "Skills installation confirmed."
-			cmd, output, _ := retryTestCommand(t)
-			cmd.SetErr(output)
+			cmd, output, visible := retryTestCommand(t)
 			calls := 0
-			app := App{Terminal: true, Output: output, ErrorOutput: output}
+			app := App{Terminal: true, Output: output, ErrorOutput: visible, reviewOutput: visible}
 			app.Prompter = fakePrompter{confirmFn: func() (prompt.ConfirmationResult, error) {
 				calls++
-				if strings.Contains(output.String(), acknowledgment) {
+				if calls > 1 {
+					// The failed Apply is now truthfully reportable and retryable.
+					// Decline that separate retry question without re-authorizing it.
+					return prompt.ConfirmationResult{Accepted: false}, nil
+				}
+				if strings.Contains(visible.String(), acknowledgment) {
 					t.Fatal("confirmation was acknowledged before it was accepted")
 				}
 				return prompt.ConfirmationResult{Accepted: test.accepted}, test.confirmError
 			}}
-			// A closed plan makes reaching Apply observable without any effects.
-			plan := &PreparedSkillsBatch{closed: true, actions: []SkillsAction{{Alias: "review", ClientID: "codex", Action: "install", TargetPath: "/exact/path"}}}
+			// An invalid project context makes reaching Apply observable through
+			// the existing stale-plan sentinel, without any mutation or source I/O.
+			plan := &PreparedSkillsBatch{app: App{Scope: domain.ScopeProject, ProjectRoot: "relative"}, actions: []SkillsAction{{Alias: "review", ClientID: "codex", Action: "install", TargetPath: "/exact/path"}}}
 			err := runSkillsReviewedPlan(cmd, app, &options{format: test.format, plain: true, dryRun: test.dryRun}, plan, test.confirm)
 			if test.wantApply {
-				if err == nil || !strings.Contains(err.Error(), "skill plan closed") {
-					t.Fatalf("closed plan did not expose Apply boundary: %v", err)
+				if !errors.Is(err, ErrSkillsPlanStale) {
+					t.Fatalf("input guard did not expose Apply boundary: %v", err)
 				}
 			} else if !errors.Is(err, test.confirmError) {
 				t.Fatalf("confirmation result changed: %v", err)
 			}
-			if (calls == 1) != (test.confirm && !test.dryRun) || calls > 1 {
-				t.Fatalf("confirmation calls = %d", calls)
+			wantCalls := 0
+			if test.confirm && !test.dryRun {
+				wantCalls++
 			}
-			text := output.String()
+			if test.confirm && test.wantApply && test.format == "human" {
+				wantCalls++
+			}
+			if calls != wantCalls {
+				t.Fatalf("confirmation/retry calls = %d, wanted %d", calls, wantCalls)
+			}
+			text := visible.String()
+			if strings.Contains(output.String(), acknowledgment) {
+				t.Fatal("confirmation acknowledgment entered result stdout")
+			}
 			wantAcknowledgment := test.confirm && test.wantApply && test.format == "human"
 			count := strings.Count(text, acknowledgment)
 			if wantAcknowledgment && count != 1 || !wantAcknowledgment && count != 0 {

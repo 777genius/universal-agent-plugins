@@ -21,15 +21,16 @@ import uuid
 
 from harness import Session, check, clean, prepare_scanner, scanner_options
 from native_skills import compact
-from skills_fixture import GITHUB_SOURCE, SOURCE_SHA, SkillsFixture, build_native_fixture
+from skills_fixture import (GITHUB_SOURCE, NATIVE_SOURCE, SOURCE_SHA, SkillsFixture,
+                            build_native_fixture)
 from skills_oracles import (durable_tree, envelope, failure_log, installed,
                             items_by_agent, native_mutations, persist)
 
 CASES = ('source-feasibility', 'fresh', 'unchanged', 'unchanged-failure',
          'partial-json', 'partial-decline', 'partial-retry', 'log-unavailable', 'recovery-refusal', 'no-targets',
          'review-decline', 'review-ctrl-c', 'review-eof', 'review-redirect',
-         'catalog-redirect', 'plain-browser', 'explicit-ui')
-BROWSER_CASES = frozenset(('catalog-redirect', 'plain-browser', 'explicit-ui'))
+         'catalog-redirect', 'catalog-both-redirect', 'plain-browser', 'explicit-ui')
+BROWSER_CASES = frozenset(('catalog-redirect', 'catalog-both-redirect', 'plain-browser', 'explicit-ui'))
 QUESTION = r'Install these Skills\? \[Y/n\] '
 RETRY = r'Retry [^\r\n]*\? \[Y/n\] '
 
@@ -158,6 +159,13 @@ class Matrix:
                         path = fixture.data / filename
                         if path.is_file():
                             shutil.copyfile(path, evidence / filename)
+                    logs = fixture.data / 'logs'
+                    if logs.is_dir():
+                        saved_logs = evidence / 'diagnostics'
+                        saved_logs.mkdir()
+                        for log in logs.glob('install-*.jsonl'):
+                            check(not log.is_symlink(), 'diagnostic file unexpectedly became a symlink')
+                            shutil.copyfile(log, saved_logs / log.name)
                     if fixture.publisher:
                         persist(evidence / 'publisher-requests.json', fixture.publisher.requests)
                 finally:
@@ -224,8 +232,9 @@ class Matrix:
         check(not native_mutations(fixture.calls()[calls:]),
               'failed no-op performed native mutation')
         logs = list((fixture.data / 'logs').glob('install-*.jsonl'))
-        check(logs and any('codex' in log.read_text() for log in logs),
-              'unchanged pre-apply failure was not logged')
+        check(logs, 'unchanged pre-apply failure was not logged')
+        failure_log({'log_file': str(logs[0]), 'items': [
+            {'targetId': 'codex', 'alias': fixture.skill_name, 'status': 'failed'}]}, fixture)
 
     def case_partial_json(self, fixture, evidence):
         fixture.control('fail-add')
@@ -464,6 +473,26 @@ class Matrix:
     def case_catalog_redirect(self, fixture, evidence):
         self.catalog(fixture, evidence, redirect='stdout')
 
+    def case_catalog_both_redirect(self, fixture, evidence):
+        argv = [str(self.binary), 'skills', 'add', GITHUB_SOURCE,
+                '--plain', '--no-ui', '--color=never']
+        session = self.session(argv, fixture, evidence, redirect='both')
+        try:
+            # No input is ever sent to the CLI. The existing restoration probe
+            # runs only after actual process exit and reuses the same descriptor.
+            session.finish(1)
+            fixture.unchanged()
+            output = ((evidence / 'stdout.raw').read_bytes() +
+                      (evidence / 'stderr.raw').read_bytes()).decode('utf-8', 'replace')
+            check('Available Skills' not in output and 'Select: ' not in output,
+                  'unavailable visible terminal still entered the hidden catalog')
+            check(any(word in output.lower() for word in
+                      ('terminal', 'non-interactive', '--skill', '--path', 'prompt')),
+                  'unavailable terminal refusal lost actionable guidance')
+            check(not native_mutations(fixture.calls()), 'hidden catalog refusal changed native state')
+        finally:
+            session.close()
+
     def case_plain_browser(self, fixture, evidence):
         install_opener(fixture, self.native)
         self.catalog(fixture, evidence)
@@ -506,7 +535,7 @@ def selected_cases(cases, suite, platform):
     if platform != 'linux':
         selected = [name for name in selected if name != 'recovery-refusal']
     if platform == 'win32':
-        selected = [name for name in selected if name not in ('review-redirect', 'catalog-redirect')]
+        selected = [name for name in selected if name not in ('review-redirect', 'catalog-redirect', 'catalog-both-redirect')]
     return selected
 
 
@@ -532,13 +561,15 @@ def main():
     args.artifacts.mkdir(parents=True, exist_ok=False)
     binary = args.binary.resolve(strict=True)
     native = args.native_fixture
+    native_origin = 'supplied' if native is not None else 'built'
     if native is None:
         go = args.build_go or shutil.which('go')
         check(go is not None, '--native-fixture or Go toolchain is required')
         native = build_native_fixture(
             go, args.artifacts / ('native.exe' if os.name == 'nt' else 'native'))
+    native = native.resolve(strict=True)
     scanner = prepare_scanner(args)
-    matrix = Matrix(binary, native.resolve(strict=True), args.timeout,
+    matrix = Matrix(binary, native, args.timeout,
                     args.acquisition_timeout, args.source, args.scanner_path)
     try:
         head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
@@ -549,6 +580,10 @@ def main():
                   harness_sha=head, harness_dirty=dirty,
                   github_fixture_sha=SOURCE_SHA, source_mode=args.source,
                   binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
+                  native_fixture_path=str(native), native_fixture_origin=native_origin,
+                  native_fixture_sha256=hashlib.sha256(native.read_bytes()).hexdigest(),
+                  native_fixture_embedded_source_sha256=hashlib.sha256(
+                      NATIVE_SOURCE.encode('utf-8')).hexdigest(),
                   native_protocol='synthetic; no vendor/model/auth qualification',
                   scanner=scanner, platform=sys.platform, cases=[])
     for name in selected_cases(args.case, args.suite, sys.platform):
@@ -559,6 +594,8 @@ def main():
             matrix.run_case(name, args.artifacts / name)
             check(hashlib.sha256(binary.read_bytes()).hexdigest() == report['binary_sha256'],
                   'input CLI binary changed during qualification')
+            check(hashlib.sha256(native.read_bytes()).hexdigest() == report['native_fixture_sha256'],
+                  'input native fixture binary changed during qualification')
             row['status'] = 'pass'
         except Exception as error:
             row['error'] = repr(error)

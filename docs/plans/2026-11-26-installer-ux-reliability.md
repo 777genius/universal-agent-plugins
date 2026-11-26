@@ -1,6 +1,8 @@
 # Installer reliability and console UX: implementation plan
 
-Status: **implementation plan; production changes and final E2E pending**.
+Status: **implemented; independent review fixes and final cross-platform
+qualification in progress**. Actual PR checks and retained evidence, rather
+than this plan's estimates, determine merge readiness.
 Owner authorization: 26 November 2026 (Europe/Kiev).
 Base: `ce789138a393bffd7e6d001c0e4f8aec05e47773`.
 Delivery: one Draft PR, immediate publication of each cohesive commit, repeated
@@ -43,12 +45,21 @@ store, retry engine, terminal framework, diagnostic command or permission model.
 
 ## 2. Evidence and overlap
 
-Four diagnostic tests fail on unchanged main for the intended behavior:
-`TestUXAuditPlainSkillsDoesNotAutomaticallyChooseBrowser`,
-`TestUXAuditSkillsReviewUsesAlreadySelectedVisibleStream`,
-`TestUXAuditSkillsNoDetectedTargetsHasActionableDiagnosis`, and
-`TestUXAuditRepeatedSkillReportsPrepublicationFailure`.
-They were executed with repository Go 1.26.11.
+Exploratory scratch tests on the unchanged base identified four candidate
+regressions. Their temporary source and captured output were not retained in
+the repository, so those baseline-failure claims are **not independently
+verified by repository evidence** and are not acceptance proof.
+
+This PR instead carries reproducible production-composed controls:
+`TestPlainSkillsDoesNotAutomaticallyChooseBrowser`,
+`TestSkillsReviewUsesAlreadySelectedVisibleStream`, and
+`TestSkillsNoDetectedTargetsHasActionableDiagnosis` in
+`cli/internal/agentpluginscli/skills_console_regression_test.go`, plus
+`TestSkillsRepeatedPrepublicationFailureReportsEveryBinding` in
+`cli/internal/agentpluginscli/install_outcome_truth_test.go`. Run them with the
+repository Go toolchain using `go test -count=1 ./cli/internal/agentpluginscli
+-run '^(TestPlainSkillsDoesNotAutomaticallyChooseBrowser|TestSkillsReviewUsesAlreadySelectedVisibleStream|TestSkillsNoDetectedTargetsHasActionableDiagnosis|TestSkillsRepeatedPrepublicationFailureReportsEveryBinding)$'`.
+Current-commit results and public-process evidence determine acceptance.
 
 The suspected HTTPS retry-content vulnerability was **withdrawn** after real
 fixture checks: a fresh retry re-reviews a changed destination, while retained
@@ -232,7 +243,9 @@ source policy accepts HTTPS loopback endpoints; prove the real composition early
 Go macOS/Windows trust does not consume SSL_CERT_FILE like Linux does. Those
 platforms use a pinned public own-repository GitHub Skill, full commit in the
 source selector and exact path, isolated profiles and native protocol fixtures.
-For example the base contains examples/skills/docs-only-review/skills/review-checklist.
+The pinned base uses tests/fixtures/uap_apm/skills/benchmark-note, a standard
+inert Skill with scalar frontmatter. The earlier docs-only-review illustration
+contains legacy mapping-valued compatibility and is not a valid raw-Skills fixture.
 Explicit --ref is a branch/tag selector, not the full-SHA source syntax.
 
 Raw GitHub acquisition strips GIT_* and user Git configuration; GIT_SSL_CAINFO
@@ -320,8 +333,24 @@ Round 2: all three independent reviewers rechecked the revised plan and
 reported PASS with no remaining blocking plan findings. This is plan review,
 not production-code approval or E2E evidence.
 
+Implementation review found and corrected two additional user-visible paths:
+failed native next/manual instructions could leak provider text in human output,
+and a refused interaction factory could leave a hidden numeric reader when both
+output streams were redirected. The imperative `update --all` owner now also
+records classified failures and preserves failed output writes. A further review
+requires authoritative per-binding provenance when projecting healthy native
+rows with missing optional identity in a mixed batch. These reviews are tracked
+separately from actual CI and do not count unexecuted platform lanes as passing.
+
+The recovered local executor builds the production picker assets and runs the
+focused Go and Python controls. Its ordinary process-containment prerequisite
+is unavailable (`/proc/.../task/.../children`), so Git/native cases remain
+mandatory on the normal CI hosts. The approved `ci:github-hosted` per-PR label
+selects the documented hosted Linux fallback; no assertion or global runner
+policy is relaxed.
+
 - [x] Two plan critique rounds incorporated.
-- [ ] Exact source-fixture / bundled-binary feasibility proven.
+- [x] Exact Linux HTTPS source and production picker bundle feasibility proven.
 - [ ] Confirmed outcome and console regressions fixed.
 - [ ] Diagnostics remain useful when log recording is unavailable.
 - [ ] Large catalogs and fallback races covered.

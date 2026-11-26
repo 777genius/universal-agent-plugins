@@ -66,14 +66,9 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 	if err != nil {
 		return renderSkillsCommandIssue(cmd, opts, err)
 	}
-	if interactive && app.Prompter == nil && app.PromptFactory != nil {
-		resolved, promptErr := withPrompter(cmd, app, opts)
-		if promptErr != nil && !errors.Is(promptErr, prompt.ErrPromptUnavailable) {
-			return promptErr
-		}
-		if promptErr == nil {
-			app = resolved
-		}
+	app, promptErr := resolveSkillsInteraction(cmd, app, opts, interactive)
+	if promptErr != nil && !errors.Is(promptErr, prompt.ErrPromptUnavailable) {
+		return promptErr
 	}
 	requested, err := parseTargetOption(opts.target)
 	if err != nil {
@@ -89,9 +84,18 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 	if err := cmd.Context().Err(); err != nil {
 		return err
 	}
+	if promptErr != nil && selection.requiresInteraction(opts, true) {
+		return promptErr
+	}
 	if isWebsiteSkillInput(input) {
 		return selection.runWebsite(cmd, app, opts, input, interactive)
 	}
+	return selection.runGit(cmd, app, opts, input, interactive, promptErr)
+}
+
+// Git source lifetime encloses both browser ownership and any safe terminal
+// handoff. Common flags, scope and interaction-host resolution stay in run.
+func (selection *skillsAddOptions) runGit(cmd *cobra.Command, app App, opts *options, input string, interactive bool, promptErr error) error {
 	request := SkillsPickerRequest{Input: input, Ref: selection.ref, Path: selection.folder, PathSet: cmd.Flags().Changed("path")}
 	if request.PathSet {
 		if err := sourceacquisition.ValidateSkillPath(request.Path); err != nil {
@@ -105,6 +109,9 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 		return err
 	}
 	defer session.cleanup()
+	if promptErr != nil && selection.requiresInteraction(opts, len(selection.names) > 0 || request.PathSet || session.source.ExactPath) {
+		return promptErr
+	}
 	browser := selection.useBrowserPicker(interactive, opts, request.PathSet, session.source.ExactPath)
 	if browser {
 		handled, err := runSkillsBrowser(cmd, app, opts, session, selection.ui)

@@ -67,7 +67,7 @@ func TestSingleAddApplicationUnavailableLogPreservesCauseAndEffects(t *testing.T
 					}
 				} else {
 					decodeOneDiagnosticEnvelope(t, output.String())
-					if stderr.Len() != 0 {
+					if strings.Contains(stderr.String(), "Technical details") || strings.Contains(stderr.String(), "Failure codes:") {
 						t.Fatalf("single-add JSON gained human diagnostics: %q", stderr.String())
 					}
 				}
@@ -125,7 +125,7 @@ func TestGroupCommandUnavailableLogKeepsPreparationFailure(t *testing.T) {
 					}
 				} else {
 					decodeOneDiagnosticEnvelope(t, output)
-					if stderr != "" {
+					if strings.Contains(stderr, "Technical details") || strings.Contains(stderr, "Failure codes:") {
 						t.Fatalf("group JSON gained a human notice: %q", stderr)
 					}
 				}

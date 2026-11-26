@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/prompt"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 // A fresh HTTPS retry can acquire changed bytes only after the existing second
@@ -50,7 +50,7 @@ func TestSkillsWebsiteRetryRetainsReviewAndRevisionAuthority(t *testing.T) {
 			cmd, _, _ := retryTestCommand(t)
 			next, err := prepareSkillsRetry(cmd, app, &options{format: "human", scope: "user"}, plan, plan.Actions(), reportByAgent([]agentItem{failedItem("pdf", "codex", errors.New("prepublication failure"))}))
 			if retained {
-				if next != nil || !errors.Is(err, domain.ErrRetainedRevisionChange) || confirmations != 1 {
+				if next != nil || !errors.Is(err, installer.ErrUpdateRequired) || confirmations != 1 {
 					t.Fatalf("retained revision change escaped refusal: next=%v confirmations=%d err=%v", next != nil, confirmations, err)
 				}
 				return

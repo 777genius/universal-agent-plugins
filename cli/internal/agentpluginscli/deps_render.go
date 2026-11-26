@@ -50,6 +50,8 @@ type dependencyResultDTO struct {
 	Reason         string                    `json:"reason,omitempty"`
 	ManualActions  []string                  `json:"manual_actions,omitempty"`
 	NextActions    []dependencyNextActionDTO `json:"next_actions,omitempty"`
+	bindingStatus  environment.BindingStatus
+	bindingFailure *installFailure
 }
 type dependencyNextActionDTO struct {
 	Kind   string `json:"kind"`
@@ -57,7 +59,16 @@ type dependencyNextActionDTO struct {
 }
 
 func renderDependencyResults(cmd *cobra.Command, opts *options, actions []dependencyAction, results []installer.Result, applyErr error) error {
-	out := dependencyResultOutput(results)
+	return renderDependencyResultOutput(cmd, opts, actions, dependencyResultOutput(results), applyErr)
+}
+
+// Observed bindings retain their authority through human projection, including
+// results whose native IDs are absent or identical to another binding's DTO.
+func renderDependencyBindingResults(cmd *cobra.Command, opts *options, actions []dependencyAction, outcomes []environment.BindingOutcome, applyErr error) error {
+	return renderDependencyResultOutput(cmd, opts, actions, dependencyBindingResultOutput(outcomes), applyErr)
+}
+
+func renderDependencyResultOutput(cmd *cobra.Command, opts *options, actions []dependencyAction, out []dependencyResultDTO, applyErr error) error {
 	outcome := "completed"
 	if applyErr != nil {
 		outcome = "partial"
@@ -95,6 +106,20 @@ func renderDependencyResults(cmd *cobra.Command, opts *options, actions []depend
 	return renderInstallAttention(cmd, opts)
 }
 
+func dependencyBindingResultOutput(outcomes []environment.BindingOutcome) []dependencyResultDTO {
+	out := dependencyResultOutput(environment.Results(outcomes))
+	index := 0
+	for _, binding := range outcomes {
+		if binding.Result == nil {
+			continue
+		}
+		out[index].bindingStatus = binding.Status
+		out[index].bindingFailure = describeBindingFailure(binding)
+		index++
+	}
+	return out
+}
+
 // renderInstallAttention explains agents that did not succeed in plain words.
 // Human-readable binding results appear above; technical detail is in the log.
 func renderInstallAttention(cmd *cobra.Command, opts *options) error {
@@ -122,8 +147,9 @@ func renderDependencyHumanResults(cmd *cobra.Command, opts *options, actions []d
 		return err
 	}
 	for _, result := range out {
+		result = dependencyHumanResult(opts, result)
 		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s %s for %s: %s %s\n", humanDependencyVerb(result.Operation),
-			prompt.SafeText(dependencyResultAlias(opts.installResult, result)), prompt.SafeText(reviewClientName(domain.ClientID(result.ClientID))), result.Outcome, dependencyHumanResultReason(opts, result)); err != nil {
+			prompt.SafeText(dependencyResultAlias(opts.installResult, result)), prompt.SafeText(reviewClientName(domain.ClientID(result.ClientID))), result.Outcome, result.Reason); err != nil {
 			return err
 		}
 		for _, next := range result.NextActions {

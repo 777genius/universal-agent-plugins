@@ -1,4 +1,5 @@
 """Failure-sensitive controls for Skills qualification source/state oracles."""
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -73,16 +74,57 @@ class DurableStateTests(unittest.TestCase):
         (self.fixture.home / 'empty-new-directory').mkdir()
         self.assertNotEqual(oracle.durable_tree(self.fixture), before)
 
+    def diagnostic(self, path):
+        return {'log_file': str(path), 'items': [
+            {'targetId': 'codex', 'alias': 'demo', 'status': 'failed'}]}
+
+    def log_rows(self):
+        return [{'type': 'run', 'schema_version': 1, 'command': 'skills add', 'attempt': 1},
+                {'type': 'binding', 'client': 'codex', 'alias': 'demo', 'status': 'failed',
+                 'code': 'native_command_failed', 'summary': 'Native operation did not complete.'}]
+
     def test_log_must_exist_and_stay_inside_disposable_fixture(self):
         path = self.root / 'diagnostic.jsonl'
-        path.write_text('{"client":"codex","status":"failed"}\n')
-        self.assertEqual(oracle.failure_log({'log_file': str(path)}, self.fixture)[0]['client'],
-                         'codex')
+        rows = self.log_rows()
+        path.write_text('\n'.join(json.dumps(row) for row in rows) + '\n')
+        self.assertEqual(oracle.failure_log(self.diagnostic(path), self.fixture)[1]['client'], 'codex')
         path.unlink()
         with self.assertRaises(AssertionError):
-            oracle.failure_log({'log_file': str(path)}, self.fixture)
+            oracle.failure_log(self.diagnostic(path), self.fixture)
         with self.assertRaises(AssertionError):
-            oracle.failure_log({'log_file': str(self.root.parent / 'outside')}, self.fixture)
+            oracle.failure_log(self.diagnostic(self.root.parent / 'outside'), self.fixture)
+
+    def test_header_only_success_only_wrong_client_and_unclassified_logs_cannot_pass(self):
+        path = self.root / 'diagnostic.jsonl'
+        header, failure = self.log_rows()
+        alternatives = [
+            [header],
+            [header, dict(failure, status='completed')],
+            [header, dict(failure, client='cursor')],
+            [header, dict(failure, alias='other')],
+            [header, dict(failure, code='')],
+            [header, dict(failure, summary='')],
+            [dict(header, schema_version=2), failure],
+            [dict(header, command='add'), failure],
+        ]
+        for rows in alternatives:
+            with self.subTest(rows=rows):
+                path.write_text('\n'.join(json.dumps(row) for row in rows) + '\n')
+                with self.assertRaises(AssertionError):
+                    oracle.failure_log(self.diagnostic(path), self.fixture)
+        path.write_text('{"truncated":')
+        with self.assertRaisesRegex(AssertionError, 'JSON Lines'):
+            oracle.failure_log(self.diagnostic(path), self.fixture)
+
+    def test_missing_alias_on_both_result_and_log_is_not_a_matching_binding(self):
+        path = self.root / 'diagnostic.jsonl'
+        rows = self.log_rows()
+        rows[1].pop('alias')
+        path.write_text('\n'.join(json.dumps(row) for row in rows) + '\n')
+        result = self.diagnostic(path)
+        result['items'][0].pop('alias')
+        with self.assertRaisesRegex(AssertionError, 'expected package alias'):
+            oracle.failure_log(result, self.fixture)
 
     def test_readonly_commands_do_not_hide_any_mutation(self):
         reads = [['--version'], ['plugin', 'list', '--json'], ['app-server']]
@@ -256,9 +298,70 @@ class FixtureIsolationTests(unittest.TestCase):
 
     def test_website_cannot_stand_in_for_catalog_browser_coverage(self):
         self.assertEqual(matrix.BROWSER_CASES,
-                         {'catalog-redirect', 'plain-browser', 'explicit-ui'})
+                         {'catalog-redirect', 'catalog-both-redirect', 'plain-browser', 'explicit-ui'})
         self.assertTrue(source.GITHUB_SOURCE.endswith('@' + source.SOURCE_SHA))
         self.assertNotIn('--ref', source.GITHUB_SOURCE)
+
+
+class ReportProvenanceTests(unittest.TestCase):
+    def run_report(self, root, supplied=True, mutate=None):
+        binary = root / 'agentplugins'
+        binary.write_bytes(b'unit-test CLI identity')
+        native = root / 'supplied-native'
+        native.write_bytes(b'unit-test responder identity')
+        artifacts = root / 'evidence'
+        argv = ['skills_matrix.py', '--binary', str(binary), '--product-sha', 'a' * 40,
+                '--artifacts', str(artifacts), '--case', 'fresh']
+        if supplied:
+            argv += ['--native-fixture', str(native)]
+        else:
+            argv += ['--build-go', sys.executable]
+
+        def build_stub(_go, output):
+            nonlocal native
+            native = output
+            native.write_bytes(b'unit-test responder identity')
+            return native
+
+        def scanner_stub(args):
+            args.scanner_path = None
+            return 'unit-test scanner metadata'
+
+        def case_stub(_name, evidence):
+            evidence.mkdir()
+            if mutate:
+                (native if mutate == 'native' else binary).write_bytes(b'changed during case')
+
+        with patch.object(matrix.sys, 'argv', argv), \
+                patch.object(matrix, 'prepare_scanner', side_effect=scanner_stub), \
+                patch.object(matrix, 'build_native_fixture', side_effect=build_stub) as build, \
+                patch.object(matrix, 'Matrix') as runner, \
+                patch.object(matrix.subprocess, 'check_output', side_effect=['a' * 40 + '\n', '']), \
+                patch('builtins.print'):
+            runner.return_value.run_case.side_effect = case_stub
+            code = matrix.main()
+            self.assertEqual(build.call_count, 0 if supplied else 1)
+        return code, json.loads((artifacts / 'report.json').read_text()), native
+
+    def test_supplied_and_built_responder_provenance_are_distinct(self):
+        for supplied in (True, False):
+            with self.subTest(supplied=supplied), tempfile.TemporaryDirectory() as temporary:
+                code, report, native = self.run_report(Path(temporary), supplied=supplied)
+                self.assertEqual(code, 0)
+                self.assertEqual(report['native_fixture_path'], str(native.resolve()))
+                self.assertEqual(report['native_fixture_origin'], 'supplied' if supplied else 'built')
+                self.assertEqual(report['native_fixture_sha256'],
+                                 hashlib.sha256(b'unit-test responder identity').hexdigest())
+                self.assertEqual(report['native_fixture_embedded_source_sha256'],
+                                 hashlib.sha256(source.NATIVE_SOURCE.encode('utf-8')).hexdigest())
+
+    def test_case_cannot_pass_after_cli_or_responder_bytes_change(self):
+        for changed in ('cli', 'native'):
+            with self.subTest(changed=changed), tempfile.TemporaryDirectory() as temporary:
+                code, report, _native = self.run_report(Path(temporary), mutate=changed)
+                self.assertEqual(code, 1)
+                self.assertEqual(report['cases'][0]['status'], 'fail')
+                self.assertIn('binary changed during qualification', report['cases'][0]['error'])
 
 
 if __name__ == '__main__':

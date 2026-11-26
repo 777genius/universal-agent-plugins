@@ -126,8 +126,32 @@ def failure_log(result, fixture):
     file = Path(path)
     check(file.resolve().is_relative_to(fixture.root.resolve()), 'log escaped fixture')
     check(file.is_file(), 'result points to a nonexistent log')
-    entries = [json.loads(line) for line in file.read_text(encoding='utf-8').splitlines()]
-    check(entries, 'failed binding log is empty')
+    try:
+        entries = [json.loads(line) for line in file.read_text(encoding='utf-8').splitlines()]
+    except json.JSONDecodeError as error:
+        raise AssertionError('diagnostic log is not valid JSON Lines') from error
+    check(entries and isinstance(entries[0], dict), 'failed binding log has no run header')
+    header = entries[0]
+    check(header.get('type') == 'run' and header.get('schema_version') == 1 and
+          header.get('command') == 'skills add' and
+          isinstance(header.get('attempt'), int) and header['attempt'] >= 1,
+          'diagnostic run header does not identify this Skills attempt')
+    failed_statuses = {'failed', 'not_attempted', 'incomplete', 'conflict',
+                       'recovery_required', 'cancelled', 'canceled'}
+    expected = [row for row in items_by_agent(result).values()
+                if row.get('status') in ('failed', 'skipped')]
+    check(expected, 'diagnostic oracle requires an actual failed result')
+    records = [row for row in entries[1:] if isinstance(row, dict) and
+               row.get('type') == 'binding' and row.get('status') in failed_statuses]
+    for item in expected:
+        check(isinstance(item.get('alias'), str) and bool(item['alias'].strip()),
+              'failed result lost the expected package alias')
+        check(any(row.get('client') == item['targetId'] and
+                  row.get('alias') == item.get('alias') and
+                  isinstance(row.get('code'), str) and bool(row['code'].strip()) and
+                  isinstance(row.get('summary'), str) and bool(row['summary'].strip())
+                  for row in records),
+              'diagnostic log lost matching failed binding, classification or summary')
     return entries
 
 

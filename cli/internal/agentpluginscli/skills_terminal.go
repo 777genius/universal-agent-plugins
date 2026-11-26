@@ -168,25 +168,16 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 	if opts.format == "json" && opts.dryRun {
 		return renderSkillsDryRun(cmd, review)
 	}
-	if confirm {
+	if confirm && !opts.dryRun {
 		var err error
 		app, err = withPrompter(cmd, app, opts)
 		if err != nil {
 			return err
 		}
 	}
-	richReview := false
-	if rich, ok := app.Prompter.(interface{ RichReview() bool }); ok {
-		richReview = confirm && !opts.dryRun && !opts.plain && opts.format == "human" && rich.RichReview()
-	}
-	if opts.format != "json" && !richReview {
-		writer := cmd.OutOrStdout()
-		if confirm && !opts.dryRun {
-			writer = reviewWriter(cmd, app)
-		}
-		if err := renderHumanSkillsReviewTo(writer, review); err != nil {
-			return err
-		}
+	richReview := skillsUsesRichReview(app, opts, confirm)
+	if err := renderSkillsTerminalReview(cmd, app, opts, review, confirm, richReview); err != nil {
+		return err
 	}
 	if opts.dryRun {
 		return nil
@@ -208,6 +199,28 @@ func runSkillsReviewedPlan(cmd *cobra.Command, app App, opts *options, prepared 
 	}
 	return applySkillsWithRecovery(cmd, app, opts, prepared, confirm && opts.format != "json")
 }
+
+// Rich review is a consent surface. Dry runs always render their plan data to
+// stdout, even when a rich interaction host was resolved for earlier choices.
+func skillsUsesRichReview(app App, opts *options, confirm bool) bool {
+	if !confirm || opts.dryRun || opts.plain || opts.format != "human" {
+		return false
+	}
+	rich, ok := app.Prompter.(interface{ RichReview() bool })
+	return ok && rich.RichReview()
+}
+
+func renderSkillsTerminalReview(cmd *cobra.Command, app App, opts *options, review skillspicker.Plan, confirm, rich bool) error {
+	if opts.format == "json" || rich {
+		return nil
+	}
+	writer := cmd.OutOrStdout()
+	if confirm && !opts.dryRun {
+		writer = reviewWriter(cmd, app)
+	}
+	return renderHumanSkillsReviewTo(writer, review)
+}
+
 func confirmSkillsReview(cmd *cobra.Command, app App, review skillspicker.Plan, rich bool) (bool, error) {
 	request := prompt.ConfirmationRequest{Title: "Install these Skills?", Default: true}
 	if rich {

@@ -17,10 +17,10 @@ func TestUnavailableDiagnosticUsesTypedFactsWithoutPublishingErrors(t *testing.T
 	private := "opaque-provider-secret-438275"
 	for name, cause := range map[string]error{
 		"unknown provider":        errors.New(private),
-		"path and permission":    &fs.PathError{Op: "mkdir", Path: "/private/" + private, Err: fs.ErrPermission},
-		"URL credentials":        &url.Error{Op: "Get", URL: "https://user:" + private + "@example.test/" + private, Err: errors.New("response " + private)},
+		"path and permission":     &fs.PathError{Op: "mkdir", Path: "/private/" + private, Err: fs.ErrPermission},
+		"URL credentials":         &url.Error{Op: "Get", URL: "https://user:" + private + "@example.test/" + private, Err: errors.New("response " + private)},
 		"unlabelled network body": &net.OpError{Op: "dial", Net: "tcp", Err: errors.New(private)},
-		"terminal effects":       errors.New("\x1b[2J\r\n" + private),
+		"terminal effects":        errors.New("\x1b[2J\r\n" + private),
 	} {
 		t.Run(name, func(t *testing.T) {
 			reports := reportByAgent([]agentItem{failedItem("pdf", "codex", cause)})

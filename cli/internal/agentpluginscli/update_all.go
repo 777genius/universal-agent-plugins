@@ -280,24 +280,13 @@ func (session *updateAllSession) applyAll() error {
 	for index := range session.preparedItems {
 		item := &session.preparedItems[index]
 		if err := checkPreparedImperativeUpdate(session.ctx, item.prepared); err != nil {
-			view := &session.result.Installations[item.resultIndex]
-			view.Status, view.Reason = "apply_failed", err.Error()
-			session.result.Failed++
-			session.result.Status = "partial_failure"
-			markUnattemptedUpdateAll(&session.result, session.preparedItems, index+1)
-			_ = renderUpdateAll(session.cmd, session.opts, session.result)
-			return err
+			return session.failImperativeUpdate(index, nil, err)
 		}
 		applied, applyErr := applyPreparedUpdate(session.ctx, item.prepared)
 		view := &session.result.Installations[item.resultIndex]
 		view.Plan = &applied
 		if applyErr != nil {
-			view.Status, view.Reason = "apply_failed", applyErr.Error()
-			session.result.Failed++
-			session.result.Status = "partial_failure"
-			markUnattemptedUpdateAll(&session.result, session.preparedItems, index+1)
-			_ = renderUpdateAll(session.cmd, session.opts, session.result)
-			return applyErr
+			return session.failImperativeUpdate(index, &applied, applyErr)
 		}
 		view.Status = "updated"
 		session.result.Updated++
@@ -354,7 +343,7 @@ func renderUpdateAll(cmd *cobra.Command, opts *options, result updateAllResult) 
 		}
 		return writeJSONResult(cmd.OutOrStdout(), "update", overall, result)
 	}
-	if err := renderUpdateAllHuman(cmd.OutOrStdout(), result); err != nil {
+	if err := renderUpdateAllHuman(cmd.OutOrStdout(), updateAllHumanFailureResult(result, opts.installResult)); err != nil {
 		return installOutputError(err)
 	}
 	return renderInstallAttention(cmd, opts)
