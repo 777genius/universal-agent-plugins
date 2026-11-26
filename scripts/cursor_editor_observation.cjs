@@ -48,25 +48,55 @@ function ordinary(value, directory) {
   return value;
 }
 
+class ScreenshotFailure extends Error {
+  constructor(error, phase) {
+    const message = error instanceof Error ? error.message : '';
+    const known = ['path-refused', 'screenshot-bound', 'screenshot-custody'];
+    super(known.includes(message) ? message : 'screenshot-refused');
+    this.phase = phase;
+    const name = error instanceof Error ? error.name : '';
+    const code = error instanceof Error ? error.code : '';
+    this.category = ['TimeoutError', 'TargetClosedError'].includes(name) ? name
+      : ['EACCES', 'EPERM', 'ENOENT', 'EEXIST', 'ENOSPC', 'EIO', 'EBADF', 'EMFILE', 'ENFILE'].includes(code) ? code
+        : known.includes(message) ? message : 'other';
+  }
+}
+
 async function screenshot(page, directory, name) {
-  ordinary(directory, true);
-  const parentBefore = fs.lstatSync(directory);
-  const destination = path.join(directory, name);
-  const descriptor = fs.openSync(destination, 'wx', 0o600);
+  let phase = 'path';
   try {
-    const before = fs.fstatSync(descriptor);
-    const body = await page.screenshot({ timeout: 5000 });
-    if (body.length > 8 << 20) throw new Error('screenshot-bound');
-    fs.writeFileSync(descriptor, body);
-    const held = fs.fstatSync(descriptor), current = fs.lstatSync(destination);
-    const parentAfter = fs.lstatSync(directory);
-    if (before.ino !== held.ino || held.ino !== current.ino || held.dev !== current.dev
-        || before.mode !== held.mode || held.mode !== current.mode || held.uid !== current.uid
-        || !current.isFile() || current.nlink !== 1 || current.size !== body.length
-        || parentBefore.ino !== parentAfter.ino || parentBefore.dev !== parentAfter.dev
-        || fs.realpathSync(directory) !== directory) throw new Error('screenshot-custody');
-    return { name, bytes: body.length, sha256: createHash('sha256').update(body).digest('hex') };
-  } finally { fs.closeSync(descriptor); }
+    ordinary(directory, true);
+    const parentBefore = fs.lstatSync(directory);
+    const destination = path.join(directory, name);
+    phase = 'open';
+    const descriptor = fs.openSync(destination, 'wx', 0o600);
+    try {
+      phase = 'file-check';
+      const before = fs.fstatSync(descriptor);
+      phase = 'capture';
+      const body = await page.screenshot({ timeout: 5000 });
+      phase = 'content';
+      if (!Buffer.isBuffer(body) || body.length === 0 || body.length > 8 << 20) throw new Error('screenshot-bound');
+      phase = 'write';
+      fs.writeFileSync(descriptor, body);
+      phase = 'custody';
+      const held = fs.fstatSync(descriptor), current = fs.lstatSync(destination);
+      const parentAfter = fs.lstatSync(directory);
+      if (before.ino !== held.ino || held.ino !== current.ino || held.dev !== current.dev
+          || before.mode !== held.mode || held.mode !== current.mode || held.uid !== current.uid
+          || !current.isFile() || current.nlink !== 1 || current.size !== body.length
+          || parentBefore.ino !== parentAfter.ino || parentBefore.dev !== parentAfter.dev
+          || fs.realpathSync(directory) !== directory) throw new Error('screenshot-custody');
+      return { name, bytes: body.length, sha256: createHash('sha256').update(body).digest('hex') };
+    } catch (error) {
+      throw new ScreenshotFailure(error, phase);
+    } finally {
+      phase = 'close';
+      fs.closeSync(descriptor);
+    }
+  } catch (error) {
+    throw error instanceof ScreenshotFailure ? error : new ScreenshotFailure(error, phase);
+  }
 }
 
 async function visibleText(page) {
@@ -94,10 +124,15 @@ async function controlFailureScreenshot(page, directory, result) {
   try {
     // Diagnostic only; never a component inventory or qualification fact.
     result.diagnostic_screenshot = await screenshot(page, directory, 'control-unobserved.png');
-  } catch { /* Preserve the original refusal if the bounded capture fails. */ }
+  } catch (error) {
+    // Keep the original refusal; only fixed facts describe this failed capture.
+    if (error instanceof ScreenshotFailure) result.diagnostic_screenshot_failure = {
+      phase: error.phase, category: error.category,
+    };
+  }
 }
 
-async function clickNamed(page, name) {
+async function waitNamedControl(page, name) {
   await refuseVisibleGate(page);
   const control = page.getByText(name, { exact: true }).filter({ visible: true });
   const refusal = page.getByText(gatePattern).filter({ visible: true });
@@ -111,8 +146,21 @@ async function clickNamed(page, name) {
   }
   await refuseVisibleGate(page);
   if (await control.count() !== 1) throw new Error('ui-control-unobserved');
+  return control;
+}
+
+async function clickNamed(page, name) {
+  const control = await waitNamedControl(page, name);
   await refuseVisibleGate(page);
   await control.click({ timeout: 5000 });
+}
+
+async function startupScreenshot(page, directory) {
+  // firstWindow() does not guarantee a rendered UI. Readiness must precede
+  // this mandatory capture, without acting on the control or any gate.
+  await waitNamedControl(page, 'Customize');
+  await refuseVisibleGate(page);
+  return screenshot(page, directory, 'startup.png');
 }
 
 async function confirmedMarkers(page, names) {
@@ -181,8 +229,8 @@ async function observe(input, progress = () => {}) {
     result.sandbox_request_and_argv_verified = true;
     page = await app.firstWindow({ timeout: 10000 });
     page.setDefaultTimeout(5000);
-    result.screenshots.push(await screenshot(page, input.output, 'startup.png'));
-    await visibleText(page);
+    result.stage = 'startup';
+    result.screenshots.push(await startupScreenshot(page, input.output));
     result.stage = 'customize';
     await clickNamed(page, 'Customize');
     result.stage = 'skills';
@@ -203,11 +251,14 @@ async function observe(input, progress = () => {}) {
     app = undefined;
     result.status = 'observed';
   } catch (error) {
-    const classes = ['help-refused', 'path-refused', 'tool-version-refused', 'phase-deadline', 'screenshot-bound',
+    const classes = ['help-refused', 'path-refused', 'tool-version-refused', 'phase-deadline', 'screenshot-refused', 'screenshot-bound',
       'screenshot-custody', 'ui-text-bound', 'login-gate', 'trust-gate', 'import-policy-gate',
       'ui-control-unobserved', 'launch-authority-refused', 'non-natural-exit', 'component-unobserved'];
     const message = error instanceof Error ? error.message : '';
     result.observation = classes.includes(message) ? message : 'editor-observation-refused';
+    if (error instanceof ScreenshotFailure) result.screenshot_failure = {
+      phase: error.phase, category: error.category,
+    };
     await controlFailureScreenshot(page, input.output, result);
     if (app && closed) {
       try { await quit(app, closed, result); } catch { result.shutdown_unqualified = true; }
@@ -227,7 +278,7 @@ async function main(write, progress) {
   if (result.status !== 'observed') process.exitCode = 1;
 }
 
-module.exports = { isolationArguments, gate, ordinary, inventoryScreenshot, clickNamed, controlFailureScreenshot };
+module.exports = { isolationArguments, gate, ordinary, inventoryScreenshot, clickNamed, controlFailureScreenshot, startupScreenshot };
 if (require.main === module) {
   let written = false;
   let latest = { stage: 'input' };

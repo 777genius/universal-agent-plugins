@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { isolationArguments, gate, ordinary, inventoryScreenshot, clickNamed, controlFailureScreenshot } = require('./cursor_editor_observation.cjs');
+const { isolationArguments, gate, ordinary, inventoryScreenshot, clickNamed, controlFailureScreenshot, startupScreenshot } = require('./cursor_editor_observation.cjs');
 
 const directories = { userData: '/owned/userdata', extensions: '/owned/extensions', project: '/owned/project' };
 // Required usage/option rows from pinned 3.30.14 help; this is a grammar
@@ -379,10 +379,191 @@ test('bounded failure capture errors preserve the original refusal', async () =>
     } };
     const result = { status: 'unqualified', observation: 'ui-control-unobserved', screenshots: [] };
     await controlFailureScreenshot(page, root, result);
-    assert.deepEqual(result, { status: 'unqualified', observation: 'ui-control-unobserved', screenshots: [] });
+    assert.deepEqual(result, { status: 'unqualified', observation: 'ui-control-unobserved', screenshots: [],
+      diagnostic_screenshot_failure: { phase: 'capture', category: 'other' } });
+    assert.equal(JSON.stringify(result).includes('PRIVATE-CAPTURE-FAILURE'), false);
     assert.equal(captures, 1);
     await controlFailureScreenshot(page, root, { observation: 'trust-gate' });
     await controlFailureScreenshot(undefined, root, result);
     assert.equal(captures, 1);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+test('startup capture waits for a unique visible Customize control without clicking', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-startup-ready-')));
+  try {
+    const { page, events } = controlPage([blankControl, { text: 'Customize', count: 1, visible: true }]);
+    page.screenshot = async options => {
+      assert.deepEqual(options, { timeout: 5000 });
+      events.push('screenshot');
+      return Buffer.from('inert capture bytes; not native UI evidence');
+    };
+    const receipt = await startupScreenshot(page, root);
+    assert.deepEqual(events, ['text', 'wait', 'text', 'count', 'text', 'screenshot']);
+    assert.equal(receipt.name, 'startup.png');
+    assert.equal(receipt.bytes, fs.statSync(path.join(root, 'startup.png')).size);
+    assert.equal(receipt.sha256.length, 64);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('startup gates and unobserved controls refuse before creating an image', async () => {
+  const ready = { text: 'Customize', count: 1, visible: true };
+  const cases = [
+    [blankControl, undefined, /ui-control-unobserved/u],
+    [{ text: 'Customize Customize', count: 2, visible: true }, undefined, /ui-control-unobserved/u],
+    [{ ...ready, locatorText: 'Sign in to continue' }, undefined, /login-gate/u],
+    [ready, { ...ready, locatorText: 'Trust this workspace' }, /trust-gate/u],
+    [{ ...ready, locatorText: 'Local plugin imports are disabled' }, undefined, /import-policy-gate/u],
+  ];
+  for (const [state, afterCount, cause] of cases) {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-startup-refused-')));
+    try {
+      const { page, events } = controlPage([state], afterCount);
+      page.screenshot = async () => { throw new Error('screenshot-must-not-run'); };
+      await assert.rejects(startupScreenshot(page, root), cause);
+      assert.equal(events.includes('click'), false);
+      assert.equal(fs.existsSync(path.join(root, 'startup.png')), false);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('capture failure retains only its phase and an allowlisted category', async () => {
+  for (const [name, code, category] of [
+    ['TimeoutError', undefined, 'TimeoutError'],
+    ['TargetClosedError', undefined, 'TargetClosedError'],
+    ['Error', 'EIO', 'EIO'],
+    ['PRIVATE-NAME', 'PRIVATE-CODE', 'other'],
+  ]) {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-startup-capture-')));
+    try {
+      const { page } = controlPage([{ text: 'Customize', count: 1, visible: true }]);
+      page.screenshot = async () => {
+        const error = new Error('PRIVATE-MESSAGE');
+        error.name = name;
+        error.code = code;
+        throw error;
+      };
+      await assert.rejects(startupScreenshot(page, root), error => {
+        assert.equal(error.message, 'screenshot-refused');
+        assert.equal(error.phase, 'capture');
+        assert.equal(error.category, category);
+        assert.equal(JSON.stringify(error).includes('PRIVATE-'), false);
+        return true;
+      });
+      assert.equal(fs.statSync(path.join(root, 'startup.png')).size, 0);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('empty, nonbinary and oversized capture bodies cannot produce receipts', async () => {
+  for (const body of [Buffer.alloc(0), 'PRIVATE-NONBINARY', Buffer.alloc((8 << 20) + 1)]) {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-startup-bound-')));
+    try {
+      const { page } = controlPage([{ text: 'Customize', count: 1, visible: true }]);
+      page.screenshot = async () => body;
+      await assert.rejects(startupScreenshot(page, root), error => {
+        assert.equal(error.message, 'screenshot-bound');
+        assert.equal(error.phase, 'content');
+        assert.equal(error.category, 'screenshot-bound');
+        return true;
+      });
+      assert.equal(fs.statSync(path.join(root, 'startup.png')).size, 0);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('startup capture refuses an existing output without overwriting or capturing', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-startup-existing-')));
+  try {
+    fs.writeFileSync(path.join(root, 'startup.png'), 'owned sentinel', { mode: 0o600 });
+    const { page } = controlPage([{ text: 'Customize', count: 1, visible: true }]);
+    page.screenshot = async () => { throw new Error('capture-must-not-run'); };
+    await assert.rejects(startupScreenshot(page, root), error => {
+      assert.equal(error.message, 'screenshot-refused');
+      assert.equal(error.phase, 'open');
+      assert.equal(error.category, 'EEXIST');
+      return true;
+    });
+    assert.equal(fs.readFileSync(path.join(root, 'startup.png'), 'utf8'), 'owned sentinel');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+for (const [name, category] of [['TimeoutError', 'TimeoutError'], ['PRIVATE-NAME', 'other']]) {
+  test(`inert CLI waits before startup capture and privately reports ${category} with ordinary Quit`, () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-startup-cli-')));
+    try {
+      for (const directory of ['project', 'userdata', 'extensions', 'output', 'playwright']) {
+        fs.mkdirSync(path.join(root, directory));
+      }
+      fs.writeFileSync(path.join(root, 'electron'), 'inert executable placeholder');
+      fs.writeFileSync(path.join(root, 'playwright', 'package.json'),
+        JSON.stringify({ version: '1.64.1', main: 'index.js' }));
+      // Controlled library/window boundary; neither this page nor child is native proof.
+      fs.writeFileSync(path.join(root, 'playwright', 'index.js'), `
+        const { EventEmitter } = require('node:events');
+        module.exports = { _electron: { launch: async options => {
+          if (options.chromiumSandbox !== true || options.env.DEBUG !== undefined) throw Error('launch-refused');
+          let ready = false;
+          const child = Object.assign(new EventEmitter(), {
+            spawnfile: options.executablePath, spawnargs: [options.executablePath, ...options.args],
+          });
+          const control = {
+            filter() { return this; }, count: async () => Number(ready),
+            or() { return { first() { return { async waitFor(bound) {
+              if (bound.state !== 'visible' || bound.timeout !== 5000) throw Error('wait-refused');
+              await Promise.resolve(); ready = true;
+            } }; } }; },
+            async click() { throw Error('unexpected-click'); },
+          };
+          const page = {
+            setDefaultTimeout(value) { if (value !== 5000) throw Error('timeout-refused'); },
+            locator() { return { async evaluate() { return { text: ready ? 'Customize' : '', overflow: false }; } }; },
+            getByText(value) {
+              if (typeof value === 'string') {
+                if (value !== 'Customize') throw Error('control-refused');
+                return control;
+              }
+              return { filter() { return this; }, count: async () => 0 };
+            },
+            async screenshot(bound) {
+              if (!ready || bound.timeout !== 5000) throw Error('PRIVATE-UNREADY');
+              const error = Error('PRIVATE-MESSAGE'); error.name = ${JSON.stringify(name)}; throw error;
+            },
+          };
+          return {
+            process: () => child,
+            firstWindow: async () => page,
+            evaluate: async fn => fn({ app: { quit() { child.emit('close', 0, null); } } }),
+          };
+        } } };
+      `);
+      const input = {
+        root, project: path.join(root, 'project'), userData: path.join(root, 'userdata'),
+        extensions: path.join(root, 'extensions'), output: path.join(root, 'output'),
+        playwright: path.join(root, 'playwright'), electron: path.join(root, 'electron'), help,
+      };
+      const run = spawnSync(process.execPath, [path.join(__dirname, 'cursor_editor_observation.cjs')], {
+        input: JSON.stringify(input), encoding: 'utf8', timeout: 10000,
+        env: { ...process.env, DEBUG: 'pw:browser' },
+      });
+      assert.equal(run.error, undefined);
+      assert.equal(run.status, 1);
+      assert.equal(run.signal, null);
+      assert.equal(run.stdout.trim().split('\n').length, 1);
+      assert.ok(Buffer.byteLength(run.stdout) <= 65536);
+      assert.equal(run.stdout.includes('PRIVATE-'), false);
+      const report = JSON.parse(run.stdout);
+      assert.equal(report.status, 'unqualified');
+      assert.equal(report.stage, 'startup');
+      assert.equal(report.observation, 'screenshot-refused');
+      assert.deepEqual(report.screenshot_failure, { phase: 'capture', category });
+      assert.deepEqual(report.screenshots, []);
+      assert.equal(report.quit_requested, true);
+      assert.equal(report.quit_acknowledged, true);
+      assert.deepEqual(report.native_exit, { code: 0, signal: null });
+      for (const key of ['skills_ready', 'model_runtime_qualified', 'authentication_qualified', 'source_attribution_qualified']) {
+        assert.equal(report[key], false);
+      }
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+}
