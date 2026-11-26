@@ -76,14 +76,28 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 	if !ok {
 		return StatusUnknown, false, false
 	}
+	if claudeBuiltinListID(entry) {
+		identity, valid := claudeBuiltinListIdentity(entry)
+		if !valid {
+			return StatusUnknown, false, false
+		}
+		if _, duplicate := seen[identity]; duplicate {
+			return StatusUnknown, false, false
+		}
+		seen[identity] = struct{}{}
+		return StatusUnknown, false, true
+	}
 	id, idOK := entry["id"].(string)
 	scope, scopeOK := entry["scope"].(string)
 	enabled, enabledOK := entry["enabled"].(bool)
 	installPath, pathOK := entry["installPath"].(string)
-	if !idOK || !scopeOK || !enabledOK || !pathOK || id == "" || scope == "" || !filepath.IsAbs(installPath) {
+	if !idOK || !scopeOK || !enabledOK || !pathOK || id == "" || !knownClaudeScope(scope) || !filepath.IsAbs(installPath) {
 		return StatusUnknown, false, false
 	}
-	identity := id + "\x00" + scope + "\x00" + filepath.Clean(installPath)
+	identity, valid := claudeListIdentity(entry, id, expectedID, scope, installPath)
+	if !valid {
+		return StatusUnknown, false, false
+	}
 	if _, duplicate := seen[identity]; duplicate {
 		return StatusUnknown, false, false
 	}
@@ -98,6 +112,55 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 		return StatusUnknown, false, false
 	}
 	return StatusUnknown, enabled, true
+}
+
+// Claude Code prints one unrelated local/project-scope row per project. Keep
+// the queried managed identity and global entries unique: optional projectPath
+// metadata must not let malformed rows evade duplicate detection.
+func claudeListIdentity(entry map[string]any, id, expectedID, scope, installPath string) (string, bool) {
+	identity := id + "\x00" + scope + "\x00" + filepath.Clean(installPath)
+	if project, hasProject := entry["projectPath"]; hasProject {
+		path, valid := project.(string)
+		if !valid || !filepath.IsAbs(path) || filepath.Clean(path) != path {
+			return "", false
+		}
+		if id != expectedID && (scope == "local" || scope == "project") {
+			identity += "\x00" + path
+		}
+	}
+	return identity, true
+}
+
+// claudeBuiltinListID identifies the reserved builtin namespace independently
+// of row shape. A malformed @builtin row must never fall back to ordinary
+// plugin parsing as an unrelated source.
+func claudeBuiltinListID(entry map[string]any) bool {
+	id, ok := entry["id"].(string)
+	if !ok {
+		return false
+	}
+	_, builtin := strings.CutSuffix(id, "@builtin")
+	return builtin
+}
+
+// Claude Code lists its bundled "<name>@builtin" plugins without installPath.
+// Such a row can never be the managed @skills-dir identity, so it is skipped
+// instead of making the whole listing unrecognized; any other shape stays strict.
+func claudeBuiltinListIdentity(entry map[string]any) (string, bool) {
+	if _, hasPath := entry["installPath"]; hasPath {
+		return "", false
+	}
+	if _, hasProject := entry["projectPath"]; hasProject {
+		return "", false
+	}
+	id, idOK := entry["id"].(string)
+	scope, scopeOK := entry["scope"].(string)
+	_, enabledOK := entry["enabled"].(bool)
+	name, builtin := strings.CutSuffix(id, "@builtin")
+	if !idOK || !scopeOK || !enabledOK || scope != "user" || !builtin || name == "" {
+		return "", false
+	}
+	return id + "\x00" + scope, true
 }
 
 func claudeProjectEntryLoaded(entry map[string]any, expectedPath string) bool {
