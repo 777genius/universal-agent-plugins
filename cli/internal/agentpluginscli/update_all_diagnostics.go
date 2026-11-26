@@ -62,7 +62,32 @@ func imperativeUpdateAgentItems(prepared *preparedUpdateMany, applied *updateMul
 		}
 		items = append(items, item)
 	}
+	classifyImperativeUpdateCause(items, applied, cause)
 	return items
+}
+
+// A group cause identifies a single failed peer, or a shared refusal before
+// any peer completed. Multiple failed peers retain their individual reports.
+func classifyImperativeUpdateCause(items []agentItem, applied *updateMultiResult, cause error) {
+	if cause == nil {
+		return
+	}
+	failed, last := 0, 0
+	for index, item := range items {
+		if item.failure != nil {
+			failed++
+			last = index
+		}
+	}
+	if failed == 1 && items[last].failure.Kind == failureUnknown {
+		items[last].failure = describeSyncFailure(cause)
+	}
+	if failed == 0 && (applied == nil || applied.Succeeded == 0) {
+		for index := range items {
+			items[index].Status = "not_attempted"
+			items[index].failure = describeSyncFailure(cause)
+		}
+	}
 }
 
 func imperativeUpdateFailure(item agentItem, cause error) *installFailure {
