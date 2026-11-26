@@ -172,6 +172,13 @@ func inspectClaudeMarketplacePlugin(body []byte, name, physical, active, project
 		if !ok || id == "" {
 			return claudeMarketplaceObservation{}
 		}
+		if identity, builtin := claudeBuiltinListIdentity(entry); builtin {
+			if seen[identity] || !validProjectListMetadata(entry, "") {
+				return claudeMarketplaceObservation{}
+			}
+			seen[identity] = true
+			continue
+		}
 		if id == "(suppressed)@skills-dir" {
 			if _, valid := projectSuppression(entry); !valid || seen[id] {
 				return claudeMarketplaceObservation{}
