@@ -41,6 +41,7 @@ func TestClaudeProjectMarketplaceNativeSchemas(t *testing.T) {
 			case "unrelated-other-project":
 				rows = append(rows, map[string]any{"id": "foreign@other", "version": "1.0.0", "scope": "project", "projectPath": filepath.Join(filepath.Dir(r.Plan.TargetContext.ProjectRoot), "B"), "installPath": filepath.Join(r.Client.ConfigRoot, "plugins/cache/other/foreign/1.0.0"), "enabled": false})
 			case "unrelated-local-rows":
+				rows = append(claudeBuiltinRows(), row)
 				for index := range 6 {
 					rows = append(rows, map[string]any{
 						"id": "shared@local-marketplace", "version": "1.0.0", "scope": "local",
