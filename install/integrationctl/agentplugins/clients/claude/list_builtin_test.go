@@ -18,6 +18,7 @@ func claudeBuiltinRows() []map[string]any {
 
 func TestListingSkipsBuiltinRowsWithoutInstallPath(t *testing.T) {
 	active := filepath.Join(t.TempDir(), "claude-config", "skills", "demo-managed")
+	localPath := filepath.Join(t.TempDir(), "cache", "x", "1.0.0")
 	managed := map[string]any{"id": "demo@skills-dir", "version": "1.0.0", "scope": "user", "enabled": true, "installPath": active}
 	for _, test := range []struct {
 		name string
@@ -38,12 +39,12 @@ func TestListingSkipsBuiltinRowsWithoutInstallPath(t *testing.T) {
 		{"other-source-no-path", func(rows []map[string]any) []map[string]any { rows[0]["id"] = "x@market"; return append(rows, managed) }, StatusUnknown},
 		{"local-rows-per-project", func(rows []map[string]any) []map[string]any {
 			local := func(project string) map[string]any {
-				return map[string]any{"id": "x@market", "scope": "local", "enabled": true, "installPath": "/cache/x/1.0.0", "projectPath": project}
+				return map[string]any{"id": "x@market", "scope": "local", "enabled": true, "installPath": localPath, "projectPath": project}
 			}
 			return append(rows, local("/p/one"), local("/p/two"), managed)
 		}, StatusInstalled},
 		{"duplicate-local-row", func(rows []map[string]any) []map[string]any {
-			local := map[string]any{"id": "x@market", "scope": "local", "enabled": true, "installPath": "/cache/x/1.0.0", "projectPath": "/p/one"}
+			local := map[string]any{"id": "x@market", "scope": "local", "enabled": true, "installPath": localPath, "projectPath": "/p/one"}
 			return append(rows, local, local, managed)
 		}, StatusUnknown},
 		{"managed-no-path", func(rows []map[string]any) []map[string]any {
