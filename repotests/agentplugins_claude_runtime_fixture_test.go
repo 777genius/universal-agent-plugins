@@ -8,13 +8,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/adapters/process"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/ports"
 )
 
 // Scripted provider exercises the native client's tool dispatch, not model intelligence.
@@ -136,18 +138,28 @@ func claudeRuntimeSession(t *testing.T, f *nativeFixture, cf *claudeNativeFixtur
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, client, "-p", "Use the installed native-proof runtime inspection tools.", "--output-format", "stream-json", "--verbose", "--max-turns", "4", "--permission-mode", "bypassPermissions", "--model", "claude-sonnet-4-5")
-	cmd.Env = append(cf.env(filepath.Dir(client)), "ANTHROPIC_BASE_URL="+server.URL, "ANTHROPIC_AUTH_TOKEN=uap-disposable-fixture-token", "CLAUDE_CODE_DISABLE_1M_CONTEXT=1")
-	cmd.Dir = f.Project
-	out, err := cmd.CombinedOutput()
-	cf.record(t, label, out)
+	command := ports.Command{
+		Argv: []string{client, "-p", "Use the installed native-proof runtime inspection tools.", "--output-format", "stream-json", "--verbose", "--max-turns", "4", "--permission-mode", "bypassPermissions", "--model", "claude-sonnet-4-5"},
+		Env:  append(cf.env(filepath.Dir(client)), "ANTHROPIC_BASE_URL="+server.URL, "ANTHROPIC_AUTH_TOKEN=uap-disposable-fixture-token", "CLAUDE_CODE_DISABLE_1M_CONTEXT=1"),
+		Dir:  f.Project, StdoutLimitBytes: 1 << 20,
+	}
+	result, err := (process.OS{}).RunWithDescendantExitGrace(ctx, command, 5*time.Second)
+	cf.record(t, label, result.Stdout)
+	cf.record(t, label+"-stderr", result.Stderr)
+	cleanupName := label + "-cleanup.json"
+	cleanupPath := filepath.Join(f.Root, cleanupName)
+	nativeJSON(t, cleanupPath, map[string]any{
+		"exit_code": result.ExitCode, "cleanup_complete": result.CleanupComplete,
+		"run_error": err != nil, "context_error": ctx.Err() != nil,
+	})
+	cf.transcriptSHA256[cleanupName] = nativeSHA(t, cleanupPath)
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	gatewayPath := filepath.Join(f.Root, label+"-gateway.json")
 	nativeJSON(t, gatewayPath, g.requests)
 	cf.transcriptSHA256[label+"-gateway.json"] = nativeSHA(t, gatewayPath)
-	if err != nil {
-		t.Fatalf("Claude runtime %s: %v\n%s", label, err, out)
+	if err != nil || ctx.Err() != nil || result.ExitCode != 0 || !result.CleanupComplete {
+		t.Fatalf("Claude runtime %s: error=%v context=%v exit=%d cleanup=%t\n%s\n%s", label, err, ctx.Err(), result.ExitCode, result.CleanupComplete, result.Stdout, result.Stderr)
 	}
 	if !g.skillBodySeen {
 		t.Fatal("installed selected skill body was not observed in outgoing provider context")

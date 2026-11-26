@@ -1,5 +1,6 @@
 """Real filesystem controls for signed four-package Claude cache custody."""
 import copy
+from contextlib import ExitStack, contextmanager
 import hashlib
 import json
 import os
@@ -19,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @unittest.skipUnless(sys.platform == "linux", "Linux signed cache custody")
 class SignedClosureRetirementContracts(unittest.TestCase):
-    def fixture(self, root):
+    def fixture_state(self, root):
         audit = runpy.run_path(str(ROOT / "scripts/live-install-audit.py"))
         home, project = root / "home", root / "project"
         profile = home / ".claude"
@@ -91,8 +92,49 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 "cleanup": {"result": "success", "outcome": "completed", "scope": "project",
                             "actions": actions, "results": results}}
 
-    def capture(self, f):
-        return SignedClosureRetirement(f["root"], f["home"], f["project"], f["public"], f["pins"], f["audit"])
+    @contextmanager
+    def fixture(self):
+        with TemporaryDirectory() as directory, ExitStack() as resources:
+            f = self.fixture_state(Path(directory).resolve())
+            f["resources"] = resources
+            yield f
+
+    def capture(self, f, **kwargs):
+        subject = SignedClosureRetirement(f["root"], f["home"], f["project"], f["public"], f["pins"], f["audit"], **kwargs)
+        f["resources"].callback(subject.close)
+        return subject
+
+    def test_fixture_closes_capture_when_case_exits_without_finish(self):
+        subject = None
+        try:
+            with self.fixture() as f:
+                subject = self.capture(f)
+                descriptors = tuple(subject.fds)
+                self.assertTrue(descriptors)
+            self.assertEqual(subject.fds, [])
+            for descriptor in descriptors:
+                with self.assertRaises(OSError):
+                    os.fstat(descriptor)
+        finally:
+            if subject is not None:
+                subject.close()
+
+    def test_fixture_closes_capture_when_assertion_interrupts_case(self):
+        subject = None
+        try:
+            with self.assertRaisesRegex(AssertionError, "early fixture exit"):
+                with self.fixture() as f:
+                    subject = self.capture(f)
+                    descriptors = tuple(subject.fds)
+                    self.assertTrue(descriptors)
+                    raise AssertionError("early fixture exit")
+            self.assertEqual(subject.fds, [])
+            for descriptor in descriptors:
+                with self.assertRaises(OSError):
+                    os.fstat(descriptor)
+        finally:
+            if subject is not None:
+                subject.close()
 
     def retire(self, f, marker=True):
         for index, owner in enumerate(f["owners"]):
@@ -130,8 +172,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
 
     def test_exact_four_cache_custody_optional_marker_and_raw_findings_preserved(self):
         for marker in (False, True):
-            with self.subTest(marker=marker), TemporaryDirectory() as directory:
-                f = self.fixture(Path(directory).resolve())
+            with self.subTest(marker=marker), self.fixture() as f:
                 subject = self.capture(f)
                 self.retire(f, marker)
                 residuals = self.scan(f)
@@ -139,6 +180,10 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 proof = subject.finish(f["cleanup"], residuals, lambda: self.scan(f))
                 self.assertEqual(proof["status"], "verified-signed-closure-cache-retirement-at-checkpoint")
                 self.assertFalse(proof["writer_closure_claimed"])
+                self.assertTrue(proof["retired_bytes_present"])
+                for flag in ("physical_absence_qualified", "writer_closure_qualified", "full_native_removal_qualified"):
+                    self.assertIs(proof[flag], False)
+                self.assertEqual(proof["raw_native_residuals"], sorted(residuals))
                 self.assertEqual(len(proof["members"]), 4)
                 self.assertEqual(residuals, self.scan(f))
                 self.assertEqual(subject.fds, [])
@@ -146,8 +191,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
 
     def test_installed_active_or_prepared_preserves_exact_readiness_without_auth_promotion(self):
         for activation in ("active", "prepared"):
-            with self.subTest(activation=activation), TemporaryDirectory() as directory:
-                f = self.fixture(Path(directory).resolve())
+            with self.subTest(activation=activation), self.fixture() as f:
                 state = json.loads(f["state"].read_text())
                 expected = []
                 for record, public in zip(state["installations"], f["public"]):
@@ -164,26 +208,29 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 proof = subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
                 self.assertEqual([member["binding_at_capture"] for member in proof["members"]], expected)
                 self.assertEqual([row["authentication"] for row in expected],
-                                 ["not_required", "not_checked", "not_checked", "not_required"]
-                                 if activation == "active" else ["not_checked"] * 4)
+                                 ["not_required" if activation == "active"
+                                  and alias in ("marketing-kit", "playwright") else "not_checked"
+                                  for alias in f["audit"]["MARKETING_KIT_DISTRIBUTIONS"]])
                 self.assertFalse(proof["writer_closure_claimed"])
 
     def test_exact_project_authentication_and_raw_public_agreement_required(self):
-        for index, wrong in ((index, value) for index in range(4)
-                             for value in ("auth_pending", "not_required" if index in (1, 2) else "not_checked",
-                                           "failed", "authenticated", "pending", "unknown", "", None, "missing")):
-            for location in ("both", "raw", "public"):
-                with self.subTest(index=index, wrong=wrong, location=location), TemporaryDirectory() as directory:
-                    f = self.fixture(Path(directory).resolve())
-                    state = json.loads(f["state"].read_text())
-                    binding = next(iter(state["installations"][index]["clients"].values()))
-                    for label, row in (("raw", binding), ("public", f["public"][index]["clients"][0])):
-                        if location not in ("both", label): continue
-                        if wrong == "missing": row.pop("authentication")
-                        else: row["authentication"] = wrong
-                    f["state"].write_text(json.dumps(state))
-                    with self.assertRaisesRegex(ValueError, "authentication"):
-                        self.capture(f)
+        for alias in ("marketing-kit", "notion", "hubspot-crm", "playwright"):
+            expected = "not_required" if alias in ("marketing-kit", "playwright") else "not_checked"
+            for wrong in ("auth_pending", "not_checked" if expected == "not_required" else "not_required",
+                          "failed", "authenticated", "pending", "unknown", "", None, "missing"):
+                for location in ("both", "raw", "public"):
+                    with self.subTest(alias=alias, wrong=wrong, location=location), self.fixture() as f:
+                        state = json.loads(f["state"].read_text())
+                        record = next(row for row in state["installations"] if row["declared_name"] == alias)
+                        public = next(row for row in f["public"] if row["name"] == alias)
+                        binding = next(iter(record["clients"].values()))
+                        for label, row in (("raw", binding), ("public", public["clients"][0])):
+                            if location not in ("both", label): continue
+                            if wrong == "missing": row.pop("authentication")
+                            else: row["authentication"] = wrong
+                        f["state"].write_text(json.dumps(state))
+                        with self.assertRaisesRegex(ValueError, "authentication"):
+                            self.capture(f)
 
     def test_active_local_qualification_requires_absent_catalog_and_prepared_never_promotes(self):
         for alias in ("marketing-kit", "playwright"):
@@ -192,8 +239,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     expected = "not_required" if activation == "active" else "not_checked"
                     for authentication in ("not_checked", "not_required"):
                         with (self.subTest(alias=alias, catalog=catalog, activation=activation,
-                                           authentication=authentication), TemporaryDirectory() as directory):
-                            f = self.fixture(Path(directory).resolve())
+                                           authentication=authentication), self.fixture() as f):
                             state = json.loads(f["state"].read_text())
                             index = next(i for i, row in enumerate(state["installations"])
                                          if row["declared_name"] == alias)
@@ -219,8 +265,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             for catalog in (explicit_unknown, {}, [], "private-secret", False):
                 for authentication in ("not_checked", "not_required"):
                     with (self.subTest(index=index, catalog=catalog, authentication=authentication),
-                          TemporaryDirectory() as directory):
-                        f = self.fixture(Path(directory).resolve())
+                          self.fixture() as f):
                         state = json.loads(f["state"].read_text())
                         binding = next(iter(state["installations"][index]["clients"].values()))
                         binding["package_revision"]["catalog_evidence"] = catalog
@@ -233,8 +278,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
     def test_remote_authentication_never_inherits_active_local_qualification(self):
         for alias in ("notion", "hubspot-crm"):
             for activation in ("active", "prepared"):
-                with self.subTest(alias=alias, activation=activation), TemporaryDirectory() as directory:
-                    f = self.fixture(Path(directory).resolve())
+                with self.subTest(alias=alias, activation=activation), self.fixture() as f:
                     state = json.loads(f["state"].read_text())
                     index = next(i for i, row in enumerate(state["installations"]) if row["declared_name"] == alias)
                     binding = next(iter(state["installations"][index]["clients"].values()))
@@ -249,11 +293,12 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 ("not_checked", "not_checked", "recorded=not_checked, public=not_checked"),
                 ("not_checked", "auth_pending", "recorded=not_checked, public=auth_pending"),
                 ("foreign-secret-value", {"untrusted": "secret"}, "recorded=invalid, public=invalid")):
-            with self.subTest(raw=raw), TemporaryDirectory() as directory:
-                f = self.fixture(Path(directory).resolve())
+            with self.subTest(raw=raw), self.fixture() as f:
                 state = json.loads(f["state"].read_text())
-                next(iter(state["installations"][0]["clients"].values()))["authentication"] = raw
-                f["public"][0]["clients"][0]["authentication"] = public
+                record = next(row for row in state["installations"] if row["declared_name"] == "marketing-kit")
+                view = next(row for row in f["public"] if row["name"] == "marketing-kit")
+                next(iter(record["clients"].values()))["authentication"] = raw
+                view["clients"][0]["authentication"] = public
                 f["state"].write_text(json.dumps(state))
                 with self.assertRaises(ValueError) as failure:
                     self.capture(f)
@@ -262,8 +307,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 self.assertNotIn("secret", str(failure.exception))
 
     def test_first_authentication_refusal_retains_all_four_exact_checkpoint_observations(self):
-        with TemporaryDirectory() as directory:
-            f = self.fixture(Path(directory).resolve())
+        with self.fixture() as f:
             state = json.loads(f["state"].read_text())
             digest = "sha256:" + "a" * 64
             for record, public in zip(state["installations"], f["public"]):
@@ -276,8 +320,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             f["state"].write_text(json.dumps(state))
             checkpoints = []
             with self.assertRaisesRegex(ValueError, "marketing-kit.*authentication"):
-                SignedClosureRetirement(f["root"], f["home"], f["project"], f["public"], f["pins"], f["audit"],
-                                        checkpoint_diagnostics=checkpoints)
+                self.capture(f, checkpoint_diagnostics=checkpoints)
             self.assertEqual(len(checkpoints), 1)
             observation = checkpoints[0]
             self.assertEqual(observation["status"], "observed")
@@ -292,8 +335,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             self.assertTrue(all(owner["cache"].is_dir() for owner in f["owners"]))
 
     def test_checkpoint_projection_redacts_malicious_fields_and_does_not_guess_ambiguous_binding(self):
-        with TemporaryDirectory() as directory:
-            f = self.fixture(Path(directory).resolve())
+        with self.fixture() as f:
             state = json.loads(f["state"].read_text())
             record, public = state["installations"][0], f["public"][0]
             raw = next(iter(record["clients"].values()))
@@ -317,22 +359,19 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             self.assertEqual(observation["members"]["marketing-kit"]["recorded_binding_selection"], "multiple")
 
     def test_checkpoint_safe_read_failure_is_unavailable_and_does_not_replace_strict_error(self):
-        with TemporaryDirectory() as directory:
-            f = self.fixture(Path(directory).resolve())
+        with self.fixture() as f:
             audit = dict(f["audit"], copilot_settings_read=lambda *_: (None, "private-secret"))
             self.assertEqual(observe_project_checkpoint(f["root"], f["project"], f["public"], audit), {"status": "unavailable"})
             checkpoints = []
             original = ValueError("original strict refusal")
             with patch.object(SignedClosureRetirement, "document", side_effect=original):
                 with self.assertRaises(ValueError) as refusal:
-                    SignedClosureRetirement(f["root"], f["home"], f["project"], f["public"], f["pins"], f["audit"],
-                                            checkpoint_diagnostics=checkpoints)
+                    self.capture(f, checkpoint_diagnostics=checkpoints)
             self.assertIs(refusal.exception, original)
             self.assertEqual(checkpoints, [{"status": "unavailable"}])
 
     def test_checkpoint_normalizes_only_actual_domain_enums_and_catalog_presence(self):
-        with TemporaryDirectory() as directory:
-            f = self.fixture(Path(directory).resolve())
+        with self.fixture() as f:
             state = json.loads(f["state"].read_text())
             binding = next(iter(state["installations"][0]["clients"].values()))
             public = f["public"][0]["clients"][0]
@@ -358,11 +397,9 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             self.assertEqual(members["playwright"]["recorded_catalog_evidence"]["claude_compatibility"], "absent")
 
     def test_checkpoint_sink_keeps_successful_retirement_and_fd_custody_unchanged(self):
-        with TemporaryDirectory() as directory:
-            f = self.fixture(Path(directory).resolve())
+        with self.fixture() as f:
             checkpoints = []
-            subject = SignedClosureRetirement(f["root"], f["home"], f["project"], f["public"], f["pins"], f["audit"],
-                                              checkpoint_diagnostics=checkpoints)
+            subject = self.capture(f, checkpoint_diagnostics=checkpoints)
             self.assertEqual(checkpoints, [observe_project_checkpoint(f["root"], f["project"], f["public"], f["audit"])])
             held = tuple(subject.fds)
             self.assertTrue(held)
@@ -373,25 +410,12 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             for fd in held:
                 with self.assertRaises(OSError): os.fstat(fd)
 
-    def test_main_attaches_bounded_A_and_B_diagnostics_only_to_failure_report(self):
-        from test_live_install_audit_env import IsolatedClientEnvironmentTest
-        fixture = IsolatedClientEnvironmentTest()
-        code, report, _ = fixture._exercise_marketing_kit_scope_report("claude", project_remove_error="remove B")
-        self.assertEqual(code, 1)
-        self.assertIn("injected Project removal failure", report["failure"])
-        self.assertEqual(set(report["claude_project_checkpoint_diagnostics"]),
-                         {"project_a_after_repair", "project_b_before_remove"})
-        code, report, _ = fixture._exercise_marketing_kit_scope_report("claude")
-        self.assertEqual(code, 0, report.get("failure"))
-        self.assertNotIn("claude_project_checkpoint_diagnostics", report)
-
     def test_other_readiness_fields_still_fail_closed(self):
         for key, values in {"activation": ("failed", "manual_activation_required", "not_required", "degraded", "unknown", ""),
                             "materialization": ("absent",), "verification": ("failed", "package_validated", "runtime_verified"),
                             "policy": ("blocked",), "scope": ("user",), "client_id": ("codex",)}.items():
             for value in values:
-                with self.subTest(key=key, value=value), TemporaryDirectory() as directory:
-                    f = self.fixture(Path(directory).resolve())
+                with self.subTest(key=key, value=value), self.fixture() as f:
                     state = json.loads(f["state"].read_text())
                     binding = next(iter(state["installations"][0]["clients"].values()))
                     binding[key] = f["public"][0]["clients"][0][key] = value
@@ -401,8 +425,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
 
     def test_signed_state_public_receipt_namespace_and_bundle_mutations_refused(self):
         for mutation in ("source", "digest", "public", "scope", "receipt", "namespace", "bundle", "hardlink", "symlink"):
-            with self.subTest(mutation=mutation), TemporaryDirectory() as directory:
-                f = self.fixture(Path(directory).resolve())
+            with self.subTest(mutation=mutation), self.fixture() as f:
                 state = json.loads(f["state"].read_text())
                 record = state["installations"][0]
                 binding = next(iter(record["clients"].values()))
@@ -423,8 +446,8 @@ class SignedClosureRetirementContracts(unittest.TestCase):
 
     def test_removal_receipts_must_name_every_prior_signed_owner(self):
         for mutation in ("missing", "duplicate", "wrong_id", "wrong_binding", "wrong_client", "wrong_scope", "unchanged", "pending"):
-            with self.subTest(mutation=mutation), TemporaryDirectory() as directory:
-                f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+            with self.subTest(mutation=mutation), self.fixture() as f:
+                subject = self.capture(f)
                 self.retire(f)
                 cleanup = f["cleanup"]
                 if mutation == "missing": cleanup["actions"].pop()
@@ -441,8 +464,8 @@ class SignedClosureRetirementContracts(unittest.TestCase):
 
     def test_foreign_native_registry_rows_and_unowned_residuals_never_qualify(self):
         for mutation in ("installed_foreign", "market_foreign", "active_registration", "extra_residual", "extra_quarantine", "marker", "retired_bytes", "retired_replaced", "parent_replaced", "project_replaced"):
-            with self.subTest(mutation=mutation), TemporaryDirectory() as directory:
-                f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+            with self.subTest(mutation=mutation), self.fixture() as f:
+                subject = self.capture(f)
                 self.retire(f)
                 owner = f["owners"][0]
                 if mutation in ("installed_foreign", "active_registration"):
@@ -474,9 +497,9 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 self.assertEqual(subject.fds, [])
 
     def test_rescan_cannot_mutate_retained_tree_or_registry_after_first_check(self):
-        for mutation in ("tree", "registry", "active_cache", "quarantine_extra"):
-            with self.subTest(mutation=mutation), TemporaryDirectory() as directory:
-                f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+        for mutation in ("tree", "registry", "active_cache", "quarantine_extra", "parent_empty_sibling"):
+            with self.subTest(mutation=mutation), self.fixture() as f:
+                subject = self.capture(f)
                 self.retire(f)
                 residuals = self.scan(f)
                 calls = []
@@ -490,6 +513,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                         doc = json.loads(path.read_text()); doc["vendor"]["foreign"] = 2
                         path.write_text(json.dumps(doc))
                     elif mutation == "active_cache": owner["cache"].mkdir()
+                    elif mutation == "parent_empty_sibling": (owner["cache"].parent / "unrelated-empty").mkdir(exist_ok=True)
                     else: (owner["moved"].parent / "extra").mkdir()
                     return observed
                 with self.assertRaises(ValueError):
@@ -498,8 +522,8 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 self.assertEqual(subject.fds, [])
 
     def test_close_is_safe_when_command_refuses_before_finish(self):
-        with TemporaryDirectory() as directory:
-            f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+        with self.fixture() as f:
+            subject = self.capture(f)
             subject.close(); subject.close()
             self.assertEqual(subject.fds, [])
             with self.assertRaises(ValueError):
@@ -507,8 +531,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
 
     def test_project_identity_cannot_reset_between_member_captures(self):
         original = SignedClosureRetirement.capture
-        with TemporaryDirectory() as directory:
-            f = self.fixture(Path(directory).resolve())
+        with self.fixture() as f:
             seen = []
             def capture(subject, *args):
                 owner = original(subject, *args)
@@ -527,8 +550,8 @@ class SignedClosureRetirementContracts(unittest.TestCase):
     def test_marketing_entry_keeps_strict_default_and_profile_scope_binding(self):
         runner = runpy.run_path(str(ROOT / "scripts/marketing-kit-project-release-e2e.py"))
         check = runner["check_removed_native_components"]
-        with TemporaryDirectory() as directory:
-            f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+        with self.fixture() as f:
+            subject = self.capture(f)
             self.retire(f)
             with self.assertRaisesRegex(AssertionError, "native Marketing Kit remnants"):
                 check("claude", f["home"], f["root"], "strict default")
@@ -546,8 +569,8 @@ class SignedClosureRetirementContracts(unittest.TestCase):
     def test_project_retirement_survives_user_cycle_only_with_continuously_held_authority(self):
         runner = runpy.run_path(str(ROOT / "scripts/marketing-kit-project-release-e2e.py"))
         for retained in (False, True):
-            with self.subTest(retained=retained), TemporaryDirectory() as directory:
-                f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+            with self.subTest(retained=retained), self.fixture() as f:
+                subject = self.capture(f)
                 try:
                     original_fds = tuple(subject.fds)
                     self.retire(f)
@@ -582,8 +605,8 @@ class SignedClosureRetirementContracts(unittest.TestCase):
         changes = ("user-residue", "tree", "metadata", "marker", "quarantine", "parent",
                    "registry", "active-resurrection", "cache-resurrection", "empty", "rescan")
         for change in changes:
-            with self.subTest(change=change), TemporaryDirectory() as directory:
-                f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+            with self.subTest(change=change), self.fixture() as f:
+                subject = self.capture(f)
                 self.retire(f)
                 subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f), keep_open=True)
                 held = tuple(subject.fds)
@@ -623,8 +646,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
     def test_retained_parent_entries_preserve_exact_accepted_siblings(self):
         for marker in (False, True):
             for change in (None, "empty-sibling", "nested-empty-sibling", "replaced-sibling", "removed-sibling"):
-                with self.subTest(marker=marker, change=change), TemporaryDirectory() as directory:
-                    f = self.fixture(Path(directory).resolve())
+                with self.subTest(marker=marker, change=change), self.fixture() as f:
                     parent = f["owners"][0]["cache"].parent
                     sibling = parent / "unrelated-version"
                     sibling.mkdir()
@@ -633,37 +655,34 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                         self.retire(f, marker=marker)
                         subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f), keep_open=True)
                         held, original = tuple(subject.fds), self.scan(f)
-                        if change == "empty-sibling":
-                            (parent / "unrelated-empty").mkdir()
-                        elif change == "nested-empty-sibling":
-                            (parent / "new-version/empty").mkdir(parents=True)
+                        if change == "empty-sibling": (parent / "unrelated-empty").mkdir()
+                        elif change == "nested-empty-sibling": (parent / "new-version/empty").mkdir(parents=True)
                         elif change in ("replaced-sibling", "removed-sibling"):
                             sibling.rename(f["root"] / "original-unrelated-version")
-                            if change == "replaced-sibling":
-                                sibling.mkdir()
-                        # Empty namespace changes are invisible to the identity
-                        # scanner; held-parent custody must still reject them.
+                            if change == "replaced-sibling": sibling.mkdir()
+                        # These namespace mutations leave the identity scanner
+                        # unchanged; rejection must come from held-parent custody.
                         self.assertEqual(self.scan(f), original)
                         if change is None:
                             proof = subject.verify_retained(f["home"], f["root"], original, lambda: self.scan(f))
                             self.assertEqual(proof["status"],
                                 "verified-unchanged-signed-project-cache-retirement-at-user-removal")
-                            self.assertFalse(proof["writer_closure_claimed"])
+                            for flag in ("physical_absence_qualified", "writer_closure_qualified", "full_native_removal_qualified"):
+                                self.assertIs(proof[flag], False)
                             self.assertTrue(set(held) <= set(subject.fds))
                         else:
                             with self.assertRaises(ValueError):
                                 subject.verify_retained(f["home"], f["root"], original, lambda: self.scan(f))
                             self.assertEqual(subject.fds, [])
                             for fd in held:
-                                with self.assertRaises(OSError):
-                                    os.fstat(fd)
+                                with self.assertRaises(OSError): os.fstat(fd)
                     finally:
                         subject.close()
 
     def test_retained_authority_cannot_be_unfinished_closed_reused_or_wrong_profile(self):
         for change in ("unfinished", "closed", "wrong-home", "wrong-case", "twice", "invalid-receipt"):
-            with self.subTest(change=change), TemporaryDirectory() as directory:
-                f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+            with self.subTest(change=change), self.fixture() as f:
+                subject = self.capture(f)
                 held = tuple(subject.fds)
                 self.assertIsNone(subject.retired_allowed)
                 if change == "unfinished":
@@ -694,8 +713,8 @@ class SignedClosureRetirementContracts(unittest.TestCase):
     def test_execute_captures_verified_four_member_receipt_for_real_retirement(self):
         runner = runpy.run_path(str(ROOT / "scripts/marketing-kit-project-release-e2e.py"))
         execute = runner["execute"]
-        with TemporaryDirectory() as directory:
-            f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+        with self.fixture() as f:
+            subject = self.capture(f)
             captured = []
             def invoke(argv, env, project, timeout):
                 self.assertEqual(argv, ["/released/agentplugins", "remove", "marketing-kit",
@@ -723,8 +742,8 @@ class SignedClosureRetirementContracts(unittest.TestCase):
         runner = runpy.run_path(str(ROOT / "scripts/marketing-kit-project-release-e2e.py"))
         execute = runner["execute"]
         for failure in ("process", "pending", "partial_receipts"):
-            with self.subTest(failure=failure), TemporaryDirectory() as directory:
-                f = self.fixture(Path(directory).resolve()); subject = self.capture(f)
+            with self.subTest(failure=failure), self.fixture() as f:
+                subject = self.capture(f)
                 captured = []
                 result = {"exit_code": 0, "timeout": False, "_json": copy.deepcopy(f["cleanup"])}
                 if failure == "process": result["exit_code"] = 1
@@ -742,6 +761,17 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 self.assertEqual(subject.fds, [])
                 self.assertTrue(all(owner["cache"].is_dir() for owner in f["owners"]))
 
+    def test_main_attaches_bounded_A_and_B_diagnostics_only_to_failure_report(self):
+        from test_live_install_audit_env import IsolatedClientEnvironmentTest
+        fixture = IsolatedClientEnvironmentTest()
+        code, report, _ = fixture._exercise_marketing_kit_scope_report("claude", project_remove_error="remove B")
+        self.assertEqual(code, 1)
+        self.assertIn("injected Project removal failure", report["failure"])
+        self.assertEqual(set(report["claude_project_checkpoint_diagnostics"]),
+                         {"project_a_after_repair", "project_b_before_remove"})
+        code, report, _ = fixture._exercise_marketing_kit_scope_report("claude")
+        self.assertEqual(code, 0, report.get("failure"))
+        self.assertNotIn("claude_project_checkpoint_diagnostics", report)
 
 if __name__ == "__main__":
     unittest.main()

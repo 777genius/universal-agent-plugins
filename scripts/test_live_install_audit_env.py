@@ -2422,7 +2422,9 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                               codex_checkpoint_error=None, codex_constructor_error=None,
                                               require_copilot_trust=False, copilot_trust_mutation=None,
                                               copilot_fixture_failure=None, claude_retained_scan_error=False,
-                                              temporary_root_alias=False):
+                                              temporary_root_alias=False, codex_initializer=None,
+                                              copilot_refusal_mutation=None, copilot_add_failure=False,
+                                              claude_native_mutation=None):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2608,6 +2610,8 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
 
         def execute(_cli, env, project, _target, label, *args, capture=None):
             phases.append(label)
+            if label == "cold locked restore" and target == "copilot" and copilot_add_failure:
+                raise AssertionError("positive cold restore failed")
             scope = args[args.index("--scope") + 1]
             key = (env["AGENTPLUGINS_HOME"], scope)
             portable = project if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
@@ -2643,7 +2647,21 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                   "installation_id": row["installation_id"], "outcome": "completed"}
                                  for row in actions]})
                 installed[key] = {}
+            if capture is not None:
+                capture({"inert_test_only": True})
             return {"stage": label, "exit_code": 0, "result": "passed"}
+
+        def cold_consent(argv, env, project, timeout):
+            self.assertEqual(target, "copilot")
+            self.assertEqual(project.parent.name, "D")
+            self.assertEqual(argv, ["unused", "install", "--locked", "--yes", "--scope", "project",
+                                    "--project-root", str(project), "--format", "json"])
+            self.assertEqual(timeout, 180)
+            phases.append("cold Copilot Project folder consent refused")
+            response = self._marketing_kit_copilot_consent_response(runner, project)
+            if copilot_refusal_mutation is not None:
+                copilot_refusal_mutation(response, env, project)
+            return response
 
         def boundary(_cli, env, project, expected, _guards):
             self.assertEqual(project.parent.name, "E")
@@ -2707,11 +2725,54 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             return {"status": "installed" if owners else "absent", "managed_count": len(owners),
                     "profile": str(Path(env["HOME"]).resolve()), "owners": owners}
 
+        def codex_profile(audit, root, env, project):
+            if codex_initializer is not None:
+                return codex_initializer(runner, env, project)
+            return FakeCodexProfile(audit, root, env, project)
+
+        # These are inert scope/report controls, like the existing public/native
+        # substitutes above. Real cache custody and native-output validation
+        # have separate adversarial filesystem/protocol tests; no native claim.
+        class ClaudeDiscovery:
+            def __init__(self, *args):
+                pass
+            def before_remove(self, env, project, scope, label):
+                phases.append("claude-before:" + label)
+                if project.parent.name == "B":
+                    self_case.assertIn("cold locked restore", phases)
+                if project.parent.name == "C":
+                    self_case.assertIn("User cold locked restore C", phases)
+                mutate_claude("before", project)
+                return {"scope": scope}
+            def after_remove(self, env, project, before, label):
+                phases.append("claude-after:" + label)
+                mutate_claude("after", project)
+                return {"inert_test_only": True, "scope": before["scope"]}
+
+        self_case = self
+        def mutate_claude(phase, project):
+            if claude_native_mutation is not None:
+                selected_phase, selected_case, victim, failure = claude_native_mutation
+                if (phase, project.parent.name) == (selected_phase, selected_case):
+                    (project.parent.parent / victim / "home/unknown-native-write").write_text("tampered")
+                    if failure:
+                        raise ValueError("injected Claude native observation failure")
+
+        class ClaudeRetirement:
+            def __init__(self, case, home, *args):
+                self.case, self.home = case, home
+            def close(self):
+                pass
+            def finish(self, *args, **kwargs):
+                return {"inert_test_only": True}
+            def verify_retained(self, *args):
+                return {"inert_test_only": True}
+
         with TemporaryDirectory() as output:
             report_path = Path(output) / "report.json"
             with patch.dict(main.__globals__, {
-                    "execute": execute, "verify_pinned_launcher": lambda *_: None,
-                    "CodexProfile": FakeCodexProfile, "SignedClosureRetirement": FakeRetirement,
+                    "execute": execute, "invoke": cold_consent, "verify_pinned_launcher": lambda *_: None,
+                    "CodexProfile": codex_profile, "SignedClosureRetirement": FakeRetirement,
                     "prepare_copilot_project_b_trust": prepare_trust,
                     "profile_snapshot": profile, "check_foreign": foreign,
                     "check_user_project_unchanged": project_check,
@@ -2727,6 +2788,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "verify_fixed_vscode_user_policy_refusal": lambda *_: self.fail("historical45 is not a current gate"),
                     "verify_current_vscode_user_boundary": boundary,
                     "observe_production_policy": observe,
+                    "RemovalDiscovery": ClaudeDiscovery,
                     "codex_user_native_remove_attestation": lambda *_: ("--external-uninstalled",),
                     # Patch the runner binding, preserving tempfile for setup helpers.
                     "tempfile": SimpleNamespace(TemporaryDirectory=CheckedCleanup),
@@ -2734,20 +2796,366 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     patch.dict(runner["audit"], {"copilot_native_roots_guard": make_guard}), \
                     patch.object(Path, "open", checked_open), \
                     patch.object(sys, "argv", ["runner", "--target", target, "--cli", "unused",
+                                               *(["--cli-version", "0.1.116"] if target == "claude" else []),
                                                "--report", str(report_path)]), \
                     patch.object(sys, "stdout", StringIO()), patch.object(sys, "stderr", StringIO()):
                 code = main()
-            if target == "codex":
+            if target == "codex" and codex_initializer is None:
                 self.assertEqual(len(codex_profiles),
                                  ("A", "B", "C").index(codex_constructor_error)
                                  if codex_constructor_error is not None else 3)
                 self.assertTrue(all(profile.checkpoints for profile in codex_profiles))
             if target == "claude":
-                self.assertTrue(retirements)
                 self.assertTrue(all(retirement.closed for retirement in retirements))
-                self.assertTrue(all(retirement.finished for retirement in retirements)
-                                if project_remove_error not in ("remove A", "remove B") else not retirements[-1].finished)
+                # A refused native preflight may stop before capture; a failed
+                # postflight must close custody without qualifying retirement.
+                if claude_native_mutation is None:
+                    self.assertTrue(retirements)
+                    self.assertTrue(all(retirement.finished for retirement in retirements)
+                                    if project_remove_error not in ("remove A", "remove B") else not retirements[-1].finished)
             return code, json.loads(report_path.read_text()), phases
+
+    def _marketing_kit_copilot_consent_response(self, runner, project):
+        reason = "copilot has not remembered the selected project folder; rerun installation to restore folder trust"
+        aliases = sorted(runner["UPDATE_ALIASES"])
+        return {"exit_code": 1, "timeout": False, "_json": {
+            "schema_version": 1, "command": "agentplugins install", "result": "failure",
+            "outcome": "partial", "scope": "project", "scope_selection_reason": "explicit",
+            "selection": {"scope": "project", "scope_selection_reason": "explicit",
+                          "project_root": str(project), "manifest_path": str(project / "uap.toml"),
+                          "lock_path": str(project / "uap.lock")},
+            "bindings": [{"alias": alias, "client_id": "copilot", "status": "incomplete", "code": "FAILED"}
+                         for alias in aliases],
+            "actions": [{"alias": alias, "client_id": "copilot", "action": "install",
+                         "package_digest": runner["FIXED_SIGNED_CLOSURE"][runner["REQUIRED_DISTRIBUTIONS"][alias]]["tree_digest"],
+                         "revision": runner["FIXED_SIGNED_CLOSURE"][runner["REQUIRED_DISTRIBUTIONS"][alias]]["resolved_revision"]}
+                        for alias in aliases],
+            "results": [{"installation_id": "refused-" + alias, "client_id": "copilot",
+                         "operation": "install", "outcome": "incomplete", "reason": reason,
+                         "next_actions": [{"kind": "activate", "reason": reason}]} for alias in aliases]}}
+
+    @contextmanager
+    def _cold_copilot_data_case(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            home, data, project = (root / name for name in ("home", "data", "project"))
+            for directory in (home, data, project): directory.mkdir(mode=0o700)
+            (home / ".copilot").mkdir(mode=0o700)
+            (project / "uap.toml").write_text("retained portable manifest")
+            (project / "uap.lock").write_text("retained signed lock")
+            foreign = data / "foreign-receipt.json"
+            foreign.write_text("unmanaged data remains unchanged")
+            foreign.chmod(0o600)
+            env = {"HOME": str(home), "AGENTPLUGINS_HOME": str(data)}
+            yield runner, env, project, data
+
+    def test_marketing_kit_cold_copilot_expected_refusal_rejects_installer_data_writes(self):
+        for relative in ("state-v2.json", "uap.toml", "uap.lock", "managed/plugin",
+                         "operations-v2/receipt", "plugin-data/data", "foreign-receipt.json",
+                         "store/packages/unowned/package", "store/.staging/entry-leftover/file"):
+            with self.subTest(path=relative), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                def invoke(*_):
+                    path = data / relative
+                    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    path.write_text("unexpected durable state")
+                    path.chmod(0o600)
+                    return self._marketing_kit_copilot_consent_response(runner, project)
+                with patch.dict(verify.__globals__, {"invoke": invoke}):
+                    with self.assertRaises(AssertionError): verify("unused", env, project)
+
+    def test_marketing_kit_cold_copilot_preserves_existing_file_link_custody(self):
+        for remove_alias in (False, True):
+            with self.subTest(remove_alias=remove_alias), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                original = data / "foreign-receipt.json"
+                before = runner["scoped_snapshot"]([data])
+                def invoke(*_):
+                    alias = data.parent / "outside-data-alias"
+                    os.link(original, alias)
+                    if remove_alias: alias.unlink()
+                    # Shared snapshot equality is deliberately insufficient:
+                    # bytes, inode, mode and mtime all survive this mutation.
+                    self.assertEqual(runner["scoped_snapshot"]([data]), before)
+                    return self._marketing_kit_copilot_consent_response(runner, project)
+                with patch.dict(verify.__globals__, {"invoke": invoke}):
+                    with self.assertRaisesRegex(AssertionError, "existing data entry"):
+                        verify("unused", env, project)
+
+    def test_marketing_kit_cold_copilot_exception_still_checks_installer_data(self):
+        for mutation in (False, True):
+            with self.subTest(mutation=mutation), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                def invoke(*_):
+                    if mutation: (data / "state-v2.json").write_text("unexpected")
+                    raise RuntimeError("subject process failed")
+                with patch.dict(verify.__globals__, {"invoke": invoke}):
+                    if mutation:
+                        with self.assertRaises(AssertionError): verify("unused", env, project)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "subject process failed"):
+                            verify("unused", env, project)
+
+    def test_marketing_kit_cold_copilot_clean_cache_and_receipt_bound_project_positive(self):
+        with self._cold_copilot_data_case() as (runner, env, project, data):
+            verify = runner["verify_copilot_cold_project_refusal"]
+            foreign_before = runner["scoped_snapshot"]([data])
+            def invoke(*_):
+                for name, body in (("directory-v1-cache.json", b"signed Directory cache"),
+                                   ("directory-v1-cache.json.lock", b"")):
+                    path = data / name; path.write_bytes(body); path.chmod(0o600)
+                response = self._marketing_kit_copilot_consent_response(runner, project)
+                alias = response["_json"]["actions"][0]["alias"]
+                iid = response["_json"]["results"][0]["installation_id"]
+                physical = alias + "-" + hashlib.sha256(iid.encode()).hexdigest()[:12]
+                managed = project / ".uap/managed/clients/copilot" / physical
+                managed.mkdir(parents=True, mode=0o700)
+                (managed / "plugin.json").write_text("receipt-bound materialization")
+                (project / ".uap/state-v2.json").write_text("Project state may be retained")
+                return response
+            with patch.dict(verify.__globals__, {"invoke": invoke}):
+                result = verify("unused", env, project)
+            self.assertEqual(result["result"], "expected_refusal")
+            self.assertFalse(result["cold_native_restore_qualified"])
+            after = runner["scoped_snapshot"]([data])
+            self.assertTrue(all(after[key] == value for key, value in foreign_before.items()))
+
+    @unittest.skipUnless(os.name == "posix", "published Ubuntu cold-cache descriptor custody")
+    def test_marketing_kit_cold_copilot_cache_allowance_is_exact_and_source_bound(self):
+        mutations = (None, "source-bytes", "metadata", "executables", "state-in-entry", "unknown-entry",
+                     "nonempty-staging", "lock", "source-mode", "hardlink", "symlink", "fifo",
+                     "existing-addition", "existing-rewrite")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                helpers = runner["audit"]["WINDSURF_GLOBAL_AUDIT"]
+                custody = runner["audit"]["CLAUDE_RETIREMENT_AUDIT"]
+                # Exercise the cache-coordinate join with an inert independently
+                # held source; the reused digest engine has its own contracts.
+                source = data.parent / "source"
+                source.mkdir(mode=0o700)
+                (source / "plugin.json").write_bytes(b'{"name":"inert-cache"}\n')
+                (source / "plugin.json").chmod(0o600)
+                fd = custody["open_directory"](source)
+                try: digest = helpers["immutable_source_digest"](fd, helpers["frame"](fd))
+                finally: os.close(fd)
+                distribution = runner["REQUIRED_DISTRIBUTIONS"]["marketing-kit"]
+                pins = runner["FIXED_SIGNED_CLOSURE"]
+                pin = {**pins[distribution], "tree_digest": digest}
+                entry = data / "store/packages/agentplugins-tree-sha256-v1" / digest[7:]
+                metadata = {"schema_version": 1, "digest_algorithm": "agentplugins-tree-sha256-v1",
+                            "tree_digest": digest, "source": {}}
+                def populate():
+                    import shutil
+                    entry.mkdir(parents=True, mode=0o700)
+                    shutil.copytree(source, entry / "package")
+                    path = entry / "metadata.json"
+                    path.write_text(json.dumps(metadata)); path.chmod(0o600)
+                    (data / "store/.staging").mkdir(mode=0o700)
+                    for directory in (data / "store", data / "store/packages",
+                                      data / "store/packages/agentplugins-tree-sha256-v1"):
+                        directory.chmod(0o700)
+                if mutation and mutation.startswith("existing-"): populate()
+                def invoke(*_):
+                    if not (mutation and mutation.startswith("existing-")): populate()
+                    lock = data / "store/store.lock"
+                    lock.write_text('{"pid":123,"acquired_at":"2026-11-23T12:00:00Z"}\n')
+                    lock.chmod(0o600)
+                    if mutation == "source-bytes": (entry / "package/plugin.json").write_text("wrong bytes")
+                    elif mutation == "metadata": (entry / "metadata.json").write_text("{}")
+                    elif mutation == "executables":
+                        (entry / "metadata.json").write_text(json.dumps({**metadata, "executable_files": ["unknown"]}))
+                    elif mutation == "state-in-entry": (entry / "state-v2.json").write_text("unowned")
+                    elif mutation == "unknown-entry": (entry.parent / ("0" * 64)).mkdir(mode=0o700)
+                    elif mutation == "nonempty-staging": (data / "store/.staging/entry-unfinished").mkdir(mode=0o700)
+                    elif mutation == "lock": lock.write_text("not a producer process lock")
+                    elif mutation == "source-mode": (entry / "package/plugin.json").chmod(0o644)
+                    elif mutation == "hardlink": os.link(entry / "package/plugin.json", source / "linked")
+                    elif mutation == "symlink":
+                        (entry / "package/plugin.json").unlink()
+                        (entry / "package/plugin.json").symlink_to(source / "plugin.json")
+                    elif mutation == "fifo":
+                        (entry / "package/plugin.json").unlink()
+                        os.mkfifo(entry / "package/plugin.json", 0o600)
+                    elif mutation == "existing-addition": (entry / "package/extra").write_text("unowned")
+                    elif mutation == "existing-rewrite": (entry / "package/plugin.json").write_text("changed")
+                    return self._marketing_kit_copilot_consent_response(runner, project)
+                descriptors = Path("/proc/self/fd")
+                count = len(list(descriptors.iterdir())) if descriptors.is_dir() else None
+                with patch.dict(pins, {distribution: pin}), patch.dict(verify.__globals__, {"invoke": invoke}):
+                    if mutation is None:
+                        self.assertEqual(verify("unused", env, project)["result"], "expected_refusal")
+                    else:
+                        with self.assertRaises((AssertionError, RuntimeError, ValueError)): verify("unused", env, project)
+                if count is not None:
+                    self.assertEqual(len(list(descriptors.iterdir())), count, "cache custody leaked a descriptor")
+
+    def test_marketing_kit_copilot_consent_refusal_requires_exact_causal_closure(self):
+        mutations = [
+            lambda r, *_: r.update(exit_code=0),
+            lambda r, *_: r.update(timeout=True),
+            lambda r, *_: r.update(_json=None),
+            lambda r, *_: r["_json"].update(scope="user"),
+            lambda r, *_: r["_json"].update(result="success"),
+            lambda r, *_: r["_json"].pop("bindings"),
+            lambda r, *_: r["_json"]["bindings"].pop(),
+            lambda r, *_: r["_json"]["bindings"][0].update(alias="unrelated"),
+            lambda r, *_: r["_json"]["bindings"][0].update(client_id="codex"),
+            lambda r, *_: r["_json"]["bindings"][0].update(status="completed"),
+            lambda r, *_: r["_json"]["bindings"][0].update(code="TIMEOUT"),
+            lambda r, *_: r["_json"].pop("selection"),
+            lambda r, *_: r["_json"]["selection"].update(scope="user"),
+            lambda r, *_: r["_json"]["selection"].update(scope_selection_reason="inferred"),
+            lambda r, *_: r["_json"]["selection"].update(project_root="/unrelated/project"),
+            lambda r, *_: r["_json"]["selection"].update(manifest_path="/unrelated/uap.toml"),
+            lambda r, *_: r["_json"]["selection"].update(lock_path="/unrelated/uap.lock"),
+            lambda r, *_: r["_json"]["actions"].pop(),
+            lambda r, *_: r["_json"]["actions"][0].update(client_id="codex"),
+            lambda r, *_: r["_json"]["actions"][0].update(revision="unreviewed"),
+            lambda r, *_: r["_json"]["results"][0].update(reason="native command timed out"),
+            lambda r, *_: r["_json"]["results"][0].update(outcome="completed"),
+            lambda r, *_: r["_json"]["results"][0].update(next_actions=[]),
+            lambda r, *_: r["_json"]["results"][0].update(
+                installation_id=r["_json"]["results"][1]["installation_id"]),
+            lambda r, e, p: (Path(e["HOME"]) / ".copilot/config.json").write_text(
+                json.dumps({"trustedFolders": [str(p)]})),
+            lambda r, e, p: (Path(e["HOME"]) / ".copilot/unowned-cache").write_text("unknown native write"),
+            lambda r, e, p: (p / "uap.lock").write_text("rewritten agreement"),
+            lambda r, e, p: (p.parent.parent / "A/home/peer-write").write_text("tampered"),
+        ]
+        for index, mutation in enumerate(mutations):
+            with self.subTest(index=index):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=mutation)
+                self.assertEqual(code, 1)
+                self.assertFalse(report["cold_native_restore_qualified"])
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertNotIn("cold locked restore", phases)
+
+    def test_marketing_kit_copilot_refusal_does_not_qualify_failed_explicit_add(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "copilot", copilot_add_failure=True)
+        self.assertEqual(code, 1)
+        self.assertEqual(report["failure"], "positive cold restore failed")
+        self.assertFalse(report["cold_native_restore_qualified"])
+        self.assertFalse(report["two_scope_lifecycle_qualified"])
+        self.assertEqual(report["scope_results"]["project"]["status"], "not_run")
+        self.assertLess(phases.index("cold Copilot Project folder consent refused"),
+                        phases.index("cold locked restore"))
+        self.assertNotIn("remove B", phases)
+
+    def test_marketing_kit_copilot_refusal_binds_present_action_ids_and_accepts_cold_missing_ids(self):
+        def bind_ids(response, _env, _project):
+            for action, result in zip(response["_json"]["actions"], response["_json"]["results"]):
+                action["installation_id"] = result["installation_id"]
+
+        def swap_child_ids(response, env, project):
+            bind_ids(response, env, project)
+            rows = response["_json"]["results"]
+            actions = response["_json"]["actions"]
+            notion = next(i for i, row in enumerate(actions) if row["alias"] == "notion")
+            hubspot = next(i for i, row in enumerate(actions) if row["alias"] == "hubspot-crm")
+            rows[notion]["installation_id"], rows[hubspot]["installation_id"] = (
+                rows[hubspot]["installation_id"], rows[notion]["installation_id"])
+
+        for mutation in (None, bind_ids, swap_child_ids):
+            with self.subTest(mutation=mutation):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=mutation)
+                self.assertEqual(code, int(mutation is swap_child_ids), report.get("failure"))
+                self.assertFalse(report["cold_native_restore_qualified"])
+                self.assertEqual("cold locked restore" in phases, mutation is not swap_child_ids)
+
+    def test_marketing_kit_copilot_refusal_protects_native_project_files_and_empty_directories(self):
+        paths = (".github/mcp.json", ".github/copilot/settings.local.json", ".github/empty-native",
+                 "empty-project-directory", ".uap/unknown-empty", ".uap/operations-v2/unowned.json",
+                 ".uap/managed/clients/copilot/unowned-package")
+        for relative in paths:
+            with self.subTest(relative=relative):
+                def mutate(_response, _env, project):
+                    path = project / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    if relative.endswith(".json"):
+                        path.write_text('{"mcpServers":{"unexpected":{}}}')
+                    else:
+                        path.mkdir()
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=mutate)
+                self.assertEqual(code, 1)
+                self.assertIn("Project state", report["failure"])
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertNotIn("cold locked restore", phases)
+
+    def test_marketing_kit_copilot_refusal_checks_project_custody_when_invocation_raises(self):
+        for relative in (None, ".github/mcp.json", ".github/empty-native"):
+            with self.subTest(relative=relative):
+                def interrupted(_response, _env, project):
+                    if relative is not None:
+                        path = project / relative
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        if relative.endswith(".json"):
+                            path.write_text('{"mcpServers":{"unexpected":{}}}')
+                        else:
+                            path.mkdir()
+                    raise RuntimeError("refused invocation interrupted")
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "copilot", copilot_refusal_mutation=interrupted)
+                self.assertEqual(code, 1)
+                self.assertIn("Project state" if relative else "refused invocation interrupted", report["failure"])
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                self.assertNotIn("cold locked restore", phases)
+
+    def test_marketing_kit_copilot_cold_trust_accepts_owned_temp_ancestor_alias(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent / "marketing-kit-project-release-e2e.py"))
+        with TemporaryDirectory() as temporary:
+            canonical = Path(temporary) / "canonical"
+            canonical.mkdir()
+            alias = Path(temporary) / "alias"
+            try:
+                alias.symlink_to(canonical, target_is_directory=True)
+            except (OSError, NotImplementedError) as error:
+                self.skipTest(f"host cannot create a temporary path alias: {error}")
+            root = alias / "cases"
+            root.mkdir()
+            env, project, *_ = runner["run_case"]("unused", "copilot", root, "B")
+            for name in ("uap.toml", "uap.lock"):
+                (project / name).write_text("retained agreement")
+            reached = []
+            def stop_before_native_call(*_args, **_kwargs):
+                reached.append(True)
+                raise RuntimeError("reached genuine cold invocation boundary")
+            verify = runner["verify_copilot_cold_project_refusal"]
+            with patch.dict(verify.__globals__, {"invoke": stop_before_native_call}):
+                with self.assertRaisesRegex(RuntimeError, "reached genuine cold invocation boundary"):
+                    verify("unused", env, project)
+            self.assertEqual(reached, [True])
+
+    def test_marketing_kit_copilot_refusal_accepts_only_receipt_bound_private_materialization(self):
+        def materialize(response, _env, project):
+            private = project / ".uap"
+            private.mkdir(mode=0o700)
+            for name in ("state-v2.json", "mutation.lock", "environment.lock"):
+                (private / name).write_text("inert installer artifact")
+            for name in ("operations-v2", "installer-tmp"):
+                (private / name).mkdir()
+            for action, result in zip(response["_json"]["actions"], response["_json"]["results"]):
+                physical = action["alias"] + "-" + hashlib.sha256(result["installation_id"].encode()).hexdigest()[:12]
+                package = private / "managed/clients/copilot" / physical
+                package.mkdir(parents=True)
+                (package / "plugin.json").write_text("inert staged package")
+                data = private / "plugin-data" / physical
+                data.mkdir(parents=True)
+                (data / ".agentplugins-data-owner.json").write_text("inert data receipt")
+        code, report, phases = self._exercise_marketing_kit_scope_report(
+            "copilot", copilot_refusal_mutation=materialize)
+        self.assertEqual(code, 0, report.get("failure"))
+        self.assertFalse(report["cold_native_restore_qualified"])
+        self.assertTrue(report["two_scope_lifecycle_qualified"])
+        self.assertIn("cold locked restore", phases)
 
     @unittest.skipUnless(COPILOT_TRUST_FIXTURE_SUPPORTED, "Marketing Copilot B fixture requires POSIX descriptors")
     def test_marketing_kit_canonicalizes_allocated_root_before_trust_and_keeps_later_guards(self):
@@ -2865,8 +3273,19 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 code, report, phases = self._exercise_marketing_kit_scope_report(target)
                 self.assertEqual(code, 0, report.get("failure"))
                 self.assertEqual(report["status"], "passed")
-                self.assertEqual(report["qualification_scope"], "user_and_project")
+                self.assertEqual(report["qualification_scope"],
+                    "user_and_project_installation_lifecycle_with_retained_Claude_bytes"
+                    if target == "claude" else "user_and_project")
+                if target == "claude":
+                    self.assertEqual(len(report["claude_fresh_removal_discovery"]), 4)
+                    for flag in ("full_native_removal_qualified", "physical_absence_qualified",
+                                 "writer_closure_qualified", "mcp_discovery_absence_qualified"):
+                        self.assertIs(report["native_removal_qualification"][flag], False)
                 self.assertTrue(report["two_scope_lifecycle_qualified"])
+                if target == "copilot":
+                    self.assertFalse(report["cold_native_restore_qualified"])
+                else:
+                    self.assertNotIn("cold_native_restore_qualified", report)
                 self.assertEqual(report["positive_policy"]["source_mode"], "production_default")
                 self.assertEqual(report["positive_policy"]["snapshot_sequence"], 46)
                 self.assertEqual([phase for phase in phases if phase.startswith("catalog:")],
@@ -2876,8 +3295,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     "policy": report["positive_policy"]})
                 for scope in ("user", "project"):
                     self.assertEqual(report["scope_results"][scope], {
-                        "expectation": "positive_lifecycle", "status": "passed"})
-                required = ["add", "repeat add", "update", "repair intact", "cold locked restore",
+                        "expectation": "positive_lifecycle",
+                        "status": "passed"})
+                restore = (["cold Copilot Project folder consent refused", "cold locked restore"]
+                           if target == "copilot" else ["cold locked restore"])
+                required = ["add", "repeat add", "update", "repair intact", *restore,
                             "remove B", "remove A", "User add", "User repeat add", "User update",
                             "User repair intact", "User cold locked restore C", "User remove C", "User remove"]
                 self.assertEqual([phase for phase in phases if phase in required], required)
@@ -3753,6 +4175,116 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     AssertionError, "CLI did not succeed"):
                 check({**installed, "_json": {**installed["_json"], **changed}},
                       "cold locked restore", "install")
+
+    def test_marketing_kit_signed_tuple_failure_preserves_bounded_public_evidence(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        inspect = runner["inspect_signed_closure"]
+        distribution = runner["REQUIRED_DISTRIBUTIONS"]["playwright"]
+        def invoke(command, *_):
+            response = self._marketing_kit_info_response(runner, command[2])
+            if command[2] == distribution:
+                response["_json"]["data"]["selected_release"].update(
+                    release_sequence=1, repository="x" * 300,
+                    resolved_revision="128b01ff2b4f7242ad061ad823d5e4018af6b2e4",
+                    private_unselected_field="must-not-appear")
+            return response
+        with patch.dict(inspect.__globals__, {"invoke": invoke}):
+            with self.assertRaisesRegex(AssertionError, "immutable source identity changed") as caught:
+                inspect("agentplugins", {}, Path("."), "codex")
+        text = str(caught.exception)
+        observed = json.loads(text.split(": ", 1)[1])
+        self.assertEqual(observed["distribution"], distribution)
+        self.assertEqual(observed["snapshot_sequence"], runner["FIXED_REFUSAL_POLICY"]["snapshot_sequence"])
+        self.assertEqual(observed["snapshot_digest"], runner["FIXED_REFUSAL_POLICY"]["snapshot_digest"])
+        self.assertEqual(observed["expected_release"]["release_sequence"], 2)
+        self.assertEqual(observed["observed_release"]["release_sequence"], 1)
+        self.assertEqual(observed["observed_release"]["repository"], {
+            "type": "str", "length": 300, "sha256": hashlib.sha256(b"x" * 300).hexdigest()})
+        self.assertEqual(observed["observed_release"]["resolved_revision"], {
+            "type": "str", "length": 40,
+            "sha256": hashlib.sha256(b"128b01ff2b4f7242ad061ad823d5e4018af6b2e4").hexdigest()})
+        self.assertEqual(observed["observed_release"]["package_path"],
+                         runner["FIXED_SIGNED_CLOSURE"][distribution]["package_path"])
+        self.assertNotIn("must-not-appear", text)
+        self.assertNotIn("private_unselected_field", text)
+        self.assertLess(len(text), 2500)
+
+    def test_marketing_kit_signed_tuple_diagnostic_redacts_sensitive_allowlisted_values(self):
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        inspect = runner["inspect_signed_closure"]
+        distribution = runner["REQUIRED_DISTRIBUTIONS"]["playwright"]
+        sensitive = (
+            ("allowlisted-uri-secret", "https://alice:allowlisted-uri-secret@host.invalid/private"),
+            ("allowlisted-private-secret", "allowlisted-private-secret arbitrary\nsensitive text"),
+            ("allowlisted-repository-secret", "allowlisted-repository-secret/private"),
+            ("allowlisted-path-secret", "private/allowlisted-path-secret"),
+            ("allowlisted-version-secret", "0.1.0+allowlisted-version-secret"),
+            ("allowlisted-surrogate-secret", "allowlisted-surrogate-secret" + chr(0xDCFF)),
+        )
+        for field in ("selected_distribution", "id", "release_status",
+                      *runner["FIXED_SIGNED_CLOSURE"][distribution]):
+            for canary, value in sensitive:
+                with self.subTest(field=field, canary=canary):
+                    def invoke(command, *_):
+                        response = self._marketing_kit_info_response(runner, command[2])
+                        if command[2] == distribution:
+                            data = response["_json"]["data"]
+                            if field == "selected_distribution":
+                                data[field] = value
+                            else:
+                                data["selected_release"][field] = value
+                        return response
+                    with patch.dict(inspect.__globals__, {"invoke": invoke}):
+                        with self.assertRaisesRegex(AssertionError, "immutable source identity changed") as caught:
+                            inspect("agentplugins", {}, Path("."), "codex")
+                    text = str(caught.exception)
+                    observed = json.loads(text.split(": ", 1)[1])
+                    selected = (observed["selected_distribution"] if field == "selected_distribution"
+                                else observed["observed_release"][field])
+                    self.assertEqual(selected, {"type": "str", "length": len(value),
+                        "sha256": hashlib.sha256(value.encode("utf-8", errors="surrogatepass")).hexdigest()})
+                    self.assertNotIn(canary, text)
+                    self.assertNotIn("alice", text)
+                    self.assertLess(len(text), 2500)
+
+    def test_marketing_kit_workflow_separates_current_lifecycle_and_historical_abort(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/marketing-kit-project-release-e2e.yml").read_text()
+        self.assertIn("npm install --global universal-agent-plugins@0.1.116", workflow)
+        self.assertIn('--cli-version 0.1.116', workflow)
+        self.assertIn('release.version !== "0.1.116"', workflow)
+        self.assertIn('result.stdout.replace(/\\n+$/, "") !== "agentplugins 0.1.116"', workflow)
+        historical = workflow.split("      - name: Verify historical npm 0.1.115 launcher abort cleanup", 1)[1].split("      - name:", 1)[0]
+        self.assertIn('npm install --prefix "$RUNNER_TEMP/uap-legacy" --no-audit --no-fund universal-agent-plugins@0.1.115', historical)
+        self.assertIn('UAP_GLOBAL_NPM_ROOT="$RUNNER_TEMP/uap-legacy/node_modules"', historical)
+        self.assertIn('timeout 20s node scripts/marketing-kit-published-launcher-abort.js', historical)
+        self.assertNotIn('continue-on-error', historical)
+
+    def test_marketing_kit_selected_published_version_is_strict_and_context_local(self):
+        import argparse
+        from runpy import run_path
+        runner = run_path(str(Path(__file__).resolve().parent /
+                              "marketing-kit-project-release-e2e.py"))
+        require = runner["require_exact_published_version"]
+        token = runner["_CLI_VERSION"].set("0.1.116")
+        valid = {"exit_code": 0, "timeout": False, "stdout_tail": "agentplugins 0.1.116\n"}
+        try:
+            require(valid)
+            with patch.dict(require.__globals__, {"invoke": Mock(return_value=valid)}):
+                runner["verify_pinned_launcher"]("agentplugins", {}, Path("."))
+            for value in ("0.1.104", "0.1.116-dev", "0.1.1161", "0.1.117"):
+                with self.subTest(value=value), self.assertRaisesRegex(AssertionError, "not exact"):
+                    require({**valid, "stdout_tail": "agentplugins " + value})
+            for value in ("latest", "0.1.116-dev", "01.1.116", "0.1.116\n"):
+                with self.subTest(pin=value), self.assertRaises(argparse.ArgumentTypeError):
+                    runner["published_cli_version"](value)
+        finally:
+            runner["_CLI_VERSION"].reset(token)
+        require({**valid, "stdout_tail": "agentplugins 0.1.115\n"})
 
     def test_marketing_kit_published_abort_watchdog_refuses_stranded_proof_phases(self):
         # Run the actual script with an inert private bootstrap. A stranded
@@ -6092,6 +6624,43 @@ module.exports = {
         self.assertEqual(report["pr_head_sha"], "b" * 40)
         self.assertEqual(report["results"][0]["status"], "client-unavailable")
 
+    @unittest.skipUnless(sys.platform == "linux", "Ubuntu Windsurf projection toolchain prelude")
+    def test_windsurf_workflow_preserves_selected_go_and_refuses_wrong_version(self):
+        workflow = (Path(__file__).resolve().parents[1] /
+                    ".github/workflows/live-install-remaining-clients.yml").read_text()
+        step = workflow.split("      - name: Run real acquisitions and report every source and outcome\n", 1)[1]
+        prelude = textwrap.dedent(step.split("        run: |\n", 1)[1]
+            .split("          acceptance=()", 1)[0])
+        # Execute the actual prelude only: no vendor, audit, or native process.
+        script = prelude + '\n[[ "$(command -v go)" == "$EXPECTED_GO" ]]\nprintf "%s\\n" "$(command -v go)"\n'
+        for version in ("go version go1.26.11 linux/amd64", "go version go1.26.10 linux/amd64"):
+            with self.subTest(version=version), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                selected = root / "setup-go/bin/go"
+                vendor = root / "runner/vendor-root/usr/bin/go"
+                home = root / "home"
+                for directory in (selected.parent, vendor.parent, home): directory.mkdir(parents=True)
+                selected.write_text('#!/bin/bash\n[[ "$#" == 1 && "$1" == version && "$GOTOOLCHAIN" == local ]] || exit 64\n'
+                    'printf "%s\\n" "$0" >> "$TEST_GO_LOG"\nprintf "%s\\n" "$TEST_GO_VERSION"\n')
+                vendor.write_text('#!/bin/bash\nprintf "vendor invoked\\n" >> "$TEST_VENDOR_LOG"\nexit 79\n')
+                selected.chmod(0o700); vendor.chmod(0o700)
+                selected_log, vendor_log = root / "selected-go.log", root / "vendor-go.log"
+                env = {"PATH": str(selected.parent) + ":/usr/bin:/bin", "HOME": str(home),
+                       "RUNNER_TEMP": str(root / "runner"), "AUDIT_TARGET": "windsurf", "AUDIT_KIND": "plugin",
+                       "EXPECTED_GO": str(selected), "TEST_GO_VERSION": version,
+                       "TEST_GO_LOG": str(selected_log), "TEST_VENDOR_LOG": str(vendor_log)}
+                result = subprocess.run(["/bin/bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
+                                        env=env, capture_output=True, text=True, timeout=10)
+                if version == "go version go1.26.11 linux/amd64":
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, str(selected) + "\n")
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertEqual(result.stdout, "")
+                self.assertTrue(selected_log.is_file(), "selected compiler version was never checked")
+                self.assertEqual(selected_log.read_text(), str(selected) + "\n")
+                self.assertFalse(vendor_log.exists())
+
     def test_both_matrix_workflows_export_pr_source_head(self):
         for relative_path in (
             ".github/workflows/live-install-audit.yml",
@@ -6210,28 +6779,24 @@ module.exports = {
         run = workflow.split("      - name: Run real acquisitions and report every source and outcome\n", 1)[1]
         prefix = textwrap.dedent(run.split("        run: |\n", 1)[1].split("          python3 scripts/live-install-audit.py", 1)[0])
         fixed = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
-        self.assertEqual(prefix, 'acceptance=()\n'
-                         'if [[ "$AUDIT_TARGET" == kiro ]]; then\n'
-                         '  test -n "$KIRO_NODE_BIN"\n'
-                         '  export PATH="$KIRO_NODE_BIN:' + fixed + '"\n'
-                         '  if [[ "$AUDIT_KIND" == plugin ]]; then\n'
-                         '    acceptance=(--acceptance kiro-prepared-installation)\n'
-                         '  fi\n'
-                         'else\n  export PATH="' + fixed + '"\nfi\n'
-                         'if [[ "$AUDIT_TARGET" == cursor && "$AUDIT_KIND" == plugin ]]; then\n'
-                         '  acceptance=(--acceptance cursor-prepared-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == cursor && "$AUDIT_KIND" == skill ]]; then\n'
-                         '  acceptance=(--acceptance cursor-prepared-skills-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == skill ]]; then\n'
-                         '  acceptance=(--acceptance kiro-prepared-skills-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == grok && "$AUDIT_KIND" == skill ]]; then\n'
-                         '  acceptance=(--acceptance grok-prepared-skills-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then\n'
-                         '  acceptance=(--acceptance windsurf-prepared-installation)\n'
-                         'elif [[ "$AUDIT_TARGET" == vscode && "$AUDIT_KIND" == plugin ]]; then\n'
-                         '  # User preparation and preserved refusal only; no uninstall attestation.\n'
-                         '  acceptance=(--acceptance vscode-user-manual-preparation)\n'
-                         'fi\n')
+        self.assertTrue(prefix.startswith('audit_go_bin=""\n'))
+        self.assertIn('audit_go="$(command -v go)"', prefix)
+        self.assertIn('GOTOOLCHAIN=local "$audit_go" version', prefix)
+        self.assertIn('go version go1.26.11 linux/amd64', prefix)
+        self.assertIn('audit_go_bin="${audit_go%/*}:"', prefix)
+        self.assertIn('acceptance=()\nif [[ "$AUDIT_TARGET" == kiro ]]; then\n', prefix)
+        self.assertIn('test -n "$KIRO_NODE_BIN"', prefix)
+        self.assertIn('export PATH="${audit_go_bin}$KIRO_NODE_BIN:' + fixed + '"', prefix)
+        self.assertIn('export PATH="${audit_go_bin}' + fixed + '"', prefix)
+        for mode in ('kiro-installation', 'kiro-skills-installation',
+                     'cursor-prepared-installation', 'cursor-prepared-skills-installation',
+                     'grok-prepared-skills-installation', 'windsurf-global-installation',
+                     'vscode-user-manual-preparation'):
+            self.assertIn('acceptance=(--acceptance ' + mode + ')', prefix)
+        self.assertNotIn('kiro-prepared-skills-installation', prefix)
+        self.assertNotIn('windsurf-prepared-installation', prefix)
+        self.assertIn('[[ "$(command -v go)" == "$audit_go" ]]', prefix)
+        self.assertIn('[[ "$(command -v docker)" == "$RUNNER_TEMP/vendor-root/usr/bin/docker" ]]', prefix)
         self.assertNotIn("$PATH", prefix)
         audit = load_audit()
         with TemporaryDirectory() as temporary:
@@ -8448,10 +9013,13 @@ module.exports = {
                 def fake_call(argv, env, cwd, timeout=105):
                     if argv[1] == "skills":
                         state["add_count"] = state.get("add_count", 0) + 1
-                        skill.parent.mkdir(parents=True, exist_ok=True)
-                        skill.write_text("---\nname: demo-skill\n---\n")
-                        (project / "uap.toml").write_text("demo-skill\n")
-                        (project / "uap.lock").write_text('{"name":"demo-skill"}')
+                        # A genuine repeated add is a no-op: Cursor checks the
+                        # pinned tree's inode/mtime as well as its content.
+                        if not state["installed"]:
+                            skill.parent.mkdir(parents=True, exist_ok=True)
+                            skill.write_text("---\nname: demo-skill\n---\n")
+                            (project / "uap.toml").write_text("demo-skill\n")
+                            (project / "uap.lock").write_text('{"name":"demo-skill"}')
                         state["installed"] = True
                     elif argv[1] == "remove":
                         skill.unlink()
@@ -13075,6 +13643,51 @@ class WindsurfPreparedAcceptanceContracts(unittest.TestCase):
         self.assertEqual((original['passed'], original['prepared_lifecycle_passed'],
                           original['verified_negative_coverage']), (0, 25, 1))
 
+    def test_actual_prepared_cases_keep_six_calls_without_global_native_observer(self):
+        import copy
+        audit = load_audit()
+        report = self.original()
+        fixtures = json.loads(audit.FIXTURES.read_text())
+        phases = ('install', 'list', 'repeat_add', 'repeat_list', 'cleanup', 'post_remove_list')
+        # Only subprocess transport is inert. Exercise real case setup,
+        # source matching, repeat/remove and the unchanged legacy summary.
+        for index in (22, 25, 26, 29):
+            with self.subTest(index=index), TemporaryDirectory() as temporary:
+                retained = copy.deepcopy(report['results'][index])
+                commands = []
+                def invoke(argv, env, cwd, timeout=105, **options):
+                    phase = phases[len(commands)]
+                    self.assertEqual(argv, retained['windsurf_public_commands'][len(commands)])
+                    self.assertTrue(options['capture_full'])
+                    self.assertTrue((Path(env['HOME']) / '.config/devin/foreign-neighbor.txt').is_file())
+                    commands.append(list(argv))
+                    if phase in ('install', 'repeat_add'):
+                        document = {'schema_version': 1, 'command': 'add', 'result': 'success',
+                                    'data': {'actions': [{'alias': retained['identity'], 'client_id': 'windsurf',
+                                        'component_support': [{'kind': 'skill', 'name': 'inert', 'support': 'prepared'}]}]}}
+                        body = json.dumps(document)
+                    else:
+                        body = retained[phase]['stdout_tail']
+                        document = json.loads(body)
+                    return {'exit_code': 0, 'timeout': False, 'stdout_tail': body[-1800:],
+                            'stderr_tail': '', 'stdout_full': body, 'stderr_full': '', '_json': document}
+                with patch.object(audit, 'call', side_effect=invoke), patch.dict(
+                        audit.WINDSURF_GLOBAL_AUDIT, {'WindsurfGlobalSkillAudit': lambda *a, **k:
+                            self.fail('explicit Prepared acceptance invoked the native observer')}):
+                    row = audit.do_case(report['cli'], 'windsurf', 'plugin', retained['source'], index,
+                        Path(temporary), fixtures['plugin_declared_names'], fixtures['signed_release_pins'],
+                        installation_audit='windsurf-prepared-installation')
+                self.assertEqual(row['status'], 'prepared-lifecycle-passed')
+                self.assertEqual(row['windsurf_public_commands'], commands)
+                self.assertEqual(len(commands), 6)
+                self.assertNotIn('windsurf_global_native_proof', row)
+                self.assertTrue(all('stdout_full' not in row[phase] and 'stderr_full' not in row[phase]
+                                    for phase in phases))
+                report['results'][index] = row
+        accepted = audit.prepared_installation_summary(report, fixtures, 'windsurf-prepared-installation')
+        self.assertEqual((accepted['installation_passed'], accepted['installation_verified_negative_coverage'],
+                          accepted['installation_acceptance_passed']), (25, 5, True))
+
 
     def test_original_provenance_effects_and_nullable_refusals_are_required(self):
         import copy
@@ -13168,6 +13781,9 @@ class WindsurfPreparedAcceptanceContracts(unittest.TestCase):
         for row in rows:
             for command in row['windsurf_public_commands']:
                 command[0] = cli
+        def next_case(*args, **kwargs):
+            self.assertEqual(kwargs.get('installation_audit'), acceptance)
+            return rows[args[4]]
         with TemporaryDirectory() as temporary:
             argv = ['live-install-audit', '--cli', cli, '--target', target, '--kind', kind,
                     '--limit', str(limit), '--report-dir', temporary]
@@ -13178,7 +13794,7 @@ class WindsurfPreparedAcceptanceContracts(unittest.TestCase):
                   patch.object(audit, 'vendor_bootstrap_attested', return_value=True),
                   patch.dict(audit.AGENT_BINARIES, {'devin': cli, 'windsurf': cli}, clear=True),
                   patch.object(audit, 'version_evidence', return_value=original['client_version']) as version,
-                  patch.object(audit, 'do_case', side_effect=rows) as cases,
+                  patch.object(audit, 'do_case', side_effect=next_case) as cases,
                   redirect_stdout(StringIO()), redirect_stderr(StringIO())):
                 try:
                     code = audit.main()
