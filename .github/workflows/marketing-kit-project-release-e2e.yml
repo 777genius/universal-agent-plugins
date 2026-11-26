@@ -15,6 +15,7 @@ on:
       - 'scripts/test_marketing_kit_claude_retirement.py'
       - 'scripts/test_marketing_kit_codex_profile.py'
       - 'scripts/test_marketing_kit_policy_boundary.py'
+      - 'scripts/test_marketing_kit_copilot_refusal.py'
       - 'scripts/test_marketing_kit_peer_initialization.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/claude_cache_retirement_audit.py'
@@ -44,6 +45,7 @@ on:
       - 'scripts/test_marketing_kit_claude_retirement.py'
       - 'scripts/test_marketing_kit_codex_profile.py'
       - 'scripts/test_marketing_kit_policy_boundary.py'
+      - 'scripts/test_marketing_kit_copilot_refusal.py'
       - 'scripts/test_marketing_kit_peer_initialization.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/claude_cache_retirement_audit.py'
@@ -260,6 +262,7 @@ jobs:
           fi
           python3 -m unittest discover -s scripts -p 'test_marketing_kit_codex_profile.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 -m unittest discover -s scripts -p 'test_marketing_kit_policy_boundary.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
+          python3 -m unittest discover -s scripts -p 'test_marketing_kit_copilot_refusal.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 -m unittest discover -s scripts -p 'test_marketing_kit_peer_initialization.py' 2>&1 | tee -a "$RUNNER_TEMP/marketing-kit-project/regressions.log"
           python3 scripts/marketing-kit-project-release-e2e.py             --target "$TARGET" --cli "$(command -v agentplugins)" --cli-version 0.1.116             --report "$RUNNER_TEMP/marketing-kit-project/report.json"
       - name: Preserve factual outcomes including failures
