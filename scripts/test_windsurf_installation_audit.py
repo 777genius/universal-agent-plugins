@@ -1193,6 +1193,9 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         import test_windsurf_global_skill_audit as native_fixture
         item, identity = selected(self.fixtures, index)
         pin = copy.deepcopy(native_fixture.proof.CASES[item])
+        # This inert source is synthesized below from valid unit Skills only;
+        # it does not inherit the production scientific-writer's invalid inputs.
+        pin["invalid_skills"] = ()
         names = pin["skills"]
         bodies = {name: (f"---\nname: {name}\ndescription: {native_fixture.DESCRIPTION}\n---\nA unit-only fixture.\n").encode()
                   for name in names}

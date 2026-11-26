@@ -288,6 +288,10 @@ def native_reference(row, source, identity, index):
             and row.get("matched_installation_ids") == row.get("repeat_installation_ids") == [owner["uuid"]]
             and type(stored) is dict and stored.get("tree_digest") == pin["tree_digest"]
             and stored.get("complete_skills") == list(pin["skills"])
+            and stored.get("complete_raw_skills") == sorted((*pin["skills"], *pin.get("invalid_skills", ())))
+            and stored.get("invalid_source_skills") == proof.get("source_invalid_skills") == list(pin.get("invalid_skills", ()))
+            and proof.get("invalid_source_skills_native_qualified") is False
+            and proof.get("all_source_skills_native_qualified") is (not bool(pin.get("invalid_skills")))
             and type(stored.get("held_frame")) is dict and stored["held_frame"] == stored.get("last_verified_frame"))
     observations, transitions = proof.get("observations"), proof.get("public_transitions")
     require(type(observations) is list and all(type(v) is dict for v in observations)

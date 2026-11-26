@@ -52,11 +52,19 @@ CASES = {
         "name": "claude-scientific-writer", "version": "2.22.0",
         "tree_digest": "sha256:bd70f81982eaa8984aee73838542ed2c190ea73f908977d210368fef7275c3ca",
         "manifest_digest": "sha256:c1950c0a0b6727ffda4f895bb179e0d749cc2fd5d52747ccdc034d66854fee34",
-        "skills": ("citation-management", "clinical-decision-support", "clinical-reports", "docx", "generate-image",
-                   "hypothesis-generation", "infographics", "latex-posters", "literature-review", "market-research-reports",
-                   "markitdown", "parallel-web", "pdf", "peer-review", "pptx", "pptx-posters", "research-grants",
-                   "research-lookup", "scholar-evaluation", "scientific-critical-thinking", "scientific-schematics",
-                   "scientific-slides", "scientific-writing", "treatment-plans", "venue-templates", "xlsx")},
+        # Exact current Go Skill loader: numeric metadata invalidates nine raw
+        # components. All 26 source paths remain covered by the immutable digest.
+        "skills": (
+            "clinical-decision-support", "clinical-reports", "docx",
+            "hypothesis-generation", "market-research-reports", "markitdown",
+            "pdf", "peer-review", "pptx",
+            "pptx-posters", "research-grants", "scholar-evaluation",
+            "scientific-critical-thinking", "scientific-writing", "treatment-plans",
+            "venue-templates", "xlsx"),
+        "invalid_skills": (
+            "citation-management", "generate-image", "infographics",
+            "latex-posters", "literature-review", "parallel-web",
+            "research-lookup", "scientific-schematics", "scientific-slides")},
     "github:obra/the-elements-of-style@05fc4f0d2b97b7c042dd9949ad658568e4a1324e": {
         "name": "elements-of-style", "version": "1.0.0",
         "tree_digest": "sha256:32fc89e62a200be082357d2cd5111284aa974b79678835cd60875de8fbba5958",
@@ -625,9 +633,12 @@ class WindsurfGlobalSkillAudit:
             else:
                 require(now == previous, "original HOME bytes/identity changed")
         added = set(current) - set(self.initial_home)
-        require(all(any(path == root or path.startswith(root + "/") for root in selected)
-                    or path in self.vendor_cache_entries for path in added),
-                "unowned HOME delta outside exact client cache or managed Skills")
+        unexpected = {path: current[path] for path in added
+                      if not any(path == root or path.startswith(root + "/") for root in selected)
+                      and path not in self.vendor_cache_entries}
+        if unexpected:
+            raise ValueError("unowned HOME delta outside exact client cache or managed Skills; "
+                             + json.dumps(frame_changes({}, unexpected), sort_keys=True))
         require(all(current.get(path) == value for path, value in self.vendor_cache_entries.items()),
                 "public UAP transition modified the pinned native vendor cache")
         require(all(root in added and current[root]["kind"] == "dir" for root in selected), "native owned Skill root is absent")
@@ -726,16 +737,21 @@ class WindsurfGlobalSkillAudit:
         require(actual_digest == self.pin["tree_digest"], "actual immutable source bytes do not match the independent tree pin")
         source_skills = sorted(path.split("/")[1] for path, row in source_frame.items()
                                if row["kind"] == "file" and re.fullmatch(r"skills/[^/]+/SKILL\.md", path))
-        require(source_skills == sorted(self.pin["skills"]), "cached source lacks its complete independently closed Skill set")
+        require(source_skills == sorted((*self.pin["skills"], *self.pin.get("invalid_skills", ()))),
+                "cached source lacks its complete independently closed raw Skill set")
         self.source_frame = source_frame
         self.source_store_proof = {"path": str(self.source_store), "algorithm": "agentplugins-tree-sha256-v1",
             "tree_digest": actual_digest, "root_identity": source_frame[""], "held_frame": frame_fact(source_frame),
-            "last_verified_frame": frame_fact(source_frame), "complete_skills": source_skills}
+            "last_verified_frame": frame_fact(source_frame), "complete_skills": list(self.pin["skills"]),
+            "complete_raw_skills": source_skills, "invalid_source_skills": list(self.pin.get("invalid_skills", ()))}
         package = installed.get("package")
         require(type(package) is dict and package.get("declared_name") == self.name and package.get("version") == self.pin["version"]
                 and package.get("manifest_digest") == self.pin["manifest_digest"]
                 and type(package.get("inventory")) is dict and type(package["inventory"].get("skills")) is list
-                and sorted(package["inventory"]["skills"]) == skills, "saved package inventory/manifest differs")
+                and sorted(package["inventory"]["skills"]) == skills
+                and type(package["inventory"].get("invalid_skills", [])) is list
+                and sorted(package["inventory"].get("invalid_skills", [])) == sorted(self.pin.get("invalid_skills", ())),
+                "saved valid/invalid source inventory or manifest differs")
         clients = installed.get("clients")
         require(type(clients) is dict and len(clients) == 1, "saved owner has ambiguous target bindings")
         key, binding = next(iter(clients.items()))
@@ -980,6 +996,9 @@ class WindsurfGlobalSkillAudit:
             "writer_closure_claimed": False, "cache_exception_granted": bool(self.native_cache_events),
             "native_cache_evidence": self.native_cache_events, "case_root": str(self.case),
             "source": self.item, "independent_source_pin": self.pin, "owner": self.owner,
+            "source_invalid_skills": list(self.pin.get("invalid_skills", ())),
+            "invalid_source_skills_native_qualified": False,
+            "all_source_skills_native_qualified": bool(self.finished and not self.pin.get("invalid_skills")),
             "immutable_source_store": getattr(self, "source_store_proof", None),
             "profile_authored_before_first_child": {"files": self.fixed, "home_frame": frame_fact(self.initial_home),
                 "global_root": str(self.profile), "native_cwd": "/", "last_home_frame": frame_fact(self.home_current)},

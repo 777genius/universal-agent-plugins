@@ -85,6 +85,8 @@ class InertPublicAndNative:
         if mode == "coherent-subset":
             self.expected_pin["skills"] = ("second-source-skill", "writing-clearly-and-concisely")
             self.expected_pin["tree_digest"] = "sha256:8d6ca1c690b69a25eb40a97939d9fbcc80070dd3b2d303829996b18ff1e0a7db"
+        if mode.startswith("source-invalid"):
+            self.expected_pin["invalid_skills"] = ("source-invalid",)
         self.pin = copy.deepcopy(self.expected_pin)
         if mode == "coherent-digest-forgery":
             self.pin.update(tree_digest="sha256:" + "a" * 64, manifest_digest="sha256:" + "b" * 64)
@@ -126,6 +128,8 @@ class InertPublicAndNative:
         files = {"plugin.json": packed({"name": self.name, "version": self.pin["version"]}),
                  "skills/" + SKILL + "/SKILL.md": projected_body,
                  "skills/" + SKILL + "/references/note.txt": projected_reference}
+        if self.mode.startswith("source-invalid"):
+            files["skills/source-invalid/SKILL.md"] = SOURCE_FILES["skills/source-invalid/SKILL.md"]
         for name, body in files.items():
             write(self.managed / name, body)
         write(self.native / "SKILL.md", projected_body)
@@ -159,6 +163,10 @@ class InertPublicAndNative:
             "origin_mode": "direct", "source": source, "package": {"loader_kind": "agent_plugins", "format_id": "agent-plugins/1.0.0",
                 "schema_uri": "https://plugins.sh/schema/1.0.0.json", "declared_name": self.name, "version": self.pin["version"],
                 "manifest_digest": self.pin["manifest_digest"], "inventory": {"skills": [SKILL]}}, "clients": {self.binding_id: binding}}]}
+        if self.mode.startswith("source-invalid") and self.mode != "source-invalid-missing":
+            self.state["installations"][0]["package"]["inventory"]["invalid_skills"] = ["source-invalid"]
+            if self.mode == "source-invalid-dict":
+                self.state["installations"][0]["package"]["inventory"]["invalid_skills"] = {"source-invalid": True}
         self.lock = {"lock_version": 1, "manifest_digest": "sha256:" + hashed(packed({"schema_version": 1,
             "dependencies": [{"alias": self.name, "source_key": self.source_key, "selector": {"kind": "commit", "value": self.commit}}],
             "targets": [{"id": "windsurf", "aliases": [self.name]}]})), "packages": [{"version": self.pin["version"],
@@ -192,6 +200,8 @@ class InertPublicAndNative:
                           from_revision=self.commit, from_digest=self.pin["tree_digest"])
         else:
             action["component_support"] = [{"kind": "mcp_server" if self.mode == "mcp-component" else "skill", "name": SKILL, "support": "prepared"}]
+            if self.mode == "source-invalid-promoted":
+                action["component_support"].append({"kind": "skill", "name": "source-invalid", "support": "prepared"})
         return {"schema_version": 1, "command": "add", "result": "success", "data": {"actions": [action], "command": "agentplugins add",
             "environment": {"alias": self.name, "intent_change": not repeated, "lock_path": str(self.data / "uap.lock"),
                             "manifest_path": str(self.data / "uap.toml"), "saved": True, "scope": "user", "scope_selection_reason": "explicit", "selected_targets": ["windsurf"]},
@@ -353,6 +363,35 @@ class WindsurfGlobalSkillAuditTests(unittest.TestCase):
         self.assertEqual(evidence["removed_agreement"]["manifest_digest"], proof.EMPTY_INTENT)
         self.assertFalse(evidence["cache_exception_granted"] or evidence["writer_closure_claimed"])
         self.assertEqual([event for event in self.transport.events if event[0] == "native"], [("native", p) for p in proof.PHASES])
+
+    def test_invalid_raw_source_skills_are_reported_without_native_promotion(self):
+        invalid = b"---\nname: source-invalid\ndescription: Invalid source metadata\nmetadata:\n  version: 1\n---\nPreserved source bytes.\n"
+        with mock.patch.dict(globals(), {
+                "SOURCE_FILES": {**SOURCE_FILES, "skills/source-invalid/SKILL.md": invalid},
+                "UNIT_TREE": "sha256:9a833b14c0d396869ec6f4d640f7a252b8dff2847b9f96590ae75d2708136dd5"}):
+            row = self.run_case("source-invalid")
+            evidence = row["windsurf_global_native_proof"]
+            self.assertEqual(evidence["source_invalid_skills"], ["source-invalid"])
+            self.assertFalse(evidence["all_source_skills_native_qualified"])
+            self.assertFalse(evidence["invalid_source_skills_native_qualified"])
+            stored = evidence["immutable_source_store"]
+            self.assertEqual(stored["complete_skills"], [SKILL])
+            self.assertEqual(stored["complete_raw_skills"], sorted((SKILL, "source-invalid")))
+            self.assertEqual(stored["invalid_source_skills"], ["source-invalid"])
+            for mode in ("source-invalid-missing", "source-invalid-promoted", "source-invalid-dict"):
+                with self.subTest(mode=mode), self.assertRaises(ValueError): self.run_case(mode)
+
+    def test_public_home_delta_remains_refused_with_bounded_path_diagnostic(self):
+        original = InertPublicAndNative.author_installation
+        def author(transport, *args):
+            original(transport, *args)
+            write(transport.home / ".config/devin/unowned-public.txt", b"private native values never leave the fixture")
+        with mock.patch.object(InertPublicAndNative, "author_installation", author):
+            with self.assertRaisesRegex(ValueError, "unowned HOME delta") as failure:
+                self.run_case("vendor-cache-small")
+        self.assertIn('"relative_key": ".config/devin/unowned-public.txt"', str(failure.exception))
+        self.assertNotIn("private native values", str(failure.exception))
+        self.assertFalse(failure.exception.audit_evidence["native_discovery_verified"])
 
     def test_source_owner_revision_and_receipt_boundaries(self):
         for mode in ("wrong-source", "wrong-commit", "wrong-uuid", "wrong-revision", "wrong-scope", "wrong-physical", "wrong-root", "wrong-lock", "wrong-native-digest", "wrong-receipt", "state-v5-only", "mcp-component", "coherent-digest-forgery", "symlink-leaf", "symlink-parent"):
