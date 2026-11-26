@@ -32,6 +32,14 @@ func TestListingSkipsBuiltinRowsWithoutInstallPath(t *testing.T) {
 		{"managed-and-builtin", func(rows []map[string]any) []map[string]any { return append([]map[string]any{managed}, rows...) }, StatusInstalled},
 		{"builtin-only", func(rows []map[string]any) []map[string]any { return rows }, StatusAbsent},
 		{"duplicate-builtin", func(rows []map[string]any) []map[string]any { return append(rows, rows[0], managed) }, StatusUnknown},
+		{"builtin-with-install-path", func(rows []map[string]any) []map[string]any {
+			rows[0]["installPath"] = localPath
+			return append(rows, managed)
+		}, StatusUnknown},
+		{"builtin-with-project-path", func(rows []map[string]any) []map[string]any {
+			rows[0]["projectPath"] = projectOne
+			return append(rows, managed)
+		}, StatusUnknown},
 		{"builtin-empty-path", func(rows []map[string]any) []map[string]any {
 			rows[0]["installPath"] = ""
 			return append(rows, managed)
