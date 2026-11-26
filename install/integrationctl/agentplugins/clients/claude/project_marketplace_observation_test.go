@@ -25,7 +25,7 @@ func TestClaudeProjectMarketplaceNativeSchemas(t *testing.T) {
 		want projectListState
 	}{
 		{"2.1.263", projectListEnabled}, {"2.1.325", projectListEnabled}, {"untrusted-with-exact-install", projectListEnabled},
-		{"unrelated-other-project", projectListEnabled}, {"disabled", projectListDisabled}, {"same-id-other-project", projectListForeign},
+		{"unrelated-other-project", projectListEnabled}, {"unrelated-local-rows", projectListEnabled}, {"disabled", projectListDisabled}, {"same-id-other-project", projectListForeign},
 		{"user-scope", projectListForeign}, {"wrong-cache", projectListForeign}, {"wrong-folder", projectListUnknown},
 		{"partial-modern-fields", projectListUnknown}, {"wrong-version", projectListUnknown}, {"load-error", projectListUnknown}, {"duplicate", projectListUnknown},
 	} {
@@ -40,6 +40,19 @@ func TestClaudeProjectMarketplaceNativeSchemas(t *testing.T) {
 				rows = append(rows, map[string]any{"id": "(suppressed)@skills-dir", "version": "unknown", "scope": "project", "enabled": false, "installPath": "", "notes": []string{claudeUntrustedProjectNote}})
 			case "unrelated-other-project":
 				rows = append(rows, map[string]any{"id": "foreign@other", "version": "1.0.0", "scope": "project", "projectPath": filepath.Join(filepath.Dir(r.Plan.TargetContext.ProjectRoot), "B"), "installPath": filepath.Join(r.Client.ConfigRoot, "plugins/cache/other/foreign/1.0.0"), "enabled": false})
+			case "unrelated-local-rows":
+				for index := range 6 {
+					rows = append(rows, map[string]any{
+						"id": "shared@local-marketplace", "version": "1.0.0", "scope": "local",
+						"projectPath": filepath.Join(filepath.Dir(r.Plan.TargetContext.ProjectRoot), fmt.Sprintf("Local-%d", index)),
+						"installPath": filepath.Join(r.Client.ConfigRoot, "plugins", "cache", "local-marketplace", "shared", "1.0.0"),
+						"enabled": true,
+					})
+				}
+				rows = append(rows,
+					map[string]any{"id": "foreign@other", "version": "1.0.0", "scope": "project", "projectPath": filepath.Join(filepath.Dir(r.Plan.TargetContext.ProjectRoot), "Foreign"), "installPath": filepath.Join(r.Client.ConfigRoot, "plugins", "cache", "other", "foreign", "1.0.0"), "enabled": false},
+					map[string]any{"id": "pdf-viewer@synced", "version": "1.0.0", "scope": "synced", "installPath": filepath.Join(r.Client.ConfigRoot, "plugins", "cache", "synced", "pdf-viewer", "1.0.0"), "enabled": true},
+				)
 			case "disabled":
 				row["enabled"] = false
 			case "same-id-other-project":
