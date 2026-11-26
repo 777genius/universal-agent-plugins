@@ -9,12 +9,21 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/skillsource"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 type stagedSkillSource struct {
 	skillsource.Acquirer
 	acquisitions int
 	offline      bool
+}
+
+func (source *stagedSkillSource) AcquireGitSkill(ctx context.Context, spec sourcespec.Git, commit, digest string) (domain.PackageSnapshot, error) {
+	source.acquisitions++
+	if source.offline {
+		return domain.PackageSnapshot{}, errors.New("source unavailable after review")
+	}
+	return source.Acquirer.AcquireGitSkill(ctx, spec, commit, digest)
 }
 
 func (source *stagedSkillSource) AcquireGitHubSkill(ctx context.Context, repository, commit, path string) (domain.PackageSnapshot, error) {
