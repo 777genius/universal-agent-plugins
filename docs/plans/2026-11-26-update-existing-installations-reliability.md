@@ -62,6 +62,9 @@ The executed focused RED used package-only `-gcflags=-l`, `GOMAXPROCS=1`, `GOGC=
 Independent read-only oracle and production reviews found no confirmed blocking regression, with proof limits recorded below.
 The focused GREEN build at `fb7c875` was also compiler-killed before tests; it provides no product result.
 Normal lint/core and final-source PM4/PM6 qualification remain pending; no GREEN pass is claimed here.
+The first normal CI core run at `da0c09c2` passed installer packages, then found three existing assertions tied to raw human error text.
+Their correction preserves the original observer sentinel and exact transaction finalization cause through `errors.Is`/`errors.As`, adds committed-phase and durable-receipt assertions, and retains actual recovery/rerun checks.
+Local full lint was process-killed; local core also lacked the invocation's Node PATH and required host process/socket features. Neither local gate qualified the product; normal CI remains required.
 
 ### A. Update-all actual outcomes — reproduced and corrected
 
@@ -158,13 +161,13 @@ Stop expansion when evidence would require architecture changes, destructive rec
 Ask for a decision only when existing authority and user instructions cannot resolve the contract.
 Ordinary merge is already authorized, subject to genuine review and qualification gates.
 
-Actual bounded scope: four production files, three regression files, two existing catalog files and this plan.
+Actual bounded scope: four production files, three new regression files, two strengthened existing regression files, two existing catalog files and this plan.
 Counts and confidence below describe scope, not qualification success.
 
 | Dimension | Revised provisional estimate |
 | --- | --- |
 | Production changes | Approximately 80 changed lines across four existing files |
-| Meaningful regressions | 369 lines across three files, including the single contention control |
+| Meaningful regressions | 369 new lines including the single contention control; two existing cause/recovery guards strengthened |
 | Supporting documentation | This plan only; no new evidence framework |
 | Complexity | 4/10; no lock or architecture changes planned |
 | Reliability improvement potential | 6/10 for the bounded reporting/guidance candidates |
