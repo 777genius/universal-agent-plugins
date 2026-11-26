@@ -76,7 +76,7 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 	if !ok {
 		return StatusUnknown, false, false
 	}
-	if _, reservedBuiltin := claudeBuiltinListID(entry); reservedBuiltin {
+	if claudeBuiltinListID(entry) {
 		identity, valid := claudeBuiltinListIdentity(entry)
 		if !valid {
 			return StatusUnknown, false, false
@@ -126,13 +126,13 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 // claudeBuiltinListID identifies the reserved builtin namespace independently
 // of row shape. A malformed @builtin row must never fall back to ordinary
 // plugin parsing as an unrelated source.
-func claudeBuiltinListID(entry map[string]any) (string, bool) {
+func claudeBuiltinListID(entry map[string]any) bool {
 	id, ok := entry["id"].(string)
 	if !ok {
-		return "", false
+		return false
 	}
 	_, builtin := strings.CutSuffix(id, "@builtin")
-	return id, builtin
+	return builtin
 }
 
 // Claude Code lists its bundled "<name>@builtin" plugins without installPath.

@@ -172,7 +172,7 @@ func inspectClaudeMarketplacePlugin(body []byte, name, physical, active, project
 		if !ok || id == "" {
 			return claudeMarketplaceObservation{}
 		}
-		if _, reservedBuiltin := claudeBuiltinListID(entry); reservedBuiltin {
+		if claudeBuiltinListID(entry) {
 			identity, valid := claudeBuiltinListIdentity(entry)
 			if !valid || seen[identity] || !validProjectListMetadata(entry, "") {
 				return claudeMarketplaceObservation{}

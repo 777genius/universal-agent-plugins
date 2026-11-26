@@ -51,7 +51,7 @@ func TestClaudeProjectMarketplaceNativeSchemas(t *testing.T) {
 						"id": "shared@local-marketplace", "version": "1.0.0", "scope": "local",
 						"projectPath": filepath.Join(filepath.Dir(r.Plan.TargetContext.ProjectRoot), fmt.Sprintf("Local-%d", index)),
 						"installPath": filepath.Join(r.Client.ConfigRoot, "plugins", "cache", "local-marketplace", "shared", "1.0.0"),
-						"enabled": true,
+						"enabled":     true,
 					})
 				}
 				rows = append(rows,

@@ -173,7 +173,7 @@ func TestClaude21332NativeListingWithDisabledAndEnabledManagedPlugin(t *testing.
 	}
 	rows := append(claudeBuiltinRows(), managed)
 	cache := filepath.Join(t.TempDir(), "plugins", "comfy")
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		rows = append(rows, map[string]any{
 			"id": "comfy@comfyui-mcp", "scope": "local", "enabled": true,
 			"installPath": cache, "projectPath": filepath.Join(t.TempDir(), "project"),
