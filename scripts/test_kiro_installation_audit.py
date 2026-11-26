@@ -230,6 +230,28 @@ class KiroInstallationTests(unittest.TestCase):
         item = FIXTURES["skills" if kind == "skill" else "plugin_aliases"][index]
         return observer.finish(row, item, index, FIXTURES), row
 
+    @unittest.skipUnless(hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"), "POSIX FIFO custody")
+    def test_receipt_fifo_refuses_without_a_blocking_open(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            observer = self.fixture(Path(temporary).resolve(), "skill")
+            receipt = observer.project / "receipt.json"
+            receipt.write_bytes(b"{}")
+            self.assertEqual(observer.read_bytes(receipt), b"{}")
+            receipt.unlink()
+            os.mkfifo(receipt)
+            real_open = os.open
+
+            def checked_open(path, flags, *args, **kwargs):
+                # Fail before opening on a regression; a real FIFO with no
+                # writer would otherwise hang the entire test process.
+                self.assertEqual(flags & (os.O_NOFOLLOW | os.O_NONBLOCK),
+                                 os.O_NOFOLLOW | os.O_NONBLOCK)
+                return real_open(path, flags, *args, **kwargs)
+
+            with patch.object(prepared.os, "open", side_effect=checked_open):
+                with self.assertRaises(ValueError):
+                    observer.read_bytes(receipt)
+
     def test_all_sources_keep_exact_states_and_complete_six_envelopes(self):
         for kind in ("plugin", "skill"):
             for index in range(30):
