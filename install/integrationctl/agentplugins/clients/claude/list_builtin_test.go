@@ -84,3 +84,60 @@ func TestProjectListingSkipsBuiltinRows(t *testing.T) {
 		t.Fatalf("duplicate builtin observation=%+v", got)
 	}
 }
+
+func TestListingRejectsMalformedUserProjectIdentity(t *testing.T) {
+	active := filepath.Join(t.TempDir(), "config", "skills", "demo-managed")
+	foreign := filepath.Join(t.TempDir(), "cache", "plugin")
+	for _, tc := range []struct {
+		name string
+		row  map[string]any
+	}{
+		{"user-row-with-project", map[string]any{"id": "x@market", "scope": "user", "enabled": true, "installPath": foreign, "projectPath": t.TempDir()}},
+		{"local-row-with-nonabsolute-project", map[string]any{"id": "x@market", "scope": "local", "enabled": true, "installPath": foreign, "projectPath": "relative"}},
+		{"local-row-with-nonstring-project", map[string]any{"id": "x@market", "scope": "local", "enabled": true, "installPath": foreign, "projectPath": true}},
+		{"builtin-row-with-project-scope", map[string]any{"id": "cc-plugin-privacy@builtin", "scope": "project", "enabled": true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rows := []map[string]any{tc.row, {"id": "demo@skills-dir", "scope": "user", "enabled": true, "installPath": active}}
+			body, err := json.Marshal(rows)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := PluginStatusFromList(body, "demo", active); got != StatusUnknown {
+				t.Fatalf("malformed listing classified as %v: %s", got, body)
+			}
+		})
+	}
+}
+
+func TestProjectListingAllowsUnrelatedProjectRows(t *testing.T) {
+	fixture := projectListFixture(t)
+	cache := filepath.Join(t.TempDir(), "cache", "comfy")
+	a, b := filepath.Join(t.TempDir(), "external-A"), filepath.Join(t.TempDir(), "external-B")
+	local := func(project string) map[string]any {
+		return map[string]any{"id": "comfy@comfyui-mcp", "scope": "local", "enabled": true, "installPath": cache, "projectPath": project}
+	}
+	rows := []map[string]any{
+		fixture.selected,
+		local(a),
+		local(b),
+		{"id": "pdf-viewer@synced", "scope": "synced", "enabled": true, "installPath": filepath.Join(t.TempDir(), "synced", "pdf-viewer")},
+	}
+	body, err := json.Marshal(rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := observeClaudeProjectList(body, "demo", fixture.active, fixture.root, fixture.user); got.state != projectListEnabled {
+		t.Fatalf("unrelated project/plugin metadata blocked managed observation: %+v", got)
+	}
+	if got := PluginStatusFromListForScope(body, "demo", fixture.active, domain.ScopeProject); got != StatusInstalled {
+		t.Fatalf("per-project listing classified as %v", got)
+	}
+	body, err = json.Marshal(append(rows, local(a)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := observeClaudeProjectList(body, "demo", fixture.active, fixture.root, fixture.user); got.state != projectListUnknown {
+		t.Fatalf("duplicate local row classified as %+v", got)
+	}
+}
