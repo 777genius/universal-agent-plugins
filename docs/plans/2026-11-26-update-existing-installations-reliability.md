@@ -1,22 +1,22 @@
 # Update and Existing Installation Reliability Plan
 
-Status: v3 — R1 and R2 complete; no reproduction, test or production pass claimed.
+Status: v3 execution update — reviewed plan completed; bounded fixes published, normal qualification pending.
 Date: 2026-11-26
 Repository: `777genius/universal-agent-plugins`
 Baseline: `main` at `4903e6794f29ce7f2c39bfd054bf37c5bf654f79`
-Delivery: Draft PR #1118; every commit published immediately by the coordinating agent.
+Delivery: PR #1118; every commit published immediately by the coordinating agent.
 
 ## Goal and review gates
 
 Make repeated installation and updates reliable and understandable through the existing public CLI.
 Prefer truthful outcomes, scoped next steps and accurate partial-success summaries without overengineering.
 Preserve #1104 existing-installation diagnosis, #1115 install outcomes/console UX and #1116 batch security authorization.
-R1 used read-only source and existing-test inspection; no candidate has been reproduced or tested in this work yet.
+R1/R2 were read-only planning reviews; v1, v2 and v3 preceded RED reproduction and production changes.
 
 1. Publish v1 and complete R1: done; dispositions appear below.
 2. Publish immutable v2 and independently review it as R2: done.
-3. Resolve R2 findings in this v3; publication completes the planning gate before implementation or tests.
-4. Reproduce only the bounded candidates below; retain only demonstrated failures or missing safe UX.
+3. Resolve R2 findings and publish v3: completed at `00eed526`, before implementation or tests.
+4. Publish bounded RED checkpoint `50dfb3eb`, then A fix `9ff069` and B/C fixes `fb7c875`.
 5. Keep final implementation review and merge qualification separate from planning reviews.
 
 ## R1 findings and dispositions
@@ -54,66 +54,72 @@ Preserve source identity, receipts/data, owned/foreign distinctions, path/symlin
 Preserve public JSON/schema/exit semantics and #1116 authorization before applicable mutations.
 A truthful unchanged result describes actual work; legitimate observations or necessary refresh must be accounted for.
 
-## Bounded candidates: maximum three, each RED-gated
+## Bounded implementation and observed RED evidence
 
-### A. Update-all outcome counts
+RED checkpoint `50dfb3eb` preceded all fixes; production scope remains the three reviewed candidates.
+Normal package compilation was resource-killed and establishes no product evidence.
+The executed focused RED used package-only `-gcflags=-l`, `GOMAXPROCS=1`, `GOGC=25` and `-p=1`; it is supplementary, not a normal/full qualification pass.
+Independent read-only oracle and production reviews found no confirmed blocking regression, with proof limits recorded below.
+The focused GREEN build at `fb7c875` was also compiler-killed before tests; it provides no product result.
+Normal lint/core and final-source PM4/PM6 qualification remain pending; no GREEN pass is claimed here.
 
-Hypothesis: `update_all.go` `applyAll` may report updated and increment `Updated` after a nil-error apply whose actual result does not justify that claim.
-Identical sources often stop at `prepared.noChange`; a repeat add/update alone does not establish this defect.
-Prove that supported public lifecycle/projection-refresh state reaches apply and then authoritative no-change, without private flags or artificial fixture branches.
-`NoChange` and `Mutated == false` are not equivalent: assess per-target results, durable changes and native effects.
-Compare human/JSON counts and status with those effects, files and state; allow legitimate lifecycle observations.
-Add a mixed changed/no-change control so one real update cannot hide a miscount.
-If existing locks/rechecks make the mismatch unreachable, stop candidate A and record it as unconfirmed.
+### A. Update-all actual outcomes — reproduced and corrected
 
-### B. Scoped recovery guidance
+The public Cobra fixture reaches real apply through command projection review, returning authoritative `NoChange=true` and `Mutated=false` for alpha while beta changes.
+RED human/JSON summaries counted alpha as updated despite that result; command-file identity/mtime and durable client bindings provide controls.
+`update_all.go` now skips only when every selected target explicitly reports no-change and no mutation; a real changed peer remains updated.
+This is composed command integration with real files, not production-composed or vendor-native qualification.
 
-Hypothesis: `install_failure.go` generic repair/update suggestions may omit the selector or scope needed to address the original installation safely.
-Public oracle: create same-name User and Project installations and trigger the applicable diagnostic.
-Execute its supported actual argv/runner/shell from another working directory, simulating independent user review/consent before any mutation; leave the sibling untouched.
-Copyable guidance requires an authoritative supported saved alias or imperative selector, selected public target, explicit effective `--scope user` or `--scope project`, and a validated absolute `--project-root` for project scope.
-A physical InstallationID is not automatically a valid saved alias; never add `--yes` or automatic repair/force.
-Fix only the existing presenter using authoritative context; reuse POSIX `quoteResumeArgument` only when shell semantics are established.
-Otherwise use contextual safe prose; do not expand the global classifier or introduce shell/command-builder architecture.
+### B. Contextual existing-installation guidance — demonstrated UX gap, prose only
 
-### C. Ordinary-update attention presentation
+A natural local-facade typed `ErrUpdateRequired` refusal omitted effective Project/target guidance.
+`installer_facade.go` now supplies human contextual prose using selected public target and resolved scope/root, preserving the typed cause and JSON behavior.
+No command, alias, shell quoting, `--yes`, force or automatic repair is introduced; retained-revision handling remains intact.
+The test's User and Project snapshots use separate fixture roots/clients and selected metadata only.
+They do not prove same-home sibling safety, native bytes, or execution of a copyable recovery command; those claims are outside this fix.
 
-Hypothesis: ordinary `runUpdateMany` may expose raw `applyErr` without the classified attention presentation available to `--all`.
-Reproduce through the public command and show an actionable presentation difference before changing anything.
-Reuse `imperativeUpdateAgentItems` and current finishing logic only where the authoritative result supports it.
-Also investigate the current loss of `renderErr` when `applyErr` is nonnil: preserve both through the existing typed output wrapper/`errors.Join` convention.
-Use a public mixed peer-success plus failure/not-attempted case with diagnostics disabled; assert retained typed causes and accurate states.
-Preserve exactly one compatible JSON document, without extra fields, documentation promises, retry or exit-policy changes.
-Do not broaden error classification or change update continuation policy.
+### C. Ordinary-update attention and output causes — reproduced and corrected
 
-## Behavior matrix and evidence disposition
+RED ordinary update exposed a raw private provider message without classified attention and dropped a concurrent writer failure.
+`update_multi.go` reuses existing finishing/attention presentation and joins operation/output errors through the existing typed wrapper convention, including preflight rendering failure.
+`update_all_diagnostics.go` classifies a sole unknown failed peer from the aggregate cause while preserving known reports and successful peers.
+Human attention and retained typed causes are covered; JSON controls retain one compatible document without new fields or policy.
+The mixed fixture checks peer execution and authoritative result counts, not durable/native successful-peer preservation.
 
-All rows require a final evidence disposition, not new code or duplicate tests.
+## Behavior matrix: existing source evidence and bounded additions
 
-| Case | R1 disposition / remaining evidence | Required outcome |
-| --- | --- | --- |
-| Repeat add, healthy same source | Existing diagnosis/outcome work; confirm existing proof | Truthful idempotent result; legitimate observations allowed |
-| Repeat add, changed source/version | Existing identity checks; candidate B only for demonstrated guidance gap | Explicit safe existing route with correct target |
-| Targeted unchanged/changed update | Existing lifecycle/apply authorities; candidate C presentation hypothesis | Actual outcome, checks and compatible output |
-| Update all unchanged/changed/mixed | Candidate A public reproduction; existing authorization preserved | Accurate per-entry outcomes and counts |
-| Update all blocked/eligible | Existing batch gate and continuation contract | No invented global transaction guarantee |
-| Concurrent add/update/repair/remove | Existing OS-lock/death/retry proof; no architecture change justified | Existing refusal/serialization and wait/retry guidance |
-| Missing/partial/drift-owned data | Existing diagnosis/recovery; overlap #1087 and #1023 | Preserve receipts/data and supported recovery route |
-| Foreign data/path/symlink conflict | Existing safety authorities; no proposed change | Fail closed without adoption or cleanup |
-| Cancellation/interrupted operation | Existing lifecycle/recovery coverage to map | Distinguish precommit refusal from durable or refresh partial effects |
-| Preparation/network failure | Existing failure contract; hypothesis only | No claimed apply that did not occur |
-| Apply partial failure | Existing durable outcomes; A/C only if demonstrated | Applied, failed and not attempted remain truthful |
-| Human/single JSON | A/B/C only where public evidence identifies a gap | Actionable text; one compatible JSON result |
+Existing test names below are source mappings, not claims that these checks ran in this work.
+CLI paths are relative to `cli/`; installer/usecase paths to `install/integrationctl/agentplugins/`.
 
-At most one deterministic public contention E2E may be added if existing public proof is absent.
-It must exercise the actual process lock with boundary IPC, no sleeps, no loser mutation, and retry after holder exit.
-It is supplementary coverage, not authorization to change locking or add a retry protocol.
+| Case | Existing concrete coverage / added disposition |
+| --- | --- |
+| Repeat add, healthy same source | `cmd/agentplugins/package_manager_install_cases_test.go`: catalog `no-save-first-repeat-remove`; `installer/engine_test.go`: `TestInstallGroupRepeatUnchangedReportsBothTargets` |
+| Changed source/version | `internal/agentpluginscli/saved_add_existing_test.go`: `TestSavedAddExistingStateIsExplainedBeforeSelection`; `installer/engine_test.go`: `TestRetainedInstallDifferentDigestIsUpdateRequired`; B adds contextual prose only |
+| Targeted unchanged/changed update | `internal/agentpluginscli/idempotent_update_test.go`: `TestImmediateMultiTargetUpdateReusesNativeBindings`; install catalog `component-set-replacement`; C adds presentation/cause retention |
+| Update all unchanged/changed/mixed | A public apply-result regression; `update_all_saved_test.go`: `TestUpdateAllDoesNotCountPartiallyAttemptedSavedAliasAsUpdated` |
+| Blocked/eligible/security | `update_all_security_test.go`: `TestUpdateAllSecurityPreflight`; install catalog `update-all-security-batch-preflight` and `update-all-security-mixed-saved-preflight` |
+| Concurrent operations | `adapters/processlock/reliability_test.go`: `TestLockConcurrentContendersAndRetry`, `TestLockReleasedAfterForcedProcessDeath`; one additional public add/update OS-lock integration control |
+| Missing/partial/drift-owned data | Install catalog `drift-recorded-pin-repair`; dependency catalog `adversarial/managed-native-drift`; existing diagnosis/recovery and #1023 boundaries retained |
+| Foreign/path/symlink conflict | Install catalog `unmanaged-source-refusal`, `foreign-environment-refusal`, `dependency-ownership-refusal`; dependency catalog `foreign-native-settings`, `symlink-lock-refusal` |
+| Cancellation/interruption | `cmd/agentplugins/project_cli_crash_restart_test.go`: `TestPublicCLICrashAfterDurablePhaseRecovery`; `claude_interrupted_remove_test.go`: `TestClaudeUserUpdateInterruptedAfterStateCommitResumesOnRerun`; `environment/apply_outcome_test.go`: `TestApplySyncCanceledContextStopsBeforeLaterBindings` |
+| Preparation/network failure | Dependency catalog `evolution/graph-update-failure-retry`; `adapters/sourceacquisition/archive_test.go`: `TestArchiveFailuresCleanOwnedFiles`; no acquisition changes |
+| Partial outcomes | `update_all_test.go`: `TestUpdateAllMarksRemainingPreparedItemsNotAttempted`; `update_all_review_test.go`: `TestUpdateAllFailureReportRetainsEarlierImperativeBindingSuccess`; `update_all_saved_test.go`: `TestUpdateAllPublishedSavedIntentReportsPartialAndUnattempted` |
+| Human/single JSON | New A/C command integration controls plus existing install ownership JSON boundary; compatible schema and exit policy retained |
+
+The new contention test uses a real child holding the actual OS lock, boundary IPC without sleeps, loser state/package checks and retry after holder exit.
+It passed as a supplementary control in the focused RED execution; it is not vendor-native qualification and adds no locking/retry logic.
+
+Six IDs are registered in the existing `evolution` map and shared JSON inventory:
+`update-all-actual-outcomes`, `repeat-add-project-guidance`, `update-add-process-contention`, `update-attention-classification`, `update-mixed-peer-attention`, `update-apply-output-causes`.
+They dispatch existing untagged regressions through `TestPackageManagerE2E`; no runner, group, report schema or framework is added.
+All six are composed public-command integration; production-composed installation and real-scanner lanes retain their separate proof boundaries.
 
 ## Ownership and exclusions
 
 Audit only relevant CLI add/update presentation and existing installer/use-case/lock call paths.
 Record exact affected files and map current tests before implementation; reuse existing fixtures and authorities.
-Inspect open #1087, #1023 and #1117 before touching overlap; do not merge, close, absorb or replace them.
+Overlap inspection preserved #1023 and #1117. #1087 merged at main `61542d3e` with qualification-script/workflow changes only, no production overlap.
+No rebase is required absent conflict; do not absorb or replace unrelated work.
 Narrow dependent slices when necessary and continue independent evidence-backed work.
 
 No new flags, modes, resolver, state engine, daemon, abstraction, automatic force/repair or lock deletion.
@@ -123,13 +129,10 @@ Do not hand-edit generated files or grow lint exemptions.
 
 ## Reversible implementation and verification after v3
 
-1. Confirm baseline and overlapping work in the shared isolated checkout.
-2. Reproduce A/B/C in disposable roots; record command, state, observed result and expected contract.
-3. Classify each as already correct, reproduced defect, demonstrated missing safe UX or unresolved hypothesis.
-4. Implement only demonstrated gaps with minimal existing-authority changes and meaningful regression oracles.
-5. Publish each commit immediately; revise estimates explicitly before any material scope increase.
-6. Exercise affected public CLI journeys and update only necessary documentation.
-7. Complete independent implementation review, final-PR qualification, ordinary authorized merge and merged-source acceptance.
+1. Planning, bounded RED reproduction, published minimal fixes and independent read-only review: completed as recorded above.
+2. Complete focused GREEN verification, then normal required checks on stable final source.
+3. Complete final-PR qualification, ordinary authorized merge and actual merged-source acceptance.
+4. Publish every subsequent commit immediately; resolve concrete findings without speculative expansion.
 
 Run `make lint`, `make test-core` and applicable affected native, rollback and cross-platform checks.
 Use the existing package-manager E2E catalog/runner: full four-platform final PR, full six-platform actual merge.
@@ -155,16 +158,17 @@ Stop expansion when evidence would require architecture changes, destructive rec
 Ask for a decision only when existing authority and user instructions cannot resolve the contract.
 Ordinary merge is already authorized, subject to genuine review and qualification gates.
 
-Estimates reflect read-only R1/R2 findings, not reproduction or passing tests.
+Actual bounded scope: four production files, three regression files, two existing catalog files and this plan.
+Counts and confidence below describe scope, not qualification success.
 
 | Dimension | Revised provisional estimate |
 | --- | --- |
-| Production changes | 30–140 lines across existing presenters/aggregation, only if RED |
-| Meaningful regressions | 150–350 lines; up to 100 additional lines only for missing public contention proof |
-| Supporting documentation | 20–60 lines beyond this plan, if needed |
+| Production changes | Approximately 80 changed lines across four existing files |
+| Meaningful regressions | 369 lines across three files, including the single contention control |
+| Supporting documentation | This plan only; no new evidence framework |
 | Complexity | 4/10; no lock or architecture changes planned |
 | Reliability improvement potential | 6/10 for the bounded reporting/guidance candidates |
-| Diagnostic confidence | 6/10 after read-only route audit; public reproduction still pending |
+| Diagnostic confidence | 8/10 after bounded RED and read-only review; proof limits remain explicit |
 | Target completion confidence | 8/10 estimate, conditional on reproduction, review and applicable qualification |
 
 Reduce scope for already-correct paths; do not spend the estimate merely to reach a patch size.
