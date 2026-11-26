@@ -17,12 +17,12 @@ import sys
 import subprocess
 from tempfile import TemporaryDirectory
 import tomllib
-
-from codex_plugin_retention_audit import HeldTree
 from uuid import UUID
 
+from codex_plugin_retention_audit import HeldTree
+
 from windsurf_global_skill_audit import (CASES as GLOBAL_SKILL_CASES, frame_changes,
-    frame, member, read_file, strict_json, managed_digest, immutable_source_digest, content, compact, sha, same)
+    frame, member, read_file, strict_json, managed_digest, immutable_source_digest, content, compact, sha, facts)
 
 ACCEPTANCE = "windsurf-global-installation"
 PREPARED = {"materialization": "materialized", "activation": "prepared",
@@ -33,13 +33,14 @@ ACTIVE_SLOTS = {22: "sre-extension", 25: "claude-scientific-writer",
                 26: "elements-of-style", 29: "recipe-skills"}
 COMPONENT_REFUSALS = {23: "itential-builder", 24: "google-cloud-storage",
                      27: "cometchat-skills", 28: "uizze-ui-slop"}
-# Installation-only Git source; never part of the four native pure-Skill cases.
-# Independently framed from the exact Git archive and confirmed with the existing
-# packagedigest.Builder + loader authority (130 entries, no links/gitlinks).
-INSTALLATION_GIT_PINS = {
+# Sanity is a prepared mixed-component source, outside the four native-only
+# Skill cases. Digests are independently framed from all 130 immutable Git
+# tree entries at this exact revision, including all 101 regular-file bodies.
+PREPARED_GIT_PINS = {
     "github:sanity-io/agent-toolkit@3ed3a143f8d3413faa7790ac0b2274fd3a8a6320": {
         "tree_digest": "sha256:c02e90a28469ff7c67ac1bdae28bee66c4f280aac4f7f00e48509d0522b565c2",
-        "manifest_digest": "sha256:3014016b8d78767b677a5a0b0ce05c03260caa15ecca6ff2efbecf79cf89a661"},
+        "manifest_digest": "sha256:3014016b8d78767b677a5a0b0ce05c03260caa15ecca6ff2efbecf79cf89a661",
+    },
 }
 CLIENT_VERSION = "devin 3000.12.57 (96542e930752)"
 CLI_VERSION = "agentplugins 0.1.115"
@@ -121,6 +122,14 @@ def canonical_projection(request, producer_revision=None):
 def require(condition):
     if not condition:
         raise ValueError("Devin Global installation evidence is unresolved")
+
+
+def independent_source_pin(source, fixtures):
+    """Keep prepared Git sources separate from the closed native Skill gate."""
+    pin = (GLOBAL_SKILL_CASES.get(source, PREPARED_GIT_PINS.get(source))
+           if source.startswith("github:") else fixtures["signed_release_pins"].get(source))
+    require(type(pin) is dict)
+    return pin
 
 
 def encoded(value, limit):
@@ -216,28 +225,6 @@ def ordinary(path):
     return info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid
 
 
-def installation_data_content(observed):
-    """Retain link bytes in ancillary comparisons; never treat links as dirs."""
-    result = content(observed)
-    for path, row in observed.items():
-        if row["kind"] == "link":
-            result[path] = ("link", row["target"], row["mode"], row["sha256"])
-    return result
-
-
-def independent_source_pin(fixtures, source):
-    """Select only fixture-bound signed or independently pinned Git bytes."""
-    require(source in fixtures["plugin_aliases"])
-    if source.startswith("github:"):
-        pin = GLOBAL_SKILL_CASES.get(source) or INSTALLATION_GIT_PINS.get(source)
-    else:
-        pin = fixtures["signed_release_pins"].get(source)
-    require(type(pin) is dict and all(type(pin.get(key)) is str
-            and re.fullmatch(r"sha256:[0-9a-f]{64}", pin[key])
-            for key in ("tree_digest", "manifest_digest")))
-    return pin
-
-
 def selected(fixtures, index):
     require(type(index) is int and 0 <= index < 30)
     sources = fixtures["plugin_aliases"]
@@ -288,11 +275,10 @@ def native_reference(row, source, identity, index):
             and row.get("matched_installation_ids") == row.get("repeat_installation_ids") == [owner["uuid"]]
             and type(stored) is dict and stored.get("tree_digest") == pin["tree_digest"]
             and stored.get("complete_skills") == list(pin["skills"])
-            and stored.get("complete_raw_skills") == sorted((*pin["skills"], *pin.get("invalid_skills", ())))
-            and stored.get("invalid_source_skills") == proof.get("source_invalid_skills") == list(pin.get("invalid_skills", ()))
-            and proof.get("invalid_source_skills_native_qualified") is False
-            and proof.get("all_source_skills_native_qualified") is (not bool(pin.get("invalid_skills")))
             and type(stored.get("held_frame")) is dict and stored["held_frame"] == stored.get("last_verified_frame"))
+    if "source_skills" in pin:
+        require(stored.get("source_skills") == list(pin["source_skills"])
+                and stored.get("rejected_skills") == pin["rejected_skills"])
     observations, transitions = proof.get("observations"), proof.get("public_transitions")
     require(type(observations) is list and all(type(v) is dict for v in observations)
             and [v.get("phase") for v in observations]
@@ -312,15 +298,24 @@ def native_reference(row, source, identity, index):
             == ["add", "repeat", "remove"] and all(v.get("verified") is True for v in transitions))
     cache_observations = [v for v in observations if v["custody"].get("native_cache_only") is True]
     cache_events = proof.get("native_cache_evidence")
-    require(type(cache_events) is list and len(cache_events) == len(cache_observations)
+    expected_events = [{"phase": observed["phase"], "before": observed["custody"]["before"],
+                        "after": observed["custody"]["after"],
+                        "changed_entries": observed["custody"]["cache_changed_entries"]}
+                       for observed in cache_observations]
+    for transition in transitions:
+        if "native_cache_custody" in transition:
+            event = transition["native_cache_custody"]
+            require(type(event) is dict and event.get("phase") == "public-" + transition["phase"]
+                    and transition["phase"] in ("add", "repeat"))
+            expected_events.append(event)
+    require(type(cache_events) is list and len(cache_events) == len(expected_events)
             and proof["cache_exception_granted"] is bool(cache_events)
             and all(type(event) is dict and set(event) == {
-                "phase", "before", "after", "changed_entries"} and
-                event["phase"] == observed["phase"] and
-                event["before"] == observed["custody"]["before"] and
-                event["after"] == observed["custody"]["after"] and
-                event["changed_entries"] == observed["custody"]["cache_changed_entries"]
-                for event, observed in zip(cache_events, cache_observations)))
+                "phase", "before", "after", "changed_entries"}
+                and type(event["changed_entries"]) is int and 1 <= event["changed_entries"] <= 40
+                and event["before"] != event["after"] for event in cache_events)
+            and sorted(cache_events, key=lambda event: event["phase"])
+                == sorted(expected_events, key=lambda event: event["phase"]))
     return {"source": source, "installation_id": owner["uuid"], "sha256": digest(proof)}
 
 
@@ -398,77 +393,109 @@ class WindsurfInstallationAudit:
     def directory_identity(info):
         return info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid
 
-    def runtime_link_owner(self, data_fd, state, physical, lock_key):
-        """Join existing data custody and locked-runtime files, never infer an owner."""
-        rows = [row for row in state["installations"] if type(row) is dict
-                and any(type(receipt) is dict and receipt.get("physical_backend_id") == physical
-                        for receipt in row.get("data_receipts", {}).values())]
-        require(len(rows) == 1)
-        row = rows[0]
-        require(type(row.get("installation_id")) is str and bool(row["installation_id"]))
-        receipt_id = "data_" + sha("\0".join((row["installation_id"], physical, "user")).encode())[:24]
-        relative = "plugin-data/" + physical
-        locator = str(self.data / relative)
-        expected = {"data_receipt_id": receipt_id, "physical_backend_id": physical,
-                    "scope": "user", "locator": locator, "state": "owned",
-                    "ownership_digest": "sha256:" + sha(("agentplugins-plugin-data-v1\0"
-                        + receipt_id + "\0" + locator).encode())}
-        marker = strict_json(read_file(data_fd, relative + "/.agentplugins-data-owner.json")[0])
-        receipt = row["data_receipts"].get(receipt_id)
-        clients = row.get("clients")
-        require(type(marker) is dict and type(receipt) is dict and type(clients) is dict
-                and all(marker.get(key) == receipt.get(key) == value for key, value in expected.items())
-                and (not clients and row.get("data_retained") is True
-                     or any(type(binding) is dict and binding.get("client_id") == "windsurf"
-                            and binding.get("scope") == "user" and binding.get("physical_artifact_id") == physical
-                            and binding.get("data_receipt_id") == receipt_id for binding in clients.values())))
-        digest = row.get("source", {}).get("tree_digest")
-        require(type(digest) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", digest))
-        source = "store/packages/agentplugins-tree-sha256-v1/" + digest[7:] + "/package/io.github.777genius.agentplugins/runtime"
-        runtime = relative + "/npm-runtime/" + lock_key
-        config = strict_json(read_file(data_fd, source + "/runtime.json")[0])
-        require(type(config) is dict and type(config.get("schema_version")) is int and config["schema_version"] == 1
-                and config.get("package_lock_sha256") == "sha256:" + lock_key
-                and type(config.get("omit_optional", False)) is bool
-                and all(type(config.get(key)) is str and config[key] for key in ("package", "version", "entrypoint")))
-        for name in ("package.json", "package-lock.json"):
-            original = read_file(data_fd, source + "/" + name, limit=4 << 20)[0]
-            require(read_file(data_fd, runtime + "/" + name, limit=4 << 20)[0] == original)
-            if name == "package-lock.json": require(sha(original) == lock_key)
-        expected_runtime = {"schema_version": 1, "lock_digest": "sha256:" + lock_key,
+    def runtime_roots(self, data_fd, state):
+        """Qualify npm link namespaces from retained ownership and source bytes."""
+        roots = set()
+        for record in state["installations"]:
+            receipts = record.get("data_receipts", {})
+            require(type(receipts) is dict)
+            for receipt_id, receipt in receipts.items():
+                require(type(receipt) is dict)
+                physical = receipt.get("physical_backend_id")
+                require(type(physical) is str and re.fullmatch(r"[a-z0-9][a-z0-9.-]{0,63}", physical))
+                require(physical == record["declared_name"][:51].rstrip(".-") + "-"
+                        + sha(record["installation_id"].encode())[:12])
+                relative = "plugin-data/" + physical
+                locator = str(self.data / relative)
+                require(receipt_id == "data_" + sha("\0".join((record["installation_id"], physical, "user")).encode())[:24]
+                        and receipt.get("data_receipt_id") == receipt_id
+                        and receipt.get("scope") == "user" and receipt.get("state") == "owned"
+                        and receipt.get("locator") == locator
+                        and receipt.get("ownership_digest") == "sha256:" + sha(
+                            ("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + locator).encode()))
+                require(encoded(strict_json(read_file(data_fd, relative + "/.agentplugins-data-owner.json")[0]), 1 << 20)
+                        == encoded(receipt, 1 << 20))
+                with member(data_fd, relative) as plugin_fd:
+                    if "npm-runtime" not in os.listdir(plugin_fd):
+                        continue
+                bindings = record.get("clients")
+                require(type(bindings) is dict)
+                if bindings:
+                    require(len(bindings) == 1 and all(binding.get("client_id") == "windsurf"
+                            and binding.get("physical_artifact_id") == physical
+                            and binding.get("data_receipt_id") == receipt_id for binding in bindings.values()))
+                else:
+                    require(record.get("data_retained") is True)
+                original = None
+                if self.saved_observations:
+                    originals = self.saved_observations[0]["documents"]["state-v2.json"]["installations"]
+                    matches = [row for row in originals if row.get("installation_id") == record["installation_id"]]
+                    require(len(matches) == 1)
+                    original = matches[0]
+                    # Removal may clear clients and update lifecycle timestamps;
+                    # it cannot rebind retained data to another source or owner.
+                    keys = ("installation_id", "declared_name", "source", "package", "data_receipts")
+                    require(encoded({key: record.get(key) for key in keys}, 1 << 20)
+                            == encoded({key: original.get(key) for key in keys}, 1 << 20))
+                tree_digest = record.get("source", {}).get("tree_digest")
+                require(type(tree_digest) is str and re.fullmatch(r"sha256:[0-9a-f]{64}", tree_digest))
+                source_relative = "store/packages/agentplugins-tree-sha256-v1/" + tree_digest[7:] + "/package"
+                with member(data_fd, source_relative) as source_fd:
+                    source_image = frame(source_fd)
+                    require(immutable_source_digest(source_fd, source_image) == tree_digest)
+                    if original is not None:
+                        pinned = self.saved_observations[0]["sources"].get(source_relative)
+                        require(type(pinned) is dict and pinned["digest"] == tree_digest
+                                and pinned["image"] == source_image)
+                    source_runtime = "io.github.777genius.agentplugins/runtime/"
+                    config = strict_json(read_file(source_fd, source_runtime + "runtime.json")[0])
+                    package_body = read_file(source_fd, source_runtime + "package.json")[0]
+                    lock_body = read_file(source_fd, source_runtime + "package-lock.json")[0]
+                require(type(config) is dict and type(config.get("schema_version")) is int
+                        and config["schema_version"] == 1
+                        and type(config.get("omit_optional", False)) is bool)
+                lock_digest = "sha256:" + sha(lock_body)
+                require(config.get("package_lock_sha256") == lock_digest)
+                runtime = relative + "/npm-runtime/" + lock_digest[7:]
+                require(read_file(data_fd, runtime + "/package.json")[0] == package_body
+                        and read_file(data_fd, runtime + "/package-lock.json")[0] == lock_body)
+                expected = {"schema_version": 1, "lock_digest": lock_digest,
                             **{key: config[key] for key in ("package", "version", "entrypoint")},
                             "omit_optional": config.get("omit_optional", False)}
-        require(same(strict_json(read_file(data_fd, runtime + "/.agentplugins-runtime.json")[0]), expected_runtime))
-        return runtime
+                require(encoded(strict_json(read_file(data_fd, runtime + "/.agentplugins-runtime.json")[0]), 1 << 20)
+                        == encoded(expected, 1 << 20))
+                roots.add(runtime + "/node_modules")
+        return roots
 
-    def data_frame(self, data_fd, state):
-        """Reuse held-tree custody for receipt-bound, contained npm bin links."""
+    def data_frame(self, data_fd, roots):
+        """Reuse held full-byte custody; only qualified npm .bin links may pass."""
+        if not roots:
+            return frame(data_fd)
         tree = HeldTree(self.data, bin_links=True)
         try:
-            require(os.path.samestat(os.fstat(data_fd), os.fstat(tree.fds["."])))
-            result, runtimes = {}, {}
-            for path, (kind, identity, value) in tree.nodes.items():
-                require(identity[3] == os.getuid())
-                name = Path(path).name
-                require(not (kind == "directory" and name == ".git")
-                        and not (kind == "file" and name in (".uap-integrations.lock", ".plugin-kit-ai.lock")))
-                row = dict(zip(("device", "inode", "mode", "uid", "gid", "links", "bytes", "modified_ns", "changed_ns"), identity))
+            require(self.directory_identity(os.fstat(tree.fds["."]))
+                    == self.directory_identity(os.fstat(data_fd)))
+            result = {}
+            for name, (kind, _, value) in tree.nodes.items():
+                relative = "" if name == "." else name
+                info = os.fstat(tree.fds[name])
+                require(info.st_uid == os.getuid())
+                # Preserve frame()/custody.tree's existing exclusions even when
+                # qualified npm bin links require the shared HeldTree reader.
+                require(not (kind == "directory" and Path(relative).name == ".git")
+                        and not (kind == "file" and Path(relative).name in (
+                            ".uap-integrations.lock", ".plugin-kit-ai.lock")))
+                row = {"kind": "dir" if kind == "directory" else kind, **facts(info)}
                 if kind == "link":
-                    parts = Path(path).parts
-                    require(len(parts) >= 7 and parts[0] == "plugin-data" and parts[2] == "npm-runtime"
-                            and re.fullmatch(r"[0-9a-f]{64}", parts[3]) and parts[4] == "node_modules"
-                            and parts[-2] == ".bin")
-                    selected = (parts[1], parts[3])
-                    if selected not in runtimes:
-                        runtimes[selected] = self.runtime_link_owner(data_fd, state, *selected)
-                    target = tree._link_target(path, value)
-                    require(target.startswith(runtimes[selected] + "/node_modules/"))
-                    row.update(kind="link", target=value, sha256=sha(value.encode()))
-                elif kind == "file": row.update(kind="file", sha256=value["sha256"])
-                else: row["kind"] = "dir"
-                result["" if path == "." else path] = row
+                    root = str(Path(relative).parent.parent)
+                    require(root in roots and Path(relative).parent.name == ".bin")
+                    target = tree._link_target(name, value)
+                    require(target.startswith(root + "/"))
+                    row["target"] = value
+                elif kind == "file":
+                    row["sha256"] = value["sha256"]
+                result[relative] = row
             tree.verify()
-            self.guard()
             return result
         finally:
             tree.close()
@@ -482,12 +509,9 @@ class WindsurfInstallationAudit:
             with member(fd, "uap-data") as data_fd:
                 require(self.directory_identity(os.fstat(data_fd)) == self.anchors[self.data])
                 docs, blobs, authorities = {}, {}, {}
+                names = os.listdir(data_fd)
                 for name in ("uap.toml", "uap.lock", "state-v2.json"):
-                    try:
-                        os.stat(name, dir_fd=data_fd, follow_symlinks=False)
-                    except FileNotFoundError:
-                        continue
-                    else:
+                    if name in names:
                         body, authorities[name] = read_file(data_fd, name)
                         blobs[name] = hashlib.sha256(body).hexdigest()
                         docs[name] = (tomllib.loads(body.decode("utf-8", errors="strict"))
@@ -503,8 +527,10 @@ class WindsurfInstallationAudit:
                 state = docs.get("state-v2.json", {"schema_version": 5, "installations": []})
                 require(type(state) is dict and type(state.get("schema_version")) is int
                         and state["schema_version"] == 5 and type(state.get("installations")) is list)
-                observed = self.data_frame(data_fd, state)
-                require(all(observed[name]["sha256"] == value for name, value in blobs.items()))
+                roots = self.runtime_roots(data_fd, state)
+                observed = self.data_frame(data_fd, roots)
+                require(all(observed[name] == {"kind": "file", **fact}
+                            for name, fact in authorities.items()))
                 for record in state["installations"]:
                     require(type(record) is dict and type(record.get("clients")) is dict)
                     for binding in record["clients"].values():
@@ -526,31 +552,29 @@ class WindsurfInstallationAudit:
                             source_image = frame(source_fd)
                             sources[source_relative] = {"image": source_image,
                                 "digest": immutable_source_digest(source_fd, source_image)}
-                require(observed == self.data_frame(data_fd, state))
+                require(observed == self.data_frame(data_fd, self.runtime_roots(data_fd, state)))
         except OSError as error:
             raise ValueError("Devin Global saved installation authority is unavailable") from error
         finally:
             os.close(fd)
         self.guard()
-        # Data trees reuse bounded HeldTree custody; source and managed
+        # Cache trees remain bounded by frame(); saved documents and managed
         # ownership are checked separately. Other data files cannot be silently
         # created by an exact refusal. Cache names come from main.go; cache
         # adapters append .lock during authenticated reconciliation. Store and
-        # scanner locations come from compose.go. Contained npm links acquire
-        # no exception from their receipt, source-lock and held-tree checks.
-        ancillary = {key: value for key, value in observed.items() if value["kind"] in ("file", "link")
+        # scanner locations come from compose.go. frame() supplies the existing
+        # regular-file, owner, link, byte, entry and depth bounds for all of them.
+        ancillary = {key: value for key, value in observed.items() if value["kind"] == "file"
                      and key not in {"uap.toml", "uap.lock", "state-v2.json", "mutation.lock", "environment.lock",
                                      "directory-v1-cache.json", "directory-v1-cache.json.lock",
                                      "discovery-v1-cache.json", "discovery-v1-cache.json.lock"}
                      and not key.startswith(("store/", "security/", "managed/"))}
-        runtime_roots = {"/".join(Path(key).parts[:4]) for key, value in observed.items()
-                         if value["kind"] == "link"}
-        runtime_images = {key: value for key, value in observed.items()
-                          if any(key == root or key.startswith(root + "/") for root in runtime_roots)}
         return {"documents": docs, "blobs": blobs, "authorities": authorities, "deliveries": deliveries,
-                "sources": sources, "runtime_images": runtime_images,
+                "sources": sources,
+                "runtime_authority": {key: value for key, value in observed.items()
+                    if any(key == root or key.startswith(root + "/") for root in roots)},
                 "managed_authority": {key: value for key, value in observed.items() if key.startswith("managed/")},
-                "ancillary": installation_data_content(ancillary),
+                "ancillary": content(ancillary),
                 "managed": content({key: value for key, value in observed.items()
                                     if key.startswith("managed/")})}
 
@@ -854,7 +878,6 @@ class WindsurfInstallationAudit:
         require(all(saved["authorities"] == self.initial_saved["authorities"]
                     and saved["managed_authority"] == self.initial_saved["managed_authority"]
                     and saved["ancillary"] == self.initial_saved["ancillary"]
-                    and saved["runtime_images"] == self.initial_saved["runtime_images"]
                     for saved in self.saved_observations))
         first, second = (entry[1] for entry in self.observations)
         if index == 13:
@@ -884,8 +907,6 @@ class WindsurfInstallationAudit:
 
     def positive(self, row, source, identity, index, fixtures):
         state = ACTIVE_SKILLS if index in ACTIVE_SLOTS else PREPARED
-        require(all(saved["runtime_images"] == self.saved_observations[0]["runtime_images"]
-                    for saved in self.saved_observations))
         if source.startswith("github:"):
             require(re.fullmatch(r"github:[^\s@]+@[0-9a-f]{40}", source))
         if index in ACTIVE_SLOTS:
@@ -1053,7 +1074,7 @@ class WindsurfInstallationAudit:
                     and locked.get("manifest_digest") == "sha256:" + sha(compact(intent)))
             require(origin.get("repository", "").lower() == repo.lower()
                     and origin.get("package_subpath", "") == subpath)
-            independent = independent_source_pin(fixtures, source)
+            independent = independent_source_pin(source, fixtures)
             require(all(revision.get(key) == independent[key] for key in ("tree_digest", "manifest_digest")))
             source_relative = "store/packages/agentplugins-tree-sha256-v1/" + independent["tree_digest"][7:] + "/package"
             source_observation = saved["sources"][source_relative]
@@ -1070,10 +1091,12 @@ class WindsurfInstallationAudit:
                     "kind": "managed_package_directory", "logical_name": identity, "path": locator,
                     "managed_digest": saved["deliveries"][relative]["digest"], "protection_class": "managed"}
                     and len(saved["deliveries"][relative]["image"]) > 1)
+            require(saved["runtime_authority"] == self.saved_observations[0]["runtime_authority"])
             agreement = (record, saved["blobs"]["uap.toml"], saved["blobs"]["uap.lock"], saved["deliveries"], saved["sources"])
             require(first is None or agreement == first)
             first = agreement
         for saved in self.saved_observations[4:]:
+            require(saved["runtime_authority"] == self.saved_observations[0]["runtime_authority"])
             intent = self.saved_intent(saved)
             require(intent["dependencies"] == intent["dev-dependencies"] == intent["targets"] == {}
                     and intent["packages"] == [] and saved["deliveries"] == {}
@@ -1224,7 +1247,7 @@ def summary(report, fixtures, *, fixture_sha256):
                             "removal_verified", "post_list_schema_valid"))
                         and row.get("post_removal_leftovers") == [])
                 projection = proof.get("source_projection")
-                independent = independent_source_pin(fixtures, source)
+                independent = independent_source_pin(source, fixtures)
                 require(type(projection) is dict and set(projection) == {"tree_digest", "manifest_digest", "delivery_digest"}
                         and all(projection.get(key) == independent[key] for key in ("tree_digest", "manifest_digest"))
                         and type(projection.get("delivery_digest")) is str
