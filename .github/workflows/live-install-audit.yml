@@ -7,8 +7,14 @@ on:
       - '.github/workflows/pr-changes.yml'
       - 'scripts/prepare-codex-linux-sandbox.sh'
       - 'scripts/live-install-audit.py'
+      - 'scripts/prepared_installation_audit.py'
+      - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/windsurf_installation_audit.py'
+      - 'scripts/test_windsurf_installation_audit.py'
       - 'scripts/pi_project_skill_audit.py'
       - 'scripts/test_pi_project_skill_audit.py'
+      - 'scripts/pi_plugin_catalog_audit.py'
+      - 'scripts/test_pi_plugin_catalog_*.py'
       - 'scripts/test_native_client_research.py'
       - 'scripts/qoder_prepared_skill_audit.py'
       - 'scripts/test_qoder_prepared_skill_audit.py'
@@ -95,6 +101,7 @@ jobs:
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
           python3 -m unittest discover -s scripts -p 'test_qoder_prepared_skill_audit.py'
           python3 -m unittest discover -s scripts -p 'test_pi_project_skill_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_pi_plugin_catalog_*.py'
           python3 -m unittest discover -s scripts -p 'test_native_client_research.py'
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_components.py'
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_opencode_negative.py'
@@ -154,13 +161,15 @@ jobs:
           npm install --global universal-agent-plugins@0.1.95 @openai/codex@0.153.4
           agentplugins version
           codex --version
-      - name: Real published-package smoke (two sources per kind)
+      - name: Observe default refusal and archived plugin / Skills lifecycles
         env:
           AUDIT_VENDOR_OUTCOME: ${{ steps.published-install.outcome }}
         run: |
           mkdir -p "$RUNNER_TEMP/published-proof"
           result=0
           for kind in plugin skill; do
+            # Record the real expired default feed separately; the immutable
+            # archive retains the original CLI's signature and expiry checks.
             # Keep this immutable release's lifecycle distinct from current Ready.
             # Observe the default feed refusal separately; only the plugin
             # lifecycle uses the unexpired, original-key official sequence 48.
@@ -181,7 +190,7 @@ jobs:
           retention-days: 14
 
   real-native-cli-matrix:
-    name: All 30 ${{ matrix.kind }} / ${{ matrix.target == 'pi' && matrix.kind == 'skill' && 'foreign Prepared + clean native' || matrix.target == 'qoder' && matrix.kind == 'skill' && 'Prepared installation' || 'native' }} ${{ matrix.target }}
+    name: All 30 ${{ matrix.kind }} / ${{ matrix.target == 'pi' && matrix.kind == 'skill' && 'foreign Prepared + clean native' || matrix.target == 'pi' && matrix.kind == 'plugin' && 'native registration' || matrix.target == 'qoder' && matrix.kind == 'skill' && 'Prepared installation' || 'native' }} ${{ matrix.target }}
     needs: [changes, native-pilot]
     if: ${{ !cancelled() && needs.native-pilot.result == 'success' && (needs.changes.result != 'success' || needs.changes.outputs.live_clients != '[]') }}
     runs-on: ubuntu-24.04
@@ -227,9 +236,9 @@ jobs:
             copilot) npm install --global @github/copilot@1.0.105 ;;
             cline) npm install --global cline@3.0.74 ;;
             kimi)
-              # Project Skills qualify only against observed 2.3.1/2.3.2.
+              # Match the supported 2.5.2 Skill discovery and strict repeat-log proof.
               if [[ "$KIND" == "skill" ]]; then
-                npm install --global @moonshot-ai/kimi-code@2.3.2
+                npm install --global @moonshot-ai/kimi-code@2.5.2
               else
                 npm install --global @moonshot-ai/kimi-code@2.4.1
               fi
@@ -270,6 +279,8 @@ jobs:
             acceptance=native
             if [[ "$TARGET" == qoder && "$KIND" == skill ]]; then
               acceptance=qoder-prepared-skills-installation
+            elif [[ "$TARGET" == pi && "$KIND" == plugin ]]; then
+              acceptance=pi-plugin-native-registration
             fi
             python3 scripts/live-install-audit.py --cli "$RUNNER_TEMP/agentplugins-audit" \
               --target "$TARGET" --kind "$KIND" --limit 30 --acceptance "$acceptance" \

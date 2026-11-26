@@ -7,6 +7,12 @@ on:
       - 'install/integrationctl/agentplugins/adapters/sourceacquisition/**'
       - 'scripts/live-install-audit.py'
       - 'scripts/native_client_research.py'
+      - 'scripts/prepared_installation_audit.py'
+      - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/windsurf_installation_audit.py'
+      - 'scripts/test_windsurf_installation_audit.py'
+      - 'scripts/published_codex_baseline.py'
+      - 'scripts/test_published_codex_baseline.py'
       - 'scripts/codex_runtime_audit.py'
       - 'scripts/windows_owned_job.py'
       - 'scripts/test_codex_runtime_audit.py'
@@ -48,7 +54,7 @@ jobs:
           import pathlib
           import subprocess
           pins = {
-              "tests/live-install/fixtures.json": "7399eaed15b3eb0981a6be12082dd8825529e896a59ea125b9500a666c21112e",
+              "tests/live-install/fixtures.json": "e22cb3b5b23e74a9e03b55e24a684ab93038f89cf18e28fd5d9755175754c0d9",
               "install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/plugin.schema.json": "0a4aad95ce337878ad38802ebf0daa3fde76abe3f65400c86bcbb1ec0b3ab883",
               "install/integrationctl/agentplugins/adapters/specregistry/schemas/1.0.0/mcp.schema.json": "6539175bfcdf43085855183e86da40ea94b166547a72b47ae9a0a390516d3acb",
           }

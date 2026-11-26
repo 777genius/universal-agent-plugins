@@ -30,6 +30,9 @@ func (*Adapter) ProjectActiveNative(ctx context.Context, root string, envelope d
 		if err := validateCursorProjectStdio(root, envelope, plan, dataPath); err != nil {
 			return nil, err
 		}
+		if err := verifyCursorToolApprovals(root, envelope, plan); err != nil {
+			return nil, err
+		}
 		return cursorProjectObjects(root, envelope, plan)
 	}
 	return nil, nil
@@ -45,6 +48,9 @@ func (*Adapter) Project(ctx context.Context, in clients.ProjectionInput) ([]doma
 	}
 	if in.Plan.Scope == domain.ScopeProject {
 		if err := projectCursorStdio(in); err != nil {
+			return nil, err
+		}
+		if err := projectCursorToolApprovals(in.StagingPath, in.Envelope, in.Plan); err != nil {
 			return nil, err
 		}
 		return cursorProjectObjects(in.StagingPath, in.Envelope, in.Plan)

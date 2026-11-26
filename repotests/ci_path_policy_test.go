@@ -297,6 +297,7 @@ func TestCIPathPolicy_HeavyNativeMatrixSelection(t *testing.T) {
 		{"picker lock", []string{"ui/skills-picker/package-lock.json"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[\"cursor\"]", "[]"},
 		{"ACP and Editor and ChatGPT", []string{"repotests/agentplugins_acp_metadata_hosted_test.go", "scripts/cursor_editor_observation.cjs", "scripts/prepare-codex-linux-sandbox.sh"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[\"cursor\",\"kiro\",\"chatgpt\"]", "[\"codex\"]"},
 		{"Devin only", []string{"scripts/devin_project_auto_install_e2e.py"}, "", "", "", "[]", "[\"windsurf\"]", "[]"},
+		{"Windsurf projection oracle", []string{"scripts/testdata/windsurf_projection_oracle/main.go"}, "", "", "", "[]", "[\"windsurf\"]", "[]"},
 		{"Devin test + ChatGPT bootstrap", []string{"scripts/test_devin_project_auto_install_e2e.py", "scripts/run-native-client-matrix.py"}, "", "", "", "[\"codex\",\"claude\",\"opencode\"]", "[\"windsurf\",\"chatgpt\"]", "[]"},
 		{"live shared", []string{"scripts/live-install-audit.py"}, "", "", "", "[]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[\"codex\",\"claude\",\"opencode\",\"gemini\",\"copilot\",\"cline\",\"kimi\",\"qoder\",\"pi\"]"},
 		{"remaining workflow", []string{".github/workflows/live-install-remaining-clients.yml"}, "", "", "", "[]", "[\"cursor\",\"kiro\",\"windsurf\",\"grok\",\"chatgpt\"]", "[]"},

@@ -293,7 +293,16 @@ test('Marketing Kit Project still rejects unsupported required components', asyn
   plugin.install_source = 'marketing-kit';
   plugin.trust_state = 'reviewed';
   plugin.distributions = plugin.distributions.slice(0, 1);
-  plugin.distributions[0]!.releases[0]!.components = ['extensions'];
+  plugin.components = ['extensions'];
+  plugin.client_support.clients = ['codex'];
+  const distribution = plugin.distributions[0]!;
+  const release = distribution.releases[0]!;
+  release.components = ['extensions'];
+  // Cursor now has a qualified extension capability. Keep this negative
+  // fixture on Codex, which cannot deliver any selected extension component.
+  release.targets = release.targets.filter(target => target.client === 'codex');
+  distribution.targets = release.targets;
+  distribution.compatible_clients = ['codex'];
   await projections(page, index);
   await navigate(page, '/', 'en', '?q=marketing-kit');
   const card = page.locator('.plugin-card[data-install-source="marketing-kit"]');
@@ -378,15 +387,29 @@ for (const width of [1440, 390]) {
   });
 }
 
-test('unsupported extensions-only Project does not show a misleading scope switch, but the User command remains', async ({ page }) => {
+test('Cursor extension capability offers a Project preview while User commands keep their scope', async ({ page }) => {
   const errors = await offline(page);
   await projections(page, partialComponentsFixture(['extensions'], ['cursor']));
   await navigate(page, '/', 'en', '?q=i18n-state-00');
   const card = page.locator('.plugin-card[data-install-source="i18n-state-00"]');
   await openCardInstall(page, card);
-  await expect(page.getByRole('dialog').locator('.install-scope')).toHaveCount(0);
-  await expect(page.getByRole('dialog').locator('.install-dialog__footer .command-snippet code'))
-    .toHaveText('npx -y universal-agent-plugins@latest add i18n-state-00');
+  const dialog = page.getByRole('dialog');
+  const command = dialog.locator('.install-dialog__footer .command-snippet code');
+  await expect(command).toHaveText('npx -y universal-agent-plugins@latest add i18n-state-00');
+  await dialog.getByRole('button', { name: 'This project', exact: true }).click();
+  await targets(page, card, ['Cursor']);
+  await expect(command).toHaveText(
+    'npx -y universal-agent-plugins@latest add i18n-state-00 --target cursor --scope project');
+  // The generated capability offers a preview. Exact extension namespace,
+  // required native components and runtime admission remain CLI decisions.
+  await expect(dialog.locator('.install-outcome')).toContainText(
+    wording('en')('registryUi.install.outcome.projectPreview'));
+  await expect(dialog.locator('.install-outcome [data-component="extensions"]'))
+    .toHaveAttribute('data-support', 'supported');
+  await dialog.getByRole('button', { name: 'This computer', exact: true }).click();
+  await expect(command).toHaveText(
+    'npx -y universal-agent-plugins@latest add i18n-state-00 --target cursor');
+  await expect(dialog.locator('.install-outcome [data-component]')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 

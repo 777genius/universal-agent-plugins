@@ -114,9 +114,9 @@ jobs:
       - name: Broad existing CLI contracts
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         working-directory: cli
-        # Run fixture processes serially; the suite budget matches REQUIRED_TEST_TIMEOUT.
-        # UI deadlines remain separate.
-        run: go test -p=1 -timeout=20m ./internal/agentpluginscli ./cmd/agentplugins/...
+        # Preserve serial fixture execution and the qualified platform-specific suite budgets.
+        # Native UI timeouts remain separate from the whole-suite deadline.
+        run: go test -v -p=1 -timeout=${{ runner.os == 'Windows' && '25m' || '20m' }} ./internal/agentpluginscli ./cmd/agentplugins/...
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
         with:

@@ -7,9 +7,19 @@ on:
       - '.github/workflows/pr-changes.yml'
       - '.github/workflows/live-install-remaining-clients.yml'
       - 'scripts/live-install-audit.py'
+      - 'scripts/prepared_installation_audit.py'
+      - 'scripts/test_prepared_installation_audit.py'
+      - 'scripts/test_kiro_installation_audit.py'
+      - 'scripts/windsurf_global_skill_audit.py'
+      - 'scripts/windsurf_installation_audit.py'
+      - 'scripts/test_windsurf_global_skill_audit.py'
+      - 'scripts/test_windsurf_installation_audit.py'
+      - 'scripts/testdata/windsurf_projection_oracle/**'
       - 'scripts/native_client_research.py'
       - 'scripts/codex_plugin_retention_audit.py'
       - 'scripts/test_codex_plugin_retention_audit.py'
+      - 'scripts/published_codex_baseline.py'
+      - 'scripts/test_published_codex_baseline.py'
       - 'scripts/test_live_install_audit_env.py'
       - 'scripts/test_kimi_repeat_log_audit.py'
       - 'scripts/devin_project_auto_install_e2e.py'
@@ -85,6 +95,17 @@ jobs:
         id: host-node
         with:
           node-version: '24'
+      - name: Verify source-bound Cursor and Grok installation contracts
+        if: ${{ matrix.target == 'cursor' || (matrix.target == 'grok' && matrix.kind == 'skill') }}
+        run: python3 -m unittest discover -s scripts -p 'test_prepared_installation_audit.py'
+      - name: Verify exact Kiro installation custody and refusal
+        if: ${{ matrix.target == 'kiro' }}
+        run: python3 -m unittest discover -s scripts -p 'test_kiro_installation_audit.py'
+      - name: Verify Windsurf source/native custody separately
+        if: ${{ matrix.target == 'windsurf' && matrix.kind == 'plugin' }}
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_windsurf_global_skill_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_windsurf_installation_audit.py'
       - name: Supply verified bubblewrap for ChatGPT native discovery
         if: matrix.target == 'chatgpt' && matrix.kind == 'plugin'
         shell: bash
@@ -129,6 +150,9 @@ jobs:
         run: |
           python3 -m unittest discover -s scripts -p 'test_live_install_audit_env.py'
           python3 -m unittest discover -s scripts -p 'test_kimi_repeat_log_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_prepared_installation_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_kiro_installation_audit.py'
+          python3 -m unittest discover -s scripts -p 'test_windsurf_installation_audit.py'
       - name: Check bounded Codex preserved-data custody
         if: matrix.target == 'chatgpt' && matrix.kind == 'plugin'
         run: python3 -m unittest discover -s scripts -p 'test_codex_plugin_retention_audit.py' -v
@@ -610,29 +634,42 @@ jobs:
           KIRO_NODE_BIN: ${{ steps.kiro-node.outputs.bin }}
         shell: bash
         run: |
+          audit_go_bin=""
+          if [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then
+            audit_go="$(command -v go)"
+            [[ "$audit_go" == /* && -f "$audit_go" && -x "$audit_go" ]]
+            [[ "$(GOTOOLCHAIN=local "$audit_go" version)" == 'go version go1.26.11 linux/amd64' ]]
+            audit_go_bin="${audit_go%/*}:"
+          fi
           acceptance=()
           if [[ "$AUDIT_TARGET" == kiro ]]; then
             test -n "$KIRO_NODE_BIN"
-            export PATH="$KIRO_NODE_BIN:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+            export PATH="${audit_go_bin}$KIRO_NODE_BIN:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
             if [[ "$AUDIT_KIND" == plugin ]]; then
-              acceptance=(--acceptance kiro-prepared-installation)
+              acceptance=(--acceptance kiro-installation)
             fi
           else
-            export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
+            export PATH="${audit_go_bin}/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$RUNNER_TEMP/vendor-root/usr/bin:$HOME/.local/bin"
           fi
           if [[ "$AUDIT_TARGET" == cursor && "$AUDIT_KIND" == plugin ]]; then
             acceptance=(--acceptance cursor-prepared-installation)
           elif [[ "$AUDIT_TARGET" == cursor && "$AUDIT_KIND" == skill ]]; then
             acceptance=(--acceptance cursor-prepared-skills-installation)
           elif [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == skill ]]; then
-            acceptance=(--acceptance kiro-prepared-skills-installation)
+            acceptance=(--acceptance kiro-skills-installation)
           elif [[ "$AUDIT_TARGET" == grok && "$AUDIT_KIND" == skill ]]; then
             acceptance=(--acceptance grok-prepared-skills-installation)
           elif [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then
-            acceptance=(--acceptance windsurf-prepared-installation)
+            acceptance=(--acceptance windsurf-global-installation)
           elif [[ "$AUDIT_TARGET" == vscode && "$AUDIT_KIND" == plugin ]]; then
             # User preparation and preserved refusal only; no uninstall attestation.
             acceptance=(--acceptance vscode-user-manual-preparation)
+          fi
+          if [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then
+            [[ "$(command -v go)" == "$audit_go" ]]
+          fi
+          if [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == plugin ]]; then
+            [[ "$(command -v docker)" == "$RUNNER_TEMP/vendor-root/usr/bin/docker" ]]
           fi
           python3 scripts/live-install-audit.py \
             --cli "$RUNNER_TEMP/agentplugins-audit" \

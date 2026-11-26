@@ -489,10 +489,10 @@
         {
           "Kind": "extension",
           "Name": "cursor",
-          "Reason": "",
+          "Reason": "extension_semantics_not_established",
           "Source": "",
           "SourceName": "",
-          "Support": "prepared"
+          "Support": "unsupported"
         }
       ],
       "DeclaredName": "demo",

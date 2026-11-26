@@ -79,6 +79,12 @@ func cursorSelectedMCP(components []domain.ComponentDecision) ([]string, bool) {
 	names := []string{}
 	allMCP := len(components) > 0
 	for _, component := range components {
+		// A selected permission declaration is not another runtime component:
+		// it must not turn a verified MCP-only project into Prepared.
+		if component.Kind == domain.ComponentExtension && component.Name == cursorToolApprovalNamespace &&
+			component.Support == domain.SupportNative {
+			continue
+		}
 		if component.Kind != domain.ComponentMCPServer || component.Support != domain.SupportNative {
 			allMCP = false
 			continue
@@ -88,7 +94,7 @@ func cursorSelectedMCP(components []domain.ComponentDecision) ([]string, bool) {
 		}
 		names = append(names, component.Name)
 	}
-	return names, allMCP
+	return names, allMCP && len(names) > 0
 }
 
 func runCursorInventory(ctx context.Context, env clients.Env, request domain.ActivationRequest, args ...string) (legacyports.CommandResult, error) {

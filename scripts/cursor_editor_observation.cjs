@@ -69,14 +69,25 @@ async function screenshot(page, directory, name) {
     const parentBefore = fs.lstatSync(directory);
     const destination = path.join(directory, name);
     phase = 'open';
+    try {
+      fs.lstatSync(destination);
+      throw Object.assign(new Error('screenshot-refused'), { code: 'EEXIST' });
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    phase = 'capture';
+    const body = await page.screenshot({ timeout: 5000 });
+    phase = 'content';
+    if (!Buffer.isBuffer(body) || body.length === 0 || body.length > 8 << 20) throw new Error('screenshot-bound');
+    phase = 'custody';
+    const parentCaptured = fs.lstatSync(directory);
+    if (parentBefore.ino !== parentCaptured.ino || parentBefore.dev !== parentCaptured.dev
+        || fs.realpathSync(directory) !== directory) throw new Error('screenshot-custody');
+    phase = 'open';
     const descriptor = fs.openSync(destination, 'wx', 0o600);
     try {
       phase = 'file-check';
       const before = fs.fstatSync(descriptor);
-      phase = 'capture';
-      const body = await page.screenshot({ timeout: 5000 });
-      phase = 'content';
-      if (!Buffer.isBuffer(body) || body.length === 0 || body.length > 8 << 20) throw new Error('screenshot-bound');
       phase = 'write';
       fs.writeFileSync(descriptor, body);
       phase = 'custody';
@@ -112,11 +123,12 @@ async function visibleText(page) {
 }
 
 async function refuseVisibleGate(page) {
-  await visibleText(page);
+  const text = await visibleText(page);
   // Text locators pierce open shadow roots; body.innerText need not include them.
   for (const [pattern, category] of gateRules) {
     if (await page.getByText(pattern).filter({ visible: true }).count() > 0) throw new Error(category);
   }
+  return text;
 }
 
 async function controlFailureScreenshot(page, directory, result) {
@@ -158,9 +170,13 @@ async function clickNamed(page, name) {
 async function startupScreenshot(page, directory) {
   // firstWindow() does not guarantee a rendered UI. Readiness must precede
   // this mandatory capture, without acting on the control or any gate.
-  await waitNamedControl(page, 'Customize');
+  const control = await waitNamedControl(page, 'Customize');
   await refuseVisibleGate(page);
-  return screenshot(page, directory, 'startup.png');
+  const image = await screenshot(page, directory, 'startup.png');
+  await refuseVisibleGate(page);
+  if (await control.count() !== 1) throw new Error('ui-control-unobserved');
+  await refuseVisibleGate(page);
+  return image;
 }
 
 async function confirmedMarkers(page, names) {
@@ -173,20 +189,20 @@ async function confirmedMarkers(page, names) {
 }
 
 async function inventoryScreenshot(page, directory, filename, names) {
-  await visibleText(page);
+  await refuseVisibleGate(page);
   for (const name of names) {
     try {
       await page.getByText(name, { exact: true }).filter({ visible: true })
         .waitFor({ state: 'visible', timeout: 5000 });
     } catch {
-      await visibleText(page); // Preserve a gate that appeared during the wait.
+      await refuseVisibleGate(page); // Preserve a gate that appeared during the wait.
       throw new Error('component-unobserved');
     }
   }
-  const text = await visibleText(page);
+  const text = await refuseVisibleGate(page);
   const markers = await confirmedMarkers(page, names);
   const image = await screenshot(page, directory, filename);
-  await visibleText(page);
+  await refuseVisibleGate(page);
   await confirmedMarkers(page, names);
   return { text, markers, image };
 }

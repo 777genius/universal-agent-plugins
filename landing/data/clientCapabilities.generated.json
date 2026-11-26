@@ -59,7 +59,7 @@
         "stdio": "native",
         "streamable-http": "native"
       },
-      "extension_support": "unsupported"
+      "extension_support": "native"
     }
   },
   {

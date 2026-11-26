@@ -34,7 +34,7 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft != true }}
     name: native-ssh-linux
     runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && 'ubuntu-24.04' || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-24.04' || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       UAP_REQUIRE_NATIVE_SSH: '1'
     steps:
@@ -46,11 +46,19 @@ jobs:
           go-version: '1.26.11'
           cache: false
       - name: Require real OpenSSH tooling
+        timeout-minutes: 5
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y openssh-server
+          if ! command -v sshd >/dev/null 2>&1; then
+            ssh_apt_options=(
+              -o Acquire::http::Timeout=30
+              -o Acquire::https::Timeout=30
+              -o Acquire::Retries=1
+            )
+            sudo apt-get "${ssh_apt_options[@]}" --error-on=any update
+            sudo apt-get "${ssh_apt_options[@]}" install -y openssh-server
+          fi
           sudo install -d -m 0755 /run/sshd
           for executable in sshd ssh ssh-keygen git jq; do
             command -v "$executable"

@@ -53,6 +53,9 @@ func cursorEditorTree(ctx context.Context, root, label string) (map[string]acpMe
 		}
 		var fact acpMetadataFile
 		if info.Mode()&os.ModeSymlink != 0 {
+			if label != "runtime" {
+				return fmt.Errorf("editor runtime alias refused")
+			}
 			fact, err = cursorEditorAlias(root, path, info)
 		} else {
 			fact, err = acpMetadataFileFact(path)
@@ -425,6 +428,186 @@ func cursorEditorObserve(ctx context.Context, t *testing.T, temp, output string,
 	cursorEditorHelpAndUI(ctx, t, root, project, output, source, paths, env, filesBefore, runtimeBefore, report)
 }
 
+// Before custody is established, retain only closed refusal classifications.
+// Never copy arbitrary driver strings, paths, messages, screenshots or markers.
+func cursorEditorFixedFact(destination, source map[string]any, key string, allowed ...string) {
+	value, ok := source[key].(string)
+	if !ok {
+		return
+	}
+	for _, candidate := range allowed {
+		if value == candidate {
+			destination[key] = candidate
+			return
+		}
+	}
+}
+
+func cursorEditorUIRefusal(result map[string]any) map[string]any {
+	facts := map[string]any{}
+	if result["status"] != "unqualified" {
+		return facts
+	}
+	facts["status"] = "unqualified"
+	cursorEditorFixedFact(facts, result, "stage",
+		"input", "preflight", "editor-launch", "startup", "customize", "skills", "plugins", "ordinary-quit")
+	cursorEditorFixedFact(facts, result, "observation",
+		"not-started", "help-refused", "path-refused", "tool-version-refused", "phase-deadline",
+		"screenshot-refused", "screenshot-bound", "screenshot-custody", "ui-text-bound",
+		"login-gate", "trust-gate", "import-policy-gate", "ui-control-unobserved",
+		"launch-authority-refused", "non-natural-exit", "component-unobserved", "editor-observation-refused",
+		"driver-refused", "driver-exited-before-report", "driver-crashed", "electron-launch-failed")
+	for _, key := range []string{"screenshot_failure", "diagnostic_screenshot_failure"} {
+		failure, ok := result[key].(map[string]any)
+		if !ok {
+			continue
+		}
+		classified := map[string]any{}
+		cursorEditorFixedFact(classified, failure, "phase",
+			"path", "open", "file-check", "capture", "content", "write", "custody", "close")
+		cursorEditorFixedFact(classified, failure, "category",
+			"TimeoutError", "TargetClosedError", "EACCES", "EPERM", "ENOENT", "EEXIST",
+			"ENOSPC", "EIO", "EBADF", "EMFILE", "ENFILE",
+			"path-refused", "screenshot-bound", "screenshot-custody", "other")
+		if len(classified) > 0 {
+			facts[key] = classified
+		}
+	}
+	return facts
+}
+
+func cursorEditorRetainUIRefusal(report map[string]any, observed []byte) (map[string]any, error) {
+	if len(observed) > 1<<20 {
+		return nil, errors.New("editor output bound")
+	}
+	var result map[string]any
+	if err := json.Unmarshal(observed, &result); err != nil {
+		return nil, err
+	}
+	if facts := cursorEditorUIRefusal(result); len(facts) > 0 {
+		report["ui_refusal"] = facts
+	}
+	return result, nil
+}
+
+func TestCursorEditorInternalAliasRuntimeOnly(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "00-safe"), []byte("owned"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("00-safe", filepath.Join(root, "10-alias")); err != nil {
+		t.Fatal(err)
+	}
+	facts, err := cursorEditorTree(t.Context(), root, "runtime")
+	if err != nil || len(facts) != 3 || os.FileMode(facts["10-alias"].Mode)&os.ModeSymlink == 0 {
+		t.Fatal("internal runtime alias refused")
+	}
+	for _, label := range []string{"project-skills", "user-plugin", "playwright", "playwright-core", "", "unknown"} {
+		facts, err := cursorEditorTree(t.Context(), root, label)
+		if err == nil || len(facts) != 2 || cursorEditorRefusalCause(err) != "alias-refused" {
+			t.Fatal("non-runtime alias admitted or refusal changed")
+		}
+		if _, admitted := facts["10-alias"]; admitted {
+			t.Fatal("refused alias retained as an admitted fact")
+		}
+	}
+}
+
+func TestCursorEditorUIRefusalPrivacyAndBounds(t *testing.T) {
+	body := []byte(`{"status":"unqualified","stage":"startup","observation":"login-gate","message":"PRIVATE-CANARY","screenshots":["PRIVATE-CANARY"],"screenshot_failure":{"phase":"capture","category":"TimeoutError","message":"PRIVATE-CANARY"}}`)
+	report := map[string]any{}
+	if _, err := cursorEditorRetainUIRefusal(report, body); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(report)
+	want := `{"ui_refusal":{"observation":"login-gate","screenshot_failure":{"category":"TimeoutError","phase":"capture"},"stage":"startup","status":"unqualified"}}`
+	if err != nil || string(encoded) != want {
+		t.Fatal("refusal projection lost fixed facts or retained private data")
+	}
+	for _, observation := range []string{"driver-refused", "driver-exited-before-report", "driver-crashed", "electron-launch-failed"} {
+		report = map[string]any{}
+		input := fmt.Sprintf(`{"status":"unqualified","stage":"input","observation":%q,"message":"PRIVATE-CANARY"}`, observation)
+		if _, err := cursorEditorRetainUIRefusal(report, []byte(input)); err != nil {
+			t.Fatal(err)
+		}
+		encoded, err = json.Marshal(report)
+		want = fmt.Sprintf(`{"ui_refusal":{"observation":%q,"stage":"input","status":"unqualified"}}`, observation)
+		if err != nil || string(encoded) != want {
+			t.Fatal("terminal refusal lost fixed facts or retained private data")
+		}
+	}
+	for _, input := range []string{
+		`{"status":"unqualified","stage":"PRIVATE-CANARY","observation":"PRIVATE-CANARY","screenshot_failure":{"phase":"PRIVATE-CANARY","category":"PRIVATE-CANARY"}}`,
+		`{"status":"unqualified","stage":{},"observation":false,"screenshot_failure":"PRIVATE-CANARY"}`,
+	} {
+		report = map[string]any{}
+		if _, err := cursorEditorRetainUIRefusal(report, []byte(input)); err != nil {
+			t.Fatal(err)
+		}
+		encoded, err = json.Marshal(report)
+		if err != nil || string(encoded) != `{"ui_refusal":{"status":"unqualified"}}` {
+			t.Fatal("unknown or malformed values escaped refusal projection")
+		}
+	}
+	for _, input := range []string{`{"status":"observed","stage":"startup"}`, `null`} {
+		report = map[string]any{}
+		if _, err := cursorEditorRetainUIRefusal(report, []byte(input)); err != nil || len(report) != 0 {
+			t.Fatal("non-refusal result became pre-custody facts")
+		}
+	}
+	for _, input := range [][]byte{[]byte(`{"status":`), append(body, []byte(strings.Repeat(" ", (1<<20)+1-len(body)))...)} {
+		report = map[string]any{}
+		if _, err := cursorEditorRetainUIRefusal(report, input); err == nil || len(report) != 0 {
+			t.Fatal("invalid or over-bound output retained refusal facts")
+		}
+	}
+}
+
+func TestCursorEditorUIRefusalSurvivesFatalCustody(t *testing.T) {
+	const childKey = "AGENTPLUGINS_EDITOR_REFUSAL_CHILD"
+	if directory := os.Getenv(childKey); directory != "" {
+		report := map[string]any{"status": "unqualified", "skills_ready": false}
+		defer cursorEditorSave(t, directory, report)
+		body := []byte(`{"status":"unqualified","stage":"startup","observation":"login-gate","message":"PRIVATE-CANARY"}`)
+		if _, err := cursorEditorRetainUIRefusal(report, body); err != nil {
+			t.Fatal("child refusal decode failed")
+		}
+		cursorEditorFrozen(t.Context(), t, map[string]string{"project-skills": filepath.Join(directory, "tree")})
+		t.Fatal("custody control unexpectedly passed")
+	}
+	directory := t.TempDir()
+	root := filepath.Join(directory, "tree")
+	if err := os.Mkdir(root, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "00-safe"), []byte("owned"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("00-safe", filepath.Join(root, "10-alias")); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestCursorEditorUIRefusalSurvivesFatalCustody$")
+	command.Env = append(os.Environ(), childKey+"="+directory)
+	output, err := command.CombinedOutput()
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) || exit.ExitCode() != 1 || ctx.Err() != nil ||
+		!strings.Contains(string(output), "editor frozen tree refused: project-skills") {
+		t.Fatal("child did not reach the actual fatal custody refusal")
+	}
+	body, err := os.ReadFile(filepath.Join(directory, "metadata.json"))
+	want := `{"skills_ready":false,"status":"unqualified","ui_refusal":{"observation":"login-gate","stage":"startup","status":"unqualified"}}`
+	var report map[string]any
+	if err != nil || json.Unmarshal(body, &report) != nil {
+		t.Fatal("deferred custody-failure report missing")
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil || string(encoded) != want {
+		t.Fatal("fatal custody lost refusal facts, exposed private contents or qualified UI")
+	}
+}
+
 func cursorEditorHelpAndUI(ctx context.Context, t *testing.T, root, project, output, source string, paths map[string]string, env []string, filesBefore, runtimeBefore map[string]acpMetadataFile, report map[string]any) {
 	t.Helper()
 	report["stage"] = "native-help"
@@ -471,8 +654,8 @@ func cursorEditorHelpAndUI(ctx context.Context, t *testing.T, root, project, out
 	report["driver_completion"] = captureFacts
 	stdoutDigest := sha256.Sum256(observed)
 	report["driver_stdout_bytes"], report["driver_stdout_sha256"] = len(observed), hex.EncodeToString(stdoutDigest[:])
-	var result map[string]any
-	decodeErr := json.Unmarshal(observed, &result)
+	result, decodeErr := cursorEditorRetainUIRefusal(report, observed)
+	report["completion_class"] = acpMetadataCompletionClass(runErr)
 	after, filesAfter := cursorEditorFrozen(ctx, t, roots), cursorEditorFiles(t, paths)
 	summariesAfter := map[string]any{}
 	for label, facts := range after {
@@ -483,7 +666,7 @@ func cursorEditorHelpAndUI(ctx context.Context, t *testing.T, root, project, out
 	for label, previous := range before {
 		unchanged = unchanged && acpMetadataSame(previous, after[label])
 	}
-	report["custody_unchanged"], report["completion_class"] = unchanged, acpMetadataCompletionClass(runErr)
+	report["custody_unchanged"] = unchanged
 	if runErr != nil || decodeErr != nil || !unchanged || result["status"] != "observed" || result["skills_ready"] != false {
 		t.Fatal("Cursor Editor UI observation remains unqualified; inspect bounded metadata and screenshots")
 	}

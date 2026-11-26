@@ -79,6 +79,13 @@ function inventoryPage(options = {}) {
       } };
     },
     getByText(name, match) {
+      if (name instanceof RegExp) return { filter(filter) {
+        assert.deepEqual(filter, { visible: true });
+        return { async count() {
+          const text = options.locatorText ? options.locatorText(events, waited) : '';
+          return Number(name.test(text));
+        } };
+      } };
       assert.deepEqual(match, { exact: true });
       return { filter(filter) {
         assert.deepEqual(filter, { visible: true });
@@ -420,7 +427,7 @@ test('startup capture waits for a unique visible Customize control without click
       return Buffer.from('inert capture bytes; not native UI evidence');
     };
     const receipt = await startupScreenshot(page, root);
-    assert.deepEqual(events, ['text', 'wait', 'text', 'count', 'text', 'screenshot']);
+    assert.deepEqual(events, ['text', 'wait', 'text', 'count', 'text', 'screenshot', 'text', 'count', 'text']);
     assert.equal(receipt.name, 'startup.png');
     assert.equal(receipt.bytes, fs.statSync(path.join(root, 'startup.png')).size);
     assert.equal(receipt.sha256.length, 64);
@@ -471,7 +478,7 @@ test('capture failure retains only its phase and an allowlisted category', async
         assert.equal(JSON.stringify(error).includes('PRIVATE-'), false);
         return true;
       });
-      assert.equal(fs.statSync(path.join(root, 'startup.png')).size, 0);
+      assert.equal(fs.existsSync(path.join(root, 'startup.png')), false);
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   }
 });
@@ -488,7 +495,7 @@ test('empty, nonbinary and oversized capture bodies cannot produce receipts', as
         assert.equal(error.category, 'screenshot-bound');
         return true;
       });
-      assert.equal(fs.statSync(path.join(root, 'startup.png')).size, 0);
+      assert.equal(fs.existsSync(path.join(root, 'startup.png')), false);
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   }
 });
@@ -588,3 +595,59 @@ for (const [name, category] of [['TimeoutError', 'TimeoutError'], ['PRIVATE-NAME
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
 }
+
+test('inventory refuses shadow-root gates before capture, after failed wait and after capture', async () => {
+  for (const when of ['initial', 'wait-failure', 'capture']) {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-inventory-shadow-')));
+    try {
+      const { page, events } = inventoryPage({
+        locatorText: events => when === 'initial'
+          || when === 'wait-failure' && events.includes('wait:first')
+          || when === 'capture' && events.includes('screenshot')
+          ? 'Cursor’s AI features require you to be logged in' : '',
+        wait: async () => { if (when === 'wait-failure') throw Error('private-timeout'); },
+      });
+      await assert.rejects(inventoryScreenshot(page, root, 'skills.png', ['first']), /login-gate/u);
+      assert.equal(events.includes('screenshot'), when === 'capture');
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('startup refuses gates and nonunique controls appearing during capture', async () => {
+  for (const change of [
+    { text: 'Cursor’s AI features require you to be logged in' },
+    { locatorText: 'Trust this workspace' },
+    { count: 0, visible: false },
+    { count: 2 },
+  ]) {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-startup-drift-')));
+    try {
+      const ready = { text: 'Customize', count: 1, visible: true };
+      const { page, events } = controlPage([ready]);
+      page.screenshot = async () => {
+        Object.assign(ready, change);
+        return Buffer.from('inert captured bytes');
+      };
+      await assert.rejects(startupScreenshot(page, root),
+        change.text ? /login-gate/u : change.locatorText ? /trust-gate/u : /ui-control-unobserved/u);
+      assert.equal(events.includes('click'), false);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('capture refuses output raced in during capture without overwriting it', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'uap-capture-race-')));
+  try {
+    const { page } = controlPage([{ text: 'Customize', count: 1, visible: true }]);
+    page.screenshot = async () => {
+      fs.writeFileSync(path.join(root, 'startup.png'), 'raced sentinel', { flag: 'wx', mode: 0o600 });
+      return Buffer.from('inert capture bytes');
+    };
+    await assert.rejects(startupScreenshot(page, root), error => {
+      assert.equal(error.phase, 'open');
+      assert.equal(error.category, 'EEXIST');
+      return true;
+    });
+    assert.equal(fs.readFileSync(path.join(root, 'startup.png'), 'utf8'), 'raced sentinel');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
