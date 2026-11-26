@@ -569,10 +569,13 @@ class WindsurfInstallationAudit:
                                      "directory-v1-cache.json", "directory-v1-cache.json.lock",
                                      "discovery-v1-cache.json", "discovery-v1-cache.json.lock"}
                      and not key.startswith(("store/", "security/", "managed/"))}
+        # Lifecycle continuity covers the locked inputs and runtime root as
+        # well as the qualified node_modules link namespace.
+        runtime_paths = {Path(root).parent.as_posix() for root in roots}
         return {"documents": docs, "blobs": blobs, "authorities": authorities, "deliveries": deliveries,
                 "sources": sources,
                 "runtime_authority": {key: value for key, value in observed.items()
-                    if any(key == root or key.startswith(root + "/") for root in roots)},
+                    if any(key == root or key.startswith(root + "/") for root in runtime_paths)},
                 "managed_authority": {key: value for key, value in observed.items() if key.startswith("managed/")},
                 "ancillary": content(ancillary),
                 "managed": content({key: value for key, value in observed.items()

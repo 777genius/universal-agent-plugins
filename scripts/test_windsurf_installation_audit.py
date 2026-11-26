@@ -176,6 +176,28 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
             os.utime(binary, ns=(info.st_atime_ns, info.st_mtime_ns))
             self.assertNotEqual(before["runtime_authority"], observer.saved_image()["runtime_authority"])
 
+    def test_runtime_authority_keeps_root_and_locked_input_identity(self):
+        for mutation in (".agentplugins-runtime.json", "package.json", "package-lock.json", "root-mode"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                runtime, _ = self.author_runtime(observer)
+                before = observer.saved_image()
+                self.assertEqual(before["runtime_authority"], observer.saved_image()["runtime_authority"])
+                if mutation == "root-mode":
+                    runtime.chmod(stat.S_IMODE(runtime.stat().st_mode) ^ 0o010)
+                else:
+                    path = runtime / mutation
+                    body, info = path.read_bytes(), path.stat()
+                    path.rename(observer.case / "original-runtime-input")
+                    path.write_bytes(body)
+                    path.chmod(stat.S_IMODE(info.st_mode))
+                    os.utime(path, ns=(info.st_atime_ns, info.st_mtime_ns))
+                    self.assertNotEqual(path.stat().st_ino, info.st_ino)
+                    self.assertEqual(path.read_bytes(), body)
+                after = observer.saved_image()
+                self.assertEqual(before["ancillary"], after["ancillary"])
+                self.assertNotEqual(before["runtime_authority"], after["runtime_authority"])
+
     def test_retained_runtime_cannot_rebind_original_source_or_data_receipt(self):
         for mutation in ("unchanged", "coherent-source", "source-binding", "package-binding",
                          "coherent-receipt", "source-replacement"):
