@@ -105,8 +105,9 @@ func (s *projectListScan) record(entry map[string]any) bool {
 	if !ok || id == "" {
 		return false
 	}
-	if identity, builtin := claudeBuiltinListIdentity(entry); builtin {
-		if s.seen[identity] || !validProjectListMetadata(entry, "") {
+	if _, reservedBuiltin := claudeBuiltinListID(entry); reservedBuiltin {
+		identity, valid := claudeBuiltinListIdentity(entry)
+		if !valid || s.seen[identity] || !validProjectListMetadata(entry, "") {
 			return false
 		}
 		s.seen[identity] = true
