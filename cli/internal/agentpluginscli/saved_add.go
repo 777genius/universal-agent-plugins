@@ -41,19 +41,42 @@ func routeSavedAdd(cmd *cobra.Command, app App, opts *options, source string, ac
 		return false, nil
 	}
 	matches := exactGitPattern.FindStringSubmatch(source)
-	if matches == nil && !isDirectorySelector(source) {
-		if _, err := sourcespec.Parse(source); err != nil {
-			return true, err
-		}
+	if err := validateSavedAddInput(app, opts, source, targets, matches != nil, activation || auth); err != nil {
+		return true, err
+	}
+	if err := inspectSavedAddRoot(cmd.Context(), app, opts, source); err != nil {
+		return true, err
 	}
 	targets, err = savedAddTargets(cmd, app, opts, source, targets)
 	if err != nil {
-		return true, explainForeignBinding(app, err)
+		return true, err
 	}
-	if (activation || auth) && len(targets) != 1 {
-		return true, errors.New("explicit lifecycle attestation requires exactly one target")
+	if err := validateSavedAddAttestation(targets, activation || auth); err != nil {
+		return true, err
 	}
-	return true, explainForeignBinding(app, runSavedAdd(cmd, app, opts, source, targets, matches, activation, auth))
+	return true, runSavedAdd(cmd, app, opts, source, targets, matches, activation, auth)
+}
+
+func validateSavedAddInput(app App, opts *options, source string, targets []domain.ClientID, exactGit, attestation bool) error {
+	if !exactGit && !isDirectorySelector(source) {
+		if _, err := sourcespec.Parse(source); err != nil {
+			return err
+		}
+	}
+	if len(targets) == 0 && app.Terminal && opts.format == "human" {
+		return nil
+	}
+	if _, err := validateSavedAddTargets(app, opts, source, targets); err != nil {
+		return err
+	}
+	return validateSavedAddAttestation(targets, attestation)
+}
+
+func validateSavedAddAttestation(targets []domain.ClientID, required bool) error {
+	if required && len(targets) != 1 {
+		return errors.New("explicit lifecycle attestation requires exactly one target")
+	}
+	return nil
 }
 
 func cloneSavedRequirements(value environment.Requirements) environment.Requirements {

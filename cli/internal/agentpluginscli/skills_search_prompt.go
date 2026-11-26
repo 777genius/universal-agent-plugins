@@ -3,6 +3,7 @@ package agentpluginscli
 import (
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -20,8 +21,11 @@ func promptSkillsCatalog(cmd *cobra.Command, s *skillsCatalogSession, catalog sk
 			available = append(available, s.candidates[candidate.Id])
 		}
 	}
+	if err := renderSkillsCatalogOmissions(reviewWriter(cmd, s.app), catalog); err != nil {
+		return nil, err
+	}
 	if len(available) == 0 {
-		return nil, fmt.Errorf("no available Skills in this catalog")
+		return nil, fmt.Errorf("no available Skills in this catalog; inspect the candidate reasons or narrow the source with --path <folder>")
 	}
 	if !opts.plain {
 		app, err := withPrompter(cmd, s.app, opts)
@@ -39,13 +43,13 @@ func promptSkillsCatalog(cmd *cobra.Command, s *skillsCatalogSession, catalog sk
 			}
 		}
 	}
-	return promptFilteredSkills(cmd, available)
+	return promptFilteredSkillsTo(cmd, available, reviewWriter(cmd, s.app))
 }
 
 func skillsCatalogRequest(available []skillsource.Candidate) prompt.SkillsSelectionRequest {
 	request := prompt.SkillsSelectionRequest{}
 	for _, candidate := range available {
-		label := prompt.SafeText(candidate.Name) + " · " + prompt.SafeText(candidate.Path)
+		label := prompt.SkillNavigationLabel(candidate.Name + " · " + candidate.Path)
 		request.Choices = append(request.Choices, prompt.SkillChoice{ID: candidate.ID, Label: label})
 	}
 	return request
@@ -69,12 +73,20 @@ func validateCatalogSelection(available []skillsource.Candidate, ids []string) (
 	return selectedTerminalSkills(available, selected), nil
 }
 func promptFilteredSkills(cmd *cobra.Command, available []skillsource.Candidate) ([]skillsource.Candidate, error) {
-	query := ""
+	return promptFilteredSkillsTo(cmd, available, cmd.OutOrStdout())
+}
+func promptFilteredSkillsTo(cmd *cobra.Command, available []skillsource.Candidate, output io.Writer) ([]skillsource.Candidate, error) {
+	writer := &planWriter{writer: output}
+	view := terminalSkillsView{}
 	selected := map[string]bool{}
 	for {
-		matches := filterTerminalSkills(available, query)
-		shown := matches[:min(len(matches), 50)]
-		if err := renderTerminalSkillMatches(cmd, shown, len(matches), query, selected); err != nil {
+		matches := view.matches(available, selected)
+		shown := view.pageMatches(matches)
+		plain, _ := cmd.Flags().GetBool("plain")
+		if err := renderTerminalSkillMatchesTo(writer, shown, len(matches), view.query, selected, plain); err != nil {
+			return nil, err
+		}
+		if err := view.renderNavigation(writer, len(matches)); err != nil {
 			return nil, err
 		}
 		line, err := readInputLine(cmd.Context(), cmd.InOrStdin())
@@ -82,11 +94,10 @@ func promptFilteredSkills(cmd *cobra.Command, available []skillsource.Candidate)
 			return nil, err
 		}
 		line = strings.TrimSpace(line)
-		if line == "" || line == "q" || line == "quit" || line == "\x1b" {
+		if line == "" || line == "q" || line == "quit" || strings.ContainsAny(line, "\x1b\x03\x04") {
 			return nil, prompt.ErrPromptCanceled
 		}
-		if strings.HasPrefix(line, "/") {
-			query = strings.TrimSpace(line[1:])
+		if view.navigate(line, len(matches)) {
 			continue
 		}
 		done, message := updateTerminalSkillsSelection(line, shown, selected)
@@ -96,7 +107,7 @@ func promptFilteredSkills(cmd *cobra.Command, available []skillsource.Candidate)
 		if message == "" {
 			continue
 		}
-		if _, err = fmt.Fprintln(cmd.OutOrStdout(), message); err != nil {
+		if _, err = fmt.Fprintln(writer, message); err != nil {
 			return nil, err
 		}
 	}
@@ -113,9 +124,11 @@ func filterTerminalSkills(candidates []skillsource.Candidate, query string) []sk
 	return matches
 }
 func renderTerminalSkillMatches(cmd *cobra.Command, shown []skillsource.Candidate, total int, query string, selected map[string]bool) error {
-	writer := cmd.OutOrStdout()
-	theme := terminaltheme.For(writer)
 	plain, _ := cmd.Flags().GetBool("plain")
+	return renderTerminalSkillMatchesTo(cmd.OutOrStdout(), shown, total, query, selected, plain)
+}
+func renderTerminalSkillMatchesTo(writer io.Writer, shown []skillsource.Candidate, total int, query string, selected map[string]bool, plain bool) error {
+	theme := terminaltheme.For(writer)
 	if plain {
 		theme = terminaltheme.Theme{}
 	}
@@ -136,7 +149,7 @@ func renderTerminalSkillMatches(cmd *cobra.Command, shown []skillsource.Candidat
 		}
 	}
 	controls := "Toggle numbers separated by commas; /query searches name, path and description; / clears filter;\nclear removes selections; done reviews; q or Enter cancels"
-	_, err := fmt.Fprint(writer, theme.Text(terminaltheme.Muted, controls)+"\n"+theme.Text(terminaltheme.Label, "Select: "))
+	_, err := fmt.Fprintln(writer, theme.Text(terminaltheme.Muted, controls))
 	return err
 }
 
@@ -153,7 +166,7 @@ func updateTerminalSkillsSelection(line string, shown []skillsource.Candidate, s
 	}
 	choices, err := numberedSkillSelection(line, shown)
 	if err != nil {
-		return false, "Choose unique numbers from the displayed matches, /query to search, or done to review your selections."
+		return false, "Choose unique numbers from the displayed matches, next/prev to browse, /query to search, or done to review your selections."
 	}
 	for _, candidate := range choices {
 		if selected[candidate.ID] {

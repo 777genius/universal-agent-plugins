@@ -86,7 +86,7 @@ jobs:
         working-directory: cli
         run: |
           go test -race -count=1 -timeout=3m ./internal/agentpluginscli/skillspicker
-          go test -count=1 -timeout=3m ./internal/agentpluginscli -run '^TestSkills(FullCLIEndToEnd|Batch)'
+          go test -race -count=1 -timeout=5m ./internal/agentpluginscli -run '^(TestBrowser|TestSkills(FullCLIEndToEnd|Batch))'
       - name: Preserve Skills selection and readiness screenshots
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0

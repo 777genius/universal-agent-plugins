@@ -80,6 +80,7 @@ func packageManagerAgreementCases() map[string]func(*testing.T) {
 		"lock-read-only-no-publication":  TestDependencyLockReadOnlyResolutionDoesNotPublish,
 		"lock-only-preserves-installed":  pmAgreementLockOnlyPreservesInstalled,
 		"source-origin-rebind-refusal":   pmAgreementSourceRebindingRequiresExplicitTransfer,
+		"retained-directory-reinstall":   TestSavedDirectoryAddAfterImperativeRemoveRetainsIdentityAndData,
 		"lock-empty-existing-refusal":    TestDependencyLockRejectsEmptyExistingLock,
 		"absent-empty-distinct":          TestDependencyLockInputCheckDistinguishesAbsentAndEmpty,
 		"direct-source-promotion":        TestDirectSavedAddPromotesRetainedIntentWithoutAcquisition,

@@ -620,6 +620,46 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 for fd in held:
                     with self.assertRaises(OSError): os.fstat(fd)
 
+    def test_retained_parent_entries_preserve_exact_accepted_siblings(self):
+        for marker in (False, True):
+            for change in (None, "empty-sibling", "nested-empty-sibling", "replaced-sibling", "removed-sibling"):
+                with self.subTest(marker=marker, change=change), TemporaryDirectory() as directory:
+                    f = self.fixture(Path(directory).resolve())
+                    parent = f["owners"][0]["cache"].parent
+                    sibling = parent / "unrelated-version"
+                    sibling.mkdir()
+                    subject = self.capture(f)
+                    try:
+                        self.retire(f, marker=marker)
+                        subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f), keep_open=True)
+                        held, original = tuple(subject.fds), self.scan(f)
+                        if change == "empty-sibling":
+                            (parent / "unrelated-empty").mkdir()
+                        elif change == "nested-empty-sibling":
+                            (parent / "new-version/empty").mkdir(parents=True)
+                        elif change in ("replaced-sibling", "removed-sibling"):
+                            sibling.rename(f["root"] / "original-unrelated-version")
+                            if change == "replaced-sibling":
+                                sibling.mkdir()
+                        # Empty namespace changes are invisible to the identity
+                        # scanner; held-parent custody must still reject them.
+                        self.assertEqual(self.scan(f), original)
+                        if change is None:
+                            proof = subject.verify_retained(f["home"], f["root"], original, lambda: self.scan(f))
+                            self.assertEqual(proof["status"],
+                                "verified-unchanged-signed-project-cache-retirement-at-user-removal")
+                            self.assertFalse(proof["writer_closure_claimed"])
+                            self.assertTrue(set(held) <= set(subject.fds))
+                        else:
+                            with self.assertRaises(ValueError):
+                                subject.verify_retained(f["home"], f["root"], original, lambda: self.scan(f))
+                            self.assertEqual(subject.fds, [])
+                            for fd in held:
+                                with self.assertRaises(OSError):
+                                    os.fstat(fd)
+                    finally:
+                        subject.close()
+
     def test_retained_authority_cannot_be_unfinished_closed_reused_or_wrong_profile(self):
         for change in ("unfinished", "closed", "wrong-home", "wrong-case", "twice", "invalid-receipt"):
             with self.subTest(change=change), TemporaryDirectory() as directory:
