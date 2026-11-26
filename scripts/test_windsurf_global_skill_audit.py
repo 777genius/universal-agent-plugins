@@ -222,6 +222,16 @@ class InertPublicAndNative:
                 atomic(path, path.read_bytes())
             elif self.mode == "repeat-source-cache-bytes":
                 write(self.source_cache / "skills" / SKILL / "SKILL.md", BODY + b"changed source\n")
+            if self.mode in ("public-add-cache", "public-repeat-cache", "public-both-cache") and (
+                    self.adds == 1 and self.mode != "public-repeat-cache"
+                    or self.adds == 2 and self.mode != "public-add-cache"):
+                write(self.home / ".cache/devin/cli/state.json", str(self.adds).encode())
+                (self.home / ".cache/devin").chmod(0o700)
+                (self.home / ".cache/devin/cli").chmod(0o700)
+            if self.mode.startswith("public-add-") and self.mode != "public-add-cache" and self.adds == 1:
+                if self.mode == "public-add-foreign": write(self.home / "unknown-private-config", b"changed")
+                if self.mode == "public-add-config": write(self.home / ".config/devin/config.json", b"{}")
+                if self.mode == "public-add-oversize": write(self.home / ".cache/devin/cli/state.json", b"x" * 70000)
             document = self.add_document(self.adds > 1)
             if self.mode == "repeat-remint" and self.adds > 1:
                 document["data"]["actions"][0]["installation_id"] = "39b5780a-ea06-41f3-9b42-41918272b261"
@@ -408,6 +418,29 @@ class WindsurfGlobalSkillAuditTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "outside its bounded cache") as caught:
             self.run_case("vendor-cache-foreign")
         self.assertFalse(caught.exception.audit_evidence["native_discovery_verified"])
+
+    def test_internal_add_and_repeat_readers_use_only_the_existing_bounded_cache_policy(self):
+        for mode, phases in (("public-add-cache", ["public-add"]),
+                             ("public-repeat-cache", ["public-repeat"]),
+                             ("public-both-cache", ["public-add", "public-repeat"])):
+            with self.subTest(mode=mode):
+                result = self.run_case(mode)
+                evidence = result["windsurf_global_native_proof"]
+                self.assertEqual(result["status"], "passed")
+                self.assertTrue(evidence["native_discovery_verified"])
+                self.assertEqual([event["phase"] for event in evidence["native_cache_evidence"]], phases)
+                self.assertFalse(evidence["writer_closure_claimed"])
+        for mode in ("public-add-foreign", "public-add-config", "public-add-oversize"):
+            with self.subTest(mode=mode), self.assertRaises(ValueError):
+                self.run_case(mode)
+
+    def test_scientific_writer_raw_and_admitted_inventories_remain_separate_and_closed(self):
+        pin = next(pin for pin in proof.CASES.values() if pin["name"] == "claude-scientific-writer")
+        self.assertEqual((len(pin["source_skills"]), len(pin["skills"]), len(pin["rejected_skills"])), (26, 17, 9))
+        self.assertEqual(set(pin["source_skills"]), set(pin["skills"]) | set(pin["rejected_skills"]))
+        self.assertFalse(set(pin["skills"]) & set(pin["rejected_skills"]))
+        self.assertEqual(set(pin["rejected_skills"].values()), {"skill_metadata_type"})
+        self.assertNotIn("scientific-writer-init", pin["source_skills"])
 
     def test_probe_cannot_create_cache_tmp_or_mutate_owned_authority(self):
         for mode in ("before-cache", "before-tmp", "probe-owned-write", "probe-state-write", "probe-source-cache-write"):

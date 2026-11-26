@@ -36,16 +36,22 @@ def kill_group(process):
         os.killpg(group_id, signal.SIGKILL)
     except ProcessLookupError:
         pass
-    except PermissionError:
-        # Darwin may refuse a group whose sole leader has already exited.
-        # After reaping, prove absence without a destructive PID-reuse retry.
-        if process.poll() is not None:
+    except PermissionError as denied:
+        # Darwin may refuse a group while its sole leader is still exiting.
+        # Spend the existing cleanup reap window on our child, then prove
+        # absence without a destructive PID-reuse retry. A live child or any
+        # uncertainty about the original group preserves the signal refusal.
+        if process.poll() is None:
             try:
-                os.killpg(group_id, 0)
-            except ProcessLookupError:
-                return
-            except OSError:
-                pass
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                raise denied
+        try:
+            os.killpg(group_id, 0)
+        except ProcessLookupError:
+            return
+        except OSError:
+            pass
         raise
 
 

@@ -3,6 +3,7 @@
 import argparse
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -12,7 +13,7 @@ import runpy
 import shutil
 import stat
 import tempfile
-from time import sleep
+from time import sleep, time
 import traceback
 import uuid
 
@@ -902,10 +903,11 @@ def check_refusal_profile_unchanged(env, project, before):
     check_refusal_data_unchanged(data, before, current["data"])
 
 
-def check_refusal_data_unchanged(data, before, observed, *, store_pins=()):
+def check_refusal_data_unchanged(data, before, observed, *, store_pins=(), consent_log=None):
     """Keep durable User data strict; grant only finite verified cold caches."""
     previous = before["data"]
     store_files, store_directories = copilot_cold_store_additions(data, previous, observed, store_pins)
+    log_files, log_directories = copilot_consent_log_additions(data, previous, observed, consent_log)
     created_root = (previous.get("root-kind:0") == "absent"
                     and observed.get("root-kind:0") == "directory")
     for key, value in previous.items():
@@ -920,9 +922,11 @@ def check_refusal_data_unchanged(data, before, observed, *, store_pins=()):
     if not before.get("directory_only"):
         files.update((REFUSAL_SCANNER_PATH, *before["subjects"]))
     files.update(store_files)
+    files.update(log_files)
     directories = {parent.as_posix() for name in files
                    for parent in Path(name).parents if parent != Path(".")}
     directories.update(store_directories)
+    directories.update(log_directories)
     allowed = set()
     if created_root:
         entry = data.lstat()
@@ -968,9 +972,83 @@ def check_refusal_data_unchanged(data, before, observed, *, store_pins=()):
                 raise AssertionError("corrupt restore created invalid Directory cache lock")
             allowed.update((key, digest_key))
         else:
-            raise AssertionError("corrupt restore created unexpected cache/data entry")
-    if (observed.keys() - previous.keys()) - allowed:
-        raise AssertionError("corrupt restore created unexpected data state")
+            delta = audit["copilot_snapshot_delta"]({}, {key: observed[key]})
+            raise AssertionError("corrupt restore created unexpected cache/data entry: "
+                                 + json.dumps(delta, sort_keys=True))
+    uncovered = (observed.keys() - previous.keys()) - allowed
+    if uncovered:
+        delta = audit["copilot_snapshot_delta"]({}, {key: observed[key] for key in uncovered})
+        raise AssertionError("corrupt restore created unexpected data state: "
+                             + json.dumps(delta, sort_keys=True))
+
+
+def copilot_consent_log_additions(data, previous, observed, consent_log):
+    """Admit only the pinned writer's record of an already-verified refusal.
+
+    npm 0.1.116 resolves to release commit 4858d973afcf6cf31b49bba98bdf06482dce6226.
+    deps_apply.go calls finishInstall before rendering its incomplete receipts;
+    install_report.go and cli/internal/installlog/log.go synchronously write one
+    private User diagnostic, even for Project scope. Keep its bytes and identity
+    in the complete snapshot; neither native process logs nor arbitrary logs
+    acquire permission here.
+    """
+    if consent_log is None or "metadata:0:logs" not in observed:
+        return set(), set()
+    receipts, started_at, finished_at = consent_log
+    if (_CLI_VERSION.get() != "0.1.116" or "metadata:0:logs" in previous
+            or len(receipts) != len(UPDATE_ALIASES)
+            or {alias for alias, _ in receipts} != UPDATE_ALIASES
+            or len({identity for _, identity in receipts}) != len(receipts)
+            or any(not isinstance(identity, str) or not identity.strip() for _, identity in receipts)
+            or not 0 <= started_at <= finished_at):
+        raise AssertionError("cold Copilot diagnostic lacks exact verified refusal authority")
+    directory = data / "logs"
+    entry = directory.lstat()
+    if (not hasattr(os, "getuid") or not stat.S_ISDIR(entry.st_mode)
+            or stat.S_IMODE(entry.st_mode) != 0o700 or entry.st_uid != os.getuid()):
+        raise AssertionError("cold Copilot diagnostic directory is unsafe")
+    names = tuple(directory.iterdir())
+    if len(names) != 1:
+        raise AssertionError("cold Copilot refusal must create only one diagnostic")
+    path = names[0]
+    match = re.fullmatch(r"install-([0-9]{8}T[0-9]{6}Z)-[0-9a-f]{8}\.jsonl", path.name)
+    entry = path.lstat()
+    if (match is None or not stat.S_ISREG(entry.st_mode) or entry.st_nlink != 1
+            or stat.S_IMODE(entry.st_mode) != 0o600 or entry.st_uid != os.getuid()
+            or entry.st_size > 16 << 10):
+        raise AssertionError("cold Copilot diagnostic file is unsafe")
+    body, status = audit["copilot_settings_read"](path, data.parent.resolve(strict=True))
+    relative = path.relative_to(data).as_posix()
+    if (status is not None or not isinstance(body, str) or not body.endswith("\n")
+            or hashlib.sha256(body.encode()).hexdigest() != observed.get(f"{data.name}/{relative}")):
+        raise AssertionError("cold Copilot diagnostic bytes changed or are unreadable")
+    try:
+        records = [audit["copilot_json_document"](line) for line in body.splitlines()]
+        header = records[0]
+        if not isinstance(header, dict):
+            raise ValueError("invalid header")
+        stamp = datetime.strptime(header.get("time", ""), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        if (stamp.strftime("%Y%m%dT%H%M%SZ") != match[1]
+                or not int(started_at) <= stamp.timestamp() <= int(finished_at)
+                or type(header.get("schema_version")) is not int
+                or type(header.get("attempt")) is not int
+                or header != {"type": "run", "schema_version": 1, "time": stamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                              "command": "agentplugins install", "version": "0.1.116",
+                              "scope": "project", "attempt": 1, "os": "linux", "arch": "amd64"}):
+            raise ValueError("unrelated header")
+        reason = "copilot has not remembered the selected project folder; rerun installation to restore folder trust"
+        expected = [{"type": "binding", "alias": alias, "client": "copilot", "status": "incomplete",
+                     "code": "FAILED", "summary": "The installation did not complete for this agent.",
+                     "detail": f"{alias}/copilot: incomplete: {reason}"} for alias, _ in receipts]
+        if records[1:] != expected:
+            raise ValueError("unrelated binding records")
+    except (ValueError, TypeError, IndexError) as error:
+        raise AssertionError("cold Copilot diagnostic differs from verified consent refusal") from error
+    # A descriptor read cannot authorize a replacement, concurrent addition or
+    # changed file after the complete checkpoint used for the refusal guard.
+    if copilot_cold_data_snapshot(data) != observed:
+        raise AssertionError("cold Copilot data changed during diagnostic custody check")
+    return {relative}, {"logs"}
 
 
 def copilot_cold_store_additions(data, previous, observed, pins):
@@ -1628,6 +1706,8 @@ def verify_copilot_cold_project_refusal(cli, env, project):
     data_before["data"] = copilot_cold_data_snapshot(Path(env["AGENTPLUGINS_HOME"]))
     agreement = {name: (project / name).read_bytes() for name in ("uap.toml", "uap.lock")}
     receipts = ()
+    consent_log = None
+    started_at = time()
     try:
         refused = invoke([cli, "install", "--locked", "--yes", "--scope", "project",
                           "--project-root", str(project), "--format", "json"], env, project, 180)
@@ -1667,13 +1747,15 @@ def verify_copilot_cold_project_refusal(cli, env, project):
         if len({row["installation_id"] for row in results}) != len(results):
             raise AssertionError("cold Copilot consent refusal reused installation receipts")
         receipts = tuple((action["alias"], result["installation_id"]) for action, result in zip(actions, results))
+        consent_log = (receipts, started_at, time())
         return {"stage": "cold Copilot Project folder consent refused", "exit_code": 1,
                 "result": "expected_refusal", "reason": "missing_remembered_folder_consent",
                 "bindings": len(results), "cold_native_restore_qualified": False}
     finally:
         guard()
         check_refusal_data_unchanged(Path(env["AGENTPLUGINS_HOME"]), data_before,
-            copilot_cold_data_snapshot(Path(env["AGENTPLUGINS_HOME"])), store_pins=tuple(FIXED_SIGNED_CLOSURE.values()))
+            copilot_cold_data_snapshot(Path(env["AGENTPLUGINS_HOME"])),
+            store_pins=tuple(FIXED_SIGNED_CLOSURE.values()), consent_log=consent_log)
         if scoped_snapshot([Path(env["HOME"])]) != native_home:
             raise AssertionError("cold Copilot locked install modified native HOME")
         check_copilot_cold_project_unchanged(project, project_before, receipts)
