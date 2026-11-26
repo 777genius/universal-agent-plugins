@@ -3602,7 +3602,8 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
                 and owner["physical"] == Path(copilot_project_binding["directory"]).name
                 and owner["active"] == str(project / copilot_project_binding["directory"])
                 and owner["skill_path"] == skill_path)
-            skill_bytes_match = matches_pinned_skill_bytes(project, skill_path, item["skill_md_git_blob_sha1"])
+            skill_bytes_match = skill_bytes_match and matches_pinned_skill_bytes(
+                project, skill_path, item["skill_md_git_blob_sha1"])
             copilot_skill_proof = copilot_skill_audit.evidence
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as error:
             copilot_skill_audit = None

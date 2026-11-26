@@ -343,7 +343,14 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         ):
             event_paths = re.findall(r"(?m)^      - " + re.escape(path) + r"$", self.body)
             self.assertEqual(len(event_paths), 2, path)
-        self.assertRegex(self.body, r"(?m)^  cancel-in-progress:.*pull_request.*push.*$")
+        # Replace superseded PR runs; preserve every non-PR run independently.
+        concurrency = re.search(r"(?m)^concurrency:\n((?:  .+\n)+)", self.body)
+        self.assertIsNotNone(concurrency)
+        self.assertEqual(concurrency[1],
+            "  group: package-manager-e2e-${{ github.event_name }}-${{ "
+            "github.event_name == 'pull_request' && (github.event.pull_request.number || github.ref) "
+            "|| github.run_id }}\n"
+            "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n")
 
     def test_each_preflight_rejection_is_an_independent_fail_closed_step(self):
         # One native command per Actions step: Windows PowerShell must never

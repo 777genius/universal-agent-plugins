@@ -477,7 +477,8 @@ class CopilotProjectSkillRegistrationTests(unittest.TestCase):
                     repeated = state["add_count"] == 2
                     if not repeated:
                         skill.parent.mkdir(parents=True)
-                        skill.write_bytes(body)
+                        skill.write_bytes(body + b"first add changed the selected Skill\n"
+                                          if mutation == "first-add-restored-skill" else body)
                         (project / "uap.toml").write_text("schema_version = 1\n[dependencies]\n", encoding="utf-8")
                         (project / "uap.lock").write_text(json.dumps(lock), encoding="utf-8")
                         publish(document)
@@ -551,8 +552,11 @@ class CopilotProjectSkillRegistrationTests(unittest.TestCase):
                             '{"skills":{"frontend-design":{}}}', encoding="utf-8")
                 elif argv[1] == "list":
                     entries = [json.loads(json.dumps(binding))] if state["installed"] else []
-                    if state["installed"] and state["add_count"] == 1 and mutation == "first-list-skill":
-                        skill.write_bytes(body + b"first list changed the selected Skill\n")
+                    if state["installed"] and state["add_count"] == 1:
+                        if mutation == "first-list-skill":
+                            skill.write_bytes(body + b"first list changed the selected Skill\n")
+                        elif mutation == "first-add-restored-skill":
+                            skill.write_bytes(body)
                     if state["installed"] and state["add_count"] == 2:
                         if mutation == "repeat-restored-skill":
                             skill.write_bytes(body)
@@ -651,6 +655,11 @@ class CopilotProjectSkillRegistrationTests(unittest.TestCase):
 
     def test_first_list_cannot_replace_the_pinned_skill_bytes(self):
         result, _ = self.run_case("first-list-skill")
+        self.assertFalse(result["skill_bytes_match"])
+        self.assertNotEqual(result["status"], "passed")
+
+    def test_first_list_cannot_hide_a_first_add_skill_rewrite(self):
+        result, _ = self.run_case("first-add-restored-skill")
         self.assertFalse(result["skill_bytes_match"])
         self.assertNotEqual(result["status"], "passed")
 
