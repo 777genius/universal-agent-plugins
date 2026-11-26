@@ -105,6 +105,13 @@ func (s *projectListScan) record(entry map[string]any) bool {
 	if !ok || id == "" {
 		return false
 	}
+	if identity, builtin := claudeBuiltinListIdentity(entry); builtin {
+		if s.seen[identity] {
+			return false
+		}
+		s.seen[identity] = true
+		return true
+	}
 	if id == "(suppressed)@skills-dir" {
 		trust, valid := projectSuppression(entry)
 		if !valid || s.suppressed {

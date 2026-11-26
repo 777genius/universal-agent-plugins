@@ -76,6 +76,13 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 	if !ok {
 		return StatusUnknown, false, false
 	}
+	if identity, builtin := claudeBuiltinListIdentity(entry); builtin {
+		if _, duplicate := seen[identity]; duplicate {
+			return StatusUnknown, false, false
+		}
+		seen[identity] = struct{}{}
+		return StatusUnknown, false, true
+	}
 	id, idOK := entry["id"].(string)
 	scope, scopeOK := entry["scope"].(string)
 	enabled, enabledOK := entry["enabled"].(bool)
@@ -83,7 +90,9 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 	if !idOK || !scopeOK || !enabledOK || !pathOK || id == "" || scope == "" || !filepath.IsAbs(installPath) {
 		return StatusUnknown, false, false
 	}
-	identity := id + "\x00" + scope + "\x00" + filepath.Clean(installPath)
+	// Claude Code prints one local-scope row per project, differing only in projectPath.
+	project, _ := entry["projectPath"].(string)
+	identity := id + "\x00" + scope + "\x00" + filepath.Clean(installPath) + "\x00" + project
 	if _, duplicate := seen[identity]; duplicate {
 		return StatusUnknown, false, false
 	}
@@ -98,6 +107,23 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 		return StatusUnknown, false, false
 	}
 	return StatusUnknown, enabled, true
+}
+
+// Claude Code lists its bundled "<name>@builtin" plugins without installPath.
+// Such a row can never be the managed @skills-dir identity, so it is skipped
+// instead of making the whole listing unrecognized; any other shape stays strict.
+func claudeBuiltinListIdentity(entry map[string]any) (string, bool) {
+	if _, hasPath := entry["installPath"]; hasPath {
+		return "", false
+	}
+	id, idOK := entry["id"].(string)
+	scope, scopeOK := entry["scope"].(string)
+	_, enabledOK := entry["enabled"].(bool)
+	name, builtin := strings.CutSuffix(id, "@builtin")
+	if !idOK || !scopeOK || !enabledOK || scope == "" || !builtin || name == "" {
+		return "", false
+	}
+	return id + "\x00" + scope, true
 }
 
 func claudeProjectEntryLoaded(entry map[string]any, expectedPath string) bool {
