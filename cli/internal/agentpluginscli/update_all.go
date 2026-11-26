@@ -309,10 +309,29 @@ func (session *updateAllSession) applyAll() error {
 		if applyErr != nil {
 			return session.failImperativeUpdate(index, &applied, applyErr)
 		}
-		view.Status = "updated"
-		session.result.Updated++
+		if selectedUpdatesUnchanged(applied) {
+			view.Status, view.Reason = "skipped", "installed package and every selected target are current"
+			session.result.Skipped++
+		} else {
+			view.Status = "updated"
+			session.result.Updated++
+		}
 	}
 	return renderUpdateAll(session.cmd, session.opts, session.result)
+}
+
+func selectedUpdatesUnchanged(applied updateMultiResult) bool {
+	selected := false
+	for _, target := range applied.Targets {
+		if !target.Selected {
+			continue
+		}
+		selected = true
+		if !target.Output.Result.NoChange || target.Output.Result.Mutated {
+			return false
+		}
+	}
+	return selected
 }
 
 func markUnattemptedUpdateAll(result *updateAllResult, prepared []preparedUpdateAllItem, start int) {
