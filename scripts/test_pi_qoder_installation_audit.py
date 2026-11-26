@@ -582,6 +582,32 @@ class PiQoderInstallationAuditTest(unittest.TestCase):
             with self.subTest(phase=phase), self.assertRaises(ValueError):
                 self.exercise("qoder", "skill", 0, phase=phase, mutate=mutate)
 
+    def test_summary_phase_join_rejects_duplicate_unverified_or_missing_rows(self):
+        phases = list(PHASES)
+        for negative in (False, True):
+            expected = phases[:2] if negative else phases
+            proof = {"observations": [{"phase": p, "admission": "verified"} for p in expected],
+                     "deliveries": [] if negative else [{"phase": p} for p in expected]}
+            self.assertTrue(installation._receipt_phases(proof, negative))
+            for field in ("observations", "deliveries"):
+                if not proof[field]:
+                    changed = copy.deepcopy(proof)
+                    changed[field].append({"phase": "install"})
+                    self.assertFalse(installation._receipt_phases(changed, negative))
+                    continue
+                for mutation in ("duplicate", "reversed", "missing", "wrong-type"):
+                    changed = copy.deepcopy(proof)
+                    rows = changed[field]
+                    if mutation == "duplicate": rows[1] = rows[0]
+                    elif mutation == "reversed": rows.reverse()
+                    elif mutation == "missing": rows.pop()
+                    else: rows[0] = None
+                    with self.subTest(negative=negative, field=field, mutation=mutation):
+                        self.assertFalse(installation._receipt_phases(changed, negative))
+            changed = copy.deepcopy(proof)
+            changed["observations"][0]["admission"] = "unqualified"
+            self.assertFalse(installation._receipt_phases(changed, negative))
+
     def test_malformed_full_public_envelopes_and_missing_phase_never_qualify(self):
         mutations = {
             "missing full stdout": lambda f, o: o.pop("stdout_full"),
@@ -748,6 +774,16 @@ class PiQoderInstallationAuditTest(unittest.TestCase):
             for name, mutate in (
                     ("missing receipt", lambda r: r["results"][0].pop("pi_qoder_installation_audit")),
                     ("missing phase", lambda r: r["results"][0]["pi_qoder_installation_audit"]["observations"].pop()),
+                    ("duplicate observations", lambda r: r["results"][0]["pi_qoder_installation_audit"].update(
+                        observations=[r["results"][0]["pi_qoder_installation_audit"]["observations"][0]] * 6)),
+                    ("reordered observations", lambda r: r["results"][0]["pi_qoder_installation_audit"]["observations"].reverse()),
+                    ("missing admission", lambda r: r["results"][0]["pi_qoder_installation_audit"]["observations"][0].pop("admission")),
+                    ("unqualified admission", lambda r: r["results"][0]["pi_qoder_installation_audit"]["observations"][0].update(admission="unqualified")),
+                    ("malformed observation", lambda r: r["results"][0]["pi_qoder_installation_audit"]["observations"].__setitem__(0, False)),
+                    ("duplicate deliveries", lambda r: r["results"][0]["pi_qoder_installation_audit"].update(
+                        deliveries=[r["results"][0]["pi_qoder_installation_audit"]["deliveries"][0]] * 6)),
+                    ("reordered deliveries", lambda r: r["results"][0]["pi_qoder_installation_audit"]["deliveries"].reverse()),
+                    ("malformed delivery", lambda r: r["results"][0]["pi_qoder_installation_audit"]["deliveries"].__setitem__(0, False)),
                     ("changed source", lambda r: r["results"][0].update(source="https://unit.invalid/foreign")),
                     ("failed removal", lambda r: r["results"][0].update(removal_verified=False)),
                     ("native relabel", lambda r: r.update(passed=30)),

@@ -1030,6 +1030,16 @@ def summary(report, fixtures, acceptance, *, signed_release_pins):
                 "qualification_scope": "owned Pi/Qoder installation lifecycle only", **QUALIFICATION}
 
 
+def _receipt_phases(proof, negative):
+    phases = COMMANDS[:2] if negative else COMMANDS
+    observations, deliveries = proof.get("observations"), proof.get("deliveries")
+    return (type(observations) is list
+            and all(type(o) is dict and o.get("admission") == "verified" for o in observations)
+            and tuple(o.get("phase") for o in observations) == phases
+            and type(deliveries) is list and all(type(d) is dict for d in deliveries)
+            and tuple(d.get("phase") for d in deliveries) == (() if negative else phases))
+
+
 def _summary(report, fixtures, acceptance, *, signed_release_pins):
     result = {"installation_passed": 0, "installation_verified_negative_coverage": 0, "installation_acceptance_passed": False,
               "qualification_scope": "owned Pi/Qoder installation lifecycle only", **QUALIFICATION}
@@ -1066,8 +1076,8 @@ def _summary(report, fixtures, acceptance, *, signed_release_pins):
                 or proof.get("original_status") != row.get("status")
                 or proof.get("acceptance") != acceptance
                 or proof.get("installation_qualified") is not (not negative) or proof.get("exact_refusal_verified") is not negative
-                or len(proof.get("observations", [])) != (2 if negative else 6)
-                or (not negative and (len(proof.get("deliveries", [])) != 6 or not proof.get("owners") or not proof.get("selected")))):
+                or not _receipt_phases(proof, negative)
+                or (not negative and (not proof.get("owners") or not proof.get("selected")))):
             return result
         if (not refusal_row(row) if negative else not lifecycle_row(
                 row, kind, proof["owners"].get(identity, {}).get("uuid"), acceptance=acceptance)):
