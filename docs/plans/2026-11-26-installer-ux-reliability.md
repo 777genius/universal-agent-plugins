@@ -353,9 +353,9 @@ document. It changes neither the installer transaction nor the JSON field schema
 The recovered local executor builds the production picker assets and runs the
 focused Go and Python controls. Its ordinary process-containment prerequisite
 is unavailable (`/proc/.../task/.../children`), so Git/native cases remain
-mandatory on the normal CI hosts. The approved `ci:github-hosted` per-PR label
-selects the documented hosted Linux fallback; no assertion or global runner
-policy is relaxed.
+mandatory on the normal CI hosts. After evaluating the documented per-PR hosted
+fallback, Linux qualification uses the repository's existing runner-pool policy,
+including the new Skills job. No assertion or global runner setting is changed.
 
 - [x] Two plan critique rounds incorporated.
 - [x] Exact Linux HTTPS source and production picker bundle feasibility proven.
