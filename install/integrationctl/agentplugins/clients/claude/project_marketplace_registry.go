@@ -168,44 +168,10 @@ func inspectClaudeMarketplacePlugin(body []byte, name, physical, active, project
 		if !ok {
 			return claudeMarketplaceObservation{}
 		}
-		id, ok := entry["id"].(string)
-		if !ok || id == "" {
-			return claudeMarketplaceObservation{}
-		}
-		if claudeBuiltinListID(entry) {
-			identity, valid := claudeBuiltinListIdentity(entry)
-			if !valid || seen[identity] || !validProjectListMetadata(entry, "") {
-				return claudeMarketplaceObservation{}
-			}
-			seen[identity] = true
-			continue
-		}
-		if id == "(suppressed)@skills-dir" {
-			if _, valid := projectSuppression(entry); !valid || seen[id] {
-				return claudeMarketplaceObservation{}
-			}
-			seen[id] = true
-			continue
-		}
-		// Claude lists registrations from every project, marking entries from
-		// other workspaces disabled. Only our exact generated id claims this
-		// installation; unrelated project registrations must remain untouched.
-		rowProject := project
-		if path, present := entry["projectPath"].(string); present {
-			rowProject = path
-		}
-		row, valid := parseProjectListRow(entry, rowProject)
+		id, row, valid := recordClaudeMarketplaceListRow(entry, project, seen)
 		if !valid {
 			return claudeMarketplaceObservation{}
 		}
-		identity := id + "\x00" + row.scope + "\x00" + row.path
-		if projectPath, present := entry["projectPath"].(string); present && (row.scope == "local" || row.scope == "project") {
-			identity += "\x00" + projectPath
-		}
-		if seen[identity] {
-			return claudeMarketplaceObservation{}
-		}
-		seen[identity] = true
 		if id != expected {
 			continue
 		}
@@ -215,6 +181,49 @@ func inspectClaudeMarketplacePlugin(body []byte, name, physical, active, project
 		result = claudeMarketplaceCandidate(entry, row, projectListQuery{name: name, active: active, project: project, user: user}, marketplace, version)
 	}
 	return result
+}
+
+// Valid builtin and suppression rows are recorded without a candidate ID.
+func recordClaudeMarketplaceListRow(entry map[string]any, project string, seen map[string]bool) (string, projectListRow, bool) {
+	id, ok := entry["id"].(string)
+	if !ok || id == "" {
+		return "", projectListRow{}, false
+	}
+	if claudeBuiltinListID(entry) {
+		identity, valid := claudeBuiltinListIdentity(entry)
+		if !valid || seen[identity] || !validProjectListMetadata(entry, "") {
+			return "", projectListRow{}, false
+		}
+		seen[identity] = true
+		return "", projectListRow{}, true
+	}
+	if id == "(suppressed)@skills-dir" {
+		if _, valid := projectSuppression(entry); !valid || seen[id] {
+			return "", projectListRow{}, false
+		}
+		seen[id] = true
+		return "", projectListRow{}, true
+	}
+	// Claude lists registrations from every project, marking entries from
+	// other workspaces disabled. Only our exact generated id claims this
+	// installation; unrelated project registrations must remain untouched.
+	rowProject := project
+	if path, present := entry["projectPath"].(string); present {
+		rowProject = path
+	}
+	row, valid := parseProjectListRow(entry, rowProject)
+	if !valid {
+		return "", projectListRow{}, false
+	}
+	identity := id + "\x00" + row.scope + "\x00" + row.path
+	if projectPath, present := entry["projectPath"].(string); present && (row.scope == "local" || row.scope == "project") {
+		identity += "\x00" + projectPath
+	}
+	if seen[identity] {
+		return "", projectListRow{}, false
+	}
+	seen[identity] = true
+	return id, row, true
 }
 
 func claudeMarketplaceCandidate(entry map[string]any, row projectListRow, q projectListQuery, marketplace, version string) claudeMarketplaceObservation {
