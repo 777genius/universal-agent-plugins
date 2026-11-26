@@ -148,6 +148,19 @@ def observe_project_checkpoint(case, project, public_rows, audit):
         return {"status": "unavailable"}
 
 
+def require_owned_residuals(audit, residuals, allowed):
+    """Keep the refusal actionable without exposing unsafe names or file data."""
+    unexpected = set(residuals) - allowed
+    if unexpected:
+        # Reuse the audit's bounded safe-relative-name projection. The reason
+        # suffix is observation data, never part of the native path authority.
+        paths = {value.partition(": ")[0]: True for value in unexpected}
+        diagnostic = audit["copilot_snapshot_delta"]({}, paths)
+        diagnostic["unexpected_residual_count"] = len(unexpected)
+        raise ValueError("Claude cache retirement has unowned native residuals: "
+                         + json.dumps(diagnostic, sort_keys=True))
+
+
 class SignedClosureRetirement:
     """Hold all four owned caches continuously across one Project removal."""
 
@@ -413,8 +426,8 @@ class SignedClosureRetirement:
         try:
             require(Path(home) == self.home and Path(case_root) == self.case)
             self.checkpoint()
-            require(callable(rescan) and type(residuals) in (set, list, tuple) and bool(residuals)
-                    and set(residuals) <= self.retired_allowed)
+            require(callable(rescan) and type(residuals) in (set, list, tuple) and bool(residuals))
+            require_owned_residuals(self.audit, residuals, self.retired_allowed)
             for _ in range(2):
                 require(set(rescan()) == set(residuals))
                 self.checkpoint()
@@ -453,7 +466,7 @@ class SignedClosureRetirement:
                         and result["outcome"] == "completed")
                 observed.add(owner["alias"])
             allowed = set().union(*(self.retired(owner) for owner in self.owners))
-            require(set(residuals) <= allowed)
+            require_owned_residuals(self.audit, residuals, allowed)
             self.registries_removed()
             require(set(rescan()) == set(residuals))
             self.recheck()

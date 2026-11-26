@@ -3,7 +3,8 @@
 The caller runs the original bounded native process and passes held streams.
 Only source/receipt-bound four-phase inventory can qualify; capability-level
 Prepared support, files, and public Active are individually insufficient.
-No login, trust repair, cache exception, or escaped-writer closure is claimed.
+Only bounded pinned-reader cache deltas are admitted; no login, trust repair,
+or escaped-writer closure is claimed.
 """
 import base64
 import copy
@@ -39,6 +40,9 @@ PROBE_KEYS = set("probe argv cwd error exit elapsed_seconds stdout_file stderr_f
 # Complete Skill sets were independently read from each immutable Git tree's
 # immediate skills/*/SKILL.md entries and its root plugin.json (default Skills
 # discovery). Original rows 22/25 have truncated tails and are not set authority.
+# Scientific-writer has 26 raw Skills; production ParseInstallerSkill admits 17.
+# Its nine metadata.openclaw maps fail skill_metadata_type; retain that complete
+# source inventory and exact rejection set under the unchanged immutable digest.
 CASES = {
     "github:gemini-cli-extensions/sre@4130b149c0b069ef2028e42b3b9f3f84cce935e6": {
         "name": "sre-extension", "version": "0.1.23",
@@ -52,11 +56,21 @@ CASES = {
         "name": "claude-scientific-writer", "version": "2.22.0",
         "tree_digest": "sha256:bd70f81982eaa8984aee73838542ed2c190ea73f908977d210368fef7275c3ca",
         "manifest_digest": "sha256:c1950c0a0b6727ffda4f895bb179e0d749cc2fd5d52747ccdc034d66854fee34",
-        "skills": ("citation-management", "clinical-decision-support", "clinical-reports", "docx", "generate-image",
+        "source_skills": ("citation-management", "clinical-decision-support", "clinical-reports", "docx", "generate-image",
                    "hypothesis-generation", "infographics", "latex-posters", "literature-review", "market-research-reports",
                    "markitdown", "parallel-web", "pdf", "peer-review", "pptx", "pptx-posters", "research-grants",
                    "research-lookup", "scholar-evaluation", "scientific-critical-thinking", "scientific-schematics",
-                   "scientific-slides", "scientific-writing", "treatment-plans", "venue-templates", "xlsx")},
+                   "scientific-slides", "scientific-writing", "treatment-plans", "venue-templates", "xlsx"),
+        "rejected_skills": {
+            "citation-management": "skill_metadata_type", "generate-image": "skill_metadata_type",
+            "infographics": "skill_metadata_type", "latex-posters": "skill_metadata_type",
+            "literature-review": "skill_metadata_type", "parallel-web": "skill_metadata_type",
+            "research-lookup": "skill_metadata_type", "scientific-schematics": "skill_metadata_type",
+            "scientific-slides": "skill_metadata_type"},
+        "skills": ("clinical-decision-support", "clinical-reports", "docx", "hypothesis-generation",
+                   "market-research-reports", "markitdown", "pdf", "peer-review", "pptx", "pptx-posters",
+                   "research-grants", "scholar-evaluation", "scientific-critical-thinking",
+                   "scientific-writing", "treatment-plans", "venue-templates", "xlsx")},
     "github:obra/the-elements-of-style@05fc4f0d2b97b7c042dd9949ad658568e4a1324e": {
         "name": "elements-of-style", "version": "1.0.0",
         "tree_digest": "sha256:32fc89e62a200be082357d2cd5111284aa974b79678835cd60875de8fbba5958",
@@ -221,7 +235,8 @@ def frame_changes(before, after):
 
 def content(value):
     return {path: (row["kind"], bool(row["mode"] & 0o111), row["bytes"], row["sha256"])
-            if row["kind"] == "file" else ("dir",) for path, row in value.items()}
+            if row["kind"] == "file" else ("link", row["target"])
+            if row["kind"] == "link" else ("dir",) for path, row in value.items()}
 
 
 def immutable_source_digest(root_fd, observed):
@@ -589,6 +604,35 @@ class WindsurfGlobalSkillAudit:
         require(total <= 256 << 10, "native cache total exceeds bounded allowance")
         return changed
 
+    def _public_native_cache(self, phase, owned):
+        """Close only Devin's existing bounded cache delta around add/repeat.
+
+        The immutable/public owner is validated first. Initial Skill writes are
+        checked by _home_transition and the source/native receipt byte join;
+        repeat retains every Skill byte and inode in this comparison.
+        """
+        current = frame(self.dirs[self.home][0])
+        def comparison(image):
+            return {"home/" + path: row for path, row in image.items()
+                    if not (phase == "add" and (path == GLOBAL_SKILLS or any(
+                        path == GLOBAL_SKILLS + "/" + name
+                        or path.startswith(GLOBAL_SKILLS + "/" + name + "/") for name in owned)))}
+        before, after = comparison(self.home_current), comparison(current)
+        if before == after:
+            return None
+        try:
+            changed = self._bounded_vendor_native_cache_delta(before, after)
+        except ValueError as error:
+            diagnostic = json.dumps(frame_changes(before, after), sort_keys=True, separators=(",", ":"))
+            raise ValueError(str(error) + "; diagnostic=" + diagnostic) from error
+        roots = (".cache/devin", ".config/devin/cli", ".local/share/devin")
+        self.vendor_cache_entries = {key: value for key, value in current.items()
+            if any(key == root or key.startswith(root + "/") for root in roots)}
+        event = {"phase": "public-" + phase, "before": frame_fact(before),
+                 "after": frame_fact(after), "changed_entries": len(changed)}
+        self.native_cache_events.append(event)
+        return event
+
     def _state_guard(self):
         for relative, (fd, body, fact) in self.files.items():
             if not relative.startswith("uap-data/"):
@@ -726,11 +770,14 @@ class WindsurfGlobalSkillAudit:
         require(actual_digest == self.pin["tree_digest"], "actual immutable source bytes do not match the independent tree pin")
         source_skills = sorted(path.split("/")[1] for path, row in source_frame.items()
                                if row["kind"] == "file" and re.fullmatch(r"skills/[^/]+/SKILL\.md", path))
-        require(source_skills == sorted(self.pin["skills"]), "cached source lacks its complete independently closed Skill set")
+        require(source_skills == sorted(self.pin.get("source_skills", self.pin["skills"])), "cached source lacks its complete independently closed Skill set")
+        require(set(source_skills) == set(self.pin["skills"]) | set(self.pin.get("rejected_skills", {})),
+                "raw source inventory does not close admitted and rejected Skills")
         self.source_frame = source_frame
         self.source_store_proof = {"path": str(self.source_store), "algorithm": "agentplugins-tree-sha256-v1",
             "tree_digest": actual_digest, "root_identity": source_frame[""], "held_frame": frame_fact(source_frame),
-            "last_verified_frame": frame_fact(source_frame), "complete_skills": source_skills}
+            "last_verified_frame": frame_fact(source_frame), "complete_skills": list(self.pin["skills"]),
+            "source_skills": source_skills, "rejected_skills": self.pin.get("rejected_skills", {})}
         package = installed.get("package")
         require(type(package) is dict and package.get("declared_name") == self.name and package.get("version") == self.pin["version"]
                 and package.get("manifest_digest") == self.pin["manifest_digest"]
@@ -806,11 +853,13 @@ class WindsurfGlobalSkillAudit:
             selector = self.owner["uuid"] if phase == "remove" and self.owner is not None else self.item
             expected = ["remove" if phase == "remove" else "add", selector, "--target", "windsurf", "--scope", "user", "--format", "json"]
             require(type(argv) is list and len(argv) == len(expected) + 1 and argv[1:] == expected, "public transition argv differs")
+            cache_event = None
             if phase == "add":
                 require(self.owner is None and len(self.observations) == 1, "initial public add order differs")
                 uid, skills = self._public_add(document, False)
                 self._bound_lock()
                 owner, managed_frame = self._state_owner(uid, skills)
+                cache_event = self._public_native_cache(phase, skills)
                 current = self._home_transition(skills)
                 self.owner, self.managed_frame, self.home_current = owner, managed_frame, current
                 for filename in ("state-v2.json", "uap.lock", "uap.toml"):
@@ -820,13 +869,19 @@ class WindsurfGlobalSkillAudit:
                 require(self.owner is not None and len(self.observations) == 2, "public repeat order differs")
                 self._public_add(document, True)
                 self._bound_lock()
+                cache_event = self._public_native_cache(phase, self.owner["skills"])
+                if cache_event is not None:
+                    self.home_current = self._home_transition(self.owner["skills"])
                 # The no-op wire result omits component_support; the original
                 # complete bound set and all saved/owned identities remain fixed.
                 self.guard()
             else:
                 require(self.removing and self.owner is not None, "remove lacks original owned installation")
                 self._removed(document)
-            self.transitions.append({"phase": phase, "argv": copy.deepcopy(argv), "stdout_bytes": len(encoded), "stdout_sha256": sha(encoded), "verified": True})
+            transition = {"phase": phase, "argv": copy.deepcopy(argv), "stdout_bytes": len(encoded), "stdout_sha256": sha(encoded), "verified": True}
+            if cache_event is not None:
+                transition["native_cache_custody"] = copy.deepcopy(cache_event)
+            self.transitions.append(transition)
             self.guard()
             return True
         except (OSError, ValueError, TypeError, KeyError, UnicodeError, RecursionError) as error:

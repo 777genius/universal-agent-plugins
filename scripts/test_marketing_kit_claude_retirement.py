@@ -170,6 +170,27 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     result.add(".claude/" + (Path(base) / name).relative_to(profile).as_posix() + ": directory")
         return result
 
+    def test_unowned_residual_refusal_is_bounded_sanitized_and_closes_custody(self):
+        with self.fixture() as f:
+            subject = self.capture(f)
+            self.retire(f)
+            raw = self.scan(f)
+            for name in ["private-secret-\n" + str(index) for index in range(24)] + ["mcp-needs-auth-cache.json"]:
+                (f["profile"] / name).write_text('{"name":"marketing-kit"}')
+            residuals = self.scan(f)
+            self.assertEqual(len(residuals - raw), 25)
+            with self.assertRaisesRegex(ValueError, "unowned native residuals: ") as raised:
+                subject.finish(f["cleanup"], residuals, lambda: self.scan(f))
+            message = str(raised.exception)
+            detail = json.loads(message.split(": ", 1)[1])
+            self.assertEqual(detail["unexpected_residual_count"], 25)
+            self.assertEqual(len(detail["items"]), 20)
+            self.assertEqual(detail["omitted_key_count"], 5)
+            self.assertEqual(detail["items"][0]["key"], ".claude/mcp-needs-auth-cache.json")
+            self.assertNotIn("private-secret", message)
+            self.assertEqual(subject.fds, [])
+            self.assertEqual(residuals, self.scan(f))
+
     def test_exact_four_cache_custody_optional_marker_and_raw_findings_preserved(self):
         for marker in (False, True):
             with self.subTest(marker=marker), self.fixture() as f:
