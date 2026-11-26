@@ -339,3 +339,13 @@ func TestCIPathPolicy_HeavyMatrixWiring(t *testing.T) {
 		}
 	}
 }
+
+func TestCIPathPolicy_LiveWindsurfGlobalAuditTrigger(t *testing.T) {
+	paths, _ := triggerSettings(t, RepoRoot(t), "live-install-audit.yml", "pull_request")["paths"].([]any)
+	for _, path := range paths {
+		if path == "scripts/windsurf_global_skill_audit.py" {
+			return
+		}
+	}
+	t.Fatal("Windsurf global audit changes must trigger the live Pi/Qoder matrix")
+}
