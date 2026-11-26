@@ -12,6 +12,7 @@ import (
 func claudeBuiltinRows() []map[string]any {
 	return []map[string]any{
 		{"id": "cc-plugin-agents-md@builtin", "version": "unknown", "scope": "user", "enabled": true, "hasUserConfig": true},
+		{"id": "cc-plugin-plugin-authoring@builtin", "version": "unknown", "scope": "user", "enabled": true},
 		{"id": "cc-plugin-privacy@builtin", "version": "unknown", "scope": "user", "enabled": true},
 	}
 }
