@@ -96,7 +96,7 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 	identity := id + "\x00" + scope + "\x00" + filepath.Clean(installPath)
 	if project, hasProject := entry["projectPath"]; hasProject {
 		path, valid := project.(string)
-		if !valid || !filepath.IsAbs(path) || filepath.Clean(path) != path || (scope != "local" && scope != "project") {
+		if !valid || !filepath.IsAbs(path) || filepath.Clean(path) != path {
 			return StatusUnknown, false, false
 		}
 		identity += "\x00" + path
