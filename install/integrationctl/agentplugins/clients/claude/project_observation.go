@@ -132,7 +132,7 @@ func (s *projectListScan) record(entry map[string]any) bool {
 		return false
 	}
 	identity := id + "\x00" + row.scope + "\x00" + row.path
-	if project, present := entry["projectPath"].(string); present {
+	if project, present := entry["projectPath"].(string); present && (row.scope == "local" || row.scope == "project") {
 		identity += "\x00" + project
 	}
 	if s.seen[identity] {
