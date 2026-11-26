@@ -97,6 +97,7 @@ func TestListingRejectsMalformedUserProjectIdentity(t *testing.T) {
 		{"user-row-with-project", map[string]any{"id": "x@market", "scope": "user", "enabled": true, "installPath": foreign, "projectPath": t.TempDir()}},
 		{"local-row-with-nonabsolute-project", map[string]any{"id": "x@market", "scope": "local", "enabled": true, "installPath": foreign, "projectPath": "relative"}},
 		{"local-row-with-nonstring-project", map[string]any{"id": "x@market", "scope": "local", "enabled": true, "installPath": foreign, "projectPath": true}},
+		{"unknown-scope", map[string]any{"id": "x@market", "scope": "future-scope", "enabled": true, "installPath": foreign}},
 		{"builtin-row-with-project-scope", map[string]any{"id": "cc-plugin-privacy@builtin", "scope": "project", "enabled": true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
