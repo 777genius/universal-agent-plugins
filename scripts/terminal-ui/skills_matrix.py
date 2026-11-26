@@ -95,6 +95,92 @@ class WindowsSession:
         check(not self.terminal.forced, 'forced native cleanup cannot qualify a case')
 
 
+def linux_process_identity(pid):
+    """Observe the same PID/start-time boundary used by the Linux OSRunner."""
+    root = Path('/proc') / str(pid)
+    check(root.stat().st_uid == os.geteuid(), 'native lineage has a foreign process owner')
+    body = (root / 'stat').read_bytes()
+    check(len(body) <= 4096, 'native lineage proc identity exceeded its bound')
+    opening, closing = body.find(b'('), body.rfind(b')')
+    check(opening > 0 and closing > opening and body[:opening].strip() == str(pid).encode(),
+          'native lineage has a malformed proc identity')
+    fields = body[closing + 1:].split()
+    check(len(fields) >= 20 and fields[0] in (b'R', b'S', b'D', b'T', b't', b'W', b'K', b'P', b'I'),
+          'native lineage process is not live')
+    parent, started = int(fields[1]), int(fields[19])
+    check(parent > 0 and started > 0, 'native lineage has no stable parent/start time')
+    executable = (root / 'exe').resolve(strict=True)
+    info = (root / 'exe').stat()
+    return dict(pid=pid, ppid=parent, start_time=started, executable=str(executable),
+                executable_identity=[info.st_dev, info.st_ino])
+
+
+def linux_pidfd_exited(fd):
+    poller = select.poll()
+    poller.register(fd, select.POLLIN)
+    return bool(poller.poll(0))
+
+
+def linux_supervisor_protocol(pid):
+    root = Path('/proc') / str(pid)
+    for name, limit in (('cmdline', 4096), ('environ', 1 << 20)):
+        with (root / name).open('rb') as stream:
+            body = stream.read(limit + 1)
+        check(len(body) <= limit, 'native supervisor protocol evidence exceeded its bound')
+        if name == 'cmdline':
+            check(body == b'/proc/self/exe\0', 'native parent is not the exact OSRunner reexec')
+        else:
+            check(body.split(b'\0').count(b'PLUGIN_KIT_AI_ORDINARY_PROCESS_SUPERVISOR=1') == 1,
+                  'native parent lacks the exact OSRunner supervisor protocol')
+
+
+def hold_native_lineage(process, identity, nonce, native, binary):
+    """Pin only the known CLI -> OSRunner supervisor -> responder topology."""
+    check(identity.get('nonce') == nonce and
+          type(identity.get('pid')) is int and identity['pid'] > 1 and
+          type(identity.get('ppid')) is int and identity['ppid'] > 1,
+          'native marker does not identify this owned CLI child')
+    check(Path(identity.get('executable', '')).resolve() == native.resolve(),
+          'native marker PID is not this fixture executable')
+    held = []
+    try:
+        check(process.poll() is None, 'CLI exited before native lineage acquisition')
+        anchor = linux_process_identity(process.pid)
+        binary_info = binary.stat()
+        check(anchor['executable'] == str(binary.resolve()) and
+              anchor['executable_identity'] == [binary_info.st_dev, binary_info.st_ino],
+              'owned CLI anchor is not the qualification executable')
+        for role, pid, expected in (('native', identity['pid'], native),
+                                    ('supervisor', identity['ppid'], binary)):
+            before = linux_process_identity(pid)
+            fd = os.pidfd_open(pid)
+            held.append(dict(role=role, fd=fd, identity=before))
+            after = linux_process_identity(pid)
+            check(before == after and not linux_pidfd_exited(fd),
+                  'native lineage changed while its stable handle was acquired')
+            expected_info = expected.stat()
+            check(after['executable'] == str(expected.resolve()) and
+                  after['executable_identity'] == [expected_info.st_dev, expected_info.st_ino],
+                  'native lineage executable is not the exact fixture/CLI inode')
+        native_row, supervisor_row = [row['identity'] for row in held]
+        check(native_row['ppid'] == identity['ppid'] and
+              supervisor_row['ppid'] == process.pid and
+              len({process.pid, native_row['pid'], supervisor_row['pid']}) == 3,
+              'native lineage does not reach the owned CLI through one supervisor')
+        linux_supervisor_protocol(supervisor_row['pid'])
+        check(process.poll() is None and linux_process_identity(process.pid) == anchor,
+              'owned CLI anchor changed during lineage acquisition')
+        for row in held:
+            check(linux_process_identity(row['identity']['pid']) == row['identity'] and
+                  not linux_pidfd_exited(row['fd']),
+                  'native lineage changed before crash control')
+        return held
+    except BaseException:
+        for row in held:
+            os.close(row['fd'])
+        raise
+
+
 class Matrix:
     def __init__(self, binary, native, timeout=20, acquisition_timeout=180,
                  source='auto', scanner=None):
@@ -314,7 +400,7 @@ class Matrix:
         rows = items_by_agent(result)
         check(rows['codex']['status'] == 'failed', 'native failure labeled successful')
         check(rows['cursor']['status'] == 'succeeded', 'healthy independent binding lost')
-        installed(fixture, ('cursor',))
+        installed(fixture, ('cursor',), retained_failed=('codex',), result=result)
         failure_log(result, fixture)
 
     def partial_interactive(self, fixture, evidence, retry):
@@ -327,7 +413,7 @@ class Matrix:
             session.wait(RETRY, 'retry-ready')
             check('Needs attention' in clean(session.raw), 'partial result is not explained')
             at_retry = len(fixture.calls())
-            healthy = installed(fixture, ('cursor',))['cursor']
+            healthy = installed(fixture, ('cursor',), retained_failed=('codex',))['cursor']
             session.send(b'y\n' if retry else b'n\n')
             session.finish(0 if retry else 1)
             if retry:
@@ -340,7 +426,8 @@ class Matrix:
                       'declined retry performed effects')
         finally:
             session.close()
-        final = installed(fixture, ('cursor', 'codex') if retry else ('cursor',))
+        final = installed(fixture, ('cursor', 'codex') if retry else ('cursor',),
+                          retained_failed=() if retry else ('codex',))
         check(final['cursor'] == healthy, 'retry rewrote the already healthy binding or receipts')
 
     def case_partial_decline(self, fixture, evidence):
@@ -378,7 +465,7 @@ class Matrix:
             session.close()
         check(blocked.read_bytes() == b'diagnostic-directory-obstructed-by-owned-fixture\n',
               'diagnostic reporting overwrote the obstructing file')
-        installed(fixture, ('cursor',))
+        installed(fixture, ('cursor',), retained_failed=('codex',))
 
     def case_recovery_refusal(self, fixture, evidence):
         # Hold exact native child identity before crashing the CLI. The responder
@@ -393,7 +480,7 @@ class Matrix:
         process = subprocess.Popen(argv, cwd=fixture.project, env=fixture.env,
                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE)
-        child_fd, child_owned = None, False
+        held, child_owned = [], False
         primary = None
         try:
             marker = fixture.root / 'native-add-paused'
@@ -403,27 +490,22 @@ class Matrix:
                 time.sleep(0.02)
             check(process.poll() is None, 'CLI exited before native effect pause')
             identity = json.loads(marker.read_text(encoding='utf-8'))
-            check(identity.get('nonce') == nonce and
-                  identity.get('ppid') == process.pid and
-                  isinstance(identity.get('pid'), int) and identity['pid'] > 1,
-                  'native marker does not identify this owned CLI child')
-            child_fd = os.pidfd_open(identity['pid'])
-            actual_executable = Path(os.readlink(f'/proc/{identity["pid"]}/exe')).resolve()
-            expected_executable = (fixture.bin / 'codex').resolve()
-            check(actual_executable == expected_executable and
-                  Path(identity['executable']).resolve() == expected_executable,
-                  'native marker PID is not this fixture executable')
+            # Preserve the rejected marker too; cleanup evidence must not hide
+            # which PID/PPID topology failed ownership admission.
+            persist(evidence / 'native-marker.json', identity)
+            held = hold_native_lineage(process, identity, nonce, fixture.bin / 'codex', self.binary)
             child_owned = True
-            poller = select.poll()
-            poller.register(child_fd, select.POLLIN)
-            check(not poller.poll(0), 'native fixture exited before crash control')
-            persist(evidence / 'owned-native-identity.json', identity)
+            persist(evidence / 'owned-native-identity.json', dict(
+                marker=identity, lineage=[dict(role=row['role'], **row['identity']) for row in held]))
             process.kill()  # Popen owns and reaps this exact CLI process.
             try:
-                signal.pidfd_send_signal(child_fd, signal.SIGKILL)
+                signal.pidfd_send_signal(held[0]['fd'], signal.SIGKILL)
             except ProcessLookupError:
                 pass  # Parent-death cleanup can have already ended this child.
-            check(poller.poll(3000), 'owned native process did not exit')
+            for row in held:
+                poller = select.poll()
+                poller.register(row['fd'], select.POLLIN)
+                check(poller.poll(3000), 'owned ' + row['role'] + ' process did not exit')
             stdout, stderr = process.communicate(timeout=3)
             (evidence / 'crash.stdout').write_bytes(stdout)
             (evidence / 'crash.stderr').write_bytes(stderr)
@@ -433,20 +515,21 @@ class Matrix:
             raise
         finally:
             cleanup_errors = []
-            if child_fd is not None:
+            for row in held:
                 try:
-                    if child_owned:
-                        try:
-                            signal.pidfd_send_signal(child_fd, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                        poller = select.poll()
-                        poller.register(child_fd, select.POLLIN)
-                        check(poller.poll(3000), 'native child cleanup could not be confirmed')
+                    # Both handles passed exact lineage/inode/start-time checks.
+                    # Never signal a marker PID or an inferred process group.
+                    try:
+                        signal.pidfd_send_signal(row['fd'], signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    poller = select.poll()
+                    poller.register(row['fd'], select.POLLIN)
+                    check(poller.poll(3000), 'owned ' + row['role'] + ' cleanup could not be confirmed')
                 except Exception as error:
                     cleanup_errors.append(repr(error))
                 finally:
-                    os.close(child_fd)
+                    os.close(row['fd'])
             try:
                 if process.poll() is None:
                     process.kill()
@@ -455,6 +538,7 @@ class Matrix:
                 cleanup_errors.append(repr(error))
             persist(evidence / 'crash-cleanup.json', dict(
                 cli_reaped=process.poll() is not None, native_identity_confirmed=child_owned,
+                lineage_roles=[row['role'] for row in held],
                 cleanup_errors=cleanup_errors))
             if cleanup_errors:
                 raise RuntimeError(f'{primary!r}; uncertain fixture cleanup: {cleanup_errors}')

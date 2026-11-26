@@ -58,10 +58,21 @@ def bindings(fixture):
     return result
 
 
-def installed(fixture, targets):
+def installed(fixture, targets, *, retained_failed=(), result=None):
+    """Prove successful deliveries and explicitly selected failed ownership.
+
+    The installer commits a managed directory before native activation. A failed
+    activation retains that directory and its receipts for repair; it is not a
+    successful native installation. Callers must name this separate expectation.
+    """
+    successful, failed = set(targets), set(retained_failed)
+    check(len(successful) == len(targets) and len(failed) == len(retained_failed) and
+          not successful.intersection(failed), 'ambiguous expected binding outcomes')
+    check(not failed or failed == {'codex'}, 'unsupported retained failure expectation')
     actual = bindings(fixture)
     state = json.loads((fixture.data / 'state-v2.json').read_text(encoding='utf-8'))
-    check(set(actual) == set(targets), f'durable targets {set(actual)}, expected {set(targets)}')
+    expected = successful | failed
+    check(set(actual) == expected, f'durable targets {set(actual)}, expected {expected}')
     try:
         lock = json.loads((fixture.data / 'uap.lock').read_text(encoding='utf-8'))
     except json.JSONDecodeError as error:
@@ -84,13 +95,21 @@ def installed(fixture, targets):
             check(hashlib.sha1(header + body, usedforsecurity=False).hexdigest() == fixture.skill_blob,
                   'GitHub Skill bytes differ from the immutable pinned source blob')
         if fixture.publisher:
-            expected = {name: hashlib.sha256(data).hexdigest()
-                        for name, data in fixture.publisher.files.items()}
-            check(hashes(skill.parent) == expected, 'Skill resource tree differs from complete source')
-        owner = next((receipt for receipt in state.get('environment_receipts', [])
-                      if receipt.get('client_binding_id') == binding['client_binding_id']), None)
-        check(owner is not None and owner.get('client_id') == target,
+            resources = {name: hashlib.sha256(data).hexdigest()
+                         for name, data in fixture.publisher.files.items()}
+            check(hashes(skill.parent) == resources, 'Skill resource tree differs from complete source')
+        owners = [receipt for receipt in state.get('environment_receipts', [])
+                  if receipt.get('client_binding_id') == binding['client_binding_id']]
+        check(len(owners) == 1 and owners[0].get('client_id') == target,
               'native binding has no matching saved environment ownership receipt')
+        owner = owners[0]
+        installations = [item for item in state.get('installations', [])
+                         if item.get('clients', {}).get(binding['client_binding_id']) == binding]
+        check(len(installations) == 1 and
+              owner.get('installation_id') == installations[0].get('installation_id') and
+              bool(owner.get('installation_id')) and owner.get('phase') == 'committed' and
+              owner.get('environment_id') == 'user-default',
+              'saved ownership receipt does not identify this committed installation/environment')
         revision = binding.get('package_revision', {})
         check(owner.get('package_digest') == revision.get('tree_digest'),
               'receipt and installed immutable package digest disagree')
@@ -99,7 +118,11 @@ def installed(fixture, targets):
         check(any(receipt.get('environment_authority', {}).get('source_key') ==
                   owner.get('source_key') and
                   receipt.get('environment_authority', {}).get('client_id') == target and
-                  receipt.get('environment_authority', {}).get('alias') == owner.get('alias')
+                  receipt.get('environment_authority', {}).get('alias') == owner.get('alias') and
+                  receipt.get('environment_authority', {}).get('environment_id') ==
+                  owner.get('environment_id') and
+                  receipt.get('client_binding_id') == binding['client_binding_id'] and
+                  receipt.get('active_path') == binding['target_locator']
                   for receipt in committed),
               'committed native receipt lost its reviewed source/client authority or alias')
         check(owner.get('alias') and owner.get('source_key'),
@@ -112,7 +135,13 @@ def installed(fixture, targets):
         check(bool(revision.get('tree_digest')) and
               packages[0].get('tree_digest') == revision['tree_digest'],
               'matching locked binding and installed immutable package digest disagree')
-        if target == 'codex':
+        if target in failed:
+            retained_native_failure(fixture, binding)
+        elif target == 'cursor':
+            check(binding.get('activation') == 'manual_activation_required' and
+                  binding.get('verification') == 'package_validated',
+                  'Cursor delivery did not retain its successful prepared boundary')
+        elif target == 'codex':
             check(binding.get('activation') == 'active' and
                   binding.get('verification') == 'installation_verified' and
                   binding.get('authentication') == 'not_required',
@@ -123,9 +152,48 @@ def installed(fixture, targets):
             check(cache.is_relative_to(fixture.root.resolve()), 'native cache escaped fixture')
             cached = cache / 'skills' / fixture.skill_name / 'SKILL.md'
             check(cached.read_bytes() == body, 'native discovered cache has different Skill bytes')
+        if result is not None:
+            reported_binding(result, expected, target, owner, binding, target in failed)
     check((fixture.data / 'uap.toml').is_file(), 'saved desired intent missing')
     check((fixture.data / 'uap.lock').is_file(), 'saved immutable lock missing')
-    return actual
+    return {target: actual[target] for target in targets}
+
+
+def retained_native_failure(fixture, binding):
+    # This qualification injects failure before Codex plugin add. Directory
+    # commit survives; native marketplace compensation must leave no installed
+    # registration. Do not generalize this to uncertain cleanup or recovery.
+    check(binding.get('activation') == 'failed' and
+          binding.get('verification') == 'failed' and
+          binding.get('authentication') == 'not_required' and
+          binding.get('policy') == 'allowed',
+          'retained native binding does not record the expected activation failure')
+    registry_path = fixture.root / 'native-registry.json'
+    check(registry_path.is_file(), 'retained native failure lost its registry observation')
+    registry = json.loads(registry_path.read_text(encoding='utf-8'))
+    check(isinstance(registry, dict) and set(registry) == {'path'} and
+          Path(registry['path']).resolve() == Path(binding['target_locator']).resolve(),
+          'failed native binding retained registration, cache or unrelated source')
+    native_home = Path(getattr(fixture, 'env', {}).get('CODEX_HOME', fixture.home / '.codex'))
+    check(native_home.resolve().is_relative_to(fixture.root.resolve()),
+          'failed native profile escaped fixture')
+    cache = native_home / 'plugins' / 'cache'
+    check(not cache.exists() and not cache.is_symlink(),
+          'failed native add left an unexpected cache effect')
+
+
+def reported_binding(result, expected, target, owner, binding, failed):
+    rows = items_by_agent(result)
+    check(set(rows) == expected, 'reported targets disagree with durable reviewed bindings')
+    item = rows[target]
+    check(item.get('status') in (('failed',) if failed else ('succeeded', 'unchanged')),
+          'reported binding outcome disagrees with durable/native evidence')
+    check(item.get('alias') == owner['alias'] and
+          item.get('destinationPath') == binding['target_locator'],
+          'reported binding lost its owned alias or destination')
+    if failed:
+        check(result.get('result') == 'failure' and result.get('status') == 'partial',
+              'retained failed binding was not reported as partial failure')
 
 
 def native_registration(path, registry):

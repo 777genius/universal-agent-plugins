@@ -143,12 +143,18 @@ class ExecutedProvenanceTests(unittest.TestCase):
                              hashlib.sha256(original).digest())
 
     def test_main_launches_copy_and_rejects_copy_mutation(self):
-        for mutate in (False, True):
-            with self.subTest(mutate=mutate), tempfile.TemporaryDirectory() as temporary:
+        for mutate, alias in ((False, False), (False, True), (True, False), (True, True)):
+            with self.subTest(mutate=mutate, alias=alias), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
+                if alias:
+                    (root / 'path alias Ω').mkdir()
+                    root = root / 'path alias Ω' / '..'
                 supplied, native = root / 'cli', root / 'native'
                 supplied.write_bytes(b'CLI bytes')
                 native.write_bytes(b'responder bytes')
+                canonical_supplied = supplied.resolve(strict=True)
+                if alias:
+                    self.assertNotEqual(str(supplied), str(canonical_supplied))
                 artifacts = root / 'evidence'
                 argv = ['skills_matrix.py', '--binary', str(supplied), '--product-sha', 'a' * 40,
                         '--native-fixture', str(native), '--artifacts', str(artifacts), '--case', 'fresh']
@@ -158,7 +164,7 @@ class ExecutedProvenanceTests(unittest.TestCase):
                 def run(_name, evidence):
                     evidence.mkdir()
                     launched = Path(runner.call_args.args[0])
-                    self.assertNotEqual(launched, supplied)
+                    self.assertNotEqual(launched.resolve(strict=True), canonical_supplied)
                     self.assertFalse(os.path.samefile(launched, supplied))
                     self.assertEqual(launched.read_bytes(), b'CLI bytes')
                     if mutate:
@@ -169,11 +175,18 @@ class ExecutedProvenanceTests(unittest.TestCase):
                         patch.object(matrix, 'Matrix') as runner, patch('builtins.print'):
                     runner.return_value.run_case.side_effect = run
                     self.assertEqual(matrix.main(), int(mutate))
-                report = json.loads((artifacts / 'report.json').read_text())
-                self.assertEqual(report['supplied_binary_path'], str(supplied))
-                self.assertEqual(report['binary_path'], str(artifacts / 'product' /
-                    ('agentplugins.exe' if os.name == 'nt' else 'agentplugins')))
+                report = json.loads((artifacts / 'report.json').read_text(encoding='utf-8'))
+                expected_copy = artifacts.resolve(strict=True) / 'product' / (
+                    'agentplugins.exe' if os.name == 'nt' else 'agentplugins')
+                self.assertEqual(report['supplied_binary_path'], str(canonical_supplied))
+                self.assertEqual(report['binary_path'], str(expected_copy))
+                self.assertEqual(Path(runner.call_args.args[0]), expected_copy)
+                self.assertEqual(report['native_fixture_path'], str(native.resolve(strict=True)))
+                self.assertEqual(report['binary_sha256'], hashlib.sha256(b'CLI bytes').hexdigest())
                 self.assertEqual(report['cases'][0]['status'], 'fail' if mutate else 'pass')
+                if mutate:
+                    self.assertIn('input CLI binary changed during qualification',
+                                  report['cases'][0]['error'])
 
 
 if __name__ == '__main__':

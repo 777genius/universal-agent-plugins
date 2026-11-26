@@ -1,10 +1,12 @@
 """Failure-sensitive controls for Skills qualification source/state oracles."""
+import copy
 import hashlib
 import json
 import os
 from pathlib import Path
 import ssl
 import socket
+import shutil
 import sys
 import tempfile
 import time
@@ -171,15 +173,20 @@ class InstallationEvidenceTests(unittest.TestCase):
         cached.parent.mkdir(parents=True)
         cached.write_bytes(self.fixture.skill_bytes)
         self.digest = 'sha256:' + 'a' * 64
-        authority = {'source_key': 'fixture-source', 'client_id': 'codex', 'alias': 'demo'}
+        authority = {'source_key': 'fixture-source', 'client_id': 'codex', 'alias': 'demo',
+                     'environment_id': 'user-default'}
         self.binding = dict(
             client_id='codex', client_binding_id='binding', target_locator=str(self.target),
             materialization='materialized', activation='active', authentication='not_required',
             verification='installation_verified', package_revision={'tree_digest': self.digest},
-            receipts=[{'phase': 'committed', 'environment_authority': authority}])
+            receipts=[{'phase': 'committed', 'environment_authority': authority,
+                       'client_binding_id': 'binding', 'active_path': str(self.target)}])
         self.owner = dict(alias='demo', client_binding_id='binding', client_id='codex',
-                          source_key='fixture-source', package_digest=self.digest)
-        self.state = dict(installations=[{'clients': {'binding': self.binding}}],
+                          source_key='fixture-source', package_digest=self.digest,
+                          installation_id='installation', environment_id='user-default',
+                          phase='committed')
+        self.state = dict(installations=[{'installation_id': 'installation',
+                                         'clients': {'binding': self.binding}}],
                           environment_receipts=[self.owner])
         self.save()
         (self.fixture.data / 'uap.toml').write_text('fixture agreement')
@@ -312,6 +319,199 @@ class InstallationEvidenceTests(unittest.TestCase):
         self.fixture.skill_blob = '0' * 40
         with self.assertRaisesRegex(AssertionError, 'immutable pinned source blob'):
             oracle.installed(self.fixture, ('codex',))
+
+
+class RetainedFailureEvidenceTests(unittest.TestCase):
+    """Managed commit survives native failure without qualifying active success."""
+    save = InstallationEvidenceTests.save
+    save_lock = InstallationEvidenceTests.save_lock
+    save_registry = InstallationEvidenceTests.save_registry
+
+    def setUp(self):
+        InstallationEvidenceTests.setUp(self)
+        self.cursor = copy.deepcopy(self.binding)
+        cursor_path = self.root / 'cursor' / 'demo'
+        shutil.copytree(self.target, cursor_path)
+        self.cursor.update(client_id='cursor', client_binding_id='cursor-binding',
+                           target_locator=str(cursor_path), activation='manual_activation_required',
+                           authentication='not_checked', verification='package_validated')
+        cursor_receipt = self.cursor['receipts'][0]
+        cursor_receipt.update(client_binding_id='cursor-binding', active_path=str(cursor_path))
+        cursor_receipt['environment_authority']['client_id'] = 'cursor'
+        self.state['installations'][0]['clients']['cursor-binding'] = self.cursor
+        self.state['environment_receipts'].append(dict(
+            self.owner, client_id='cursor', client_binding_id='cursor-binding'))
+        self.lock['packages'][0]['targets'] = ['codex', 'cursor']
+        self.binding.update(activation='failed', verification='failed', policy='allowed')
+        self.registry = {'path': str(self.target)}
+        self.result = {'result': 'failure', 'status': 'partial', 'items': [
+            {'targetId': 'codex', 'alias': 'demo', 'destinationPath': str(self.target),
+             'status': 'failed'},
+            {'targetId': 'cursor', 'alias': 'demo', 'destinationPath': str(cursor_path),
+             'status': 'succeeded'}]}
+        self.save()
+        self.save_lock()
+        self.save_registry()
+
+    def prove(self):
+        return oracle.installed(self.fixture, ('cursor',), retained_failed=('codex',),
+                                result=self.result)
+
+    def test_partial_commit_is_owned_but_only_healthy_delivery_is_returned(self):
+        self.assertEqual(self.prove(), {'cursor': self.cursor})
+        self.assertEqual(oracle.installed(self.fixture, ('cursor',), retained_failed=('codex',)),
+                         {'cursor': self.cursor})
+
+    def test_tls_publisher_resources_do_not_replace_expected_result_target_identity(self):
+        resources = {'SKILL.md': self.fixture.skill_bytes, 'reference.txt': b'original reference\n'}
+        self.fixture.publisher = SimpleNamespace(files=resources)
+        for binding in (self.binding, self.cursor):
+            skill = Path(binding['target_locator']) / 'skills' / self.fixture.skill_name
+            (skill / 'reference.txt').write_bytes(resources['reference.txt'])
+        self.assertEqual(self.prove(), {'cursor': self.cursor})
+        (self.skill.parent / 'reference.txt').write_bytes(b'changed reference\n')
+        with self.assertRaisesRegex(AssertionError, 'complete source'):
+            self.prove()
+
+    def test_failed_ownership_is_never_implicitly_accepted_or_counted_successful(self):
+        with self.assertRaisesRegex(AssertionError, 'durable targets'):
+            oracle.installed(self.fixture, ('cursor',))
+        with self.assertRaisesRegex(AssertionError, 'native Skill completion'):
+            oracle.installed(self.fixture, ('cursor', 'codex'))
+
+    def test_expected_partitions_must_be_disjoint_unique_and_supported(self):
+        for healthy, failed in ((('cursor', 'codex'), ('codex',)),
+                                (('cursor', 'cursor'), ('codex',)),
+                                (('cursor',), ('codex', 'codex')),
+                                (('codex',), ('cursor',))):
+            with self.subTest(healthy=healthy, failed=failed), self.assertRaises(AssertionError):
+                oracle.installed(self.fixture, healthy, retained_failed=failed)
+
+    def test_retained_failure_requires_exact_failed_lifecycle_facts(self):
+        original = dict(self.binding)
+        for field, wrong in (('activation', 'active'), ('activation', 'prepared'),
+                             ('verification', 'installation_verified'),
+                             ('authentication', 'not_checked'), ('policy', 'blocked'),
+                             ('materialization', 'absent')):
+            with self.subTest(field=field, wrong=wrong):
+                self.binding.update(original)
+                self.binding[field] = wrong
+                self.save()
+                with self.assertRaises(AssertionError):
+                    self.prove()
+
+    def test_registered_disabled_or_stale_cache_metadata_cannot_qualify_failure(self):
+        for key, value in (('installed', []), ('installed', [{'installed': True, 'enabled': True}]),
+                           ('installed', [{'installed': False, 'enabled': False}]),
+                           ('cache', str(self.root / 'native-cache')), ('marketplace', 'stale'),
+                           ('name', 'demo'), ('spec', 'demo@stale')):
+            with self.subTest(key=key):
+                self.registry = {'path': str(self.target), key: value}
+                self.save_registry()
+                with self.assertRaisesRegex(AssertionError, 'retained registration'):
+                    self.prove()
+
+    def test_native_cache_effect_is_rejected_even_without_registry_metadata(self):
+        cache = self.fixture.home / '.codex' / 'plugins' / 'cache'
+        cache.mkdir(parents=True)
+        with self.assertRaisesRegex(AssertionError, 'cache effect'):
+            self.prove()
+
+    def test_missing_or_foreign_native_source_is_rejected(self):
+        self.registry['path'] = str(self.root / 'other-managed-package')
+        self.save_registry()
+        with self.assertRaisesRegex(AssertionError, 'unrelated source'):
+            self.prove()
+        (self.root / 'native-registry.json').unlink()
+        with self.assertRaisesRegex(AssertionError, 'registry observation'):
+            self.prove()
+
+    def test_failed_binding_still_requires_original_skill_bytes(self):
+        self.skill.write_bytes(b'foreign bytes')
+        with self.assertRaisesRegex(AssertionError, 'Skill bytes changed'):
+            self.prove()
+
+    def test_retained_commit_and_environment_receipts_must_match_exact_binding(self):
+        original = copy.deepcopy(self.binding['receipts'])
+        for field, wrong in (('phase', 'rolled_back'), ('client_binding_id', 'cursor-binding'),
+                             ('active_path', str(self.root / 'other'))):
+            with self.subTest(field=field):
+                self.binding['receipts'] = copy.deepcopy(original)
+                self.binding['receipts'][0][field] = wrong
+                self.save()
+                with self.assertRaises(AssertionError):
+                    self.prove()
+
+    def test_wrong_or_duplicate_environment_owner_is_rejected(self):
+        original = copy.deepcopy(self.owner)
+        for field, wrong in (('phase', 'prepared'), ('installation_id', 'other-installation'),
+                             ('environment_id', 'other-environment'), ('client_id', 'cursor'),
+                             ('package_digest', 'sha256:' + 'b' * 64)):
+            with self.subTest(field=field):
+                self.owner.update(original)
+                self.owner[field] = wrong
+                self.save()
+                with self.assertRaises(AssertionError):
+                    self.prove()
+        self.owner.update(original)
+        self.state['environment_receipts'].append(dict(self.owner))
+        self.save()
+        with self.assertRaisesRegex(AssertionError, 'ownership receipt'):
+            self.prove()
+
+    def test_failed_binding_lock_pin_cannot_be_borrowed_from_an_unrelated_entry(self):
+        package = self.lock['packages'][0]
+        package['targets'] = ['cursor']
+        self.lock['packages'].append(dict(package, alias='other', targets=['codex']))
+        self.save_lock()
+        with self.assertRaisesRegex(AssertionError, 'exact binding alias/source/target'):
+            self.prove()
+
+    def test_extra_and_missing_durable_bindings_are_rejected(self):
+        clients = self.state['installations'][0]['clients']
+        clients['foreign-binding'] = dict(self.cursor, client_id='claude',
+                                           client_binding_id='foreign-binding')
+        self.save()
+        with self.assertRaisesRegex(AssertionError, 'durable targets'):
+            self.prove()
+        del clients['foreign-binding']
+        del clients['binding']
+        self.save()
+        with self.assertRaisesRegex(AssertionError, 'durable targets'):
+            self.prove()
+
+    def test_result_cannot_relabel_failure_or_a_successful_peer(self):
+        for index, wrong in ((0, 'succeeded'), (0, 'unchanged'), (0, 'skipped'), (1, 'failed')):
+            with self.subTest(index=index, wrong=wrong):
+                original = self.result['items'][index]['status']
+                self.result['items'][index]['status'] = wrong
+                with self.assertRaisesRegex(AssertionError, 'reported binding outcome'):
+                    self.prove()
+                self.result['items'][index]['status'] = original
+
+    def test_result_requires_matching_alias_destination_and_partial_failure(self):
+        row = self.result['items'][0]
+        for field, wrong in (('alias', 'other'), ('destinationPath', self.cursor['target_locator'])):
+            with self.subTest(field=field):
+                original = row[field]
+                row[field] = wrong
+                with self.assertRaisesRegex(AssertionError, 'owned alias or destination'):
+                    self.prove()
+                row[field] = original
+        self.result['result'] = 'success'
+        with self.assertRaisesRegex(AssertionError, 'partial failure'):
+            self.prove()
+
+    def test_result_requires_exact_reviewed_targets(self):
+        self.result['items'].append(dict(self.result['items'][0], targetId='claude'))
+        with self.assertRaisesRegex(AssertionError, 'reported targets'):
+            self.prove()
+
+    def test_healthy_cursor_cannot_hide_a_failed_lifecycle(self):
+        self.cursor.update(activation='failed', verification='failed')
+        self.save()
+        with self.assertRaisesRegex(AssertionError, 'successful prepared boundary'):
+            self.prove()
 
 
 @unittest.skipUnless(sys.platform == 'linux', 'Linux-only SSL_CERT_FILE source fixture')
