@@ -215,7 +215,28 @@ func (session *updateAllSession) classifyInstallation(installation domain.Instal
 		session.recordSkipCurrent(prepared, &item)
 		return
 	}
+	if err := session.authorizePrepared(prepared); err != nil {
+		session.recordPreflightFailure(&item, prepared, err)
+		return
+	}
 	session.recordPlanned(installation, prepared, &item)
+}
+
+// Keep the batch response as the sole JSON owner while reusing the ordinary
+// security decision with the original input, context and human output channels.
+func (session *updateAllSession) authorizePrepared(prepared *preparedUpdateMany) error {
+	for index := range prepared.result.Targets {
+		prepared.result.Targets[index].Output.Security = prepared.loaded.security
+	}
+	command := session.cmd
+	if session.opts.format == "json" {
+		command = &cobra.Command{Use: session.cmd.Name()}
+		command.SetContext(session.cmd.Context())
+		command.SetIn(session.cmd.InOrStdin())
+		command.SetOut(io.Discard)
+		command.SetErr(session.cmd.ErrOrStderr())
+	}
+	return authorizeSecurityAssessment(command, session.app, session.opts, &prepared.loaded)
 }
 
 func (session *updateAllSession) skipDirectoryStatus(installation domain.Installation, item *updateAllInstallation) bool {
