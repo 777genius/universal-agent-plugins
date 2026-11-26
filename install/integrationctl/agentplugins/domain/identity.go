@@ -30,7 +30,7 @@ func ComputeSourceBindingID(source SourceIdentity) string {
 		sum := sha256.Sum256([]byte(key))
 		return "src_" + hex.EncodeToString(sum[:12])
 	}
-	if source.SourceBindingHint == "uap-dependency-skill" && strings.HasPrefix(source.StableSourceKey, "github-skill:") {
+	if source.SourceBindingHint == "uap-dependency-skill" && (strings.HasPrefix(source.StableSourceKey, "github-skill:") || strings.HasPrefix(source.StableSourceKey, "git-skill-url-v1:")) {
 		sum := sha256.Sum256([]byte(source.StableSourceKey))
 		return "src_" + hex.EncodeToString(sum[:12])
 	}

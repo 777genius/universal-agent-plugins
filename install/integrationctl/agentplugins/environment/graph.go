@@ -87,7 +87,7 @@ func validateGraph(lock Lock, requirements Requirements) error {
 			return fmt.Errorf("%s: %w", pkg.Alias, err)
 		}
 		if source := pkg.Source.Git; source != nil && source.Kind == SkillKind {
-			identity := strings.ToLower(source.Repository) + "\x00" + source.Commit + "\x00" + source.ResolvedSkillPath
+			identity := (GitSource{Repository: strings.ToLower(source.Repository), URL: source.URL}).Endpoint() + "\x00" + source.Commit + "\x00" + source.ResolvedSkillPath
 			if previous := resolvedSkills[identity]; previous != "" {
 				return fmt.Errorf("aliases %s and %s select the same Skill", previous, pkg.Alias)
 			}

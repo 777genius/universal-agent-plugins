@@ -22,9 +22,9 @@ type skillsAddOptions struct {
 }
 
 func newSkillsCommand(app App, opts *options) *cobra.Command {
-	root := &cobra.Command{Use: "skills", Short: "Install raw Agent Skills from GitHub or HTTPS publisher indexes"}
+	root := &cobra.Command{Use: "skills", Short: "Install raw Agent Skills from Git or HTTPS publisher indexes"}
 	selection := &skillsAddOptions{}
-	add := &cobra.Command{Use: "add <owner/repository or HTTPS URL>", Short: "Select and install raw Skills through the saved environment installer", Long: "Select Skills from a public GitHub repository, folder or SKILL.md URL.\nHTTPS publishers expose a complete .well-known Skills index; use --skill with an exact name.\n\nExplicit --skill, --path, --target and exact file/folder URLs use terminal review.\n--ui opens interactive selection and cannot combine with --skill, --target or --dry-run.\nJSON and non-interactive use require explicit selections, targets and --yes (except --dry-run).\nTerminal selection: arrows move, space toggles Skills, / opens search, and Enter reviews.\nWhile searching, Enter applies the filter. Esc or Ctrl+C cancels.\nWith --plain: numbers toggle Skills, /query searches, / clears the filter,\nnext/prev browse pages, selected shows your basket, all returns to the catalog,\nclear removes all selections, done reviews, q or Enter cancels.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error { return selection.run(cmd, app, opts, args[0]) }}
+	add := &cobra.Command{Use: "add <owner/repository or Git/HTTPS URL>", Short: "Select and install raw Skills through the saved environment installer", Long: "Select Skills from a GitHub repository, folder or SKILL.md URL, or an HTTPS/SSH Git clone URL.\nGit sources use your existing native Git credentials; selectors use clone-url#ref//path.\nHTTPS publishers expose a complete .well-known Skills index; use --skill with an exact name.\n\nExplicit --skill, --path, --target and exact file/folder URLs use terminal review.\n--ui opens interactive selection and cannot combine with --skill, --target or --dry-run.\nJSON and non-interactive use require explicit selections, targets and --yes (except --dry-run).\nTerminal selection: arrows move, space toggles Skills, / opens search, and Enter reviews.\nWhile searching, Enter applies the filter. Esc or Ctrl+C cancels.\nWith --plain: numbers toggle Skills, /query searches, / clears the filter,\nnext/prev browse pages, selected shows your basket, all returns to the catalog,\nclear removes all selections, done reviews, q or Enter cancels.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error { return selection.run(cmd, app, opts, args[0]) }}
 	add.Flags().StringSliceVar(&selection.names, "skill", nil, "exact Skill name (repeatable; ambiguity requires --path)")
 	add.Flags().StringVar(&selection.folder, "path", "", "exact repository-relative Skill folder (empty selects repository root)")
 	add.Flags().StringVar(&selection.ref, "ref", "", "exact Git ref when a URL boundary is ambiguous")
@@ -155,7 +155,7 @@ func waitForSkillsPicker(ctx context.Context, server *skillspicker.Server) error
 }
 func (s *skillsCatalogSession) startPicker(ctx context.Context) (*skillspicker.Server, error) {
 	revision := s.source.Commit
-	return skillspicker.Start(ctx, skillspicker.Options{Source: skillspicker.Source{Repository: s.source.Repository, SourceRevision: &revision, Scope: s.source.RequestedPath}, Callbacks: s.callbacks()})
+	return skillspicker.Start(ctx, skillspicker.Options{Source: skillspicker.Source{Repository: s.source.Location(), SourceRevision: &revision, Scope: s.source.RequestedPath}, Callbacks: s.callbacks()})
 }
 func openSkillsBrowser(ctx context.Context, url string) error {
 	var name string

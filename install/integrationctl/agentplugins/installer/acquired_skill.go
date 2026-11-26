@@ -41,6 +41,25 @@ func validAcquiredSkillPaths(facts domain.SkillSourceFacts, packageSubpath strin
 	return facts.ResolvedPath == packageSubpath && (facts.ResolvedPath == "" || path.Base(facts.ResolvedPath) == facts.Name)
 }
 
+func acquiredGitSkillSourceKey(source domain.SourceIdentity, portable bool) (string, error) {
+	facts := source.Skill
+	if !portable || facts == nil || source.WebSkill != nil || source.SourceBindingHint != "uap-dependency-skill" || source.SourceKind != "git" || source.Repository != "" || source.ArchiveSHA256 != "" || !sourcespec.ValidCommit(source.ResolvedRevision) {
+		return "", ErrInvalidRequest
+	}
+	endpoint, repository, err := sourcespec.NormalizeGitURL(source.SourceURL)
+	if err != nil || endpoint != source.SourceURL || repository != "" || !domain.ValidSkillName(facts.Name) {
+		return "", ErrInvalidRequest
+	}
+	if facts.Normalizer != "agent-skill-package/v1" || !strings.HasPrefix(facts.RawTreeDigest, "sha256:") || !sourcespec.ValidSHA256(strings.TrimPrefix(facts.RawTreeDigest, "sha256:")) || !validAcquiredSkillPaths(*facts, source.PackageSubpath) {
+		return "", ErrInvalidRequest
+	}
+	key := sourcespec.GitSkillKey(endpoint, facts.Name, facts.RequestedPath)
+	if source.StableSourceKey != key || source.RequestedSource != key || source.CanonicalSource != key {
+		return "", ErrInvalidRequest
+	}
+	return key, nil
+}
+
 func acquiredWebSkillSourceKey(source domain.SourceIdentity, portable bool) (string, error) {
 	facts := source.WebSkill
 	if !portable || facts == nil || source.Skill != nil || source.SourceBindingHint != "uap-dependency-web-skill" || source.SourceKind != "https-skill" || source.ArchiveSHA256 != "" || source.Repository != "" || source.PackageSubpath != "" || domain.ValidateWebSkillSourceFacts(*facts) != nil {

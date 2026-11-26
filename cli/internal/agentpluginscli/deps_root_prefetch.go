@@ -39,7 +39,7 @@ func (resolver dependencyResolver) prefetchGitRoots(ctx context.Context, previou
 	for _, pkg := range previous.Packages {
 		pinned[pkg.SourceKey] = true
 	}
-	skills, skillsErr := resolver.app.rawSkillAcquirer()
+	_, skillsErr := resolver.app.rawSkillAcquirer()
 	type root struct {
 		key    string
 		source environment.GitSource
@@ -78,7 +78,7 @@ func (resolver dependencyResolver) prefetchGitRoots(ctx context.Context, previou
 		}
 		var snapshot domain.PackageSnapshot
 		if source.Kind == environment.SkillKind {
-			snapshot, err = skills.AcquireGitHubSkill(ctx, source.Repository, resolution.Commit, source.Path)
+			snapshot, err = resolver.app.acquireRawGitSkill(ctx, source, resolution.Commit, "")
 		} else {
 			snapshot, err = resolver.app.acquireDependencyGit(ctx, source, resolution.Commit, "")
 		}

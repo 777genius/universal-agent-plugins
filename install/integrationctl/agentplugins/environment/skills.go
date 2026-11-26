@@ -2,8 +2,10 @@ package environment
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 func validateSkillSource(source *GitSource) error {
@@ -16,8 +18,8 @@ func validateSkillSource(source *GitSource) error {
 	if source.Kind != SkillKind {
 		return errors.New("unsupported Git source kind")
 	}
-	if source.URL != "" || !repositoryPattern.MatchString(source.Repository) {
-		return errors.New("standalone Skills require a GitHub owner/repo source")
+	if err := source.ValidateEndpoint(); err != nil {
+		return err
 	}
 	return validateSkillName(source.Skill)
 }
@@ -36,8 +38,16 @@ func validateLockedSkill(source *LockedGitSource) error {
 		}
 		return nil
 	}
-	if source.Kind != SkillKind || source.URL != "" || !repositoryPattern.MatchString(source.Repository) || source.Normalizer != SkillNormalizerV1 || !validGraphDigest(source.RawTreeDigest) {
+	endpoint := GitSource{Repository: source.Repository, URL: source.URL, Path: source.Path}
+	if source.Kind != SkillKind || endpoint.ValidateEndpoint() != nil || source.Normalizer != SkillNormalizerV1 || !validGraphDigest(source.RawTreeDigest) {
 		return errors.New("unsupported or incomplete Skill normalization identity")
 	}
 	return validateSubpath(source.ResolvedSkillPath)
+}
+
+func (source GitSource) skillSourceKey() string {
+	if source.URL != "" {
+		return sourcespec.GitSkillKey(source.URL, source.Skill, source.Path)
+	}
+	return "github-skill:" + strings.ToLower(source.Repository) + ":" + source.Skill + ":" + source.Path
 }

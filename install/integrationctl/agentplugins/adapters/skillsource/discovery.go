@@ -76,14 +76,22 @@ type Session struct {
 }
 
 func (a Acquirer) Open(ctx context.Context, s Source) (*Session, error) {
-	repository, err := sourceacquisition.CanonicalGitHubRepository(s.Repository)
-	if err != nil {
-		return nil, err
+	if s.Repository != "" {
+		repository, err := sourceacquisition.CanonicalGitHubRepository(s.Repository)
+		if err != nil {
+			return nil, err
+		}
+		s.Repository = repository
 	}
-	s.Repository = repository
 	openCtx, cancel := context.WithTimeout(ctx, a.Policy.bounded().Deadline)
 	defer cancel()
-	t, e := a.OpenGitHubTree(openCtx, s.Repository, s.Commit)
+	var t *sourceacquisition.GitTree
+	var e error
+	if a.NativeGit || s.URL != "" {
+		t, e = a.OpenGitTree(openCtx, s.Git(), s.Commit)
+	} else {
+		t, e = a.OpenGitHubTree(openCtx, s.Repository, s.Commit)
+	}
 	if e != nil {
 		return nil, e
 	}
@@ -95,13 +103,13 @@ func (s *Session) candidate(e sourceacquisition.TreeEntry) Candidate {
 	if p == "." {
 		p = ""
 	}
-	return Candidate{ID: digest([]byte(s.source.Repository + "\x00" + s.source.Commit + "\x00" + p)), Path: p, Status: "unavailable", Diagnostics: []string{}}
+	return Candidate{ID: digest([]byte(s.source.Location() + "\x00" + s.source.Commit + "\x00" + p)), Path: p, Status: "unavailable", Diagnostics: []string{}}
 }
 func (s *Session) name(p string) string {
 	if p != "" {
 		return path.Base(p)
 	}
-	return path.Base(s.source.Repository)
+	return sourceRootName(s.source)
 }
 func (s *Session) cachedBlobSize(oid string) *int64 {
 	s.mu.Lock()
@@ -183,7 +191,7 @@ func (s *Session) readCandidate(ctx context.Context, e sourceacquisition.TreeEnt
 }
 
 func (s *Session) Scan(ctx context.Context, scope string) (Catalog, error) {
-	c := Catalog{Repository: s.source.Repository, Commit: s.source.Commit, ScopePath: scope, Complete: true, Candidates: []Candidate{}, Folders: []string{}, IncompleteReasons: []string{}}
+	c := Catalog{Repository: s.source.Location(), Commit: s.source.Commit, ScopePath: scope, Complete: true, Candidates: []Candidate{}, Folders: []string{}, IncompleteReasons: []string{}}
 	if err := sourceacquisition.ValidateSkillPath(scope); err != nil {
 		return c, err
 	}
@@ -435,7 +443,11 @@ func (s *Session) Preview(ctx context.Context, p string) (Preview, error) {
 	return preview, nil
 }
 func (a Acquirer) ResolveGitHubSkill(ctx context.Context, repository, sha, expected, requested, last string) (string, error) {
-	s, err := a.Open(ctx, Source{Repository: repository, Commit: sha})
+	return a.ResolveGitSkill(ctx, Source{Repository: repository, Commit: sha}, expected, requested, last)
+}
+
+func (a Acquirer) ResolveGitSkill(ctx context.Context, source Source, expected, requested, last string) (string, error) {
+	s, err := a.Open(ctx, source)
 	if err != nil {
 		return "", err
 	}
@@ -478,7 +490,7 @@ func (a Acquirer) ResolveGitHubSkill(ctx context.Context, repository, sha, expec
 func (s *Session) ExactCatalog(ctx context.Context, p string) (Catalog, error) {
 	ctx, cancel := context.WithTimeout(ctx, s.policy.Deadline)
 	defer cancel()
-	c := Catalog{Repository: s.source.Repository, Commit: s.source.Commit, ScopePath: p, Complete: false, Candidates: []Candidate{}, Folders: []string{}, IncompleteReasons: []string{"exact_skill_selection"}}
+	c := Catalog{Repository: s.source.Location(), Commit: s.source.Commit, ScopePath: p, Complete: false, Candidates: []Candidate{}, Folders: []string{}, IncompleteReasons: []string{"exact_skill_selection"}}
 	if err := sourceacquisition.ValidateSkillPath(p); err != nil {
 		return c, err
 	}

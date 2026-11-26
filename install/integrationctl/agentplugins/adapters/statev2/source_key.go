@@ -12,7 +12,7 @@ func installedSourceKey(installation domain.Installation) string {
 	if installation.Source.StableSourceKey != "" {
 		sourceKey = installation.Source.StableSourceKey
 	}
-	if installation.Source.SourceKind != "" && installation.Source.SourceKind != "https-skill" {
+	if installation.Source.SourceKind != "" && installation.Source.SourceKind != "https-skill" && (installation.Source.SourceKind != "git" || !strings.HasPrefix(installation.Source.StableSourceKey, "git-skill-url-v1:")) {
 		sourceKey = sourcespec.Key(sourcespec.Kind(installation.Source.SourceKind), installation.Source.SourceURL, installation.Source.PackageSubpath)
 	}
 	if installation.Directory != nil {

@@ -12,20 +12,25 @@ import (
 	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 type Acquirer struct {
 	sourceacquisition.Acquirer
 	Policy ScanPolicy
+	// NativeGit selects the standalone CLI transport. Hosted callers retain
+	// their existing anonymous GitHub acquisition contract.
+	NativeGit bool
 }
 type Source struct {
-	Repository, RequestedSelector, RequestedPath, Commit string
-	ExactPath                                            bool
+	Repository, URL, RequestedSelector, RequestedPath, Commit string
+	ExactPath                                                 bool
 }
 type sourceRequest struct {
 	source  Source
 	urlTail string
 	file    bool
+	git     *sourcespec.Git
 }
 
 // Resolve disambiguates every possible ref/path split against actual Git refs.
@@ -38,7 +43,9 @@ func (a Acquirer) Resolve(ctx context.Context, input, explicitRef string) (Sourc
 		return Source{}, err
 	}
 	var source Source
-	if request.urlTail != "" {
+	if request.git != nil {
+		source, err = a.resolveNativeSource(ctx, *request.git, explicitRef)
+	} else if request.urlTail != "" {
 		source, err = a.resolveURLSource(ctx, request, explicitRef)
 	} else {
 		source, err = a.resolveRepositorySource(ctx, request.source, explicitRef)
@@ -55,6 +62,17 @@ func parseSourceInput(input string) (sourceRequest, error) {
 	var request sourceRequest
 	if len(input) > 8192 || strings.TrimSpace(input) != input {
 		return request, fmt.Errorf("invalid GitHub source")
+	}
+	if nativeSourceInput(input) {
+		spec, err := sourcespec.Parse(input)
+		if err != nil {
+			return request, err
+		}
+		if spec.Kind != sourcespec.KindGit || spec.Git == nil {
+			return request, fmt.Errorf("use an HTTPS or SSH Git clone URL; prefix ambiguous HTTPS URLs with git+")
+		}
+		request.git = spec.Git
+		return request, nil
 	}
 	var err error
 	if strings.Contains(input, "://") {
@@ -80,7 +98,7 @@ func parseGitHubURL(input string) (sourceRequest, error) {
 	var request sourceRequest
 	u, err := url.Parse(input)
 	if err != nil || u.Scheme != "https" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
-		return request, fmt.Errorf("use a public HTTPS GitHub repository, folder or SKILL.md URL")
+		return request, fmt.Errorf("use an HTTPS GitHub repository, folder or SKILL.md URL")
 	}
 	parts := strings.Split(strings.TrimSuffix(strings.TrimPrefix(u.Path, "/"), "/"), "/")
 	if len(parts) < 2 {
@@ -117,15 +135,18 @@ func (a Acquirer) resolveURLSource(ctx context.Context, request sourceRequest, e
 		source.ExactPath = true
 		tail = strings.TrimSuffix(tail, "/SKILL.md")
 	}
-	resolved, p, err := a.ResolveGitHubURLPath(ctx, source.Repository, tail, explicitRef)
+	git := sourcespec.Git{Repository: source.Repository, URL: "https://github.com/" + source.Repository + ".git", Browser: &sourcespec.BrowserTree{Suffix: tail}}
+	if !a.NativeGit {
+		resolved, p, err := a.ResolveGitHubURLPath(ctx, source.Repository, tail, explicitRef)
+		source.RequestedSelector, source.RequestedPath, source.Commit = resolved.RequestedRef, p, resolved.Commit
+		return source, err
+	}
+	resolved, err := a.resolveNativeSource(ctx, git, explicitRef)
 	if err != nil {
 		return source, err
 	}
-	source.RequestedSelector = resolved.RequestedRef
-	if resolved.ResolvedRef != "" {
-		source.RequestedSelector = resolved.ResolvedRef
-	}
-	source.RequestedPath = p
+	source.RequestedSelector = resolved.RequestedSelector
+	source.RequestedPath = resolved.RequestedPath
 	source.Commit = resolved.Commit
 	return source, nil
 }
@@ -141,10 +162,16 @@ func (a Acquirer) resolveRepositorySource(ctx context.Context, source Source, ex
 	}
 	var resolved sourceacquisition.RefResolution
 	var err error
-	if explicitRef != "" {
-		resolved, err = a.ResolveGitHubRef(ctx, source.Repository, explicitRef)
+	if !a.NativeGit && source.URL == "" {
+		if explicitRef != "" {
+			resolved, err = a.ResolveGitHubRef(ctx, source.Repository, explicitRef)
+		} else {
+			resolved, err = a.ResolveGitHubSelector(ctx, source.Repository, source.RequestedSelector)
+		}
+	} else if explicitRef != "" {
+		resolved, err = a.ResolveGit(ctx, source.Git(), explicitRef, true)
 	} else {
-		resolved, err = a.ResolveGitHubSelector(ctx, source.Repository, source.RequestedSelector)
+		resolved, err = a.ResolveGit(ctx, source.Git(), source.RequestedSelector, false)
 	}
 	if err != nil {
 		return source, err

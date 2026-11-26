@@ -42,10 +42,12 @@ func (app App) skillSourceAcquirer(scratch string) (skillsource.Acquirer, error)
 		a = *value
 	case skillsource.Acquirer:
 		value.TempRoot = scratch
+		value.NativeGit = true
 		return value, nil
 	case *skillsource.Acquirer:
 		acquirer := *value
 		acquirer.TempRoot = scratch
+		acquirer.NativeGit = true
 		return acquirer, nil
 	case interface {
 		SkillsAcquirer(string) skillsource.Acquirer
@@ -55,7 +57,7 @@ func (app App) skillSourceAcquirer(scratch string) (skillsource.Acquirer, error)
 		return skillsource.Acquirer{}, errors.New("source acquisition does not support raw Skills")
 	}
 	a.TempRoot = scratch
-	return skillsource.Acquirer{Acquirer: a}, nil
+	return skillsource.Acquirer{Acquirer: a, NativeGit: true}, nil
 }
 
 func (app App) openSkillsCatalog(ctx context.Context, input SkillsPickerRequest) (*skillsCatalogSession, error) {
@@ -114,7 +116,7 @@ func (app App) StartSkillsPicker(ctx context.Context, input SkillsPickerRequest)
 		return nil, err
 	}
 	revision := session.source.Commit
-	server, err := skillspicker.Start(ctx, skillspicker.Options{Source: skillspicker.Source{Repository: session.source.Repository, SourceRevision: &revision, Scope: session.source.RequestedPath}, Callbacks: session.callbacks(), OnClose: session.cleanup})
+	server, err := skillspicker.Start(ctx, skillspicker.Options{Source: skillspicker.Source{Repository: session.source.Location(), SourceRevision: &revision, Scope: session.source.RequestedPath}, Callbacks: session.callbacks(), OnClose: session.cleanup})
 	if err != nil {
 		session.cleanup()
 		return nil, err

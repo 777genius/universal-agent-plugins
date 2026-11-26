@@ -15,6 +15,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/skillsource"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
 type prefetchSkillAcquirer struct {
@@ -260,9 +261,13 @@ type countingSkillSource struct {
 	succeeded atomic.Int32
 }
 
+func (source *countingSkillSource) AcquireGitSkill(ctx context.Context, git sourcespec.Git, commit, _ string) (domain.PackageSnapshot, error) {
+	return source.AcquireGitHubSkill(ctx, git.Repository, commit, git.Path)
+}
+
 func (source *countingSkillSource) AcquireGitHubSkill(ctx context.Context, repository, commit, path string) (domain.PackageSnapshot, error) {
 	source.mu.Lock()
-	source.calls = append(source.calls, rawSkillKey{repository, commit, path})
+	source.calls = append(source.calls, rawSkillKey{repository: repository, commit: commit, path: path})
 	n := len(source.calls)
 	source.mu.Unlock()
 	if n == 2 && source.onSecond != nil {
@@ -353,9 +358,9 @@ func TestPrepareSkillsPrefetchFetchesEachSelectedSkillOnce(t *testing.T) {
 	defer plan.Close()
 	want := make([]rawSkillKey, 0, len(names))
 	for _, name := range names[1:] {
-		want = append(want, rawSkillKey{"acme/tools", sha, "skills/" + name})
+		want = append(want, rawSkillKey{repository: "acme/tools", commit: sha, path: "skills/" + name})
 	}
-	want = append(want, rawSkillKey{"other/repo", sha, "skills/beta"})
+	want = append(want, rawSkillKey{repository: "other/repo", commit: sha, path: "skills/beta"})
 	got := source.keys()
 	slices.SortFunc(got, func(a, b rawSkillKey) int { return strings.Compare(a.repository+a.path, b.repository+b.path) })
 	slices.SortFunc(want, func(a, b rawSkillKey) int { return strings.Compare(a.repository+a.path, b.repository+b.path) })
