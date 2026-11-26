@@ -46,7 +46,10 @@ func TestListingSkipsBuiltinRowsWithoutInstallPath(t *testing.T) {
 		}, StatusUnknown},
 		{"builtin-no-enabled", func(rows []map[string]any) []map[string]any { delete(rows[0], "enabled"); return append(rows, managed) }, StatusUnknown},
 		{"builtin-no-scope", func(rows []map[string]any) []map[string]any { delete(rows[0], "scope"); return append(rows, managed) }, StatusUnknown},
-		{"bare-builtin-id", func(rows []map[string]any) []map[string]any { rows[0]["id"] = "@builtin"; return append(rows, managed) }, StatusUnknown},
+		{"bare-builtin-id-with-install-path", func(rows []map[string]any) []map[string]any {
+			rows[0]["id"], rows[0]["installPath"] = "@builtin", localPath
+			return append(rows, managed)
+		}, StatusUnknown},
 		{"other-source-no-path", func(rows []map[string]any) []map[string]any { rows[0]["id"] = "x@market"; return append(rows, managed) }, StatusUnknown},
 		{"local-rows-per-project", func(rows []map[string]any) []map[string]any {
 			local := func(project string) map[string]any {
