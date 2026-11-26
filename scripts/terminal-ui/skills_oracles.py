@@ -59,20 +59,26 @@ def bindings(fixture):
     return result
 
 
-def installed(fixture, targets, *, retained_failed=(), result=None):
-    """Prove successful deliveries and explicitly selected failed ownership.
+def installed(fixture, targets, *, retained_failed=(), prepared_targets=(), result=None):
+    """Prove successful deliveries and explicitly selected incomplete ownership.
 
     The installer commits a managed directory before native activation. A failed
     activation retains that directory and its receipts for repair; it is not a
-    successful native installation. Callers must name this separate expectation.
+    successful native installation. An interrupted native add can also leave
+    committed Prepared ownership despite an installed native registry entry.
+    Callers must name these distinct expectations; neither counts as healthy.
     """
-    successful, failed = set(targets), set(retained_failed)
+    successful, failed, prepared = set(targets), set(retained_failed), set(prepared_targets)
     check(len(successful) == len(targets) and len(failed) == len(retained_failed) and
-          not successful.intersection(failed), 'ambiguous expected binding outcomes')
+          len(prepared) == len(prepared_targets) and
+          len(successful | failed | prepared) == len(successful) + len(failed) + len(prepared),
+          'ambiguous expected binding outcomes')
     check(not failed or failed == {'codex'}, 'unsupported retained failure expectation')
+    check(not prepared or prepared == {'codex'}, 'unsupported prepared ownership expectation')
+    check(not prepared or result is None, 'prepared ownership has no completed command result')
     actual = bindings(fixture)
     state = json.loads((fixture.data / 'state-v2.json').read_text(encoding='utf-8'))
-    expected = successful | failed
+    expected = successful | failed | prepared
     check(set(actual) == expected, f'durable targets {set(actual)}, expected {expected}')
     try:
         lock = json.loads((fixture.data / 'uap.lock').read_text(encoding='utf-8'))
@@ -144,16 +150,29 @@ def installed(fixture, targets, *, retained_failed=(), result=None):
                   binding.get('verification') == 'package_validated',
                   'Cursor delivery did not retain its successful prepared boundary')
         elif target == 'codex':
-            check(binding.get('activation') == 'active' and
-                  binding.get('verification') == 'installation_verified' and
-                  binding.get('authentication') == 'not_required',
-                  'synthetic Codex protocol did not prove native Skill completion')
+            if target in prepared:
+                check(binding.get('scope') == 'user' and
+                      binding.get('activation') == 'prepared' and
+                      binding.get('verification') == 'package_validated' and
+                      binding.get('authentication') == 'not_required' and
+                      binding.get('policy') == 'allowed' and
+                      binding.get('native_activation_attempt') in ('', None) and
+                      binding.get('pending_native_intent') is None,
+                      'interrupted Codex ownership is not the exact committed Prepared boundary')
+            else:
+                check(binding.get('activation') == 'active' and
+                      binding.get('verification') == 'installation_verified' and
+                      binding.get('authentication') == 'not_required',
+                      'synthetic Codex protocol did not prove native Skill completion')
             registry = json.loads((fixture.root / 'native-registry.json').read_text(encoding='utf-8'))
             native_registration(path, registry)
             cache = Path(registry['cache']).resolve()
             check(cache.is_relative_to(fixture.root.resolve()), 'native cache escaped fixture')
             cached = cache / 'skills' / fixture.skill_name / 'SKILL.md'
             check(cached.read_bytes() == body, 'native discovered cache has different Skill bytes')
+            if target in prepared:
+                check(hashes(cached.parent) == hashes(skill.parent),
+                      'interrupted Codex cache has different complete Skill resources')
         if result is not None:
             reported_binding(result, expected, target, owner, binding, target in failed)
     check((fixture.data / 'uap.toml').is_file(), 'saved desired intent missing')

@@ -322,3 +322,39 @@ authentication, security-scanner, or release qualification. `TMPDIR` controls
 fixture storage. Go PTY tests cover display-cell alignment, narrow/short
 terminals, resize fallback, canonical/raw queued answers, terminal restoration,
 and observed-stage coloring independently of CLI timing.
+
+## Public Skills installation matrix
+
+`skills_matrix.py --suite all` runs the public installer with production picker
+assets, a real pinned scanner, disposable profiles and synthetic native protocol
+responders. Linux uses a TLS publisher with explicit certificate trust for
+selected-Skill cases; macOS and Windows use the pinned public GitHub Skill.
+Catalog/browser routing uses GitHub on every OS. Product source, source fixture,
+executed CLI/responder/scanner hashes, state and terminal evidence are separate
+fields in `report.json`. Missing prerequisites or failed cases remain failures.
+
+The Linux-only `interrupted-activation-repair` case retains the exact
+CLI → OSRunner supervisor → native responder crash checks and pidfd cleanup.
+It requires an actual committed native effect with the durable Codex user
+binding still `prepared/package_validated`. Public `info` without `--target`
+must report that recorded state without mutation. An explicit confirmed
+`repair` must then record `active/installation_verified` while preserving the
+installation/binding identity, source pin, receipts, native registry, package
+bytes and foreign files. The confirmed repair re-registers exactly the recorded
+marketplace and plugin once; unrelated native commands, extra effects or missing
+registration steps fail the case. Read-only `info` never performs those effects.
+Before/after state and each public command's raw JSON/exit evidence are retained.
+
+This boundary has no pending physical/native-attempt journal. It does not
+qualify the absent-object `SupportsPreparedRecovery` path or a typed recovery
+refusal. Existing mandatory Package manager E2E steps retain real pending-journal
+and recovery proof through `TestPublicCLICrashAfterDurablePhaseRecovery`,
+`TestDirectoryProcessCrashAfterActivationRecovers` and
+`TestDirectoryProcessCrashAfterStateCommitRecovers`, each requiring actual
+run/pass and no skip. The Skills matrix's synthetic Codex protocol and intercepted
+browser opener do not establish vendor runtime, authentication or model proof.
+The public CLI crash test additionally requires `deps sync` to refuse its actual
+pending journal with exit 1, empty stdout and the existing
+`agentplugins: installer recovery required` stderr, preserving all owned and
+foreign trees before explicit recovery and its idempotence check. No JSON
+`RECOVERY_REQUIRED` envelope is inferred from that legacy refusal.

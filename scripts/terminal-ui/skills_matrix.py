@@ -24,16 +24,16 @@ from harness import Session, check, clean, hashes, prepare_scanner, scanner_opti
 from native_skills import compact
 from skills_fixture import (GITHUB_SOURCE, NATIVE_SOURCE, SOURCE_SHA, SkillsFixture,
                             build_native_fixture)
-from skills_oracles import (durable_tree, envelope, failure_log, installed,
+from skills_oracles import (bindings, durable_tree, envelope, failure_log, installed,
                             items_by_agent, native_mutations, persist)
 
 CASES = ('source-feasibility', 'fresh', 'declared-repair-json', 'unchanged', 'unchanged-failure',
-         'partial-json', 'partial-decline', 'partial-retry', 'log-unavailable', 'recovery-refusal', 'no-targets',
+         'partial-json', 'partial-decline', 'partial-retry', 'log-unavailable', 'interrupted-activation-repair', 'no-targets',
          'review-decline', 'review-ctrl-c', 'review-eof', 'review-redirect',
          'catalog-redirect', 'catalog-both-redirect', 'plain-browser', 'explicit-ui')
 BROWSER_CASES = frozenset(('catalog-redirect', 'catalog-both-redirect', 'plain-browser', 'explicit-ui'))
 QUESTION = r'Install these Skills\? \[Y/n\] '
-RETRY = r'Retry [^\r\n]*\? \[Y/n\] '
+RETRY = r'Retry [^\r\n]*\? \[Y/n\]'
 
 
 class WindowsSession:
@@ -44,7 +44,7 @@ class WindowsSession:
         self.nonce = uuid.uuid4().hex
         self.status_path = evidence / 'status.json'
         config = dict(argv=argv, cwd=str(fixture.project), nonce=self.nonce,
-                      status=str(self.status_path))
+                      status=str(self.status_path), ctrl_c_probe=True)
         config_path = evidence / 'job.json'
         persist(config_path, config)
         env = dict(fixture.env)
@@ -54,6 +54,19 @@ class WindowsSession:
              str(config_path)], env, fixture.project, timeout, evidence=evidence)
         try:
             self.terminal.status_path = self.status_path
+            self.terminal.wait('CTRL_C_INPUT_READY_' + self.nonce)
+            status = json.loads(self.status_path.read_text(encoding='utf-8'))
+            processing = status.get('ctrl_c_processing', {})
+            check(status.get('phase') == 'interrupt-probe' and
+                  status.get('nonce') == self.nonce and
+                  processing.get('owner_pid') == self.terminal.pi.dwProcessId and
+                  processing.get('reset_checked') is True and
+                  processing.get('prior_ignore_state') == 'unknown' and
+                  type(status.get('owner_ctrl_c_events')) is int and
+                  status.get('owner_ctrl_c_events') == 0,
+                  'private owner CTRL+C input readiness proof is invalid')
+            self.terminal.send(b'\x03')
+            self.terminal.wait('CTRL_C_INPUT_OK_' + self.nonce)
             self.terminal.wait('OWNER_READY_' + self.nonce)
         except BaseException as primary:
             try:
@@ -79,6 +92,10 @@ class WindowsSession:
         terminal.timeout = self.timeout
         terminal.wait('RESTORE_READY_' + self.nonce)
         status = json.loads(self.status_path.read_text(encoding='utf-8'))
+        probe = status.get('ctrl_c_probe', {})
+        check(type(probe.get('observed_events')) is int and
+              probe == dict(observed_events=1, owner_console_unchanged=True),
+              'private owner did not qualify the actual ETX input route')
         check(status['exit'] == expected, f'CLI exit {status["exit"]}, expected {expected}')
         check(status['owner_before'] == status['owner_after'], 'owner console changed')
         check(status['before'] == status['after'], 'child console modes changed')
@@ -96,6 +113,12 @@ class WindowsSession:
         check(status['owner_probe'] == status['owner_before'],
               'owner handles/modes changed on reuse')
         check('line_' + self.nonce in clean(terminal.raw[offset:]), 'kernel echo missing')
+
+    def assert_ctrl_c_delivery(self):
+        status = json.loads(self.status_path.read_text(encoding='utf-8'))
+        check(type(status.get('owner_ctrl_c_events')) is int and
+              status['owner_ctrl_c_events'] > status['ctrl_c_probe']['observed_events'],
+              'browser cancellation did not deliver a new actual console CTRL+C event')
 
     def close(self):
         from windows_conpty import finish_console
@@ -245,7 +268,7 @@ class Matrix:
     def run_case(self, name, evidence):
         evidence.mkdir()
         source = source_for_case(name, self.source, sys.platform)
-        if name == 'recovery-refusal':
+        if name == 'interrupted-activation-repair':
             check(sys.platform == 'linux', 'recovery process identity fixture requires Linux pidfd')
         with tempfile.TemporaryDirectory(prefix='skills-console-é-') as temporary:
             fixture = SkillsFixture(temporary, self.native, self.scanner, source)
@@ -481,12 +504,18 @@ class Matrix:
               'diagnostic reporting overwrote the obstructing file')
         installed(fixture, ('cursor',), retained_failed=('codex',))
 
-    def case_recovery_refusal(self, fixture, evidence):
+    def case_interrupted_activation_repair(self, fixture, evidence):
         # Hold exact native child identity before crashing the CLI. The responder
         # does not spawn children, so a pidfd covers the sole active native effect.
         # No process-group ancestry assumption or fabricated journal is used.
         check(sys.platform == 'linux' and hasattr(os, 'pidfd_open') and
               hasattr(signal, 'pidfd_send_signal'), 'Linux pidfd support is required')
+        # These foreign bytes must survive both the interrupted apply and its
+        # explicit repair. They are outside the exact owned package projection.
+        foreign = {fixture.home / 'foreign-user-é.txt': b'foreign user bytes\n',
+                   fixture.project / 'foreign-project-é.txt': b'foreign project bytes\n'}
+        for path, body in foreign.items():
+            path.write_bytes(body)
         nonce = uuid.uuid4().hex
         fixture.control('pause-add', nonce)
         argv = fixture.args(self.binary)
@@ -558,23 +587,109 @@ class Matrix:
                 cleanup_errors=cleanup_errors))
             if cleanup_errors:
                 raise RuntimeError(f'{primary!r}; uncertain fixture cleanup: {cleanup_errors}')
-        operations = fixture.data / 'operations-v2'
-        journals = list(operations.glob('*.json'))
-        check(journals, 'crash did not produce an actual installer operation journal')
-        for journal in journals:
-            # Retain the exact product-generated journal, without fabricating or
-            # rewriting its state schema to make refusal occur.
-            shutil.copyfile(journal, evidence / ('interrupted-' + journal.name))
-        before, calls = durable_tree(fixture), len(fixture.calls())
-        result = self.command(fixture, evidence, 'recovery-refused', expect=1)
-        check(result.get('code') == 'RECOVERY_REQUIRED' or
-              result.get('error', {}).get('code') == 'RECOVERY_REQUIRED',
-              'unfinished native operation did not produce a typed recovery refusal')
-        check(not result.get('error', {}).get('retryable', False),
-              'recovery refusal offered an ordinary retry')
-        check(durable_tree(fixture) == before, 'recovery refusal changed interrupted state')
-        check(not native_mutations(fixture.calls()[calls:]),
-              'unfinished recovery started another native mutation')
+        self.complete_interrupted_activation_repair(fixture, evidence)
+        check(all(path.read_bytes() == body for path, body in foreign.items()),
+              'interrupted apply or repair changed foreign bytes')
+
+    def complete_interrupted_activation_repair(self, fixture, evidence):
+        # Codex user CLI registration follows the committed directory swap.
+        # It has no pending physical journal/native-intent contract here. The
+        # separate mandatory public-CLI/OS crash gates qualify journal recovery.
+        installed(fixture, (), prepared_targets=('codex',))
+        before = json.loads((fixture.data / 'state-v2.json').read_text(encoding='utf-8'))
+        installation, = before['installations']
+        binding = bindings(fixture)['codex']
+        installation_id = installation['installation_id']
+        check(not list((fixture.data / 'operations-v2').glob('*.json')),
+              'prepared Codex restart unexpectedly has an open directory journal')
+        persist(evidence / 'prepared-state-v2.json', before)
+        durable_before = durable_tree(fixture)
+        persist(evidence / 'prepared-durable-state.json', durable_before)
+        # The paused responder has already been reaped through its held pidfd.
+        # No later process should enter that now-consumed crash control.
+        (fixture.root / 'pause-add').unlink()
+
+        def run(label, command, extra=()):
+            argv = [str(self.binary), command, installation_id, '--scope', 'user',
+                    '--format', 'json', *extra]
+            result = subprocess.run(argv, cwd=fixture.project, env=fixture.env,
+                                    stdin=subprocess.DEVNULL, capture_output=True,
+                                    timeout=self.acquisition_timeout)
+            persist(evidence / (label + '.command.json'), dict(argv=argv, exit=result.returncode))
+            (evidence / (label + '.stdout')).write_bytes(result.stdout)
+            (evidence / (label + '.stderr')).write_bytes(result.stderr)
+            check(result.returncode == 0, label + ': public CLI restart failed')
+            return envelope(result.stdout, result.returncode,
+                            command='agentplugins repair' if command == 'repair' else command)
+
+        def inspect(label, activation, verification):
+            snapshot, calls = durable_tree(fixture), len(fixture.calls())
+            result = run(label, 'info')  # No --target: report recorded state, not fresh reconciliation.
+            data = result.get('data', {})
+            check(data.get('installation_id') == installation_id,
+                  'read-only info lost the interrupted installation identity')
+            clients = data.get('clients', [])
+            check(len(clients) == 1 and clients[0].get('client_id') == 'codex' and
+                  clients[0].get('activation') == activation and
+                  clients[0].get('verification') == verification,
+                  'read-only info misreported recorded interrupted/repaired lifecycle')
+            check(clients[0].get('materialization') == 'materialized' and
+                  all(clients[0].get('package_revision', {}).get(key) ==
+                      binding['package_revision'][key] for key in ('tree_digest', 'manifest_digest')),
+                  'read-only info lost the materialized immutable package pin')
+            check(durable_tree(fixture) == snapshot and
+                  not native_mutations(fixture.calls()[calls:]),
+                  'read-only info changed interrupted installation or native state')
+
+        inspect('prepared-info', 'prepared', 'package_validated')
+        registry = json.loads((fixture.root / 'native-registry.json').read_text(encoding='utf-8'))
+        expected_mutations = [
+            ['plugin', 'marketplace', 'update', registry['marketplace'], '--json'],
+            ['plugin', 'add', registry['spec'], '--json']]
+        calls = len(fixture.calls())
+        repaired = run('explicit-repair', 'repair', ('--target', 'codex', '--yes'))
+        actions, results = repaired.get('actions', []), repaired.get('results', [])
+        check(repaired.get('outcome') == 'completed' and repaired.get('scope') == 'user' and
+              len(actions) == 1 and actions[0].get('action') == 'repair' and
+              actions[0].get('client_id') == 'codex' and
+              actions[0].get('alias') == fixture.skill_name and
+              actions[0].get('installation_id') == installation_id and
+              actions[0].get('binding_id') == binding['client_binding_id'] and
+              actions[0].get('package_digest') == binding['package_revision']['tree_digest'],
+              'explicit repair lost its selected identity or immutable pin')
+        check(len(results) == 1 and results[0].get('operation') == 'repair' and
+              results[0].get('outcome') == 'completed' and
+              results[0].get('client_id') == 'codex' and
+              results[0].get('installation_id') == installation_id,
+              'explicit repair did not report one completed owned Codex result')
+        installed(fixture, ('codex',))
+        repair_calls = fixture.calls()[calls:]
+        observed_mutations = native_mutations(repair_calls)
+        check(observed_mutations == expected_mutations,
+              'explicit repair did not re-register exactly the recorded marketplace/plugin once')
+        check(all(args in expected_mutations or args in
+                  (['plugin', 'list', '--json'], ['--version'], ['app-server'])
+                  for args in repair_calls), 'explicit repair issued an unrelated native command')
+        after = json.loads((fixture.data / 'state-v2.json').read_text(encoding='utf-8'))
+        expected = json.loads(json.dumps(before))
+        current, = after['installations']
+        expected_installation, = expected['installations']
+        key = binding['client_binding_id']
+        expected_installation['clients'][key].update(
+            activation='active', verification='installation_verified',
+            updated_at=current['clients'][key]['updated_at'])
+        expected_installation['updated_at'] = current['updated_at']
+        check(after == expected, 'repair changed identity, pins, ownership or fields beyond lifecycle')
+        durable_after = durable_tree(fixture)
+        durable_after['state-v2.json'] = durable_before['state-v2.json']
+        check(durable_after == durable_before, 'repair rewrote package, lock, native or foreign bytes')
+        inspect('repaired-info', 'active', 'installation_verified')
+        persist(evidence / 'interrupted-activation-repair-facts.json', dict(
+            installation_id=installation_id, binding_id=key,
+            recorded_before='prepared/package_validated',
+            recorded_after='active/installation_verified', native_replayed=True,
+            authorized_native_mutations=observed_mutations,
+            physical_journal_qualification=False))
 
     def canceled_review(self, fixture, evidence, action, redirect=None):
         argv = fixture.args(self.binary, targets='cursor', yes=False, json_output=False)
@@ -680,6 +795,8 @@ class Matrix:
             self.assert_unapplied(session, fixture)
             session.send(b'\x03')
             session.finish(1)
+            if os.name == 'nt':
+                session.assert_ctrl_c_delivery()
             self.assert_unapplied(session, fixture)
         finally:
             session.close()
@@ -705,7 +822,7 @@ def selected_cases(cases, suite, platform):
     selected = [name for name in CASES if suite == 'all' or
                 (name in BROWSER_CASES) == (suite == 'browser')]
     if platform != 'linux':
-        selected = [name for name in selected if name != 'recovery-refusal']
+        selected = [name for name in selected if name != 'interrupted-activation-repair']
     if platform == 'win32':
         selected = [name for name in selected if name not in ('review-redirect', 'catalog-redirect', 'catalog-both-redirect')]
     return selected

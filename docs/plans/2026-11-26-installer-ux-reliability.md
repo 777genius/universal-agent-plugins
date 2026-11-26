@@ -223,6 +223,7 @@ and assertions are versioned alongside the implementation.
 | Unchanged repeat with pre-apply failure | Non-success agent result, safe cause, log/fallback and correct retry eligibility |
 | Partial apply and declined retry | Healthy agent stays installed; failed agent explained; no extra effects |
 | Partial apply and accepted retry | Only eligible failed agents retried; success not replayed |
+| Interrupted Codex user activation and explicit repair | Exact owned process crash; recorded prepared lifecycle; read-only info; explicit repair preserves identity, pins, receipts and foreign bytes while recording fresh native verification |
 | Recovery / cleanup refusal | No retry prompt/command; original typed failure and state retained |
 | Redirected stdout | Catalog and complete review visible before consent; result/JSON streams preserved |
 | Plain with bundled browser assets | Automatic browser not launched; explicit --ui remains intentional |
@@ -258,6 +259,36 @@ a proven pinned GitHub route with no explicit-path flag that bypasses routing.
 Public-source availability failures remain failures, never silent source swaps.
 Label Go composition tests and actual-binary cases separately. Synthetic native
 protocol responders qualify installer behavior, not vendor acceptance.
+
+The Linux `interrupted-activation-repair` process case pauses after Codex user
+registration has written its native effect, then kills only the exact CLI and
+pidfd-held responder/supervisor admitted by nonce, inode, start-time and lineage
+checks. Codex user registration follows a committed directory transaction and
+does not create a pending native-attempt journal at this boundary. Require the
+recorded `prepared/package_validated` state, intact owned bytes and committed
+receipts; read-only `info` without `--target` must preserve that recorded state.
+Then explicit `repair --yes --target codex` must re-register the exact recorded
+marketplace and plugin once, observe fresh native verification, and preserve
+immutable identity, saved pins, physical bytes, receipts and foreign files.
+The prepared CLI-registry contract requires this confirmed acting repair; it
+does not silently settle through read-only lifecycle correction. This qualifies
+interrupted activation repair, not the `SupportsPreparedRecovery` branch for an
+absent managed object, nor a `RECOVERY_REQUIRED` refusal.
+
+Actual journal pending/recovery proof remains in the existing mandatory
+Package manager E2E workflow: `TestPublicCLICrashAfterDurablePhaseRecovery`
+(the project lock isolation/public CLI step), and
+`TestDirectoryProcessCrashAfterActivationRecovers` plus
+`TestDirectoryProcessCrashAfterStateCommitRecovers` (the actual process crash
+and durable transaction recovery step). Their strict run/pass/no-skip checks
+prove their named journal transitions; they do not establish a literal
+`RECOVERY_REQUIRED` mutation-refusal result for this Codex user boundary.
+The public CLI crash test also requires a fresh `deps sync` to refuse the real
+pending journal before explicit recovery: exit 1, empty stdout and stderr
+`agentplugins: installer recovery required`, with exact owned/caller/foreign
+trees unchanged. It then exercises explicit recovery and idempotence. This is
+the existing legacy stream contract, not a JSON error-code assertion; execution
+on the new source must be independently verified in CI.
 
 | Evidence group | Linux | macOS | Windows |
 | --- | --- | --- | --- |

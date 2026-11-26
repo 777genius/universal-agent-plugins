@@ -452,6 +452,140 @@ class InstallationEvidenceTests(unittest.TestCase):
             oracle.installed(self.fixture, ('codex',))
 
 
+class PreparedOwnershipEvidenceTests(unittest.TestCase):
+    """A killed native add retains ownership without qualifying active success."""
+    save = InstallationEvidenceTests.save
+    save_lock = InstallationEvidenceTests.save_lock
+    save_registry = InstallationEvidenceTests.save_registry
+    save_manifest = InstallationEvidenceTests.save_manifest
+
+    def setUp(self):
+        InstallationEvidenceTests.setUp(self)
+        self.binding.update(scope='user', activation='prepared',
+                            verification='package_validated', policy='allowed')
+        self.save()
+
+    def prove(self):
+        return oracle.installed(self.fixture, (), prepared_targets=('codex',))
+
+    def test_committed_prepared_native_effect_is_owned_but_never_returned_as_healthy(self):
+        self.assertEqual(self.prove(), {})
+        with self.assertRaisesRegex(AssertionError, 'did not prove native Skill completion'):
+            oracle.installed(self.fixture, ('codex',))
+
+    def test_healthy_peer_stays_healthy_without_promoting_prepared_codex(self):
+        cursor = copy.deepcopy(self.binding)
+        path = self.root / 'cursor' / 'demo'
+        shutil.copytree(self.target, path)
+        cursor.update(client_id='cursor', client_binding_id='cursor-binding',
+                      target_locator=str(path), activation='manual_activation_required')
+        receipt = cursor['receipts'][0]
+        receipt.update(client_binding_id='cursor-binding', active_path=str(path))
+        receipt['environment_authority']['client_id'] = 'cursor'
+        self.state['installations'][0]['clients']['cursor-binding'] = cursor
+        self.state['environment_receipts'].append(dict(
+            self.owner, client_id='cursor', client_binding_id='cursor-binding'))
+        self.lock['packages'][0]['targets'] = self.manifest_targets = ['codex', 'cursor']
+        self.save()
+        self.save_lock()
+        self.save_manifest()
+        self.assertEqual(oracle.installed(self.fixture, ('cursor',),
+                                          prepared_targets=('codex',)), {'cursor': cursor})
+
+    def test_partitions_are_explicit_disjoint_and_never_accept_completed_result(self):
+        for targets, failed, prepared in ((('codex',), (), ('codex',)),
+                                          ((), ('codex',), ('codex',)),
+                                          ((), (), ('codex', 'codex'))):
+            with self.subTest(targets=targets, failed=failed, prepared=prepared):
+                with self.assertRaisesRegex(AssertionError, 'ambiguous expected binding outcomes'):
+                    oracle.installed(self.fixture, targets, retained_failed=failed,
+                                     prepared_targets=prepared)
+        with self.assertRaisesRegex(AssertionError, 'unsupported prepared ownership'):
+            oracle.installed(self.fixture, (), prepared_targets=('cursor',))
+        with self.assertRaisesRegex(AssertionError, 'no completed command result'):
+            oracle.installed(self.fixture, (), prepared_targets=('codex',),
+                             result={'result': 'success'})
+
+    def test_prepared_tuple_and_no_unresolved_native_attempt_are_exact(self):
+        original = copy.deepcopy(self.binding)
+        for field, wrong in (('scope', 'project'), ('activation', 'active'),
+                             ('activation', 'failed'), ('verification', 'installation_verified'),
+                             ('authentication', 'not_checked'), ('policy', 'blocked'),
+                             ('native_activation_attempt', 'unresolved'),
+                             ('native_activation_attempt', False), ('native_activation_attempt', 0)):
+            with self.subTest(field=field, wrong=wrong):
+                self.binding.clear()
+                self.binding.update(copy.deepcopy(original), **{field: wrong})
+                self.save()
+                with self.assertRaisesRegex(AssertionError, 'exact committed Prepared boundary'):
+                    self.prove()
+        self.binding.clear()
+        self.binding.update(original)
+        for pending in ({'operation_id': 'unresolved'}, {}, False, 0):
+            with self.subTest(pending=pending):
+                self.binding['pending_native_intent'] = pending
+                self.save()
+                with self.assertRaisesRegex(AssertionError, 'exact committed Prepared boundary'):
+                    self.prove()
+
+    def test_missing_disabled_foreign_registry_or_cache_cannot_qualify_prepared_effect(self):
+        original = copy.deepcopy(self.registry['installed'][0])
+        for entries in ([], [dict(original, enabled=False)], [dict(original, installed=False)],
+                        [dict(original, source={'path': str(self.root / 'foreign')})]):
+            with self.subTest(entries=entries):
+                self.registry['installed'] = entries
+                self.save_registry()
+                with self.assertRaisesRegex(AssertionError, 'not registered as installed and enabled'):
+                    self.prove()
+        self.registry['installed'] = [original]
+        self.save_registry()
+        cached = Path(self.registry['cache']) / 'skills' / 'guide' / 'SKILL.md'
+        cached.write_bytes(b'foreign cache payload\n')
+        with self.assertRaisesRegex(AssertionError, 'cache has different Skill bytes'):
+            self.prove()
+
+    def test_prepared_cache_retains_complete_publisher_resource_tree(self):
+        self.fixture.publisher = SimpleNamespace(files={
+            'SKILL.md': self.fixture.skill_bytes, 'reference.txt': b'original reference\n'})
+        resource = self.skill.parent / 'reference.txt'
+        cached = Path(self.registry['cache']) / 'skills' / 'guide' / 'reference.txt'
+        resource.write_bytes(b'original reference\n')
+        cached.write_bytes(b'original reference\n')
+        self.assertEqual(self.prove(), {})
+        cached.write_bytes(b'foreign reference\n')
+        with self.assertRaisesRegex(AssertionError, 'different complete Skill resources'):
+            self.prove()
+
+    def test_prepared_still_requires_original_source_and_committed_authority(self):
+        self.fixture.expected_source['website'] = 'https://requested-other.example'
+        with self.assertRaisesRegex(AssertionError, 'saved origin differs from requested fixture source'):
+            self.prove()
+        self.fixture.expected_source = dict(self.declaration)
+        self.owner['installation_id'] = 'foreign-installation'
+        self.save()
+        with self.assertRaisesRegex(AssertionError, 'committed installation/environment'):
+            self.prove()
+        self.owner['installation_id'] = 'installation'
+        self.binding['receipts'][0]['phase'] = 'prepared'
+        self.save()
+        with self.assertRaisesRegex(AssertionError, 'no committed receipt'):
+            self.prove()
+
+    def test_prepared_still_requires_lock_manifest_and_exact_target_partition(self):
+        self.lock['packages'][0]['tree_digest'] = 'sha256:' + 'b' * 64
+        self.save_lock()
+        with self.assertRaisesRegex(AssertionError, 'installed immutable package digest disagree'):
+            self.prove()
+        self.lock['packages'][0]['tree_digest'] = self.digest
+        self.save_lock()
+        (self.fixture.data / 'uap.toml').write_text('', encoding='utf-8')
+        with self.assertRaisesRegex(AssertionError, 'saved desired intent'):
+            self.prove()
+        self.save_manifest()
+        with self.assertRaisesRegex(AssertionError, 'durable targets'):
+            oracle.installed(self.fixture, (), prepared_targets=())
+
+
 class RetainedFailureEvidenceTests(unittest.TestCase):
     """Managed commit survives native failure without qualifying active success."""
     save = InstallationEvidenceTests.save
@@ -806,12 +940,12 @@ class FixtureIsolationTests(unittest.TestCase):
             self.assertIn(required, selected)
         self.assertNotIn('review-redirect', selected)
 
-    def test_real_journal_pidfd_control_is_selected_only_on_linux_by_default(self):
-        self.assertIn('recovery-refusal', matrix.selected_cases(None, 'all', 'linux'))
-        self.assertNotIn('recovery-refusal', matrix.selected_cases(None, 'all', 'darwin'))
-        self.assertNotIn('recovery-refusal', matrix.selected_cases(None, 'all', 'win32'))
-        self.assertEqual(matrix.selected_cases(['recovery-refusal'], 'all', 'darwin'),
-                         ['recovery-refusal'])
+    def test_real_prepared_crash_control_is_selected_only_on_linux_by_default(self):
+        self.assertIn('interrupted-activation-repair', matrix.selected_cases(None, 'all', 'linux'))
+        self.assertNotIn('interrupted-activation-repair', matrix.selected_cases(None, 'all', 'darwin'))
+        self.assertNotIn('interrupted-activation-repair', matrix.selected_cases(None, 'all', 'win32'))
+        self.assertEqual(matrix.selected_cases(['interrupted-activation-repair'], 'all', 'darwin'),
+                         ['interrupted-activation-repair'])
 
     def test_source_kind_is_explicit_for_every_platform_and_browser_control(self):
         self.assertEqual(matrix.source_for_case('fresh', 'auto', 'linux'), 'publisher')

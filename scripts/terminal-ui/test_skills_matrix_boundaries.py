@@ -226,7 +226,7 @@ class CrashWindowTests(unittest.TestCase):
             evidence.mkdir()
             marker = root / 'native-add-paused'
             marker.write_text(json.dumps(dict(nonce='nonce', pid=300, ppid=200)), encoding='utf-8')
-            fixture = SimpleNamespace(root=root, bin=root / 'bin', project=root, env={},
+            fixture = SimpleNamespace(root=root, home=root, bin=root / 'bin', project=root, env={},
                                       args=Mock(return_value=['cli']), control=Mock())
             process = SimpleNamespace(pid=100, returncode=None)
             events = []
@@ -265,7 +265,7 @@ class CrashWindowTests(unittest.TestCase):
                     patch.object(matrix, 'persist', side_effect=persist), \
                     patch.object(matrix, 'linux_pidfd_exited', side_effect=exited) as pidfd_exited:
                 with self.assertRaisesRegex(AssertionError, 'responder exited before'):
-                    matrix.Matrix('cli', 'native').case_recovery_refusal(fixture, evidence)
+                    matrix.Matrix('cli', 'native').case_interrupted_activation_repair(fixture, evidence)
             # The only CLI kill is finally-owned cleanup after refusal, not the
             # requested crash which could otherwise produce a false qualification.
             self.assertEqual(events, ['identity-written', 'responder-exited', 'cli-kill'])
