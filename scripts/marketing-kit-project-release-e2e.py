@@ -902,7 +902,7 @@ def check_refusal_profile_unchanged(env, project, before):
     check_refusal_data_unchanged(data, before, current["data"])
 
 
-def check_refusal_data_unchanged(data, before, observed, *, store_pins=()):
+def check_refusal_data_unchanged(data, before, observed, *, store_pins=(), diagnostic_files=None):
     """Keep durable User data strict; grant only finite verified cold caches."""
     previous = before["data"]
     store_files, store_directories = copilot_cold_store_additions(data, previous, observed, store_pins)
@@ -920,6 +920,8 @@ def check_refusal_data_unchanged(data, before, observed, *, store_pins=()):
     if not before.get("directory_only"):
         files.update((REFUSAL_SCANNER_PATH, *before["subjects"]))
     files.update(store_files)
+    diagnostic_files = diagnostic_files or {}
+    files.update(diagnostic_files)
     directories = {parent.as_posix() for name in files
                    for parent in Path(name).parents if parent != Path(".")}
     directories.update(store_directories)
@@ -946,7 +948,10 @@ def check_refusal_data_unchanged(data, before, observed, *, store_pins=()):
             if stat.S_IMODE(entry.st_mode) != mode:
                 raise AssertionError("corrupt restore created unsafe cache file")
             digest_key = f"{data.name}/{Path(relative)}"
-            if relative == REFUSAL_SCANNER_PATH:
+            if relative in diagnostic_files:
+                if observed.get(digest_key) != diagnostic_files[relative]:
+                    raise AssertionError("cold Copilot refusal diagnostic changed")
+            elif relative == REFUSAL_SCANNER_PATH:
                 if observed.get(digest_key) != REFUSAL_SCANNER_SHA256:
                     raise AssertionError("corrupt restore created unpinned scanner")
             elif relative in before["subjects"]:
@@ -971,6 +976,55 @@ def check_refusal_data_unchanged(data, before, observed, *, store_pins=()):
             raise AssertionError("corrupt restore created unexpected cache/data entry")
     if (observed.keys() - previous.keys()) - allowed:
         raise AssertionError("corrupt restore created unexpected data state")
+
+
+def copilot_refusal_diagnostic_files(data, before, observed, document):
+    """Bind one new private technical log to this fully validated refusal."""
+    path = document.get("log_file")
+    if path is None:
+        return {}
+    if not isinstance(path, str):
+        raise AssertionError("cold Copilot refusal diagnostic path is invalid")
+    candidate = Path(path)
+    relative = "logs/" + candidate.name
+    match = re.fullmatch(r"install-([0-9]{8}T[0-9]{6}Z)-[0-9a-f]{8}\.jsonl", candidate.name)
+    if (match is None or str(candidate) != path or candidate != data / relative
+            or "metadata:0:" + relative in before["data"]):
+        raise AssertionError("cold Copilot refusal diagnostic is not a fresh owned log")
+    entry = candidate.lstat()
+    if (not stat.S_ISREG(entry.st_mode) or stat.S_IMODE(entry.st_mode) != 0o600
+            or entry.st_nlink != 1 or entry.st_uid != os.getuid() or entry.st_size > 256 << 10):
+        raise AssertionError("cold Copilot refusal diagnostic custody is invalid")
+    body, status = audit["copilot_settings_read"](candidate, data.parent)
+    digest = hashlib.sha256(body.encode()).hexdigest() if status is None else None
+    if (status is not None or observed.get(data.name + "/" + relative) != digest
+            or copilot_cold_data_snapshot(data) != observed):
+        raise AssertionError("cold Copilot refusal diagnostic changed during read")
+    try:
+        rows = [json.loads(line, object_pairs_hook=audit["_unique_json_object"],
+                           parse_constant=audit["_invalid_json_constant"]) for line in body.splitlines()]
+        header, bindings = rows[0], rows[1:]
+        expected = {"type": "run", "schema_version": 1, "command": "install",
+                    "version": _CLI_VERSION.get(), "scope": "project", "attempt": 1,
+                    "os": "linux", "arch": "amd64"}
+        if (set(header) != set(expected) | {"time"}
+                or type(header.get("schema_version")) is not int or type(header.get("attempt")) is not int
+                or any(header.get(key) != value for key, value in expected.items())
+                or header["time"] != match[1][:4] + "-" + match[1][4:6] + "-" + match[1][6:11]
+                   + ":" + match[1][11:13] + ":" + match[1][13:]
+                or len(bindings) != len(UPDATE_ALIASES)
+                or {row.get("alias") for row in bindings} != UPDATE_ALIASES):
+            raise ValueError("unrelated diagnostic run")
+        for row in bindings:
+            if (set(row) - {"type", "alias", "client", "status", "code", "summary", "detail"}
+                    or row.get("type") != "binding" or row.get("client") != "copilot"
+                    or row.get("status") not in ("failed", "incomplete") or row.get("code") != "FAILED"
+                    or any(type(row.get(key, "")) is not str or len(row.get(key, "").encode()) > 16 << 10
+                           for key in ("summary", "detail"))):
+                raise ValueError("unrelated diagnostic binding")
+    except (ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        raise AssertionError("cold Copilot refusal diagnostic content is invalid") from error
+    return {relative: digest}
 
 
 def copilot_cold_store_additions(data, previous, observed, pins):
@@ -1672,8 +1726,11 @@ def verify_copilot_cold_project_refusal(cli, env, project):
                 "bindings": len(results), "cold_native_restore_qualified": False}
     finally:
         guard()
+        observed = copilot_cold_data_snapshot(Path(env["AGENTPLUGINS_HOME"]))
+        diagnostic_files = (copilot_refusal_diagnostic_files(Path(env["AGENTPLUGINS_HOME"]),
+            data_before, observed, data) if len(receipts) == len(UPDATE_ALIASES) else {})
         check_refusal_data_unchanged(Path(env["AGENTPLUGINS_HOME"]), data_before,
-            copilot_cold_data_snapshot(Path(env["AGENTPLUGINS_HOME"])), store_pins=tuple(FIXED_SIGNED_CLOSURE.values()))
+            observed, store_pins=tuple(FIXED_SIGNED_CLOSURE.values()), diagnostic_files=diagnostic_files)
         if scoped_snapshot([Path(env["HOME"])]) != native_home:
             raise AssertionError("cold Copilot locked install modified native HOME")
         check_copilot_cold_project_unchanged(project, project_before, receipts)

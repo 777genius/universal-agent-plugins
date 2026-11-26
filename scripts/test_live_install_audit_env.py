@@ -3158,6 +3158,47 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             self.assertTrue(all(after[key] == value for key, value in foreign_before.items()))
 
     @unittest.skipUnless(os.name == "posix", "published Ubuntu cold-cache descriptor custody")
+    def test_marketing_kit_cold_copilot_refusal_log_is_exact_and_command_bound(self):
+        variants = (None, "unreported", "other-command", "other-version", "other-alias", "extra-row",
+                    "extra-file", "existing", "wrong-mode", "hardlink", "changed-read", "duplicate-key")
+        for variant in variants:
+            with self.subTest(variant=variant), self._cold_copilot_data_case() as (runner, env, project, data):
+                verify = runner["verify_copilot_cold_project_refusal"]
+                log = data / "logs/install-20261126T120000Z-01234567.jsonl"
+                log.parent.mkdir(mode=0o700)
+                if variant == "existing":
+                    log.write_text("preexisting"); log.chmod(0o600)
+                def invoke(*_):
+                    response = self._marketing_kit_copilot_consent_response(runner, project)
+                    header = {"type": "run", "schema_version": 1, "time": "2026-11-26T12:00:00Z",
+                              "command": "install", "version": "0.1.115", "scope": "project",
+                              "attempt": 1, "os": "linux", "arch": "amd64"}
+                    bindings = [{"type": "binding", "alias": alias, "client": "copilot", "status": "incomplete",
+                                 "code": "FAILED", "summary": "Action required", "detail": "private provider text"}
+                                for alias in sorted(runner["UPDATE_ALIASES"])]
+                    if variant == "other-command": header["command"] = "add"
+                    elif variant == "other-version": header["version"] = "0.0.0"
+                    elif variant == "other-alias": bindings[0]["alias"] = "foreign"
+                    elif variant == "extra-row": bindings.append(bindings[0])
+                    body = "".join(json.dumps(row) + "\n" for row in [header, *bindings])
+                    if variant == "duplicate-key": body = body.replace('"command": "install"', '"command":"add","command":"install"')
+                    log.write_text(body); log.chmod(0o644 if variant == "wrong-mode" else 0o600)
+                    if variant == "extra-file": (log.parent / "foreign").write_text("must remain refused")
+                    if variant == "hardlink": os.link(log, data.parent / "log-link")
+                    if variant != "unreported": response["_json"]["log_file"] = str(log)
+                    return response
+                original_read = runner["audit"]["copilot_settings_read"]
+                def read(path, *args, **kwargs):
+                    body, status = original_read(path, *args, **kwargs)
+                    if variant == "changed-read" and path == log:
+                        log.write_text(body + "\n")
+                    return body, status
+                with patch.dict(verify.__globals__, {"invoke": invoke}), patch.dict(runner["audit"], {"copilot_settings_read": read}):
+                    if variant is None:
+                        self.assertEqual(verify("unused", env, project)["result"], "expected_refusal")
+                    else:
+                        with self.assertRaises(AssertionError): verify("unused", env, project)
+
     def test_marketing_kit_cold_copilot_cache_allowance_is_exact_and_source_bound(self):
         mutations = (None, "source-bytes", "metadata", "executables", "state-in-entry", "unknown-entry",
                      "nonempty-staging", "lock", "source-mode", "hardlink", "symlink", "fifo",
