@@ -96,7 +96,9 @@ class MarketingKitCodexSQLiteTests(unittest.TestCase):
 
         with (patch.object(sys, "argv", ["marketing-e2e", "--target", "codex",
                                          "--report", str(report), "--cli-version", "0.1.116"]),
-              patch.dict(self.globals, {"CodexProfile": refused}),
+              patch.dict(self.audit["AGENT_BINARIES"], {"codex": sys.executable}),
+              patch.dict(self.globals, {"CodexProfile": refused, "invoke": lambda *_args, **_kwargs: {
+                  "exit_code": 0, "timeout": False, "stdout_full": "codex-cli 0.153.4\n"}}),
               redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO())):
             self.assertEqual(self.runner["main"](), 1)
         evidence = json.loads(report.read_text())

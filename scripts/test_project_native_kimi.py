@@ -590,6 +590,7 @@ class KimiCollectorTests(unittest.TestCase):
                                 "authentication": "not_required", "policy": "allowed",
                                 "verification": "installation_verified"}]}
         row = {**dict.fromkeys(keys, True), "status": "passed", "post_remove_identity_registered": False,
+               "target": "kimi", "kind": "skill", "repeat_add": {"exit_code": 0, "timeout": False},
                "public_skill_ready": {"after-add": True, "repeat-add": True},
                "public_target_states": {"after-add": copy.deepcopy(observed), "repeat-add": copy.deepcopy(observed)}}
         report = {"pr_head_sha": "source-head", "passed": 30, "verified_negative_coverage": 0,

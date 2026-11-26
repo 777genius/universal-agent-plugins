@@ -161,6 +161,41 @@ class KimiRepeatLogAuditTest(unittest.TestCase):
         self.assertIsNone(listed)
         self.assertIsNone(self.classify(before, after, listed))
 
+    def test_absent_workspace_target_still_checks_final_companion(self):
+        for kind in ("directory", "file", "symlink"):
+            with self.subTest(kind=kind):
+                self.fixture()
+                target = self.home / ".kimi-code/.projects-write-lock"
+                companion = target.with_name(target.name + ".lock")
+                before = self.capture()
+                self.append()
+                after = self.capture()
+                self.assertIsNotNone(self.classify(before, after, self.capture()))
+                lstat, reached = Path.lstat, []
+
+                def create_on_missing_target(path, *args, **kwargs):
+                    try:
+                        return lstat(path, *args, **kwargs)
+                    except FileNotFoundError:
+                        if path == target and not reached:
+                            reached.append(True)
+                            if kind == "directory":
+                                companion.mkdir()
+                            elif kind == "file":
+                                companion.write_bytes(b"")
+                            else:
+                                companion.symlink_to(self.home / "foreign")
+                        raise
+
+                facts = {}
+                with patch.object(Path, "lstat", create_on_missing_target):
+                    listed = self.capture(facts)
+                self.assertEqual(reached, [True])
+                self.assertIsNone(listed)
+                self.assertEqual(facts, {"reason": "parent-or-path-refused"})
+                self.assertIsNone(self.classify(before, after, listed))
+                self.assertEqual((self.home / "foreign").read_bytes(), b"foreign")
+
     def test_workspace_lock_exception_preserves_all_other_scope_guards(self):
         for mutation in ("unexpected-path", "parent", "config", "missing", "created",
                          "post-list", "public-ready", "closure"):

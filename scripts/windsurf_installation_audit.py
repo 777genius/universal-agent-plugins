@@ -127,6 +127,79 @@ def image_fact(image):
     return {"sha256": digest(image), "entries": len(image)}
 
 
+def image_drift_counts(before, after):
+    """Bounded counts by key class; never print native paths or values."""
+    def category(key):
+        if key.startswith("metadata:"):
+            return "metadata"
+        if key.startswith("directory:"):
+            return "directory"
+        if key.startswith("root-kind:"):
+            return "root"
+        if key.startswith(("link:", "root-link:")):
+            return "link"
+        return "file"
+
+    differences = {}
+    for status, entries in (
+            ("added", set(after) - set(before)),
+            ("removed", set(before) - set(after)),
+            ("changed", {key for key in set(before) & set(after) if before[key] != after[key]})):
+        for key in entries:
+            label = category(key) + "_" + status
+            differences[label] = differences.get(label, 0) + 1
+    return ",".join(f"{key}={differences[key]}" for key in sorted(differences)) or "none"
+
+
+def image_drift_diagnostic(before, after):
+    """Bounded nonauthorizing roles; unknown native names and values stay private."""
+    known = {
+        "devin/mcp_config.json": "mcp_document",
+        "metadata:2:mcp_config.json": "mcp_document",
+        "devin/mcp_config.json.agentplugins.lock": "writer_lock",
+        "metadata:2:mcp_config.json.agentplugins.lock": "writer_lock",
+        "directory:2:skills": "skills_parent",
+        "metadata:2:skills": "skills_parent",
+        "devin/config.json": "native_config",
+        "metadata:2:config.json": "native_config",
+    }
+    changed = sorted(
+        key for key in set(before) | set(after)
+        if (key in before) != (key in after)
+        or key in before and before[key] != after[key]
+    )
+    entries = []
+    for key in changed[:8]:
+        entries.append({
+            "role": known.get(key, "unknown"),
+            "key_sha256": hashlib.sha256(
+                key.encode("utf-8", "surrogatepass")
+            ).hexdigest(),
+            "operation": (
+                "added" if key not in before
+                else "removed" if key not in after
+                else "changed"
+            ),
+            "before_present": key in before,
+            "after_present": key in after,
+        })
+    return {
+        "diagnostic_only": True,
+        "changed_entries": len(changed),
+        "omitted_entries": max(0, len(changed) - len(entries)),
+        "entries": entries,
+    }
+
+
+def require_same_image(before, after, phase):
+    if before != after:
+        diagnostic = encoded(image_drift_diagnostic(before, after), 4096).decode()
+        raise ValueError(
+            "Devin Global native-image drift " + phase + ": "
+            + image_drift_counts(before, after)
+            + "; diagnostic=" + diagnostic
+        )
+
 def ordinary(path):
     info = path.lstat()
     require(stat.S_ISDIR(info.st_mode) and path.resolve(strict=True) == path)
@@ -279,7 +352,9 @@ class WindsurfInstallationAudit:
         self.anchors[self.global_root] = ordinary(self.global_root)
         self.native_roots = (self.home / ".windsurf", self.home / ".devin", self.global_root)
         self.observations, self.saved_observations, self.source_projection = [], [], None
+        self.infrastructure_frames, self.retained_infrastructure = [], []
         self.initial = self.image()
+        self.terminal_image = dict(self.initial)
         self.initial_saved = self.saved_image()
         self.project_initial = self.audit["scoped_snapshot"]((self.project,))
 
@@ -396,6 +471,145 @@ class WindsurfInstallationAudit:
         self.guard()
         return image
 
+    def _lock_frame(self, image):
+        name = "mcp_config.json.agentplugins.lock"
+        key = "devin/" + name
+        if key not in image or key in self.initial:
+            return None
+        path = self.global_root / name
+        native = self.audit["NATIVE_ARTIFACTS"]
+        before = path.lstat()
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+                and 0 <= before.st_size <= 4096)
+        descriptor = native["open_member"](path)
+        try:
+            opened = os.fstat(descriptor)
+            require(native["same_opened"](before, opened)
+                    and (opened.st_uid, opened.st_gid) == (before.st_uid, before.st_gid))
+            body = os.read(descriptor, before.st_size + 1)
+            require(len(body) == before.st_size)
+            final_held = os.fstat(descriptor)
+            final_named = path.lstat()
+            require(native["identity"](opened) == native["identity"](final_held)
+                    == native["identity"](final_named)
+                    and (before.st_uid, before.st_gid) == (opened.st_uid, opened.st_gid)
+                    == (final_held.st_uid, final_held.st_gid)
+                    == (final_named.st_uid, final_named.st_gid))
+        finally:
+            os.close(descriptor)
+        identity = (before.st_mode, before.st_dev, before.st_ino,
+                    before.st_uid, before.st_gid, before.st_nlink, before.st_mtime_ns)
+        require(image.get(key) == hashlib.sha256(body).hexdigest()
+                and image.get("metadata:2:" + name)
+                == (before.st_mode, before.st_dev, before.st_ino, before.st_mtime_ns))
+        return identity, body
+
+    def _infrastructure_frame(self, image):
+        self.guard()
+        try:
+            lock = self._lock_frame(image)
+            skill = None
+            key = "directory:2:skills"
+            if key in image and key not in self.initial:
+                skill = ordinary(self.global_root / "skills")
+                require(image.get("metadata:2:skills") == skill[:3])
+            facts = (lock, skill)
+        except Exception:
+            # Extra retention proof is optional for exact restoration.
+            # An unproven frame cannot authorize retained infrastructure.
+            facts = None
+        self.guard()
+        return facts
+
+    def _neutral_file(self, name, frame):
+        require(name in ("mcp_config.json", "mcp_config.json.agentplugins.lock"))
+        self.guard()
+        path = self.global_root / name
+        require(self.audit["path_inside_case"](path, self.case))
+        native = self.audit["NATIVE_ARTIFACTS"]
+        before = path.lstat()
+        require(stat.S_ISREG(before.st_mode) and before.st_mode == 0o100600
+                and before.st_nlink == 1 and 0 <= before.st_size <= 4096
+                and (before.st_uid, before.st_gid) == self.anchors[self.global_root][3:])
+        descriptor = native["open_member"](path)
+        try:
+            opened = os.fstat(descriptor)
+            require(native["same_opened"](before, opened)
+                    and (opened.st_uid, opened.st_gid) == (before.st_uid, before.st_gid))
+            body = os.read(descriptor, before.st_size + 1)
+            require(len(body) == before.st_size)
+            final_held = os.fstat(descriptor)
+            final_named = path.lstat()
+            require(native["identity"](opened) == native["identity"](final_held)
+                    == native["identity"](final_named)
+                    and (before.st_uid, before.st_gid) == (opened.st_uid, opened.st_gid)
+                    == (final_held.st_uid, final_held.st_gid)
+                    == (final_named.st_uid, final_named.st_gid))
+        finally:
+            os.close(descriptor)
+        if name == "mcp_config.json":
+            value = json.loads(body.decode("utf-8"), object_pairs_hook=self.audit["_unique_json_object"],
+                               parse_constant=self.audit["_invalid_json_constant"])
+            require(type(value) is dict and set(value) == {"mcpServers"}
+                    and type(value["mcpServers"]) is dict and not value["mcpServers"])
+        else:
+            require(body == b"")
+        file_key, metadata_key = "devin/" + name, "metadata:2:" + name
+        metadata = (before.st_mode, before.st_dev, before.st_ino, before.st_mtime_ns)
+        require(frame.get(file_key) == hashlib.sha256(body).hexdigest()
+                and frame.get(metadata_key) == metadata)
+        self.guard()
+        return {file_key: frame[file_key], metadata_key: metadata}
+
+    def _expected_removed_image(self, frames, *, mcp, skills):
+        require(type(mcp) is bool and type(skills) is bool and len(frames) == 6)
+        require_same_image(frames[4], frames[5], "remove/list")
+        if frames[4] == self.initial:
+            require_same_image(self.initial, self.image(), "final/original")
+            self.guard()
+            return dict(self.initial), []
+        require(len(self.infrastructure_frames) == 6
+                and all(type(fact) is tuple and len(fact) == 2
+                        for fact in self.infrastructure_frames))
+        expected, roles = dict(self.initial), []
+        if mcp:
+            for name, role in (("mcp_config.json", "mcp_document"),
+                               ("mcp_config.json.agentplugins.lock", "writer_lock")):
+                keys = ("devin/" + name, "metadata:2:" + name)
+                require(all(key not in self.initial for key in keys))
+                require(all(key in frame for frame in frames for key in keys))
+                additions = self._neutral_file(name, frames[5])
+                if role == "writer_lock":
+                    require(all(all(frame[key] == additions[key] for key in keys) for frame in frames))
+                    locked = self.infrastructure_frames[5][0]
+                    require(locked is not None and locked[1] == b""
+                            and locked[0][0] == 0o100600
+                            and locked[0][3:6] == (*self.anchors[self.global_root][3:], 1)
+                            and all(fact[0] == locked for fact in self.infrastructure_frames))
+                expected.update(additions)
+                roles.append(role)
+        if skills:
+            keys = ("directory:2:skills", "metadata:2:skills")
+            require(all(key not in self.initial for key in keys))
+            path = self.global_root / "skills"
+            identity = ordinary(path)
+            require(identity[0] == 0o40700
+                    and identity[3:] == self.anchors[self.global_root][3:]
+                    and all(fact[1] == identity for fact in self.infrastructure_frames))
+            with os.scandir(path) as entries:
+                require(next(entries, None) is None)
+            require(ordinary(path) == identity)
+            additions = {keys[0]: "present", keys[1]: identity[:3]}
+            require(all(all(frame.get(key) == value for key, value in additions.items())
+                        for frame in frames))
+            expected.update(additions)
+            roles.append("skills_parent")
+        self.guard()
+        require_same_image(expected, frames[4], "remove/neutral-profile")
+        require_same_image(expected, frames[5], "post-remove/neutral-profile")
+        require_same_image(frames[5], self.image(), "final/observed")
+        return expected, sorted(roles)
+
     def removed_empty_native_coordination(self, observed):
         """Accept only an exact empty MCP writer file/lock and optional empty Skills parent.
 
@@ -438,6 +652,7 @@ class WindsurfInstallationAudit:
         require(self.audit["scoped_snapshot"]((self.project,)) == self.project_initial)
         # Existing foreign files and directory identities remain authoritative.
         require(all(image.get(key) == value for key, value in self.initial.items()))
+        self.infrastructure_frames.append(self._infrastructure_frame(image))
         self.saved_observations.append(self.saved_image())
         self.observations.append((list(argv), copy.deepcopy(outcome), image))
 
@@ -493,6 +708,10 @@ class WindsurfInstallationAudit:
                 "native_roots": [".windsurf", ".devin", ".config/devin"],
                 "project_unchanged": True, "original_native_preserved": True,
                 "initial_native_image": image_fact(self.initial),
+                "terminal_mode": ("retained-neutral-infrastructure" if self.retained_infrastructure
+                                  else "restored-original-image"),
+                "retained_infrastructure": list(self.retained_infrastructure),
+                "terminal_native_image": image_fact(self.terminal_image),
                 "initial_saved_authority_sha256": digest(self.initial_saved),
                 "observations": [{"argv": argv, "json_sha256": digest(outcome.get("_json"), 1 << 20),
                                   "native_image": image_fact(image), "saved_authority_sha256": digest(saved)}
@@ -556,22 +775,29 @@ class WindsurfInstallationAudit:
                     "removal_verified", "post_list_schema_valid"))
                 and row.get("post_removal_leftovers") == [])
         frames = [image for _, _, image in self.observations]
-        self.retained_empty_native_coordination = (
-            frames[4] != self.initial and self.removed_empty_native_coordination(frames[4]))
-        unchanged = (frames[0] == frames[1] == frames[2] == frames[3]
-                     and frames[4] == frames[5]
-                     and (frames[4] == self.initial or self.retained_empty_native_coordination))
-        if not unchanged:
-            error = ValueError("Devin Global installation evidence is unresolved")
+        try:
+            for phase, before, after in (
+                    ("add/list", frames[0], frames[1]),
+                    ("add/repeat-add", frames[0], frames[2]),
+                    ("add/repeat-list", frames[0], frames[3]),
+                    ("remove/list", frames[4], frames[5])):
+                require_same_image(before, after, phase)
+        except ValueError as error:
+            comparisons = []
+            for phase, expected, observed in (
+                    ("after-list", frames[0], frames[1]), ("after-repeat-add", frames[0], frames[2]),
+                    ("after-repeat-list", frames[0], frames[3]), ("after-remove", self.initial, frames[4]),
+                    ("after-remove-list", self.initial, frames[5])):
+                changes = frame_changes(expected, observed)
+                for entry in changes["entries"]:
+                    entry.pop("relative_key", None)
+                    entry.pop("relative_key_truncated", None)
+                comparisons.append({"phase": phase, **changes})
             error.windsurf_installation_diagnostics = {
                 "native_roots": ["HOME/.windsurf", "HOME/.devin", "HOME/.config/devin"],
-                "comparisons": [{"phase": phase, **frame_changes(expected, observed)}
-                                for phase, expected, observed in (
-                                    ("after-list", frames[0], frames[1]), ("after-repeat-add", frames[0], frames[2]),
-                                    ("after-repeat-list", frames[0], frames[3]), ("after-remove", self.initial, frames[4]),
-                                    ("after-remove-list", self.initial, frames[5]))],
+                "comparisons": comparisons,
             }
-            raise error
+            raise
         documents = [document(outcome, operation) for (_, outcome, _), operation in
                      zip(self.observations, ("add", "list", "add", "list", "remove", "list"))]
         prior = None
@@ -619,6 +845,16 @@ class WindsurfInstallationAudit:
                     and results[0].get("installation_id") == installation
                     and results[0].get("operation") == operation
                     and results[0].get("outcome") in (("completed", "unchanged") if position == 2 else ("completed",)))
+        components = documents[0][1]["actions"][0]["component_support"]
+        require(all(component.get("kind") in ("skill", "mcp_server") for component in components))
+        kinds = {component["kind"] for component in components}
+        self.terminal_image, self.retained_infrastructure = self._expected_removed_image(
+            frames, mcp="mcp_server" in kinds, skills="skill" in kinds)
+        # Retained paths need both the held native writer check and their
+        # original, stable authority identity through every public call.
+        if "mcp_document" in self.retained_infrastructure:
+            require(self.removed_empty_native_coordination(frames[4]))
+        self.retained_empty_native_coordination = bool(self.retained_infrastructure)
         return dict(state)
 
     def saved_lifecycle(self, public, source, identity, public_state, fixtures):
@@ -815,9 +1051,15 @@ def summary(report, fixtures, *, fixture_sha256):
                     and all(row.get(key) is False for key in (
                         "failed_install_registered", "failed_install_residue", "post_remove_identity_registered")))
             initial = proof.get("initial_native_image")
+            terminal = proof.get("terminal_native_image")
+            roles = proof.get("retained_infrastructure")
+            mode = proof.get("terminal_mode")
+            require(type(roles) is list and roles in (
+                [], ["mcp_document", "writer_lock"], ["skills_parent"],
+                ["mcp_document", "skills_parent", "writer_lock"]))
             frames = [entry.get("native_image") for entry in proof["observations"] if type(entry) is dict]
             require(len(frames) == (2 if negative else 6))
-            for frame in [initial, *frames]:
+            for frame in [initial, terminal, *frames]:
                 require(type(frame) is dict and set(frame) == {"sha256", "entries"}
                         and type(frame["sha256"]) is str and re.fullmatch(r"[0-9a-f]{64}", frame["sha256"])
                         and type(frame["entries"]) is int and frame["entries"] > 0)
@@ -829,6 +1071,13 @@ def summary(report, fixtures, *, fixture_sha256):
             require(all(type(entry.get("json_sha256")) is str
                         and re.fullmatch(r"[0-9a-f]{64}", entry["json_sha256"])
                         for entry in proof["observations"]))
+            if roles:
+                require(mode == "retained-neutral-infrastructure" and not negative
+                        and terminal != initial
+                        and terminal["entries"] == initial["entries"] + 2 * len(roles)
+                        and (index not in ACTIVE_SLOTS or roles == ["skills_parent"]))
+            else:
+                require(mode == "restored-original-image" and terminal == initial)
             if row.get("status") == "passed":
                 require(proof.get("preserved_native_proof") == native_reference(row, source, identity, index)
                         and row["windsurf_global_native_proof"]["binary"]["path"] == report["client_binary"])
@@ -842,9 +1091,9 @@ def summary(report, fixtures, *, fixture_sha256):
             else:
                 retained = proof.get("native_post_remove_state") == "empty-writer-coordination"
                 require(proof.get("native_post_remove_state") in ("pristine", "empty-writer-coordination")
-                        and frames[0] == frames[1] == frames[2] == frames[3] and frames[4] == frames[5]
-                        and (frames[4] == initial if not retained else
-                             frames[4] != initial and frames[4]["entries"] - initial["entries"] in (4, 6))
+                        and retained is bool(roles)
+                        and frames[0] == frames[1] == frames[2] == frames[3]
+                        and frames[4] == frames[5] == terminal
                         and row.get("status") in ("prepared-lifecycle-passed", "passed")
                         and row.get("prepared_components_only") is True
                         and all(row.get(key) is True for key in (

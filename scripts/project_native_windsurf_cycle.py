@@ -157,14 +157,14 @@ def times(value,start,end):
 
 
 def verified_mutation_lock_time(stage, raw, recorded, previous, root, start, end):
-    """Permit the exact retained no-op lock only on verified repeat-add."""
+    """Permit the exact retained lock only on a verified no-op phase."""
     try:
         body = load(raw)
     except ValueError:
         return False
     if start <= stamp(body["acquired_at"]) <= end and times(recorded, start, end):
         return True
-    return (stage == "repeat-add-a" and previous is not None
+    return (stage in NOOPS and previous is not None
             and raw == stream(previous["mutation_lock"])
             and same(previous["frames"][root]["mutation.lock"], recorded))
 
@@ -293,8 +293,10 @@ def installation(value,paths,previous,stage,cmd):
     require(type(lock["pid"]) is int and lock["pid"]>0 and lock_raw==json.dumps({"pid":lock["pid"],"acquired_at":lock["acquired_at"]},separators=(",",":")).encode()+b"\n")
     lock_record=frames[root]["mutation.lock"]
     require(lock_record["Mode"]==0o100600 and lock_record["Links"]==1 and lock_record["Size"]==len(lock_raw) and lock_record["SHA256"]==sha(lock_raw))
+    retained_lock=(previous is not None and lock_raw==stream(previous["mutation_lock"])
+                   and same(previous["frames"][root]["mutation.lock"],lock_record))
     if stage=="repeat-remove-a":
-        require(previous is not None and lock_raw==stream(previous["mutation_lock"]) and same(previous["frames"][root]["mutation.lock"],lock_record) and same(frames,previous["frames"]))
+        require(retained_lock and same(frames,previous["frames"]))
     elif not verified_mutation_lock_time(stage, lock_raw, lock_record, previous, root, start, end):
         raise ValueError("Windsurf mutation.lock timing outside selected public phase: " + stage)
     if previous is not None:

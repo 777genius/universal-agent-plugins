@@ -12,6 +12,40 @@ import time
 _FILES = run_path(str(Path(__file__).with_name("native_client_project_artifacts.py")))
 
 
+def _npm_log_facts(body):
+    """Recognize fixed records, never evidence of writer closure or liveness.
+
+    Format: npm CLI 11.19.1 lib/utils/{log-file,format,timers}.js and
+    lib/cli/exit-handler.js. Each physical line has an index/level/title prefix;
+    timing records are optional. Ignore incomplete lines and unknown formats.
+    """
+    phases = ("npm", "npm-ci:rm", "reify", "reify:unpack", "reify:build",
+              "build:link", "reify:save")
+    completed = set()
+    exit_code = None
+    observed = conflicting = False
+    for line in body.split(b"\n")[:-1]:
+        if line.endswith(b"\r"):
+            line = line[:-1]
+        match = re.fullmatch(rb"[0-9]{1,10} verbose exit (-?(?:0|[1-9][0-9]{0,9}))", line)
+        if match:
+            code = int(match[1])
+            if -(1 << 31) <= code < 1 << 32:
+                conflicting |= observed and exit_code != code
+                exit_code = code
+                observed = True
+            continue
+        match = re.fullmatch(rb"[0-9]{1,10} timing ([a-zA-Z0-9:-]{1,32}) Completed in [0-9]{1,10}ms", line)
+        if match:
+            phase = match[1].decode("ascii")
+            if phase in phases:
+                completed.add(phase)
+    return {"terminal_exit_observed": observed,
+            "terminal_exit_code": exit_code if not conflicting else None,
+            "terminal_exit_conflicting": conflicting,
+            "timing_completed": [phase for phase in phases if phase in completed]}
+
+
 def _unique(pairs):
     result = {}
     for key, value in pairs:
@@ -95,7 +129,10 @@ def collect(case):
             body = read(path)
         except FileNotFoundError:
             return {"present": False}
-        return {"present": True, "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest()}
+        result = {"present": True, "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest()}
+        if log:
+            result["npm_facts"] = _npm_log_facts(body)
+        return result
 
     def dir_fact(path):
         try:

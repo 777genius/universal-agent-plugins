@@ -143,9 +143,10 @@ class WindsurfCycleContracts(unittest.TestCase):
         root = "/held"
         previous = {"mutation_lock": wire(raw),
                     "frames": {root: {"mutation.lock": copy.deepcopy(recorded)}}}
-        self.assertTrue(cycle.verified_mutation_lock_time(
-            "repeat-add-a", raw, recorded, previous, root, start, end))
-        for stage in ("unchanged-update-a", "intact-repair-a", "add-a",
+        for stage in ("repeat-add-a", "unchanged-update-a"):
+            self.assertTrue(cycle.verified_mutation_lock_time(
+                stage, raw, recorded, previous, root, start, end))
+        for stage in ("intact-repair-a", "add-a",
                       "update-a", "remove-a", "missing-repair-a"):
             self.assertFalse(cycle.verified_mutation_lock_time(
                 stage, raw, recorded, previous, root, start, end))
@@ -179,30 +180,31 @@ class WindsurfCycleContracts(unittest.TestCase):
                                      cycle.stamp(command["ended_at"])))
         self.assertEqual(self.admit(),self.result)
 
-    def test_repeat_add_old_window_requires_exact_raw_lock_and_full_record(self):
+    def test_noop_old_window_requires_exact_raw_lock_and_full_record(self):
         baseline=copy.deepcopy(self.proofs)
-        for field in ("Kind","Mode","Device","Inode","UID","GID","Links","Size","SHA256",
-                      "Modified","Changed","raw","coherent_raw"):
-            self.proofs=copy.deepcopy(baseline)
-            value,lock,path=self.reuse_prior_lock("repeat-add-a")
-            if field in ("raw","coherent_raw"):
-                body=cycle.load(cycle.stream(value["mutation_lock"]))
-                body["pid"]+=1
-                raw=cycle.compact(body)+b"\n"
-                value["mutation_lock"]=wire(raw)
-                if field=="coherent_raw":
-                    lock.update(Size=len(raw),SHA256=cycle.sha(raw))
-            elif field=="Kind":
-                lock[field]="directory"
-            elif field in ("Modified","Changed"):
-                lock[field][1]+=1
-            elif field=="SHA256":
-                lock[field]="0"*64
-            else:
-                lock[field]+=1
-            value["frames"][path][".uap/mutation.lock"]=copy.deepcopy(lock)
-            with self.subTest(field=field),self.assertRaises(ValueError):
-                self.admit()
+        for stage in ("repeat-add-a","unchanged-update-a"):
+            for field in ("Kind","Mode","Device","Inode","UID","GID","Links","Size","SHA256",
+                          "Modified","Changed","raw","coherent_raw"):
+                self.proofs=copy.deepcopy(baseline)
+                value,lock,path=self.reuse_prior_lock(stage)
+                if field in ("raw","coherent_raw"):
+                    body=cycle.load(cycle.stream(value["mutation_lock"]))
+                    body["pid"]+=1
+                    raw=cycle.compact(body)+b"\n"
+                    value["mutation_lock"]=wire(raw)
+                    if field=="coherent_raw":
+                        lock.update(Size=len(raw),SHA256=cycle.sha(raw))
+                elif field=="Kind":
+                    lock[field]="directory"
+                elif field in ("Modified","Changed"):
+                    lock[field][1]+=1
+                elif field=="SHA256":
+                    lock[field]="0"*64
+                else:
+                    lock[field]+=1
+                value["frames"][path][".uap/mutation.lock"]=copy.deepcopy(lock)
+                with self.subTest(stage=stage,field=field),self.assertRaises(ValueError):
+                    self.admit()
         self.proofs=baseline
 
     def test_repeat_add_changed_lock_still_requires_its_current_window(self):
@@ -227,7 +229,7 @@ class WindsurfCycleContracts(unittest.TestCase):
 
     def test_other_public_calls_cannot_replay_a_prior_lock(self):
         baseline=copy.deepcopy(self.proofs)
-        for stage in ("unchanged-update-a","intact-repair-a","update-a",
+        for stage in ("intact-repair-a","update-a",
                       "missing-repair-a","remove-a","remove-b"):
             self.proofs=copy.deepcopy(baseline)
             self.reuse_prior_lock(stage)
@@ -246,6 +248,49 @@ class WindsurfCycleContracts(unittest.TestCase):
         value["frames"][self.result["component_layout"]["a"]][".uap/mutation.lock"]=copy.deepcopy(lock)
         value["mutation_lock"]=wire(raw)
         with self.assertRaises(ValueError):self.admit()
+
+    def retain_previous_lock(self, stage):
+        index=next(i for i,row in enumerate(self.proofs) if row["stage"]==stage)
+        selected=cycle.scope(stage)
+        previous=next(row["value"] for row in reversed(self.proofs[:index])
+                      if row["stage"] in cycle.PUBLIC and cycle.scope(row["stage"])==selected)
+        value=self.proofs[index]["value"]
+        project=self.result["component_layout"][selected]
+        root=project+"/.uap"
+        value["mutation_lock"]=copy.deepcopy(previous["mutation_lock"])
+        lock=copy.deepcopy(previous["frames"][root]["mutation.lock"])
+        value["frames"][root]["mutation.lock"]=lock
+        value["frames"][project][".uap/mutation.lock"]=copy.deepcopy(lock)
+        return value,root,project
+
+    def test_unchanged_reconciliation_can_retain_exact_prior_lock(self):
+        baseline=copy.deepcopy(self.proofs)
+        for stage in ("repeat-add-a","unchanged-update-a"):
+            with self.subTest(stage=stage):
+                self.proofs=copy.deepcopy(baseline)
+                self.retain_previous_lock(stage)
+                self.assertEqual(self.admit(),self.result)
+        self.proofs=baseline
+
+    def test_retained_lock_requires_same_bytes_metadata_and_noop_stage(self):
+        baseline=copy.deepcopy(self.proofs)
+        for mutation in ("body","metadata","mutating-stage"):
+            with self.subTest(mutation=mutation):
+                self.proofs=copy.deepcopy(baseline)
+                value,root,project=self.retain_previous_lock(
+                    "intact-repair-a" if mutation=="mutating-stage" else "repeat-add-a")
+                lock=value["frames"][root]["mutation.lock"]
+                if mutation=="body":
+                    body=cycle.load(cycle.stream(value["mutation_lock"]))
+                    body["pid"]+=1
+                    raw=json.dumps(body,separators=(",",":")).encode()+b"\n"
+                    value["mutation_lock"]=wire(raw)
+                    lock.update(Size=len(raw),SHA256=cycle.sha(raw))
+                elif mutation=="metadata":
+                    lock["Changed"][1]+=1
+                value["frames"][project][".uap/mutation.lock"]=copy.deepcopy(lock)
+                with self.assertRaises(ValueError):self.admit()
+        self.proofs=baseline
 
     def test_native_skill_revision_and_removal_are_same_frame_facts(self):
         original=copy.deepcopy(self.proofs)
@@ -300,6 +345,16 @@ class WindsurfCycleContracts(unittest.TestCase):
         old=next(name for name in row["frames"][root] if name.startswith("security/assessments/") and name not in row["cache"]["path"])
         row["frames"][root][old]["Inode"]+=1
         with self.assertRaises(ValueError):self.admit()
+
+    def test_repeat_progress_matches_the_public_noop_path(self):
+        row=next(row["value"] for row in self.commands if row["stage"]=="repeat-add-a")
+        resolving=b"Resolving and validating one Agent Plugin package for every selected target...\n"
+        row["stderr"]=wire(resolving)
+        self.assertEqual(self.admit(),self.result)
+        for invalid in (resolving+b"Applying transactional client package...\n",b"",resolving+resolving):
+            with self.subTest(stderr=invalid):
+                row["stderr"]=wire(invalid)
+                with self.assertRaises(ValueError):self.admit()
 
     def test_noop_and_whole_catalog_controls_refuse(self):
         original=copy.deepcopy(self.commands)

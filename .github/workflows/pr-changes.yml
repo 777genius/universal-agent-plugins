@@ -142,7 +142,7 @@ jobs:
               scripts/opencode_bootstrap_audit.py|scripts/test_opencode_bootstrap_audit.py|scripts/test_live_install_audit_opencode_negative.py) live_opencode=true ;;
               scripts/gemini_runtime_audit.py|scripts/gemini_windows_custody.py|scripts/test_gemini_windows_runtime_audit.py) live_gemini=true ;;
               scripts/qoder_prepared_skill_audit.py|scripts/test_qoder_prepared_skill_audit.py) live_qoder=true ;;
-              scripts/pi_project_skill_audit.py|scripts/test_pi_project_skill_audit.py) live_pi=true ;;
+              scripts/pi_project_skill_audit.py|scripts/test_pi_project_skill_audit.py|scripts/pi_plugin_catalog_audit.py|scripts/test_pi_plugin_catalog_*.py) live_pi=true ;;
               scripts/live-install-audit.py|scripts/native_client_research.py|scripts/test_native_client_research.py|scripts/test_live_install_audit_env.py|scripts/test_kimi_repeat_log_audit.py|tests/live-install/fixtures.json|install/integrationctl/agentplugins/adapters/securityscan/scanner*.go|.github/workflows/live-install-audit.yml|.github/workflows/pr-changes.yml|scripts/windows_owned_job.py|scripts/test_live_install_audit_components.py) live_full=true ;;
             esac
           done <<< "$files"

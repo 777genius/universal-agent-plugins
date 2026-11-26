@@ -761,6 +761,23 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 self.assertEqual(subject.fds, [])
                 self.assertTrue(all(owner["cache"].is_dir() for owner in f["owners"]))
 
+    def test_fresh_prepared_authentication_is_preserved_without_promotion(self):
+        with self.fixture() as f:
+            state = json.loads(f["state"].read_text())
+            for record, public in zip(state["installations"], f["public"]):
+                binding = next(iter(record["clients"].values()))
+                binding["activation"] = public["clients"][0]["activation"] = "prepared"
+                binding["authentication"] = public["clients"][0]["authentication"] = "not_checked"
+            f["state"].write_text(json.dumps(state))
+            subject = self.capture(f)
+            self.retire(f)
+            proof = subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
+            self.assertEqual([row["binding_at_capture"]["authentication"] for row in proof["members"]],
+                             ["not_checked"] * 4)
+            self.assertEqual([row["binding_at_capture"]["activation"] for row in proof["members"]],
+                             ["prepared"] * 4)
+            self.assertFalse(proof["writer_closure_claimed"])
+
     def test_main_attaches_bounded_A_and_B_diagnostics_only_to_failure_report(self):
         from test_live_install_audit_env import IsolatedClientEnvironmentTest
         fixture = IsolatedClientEnvironmentTest()

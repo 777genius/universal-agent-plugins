@@ -48,6 +48,15 @@ func cursorApprovalFixture(t *testing.T) (domain.ActivationRequest, nativeconfig
 	return request, kernel
 }
 
+func cursorApprovalExecutable(t *testing.T) string {
+	t.Helper()
+	executable := filepath.Join(t.TempDir(), "cursor-agent")
+	if !filepath.IsAbs(executable) || filepath.Clean(executable) != executable {
+		t.Fatalf("invalid native executable fixture: %q", executable)
+	}
+	return executable
+}
+
 func TestCursorApprovalFingerprintMatchesNativeJSONStringify(t *testing.T) {
 	source := `{"type":"stdio","command":"/usr/bin/python3","args":["/TEST/server.py","<>&","line\u2028break","literal\\u2028"],"env":{"Z_LAST":"literal <html> Ω \u2028","A_FIRST":"quote\"\\slash"},"ignored":"unknown"}`
 	server, err := cursorNormalizeApprovalServer([]byte(source))
@@ -90,7 +99,8 @@ func TestCursorApprovalCASNeverRemovesConcurrentDisable(t *testing.T) {
 		return func() error { return nil }, nil
 	})
 	runner := &cursorApprovalRunner{}
-	env := clients.Env{NativeConfig: kernel, Runner: runner, LookupExecutable: func(string) (string, error) { return "/fake/cursor-agent", nil }}
+	executable := cursorApprovalExecutable(t)
+	env := clients.Env{NativeConfig: kernel, Runner: runner, LookupExecutable: func(string) (string, error) { return executable, nil }}
 	if _, err := approveCursorMCP(context.Background(), env, request, "audit"); err == nil {
 		t.Fatal("concurrent deny was not retained")
 	}
@@ -124,7 +134,8 @@ func TestCursorCompletionPropagatesUnclosedProbeMetadata(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			request, kernel := cursorApprovalFixture(t)
 			request.VerifyOnly = true
-			env := clients.Env{NativeConfig: kernel, Runner: cursorFailingProbe{test.result}, LookupExecutable: func(string) (string, error) { return "/fake/cursor-agent", nil }}
+			executable := cursorApprovalExecutable(t)
+			env := clients.Env{NativeConfig: kernel, Runner: cursorFailingProbe{test.result}, LookupExecutable: func(string) (string, error) { return executable, nil }}
 			outcome, err := completeCursorProjectMCP(context.Background(), env, request, domain.ActivationOutcome{Activation: domain.ActivationPrepared, Verification: domain.VerificationInstalled, NativeEffect: domain.NativeEffectUnchanged})
 			if domain.IsUnclosedClientProbe(err) != test.unsafe {
 				t.Fatalf("lost cleanup metadata: %v", err)
@@ -153,7 +164,8 @@ func TestCursorApprovalRefusesPolicyDirectoryAlias(t *testing.T) {
 		t.Skip(err)
 	}
 	runner := &cursorApprovalRunner{}
-	env := clients.Env{NativeConfig: kernel, Runner: runner, LookupExecutable: func(string) (string, error) { return "/fake/cursor-agent", nil }}
+	executable := cursorApprovalExecutable(t)
+	env := clients.Env{NativeConfig: kernel, Runner: runner, LookupExecutable: func(string) (string, error) { return executable, nil }}
 	if _, err := approveCursorMCP(context.Background(), env, request, "audit"); err == nil {
 		t.Fatal("approval followed a foreign policy directory alias")
 	}

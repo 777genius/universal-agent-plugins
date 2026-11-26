@@ -33,7 +33,7 @@ func (*Adapter) InspectNativeRegistry(ctx context.Context, env clients.Env, clie
 			selected.NativeObjects = cursorNativeObjects(managed.NativeObjects)
 			managed = &selected
 		}
-		return cursorComponents(root).Inspect(plan.Components, managed, env.NativeConfig)
+		return cursorComponents(root).Inspect(cursorNativeInstallComponents(plan.Components), managed, env.NativeConfig)
 	}
 	// This manual preparation contract has no managed executable registration.
 	// Clear leaves the existing prepared-directory collision walk in charge;

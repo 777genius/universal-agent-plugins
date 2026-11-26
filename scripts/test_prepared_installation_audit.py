@@ -674,36 +674,11 @@ class PreparedInstallationTest(unittest.TestCase):
     def test_explicit_main_mode_preserves_default_failure_and_original_native_counts(self):
         runner = run_path(str(ROOT / "scripts/live-install-audit.py"))
         main = runner["main"]
-        value = report("skill")
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp).resolve()
-            cli = root / "agentplugins"; cli.write_text("fixture")
-            def version(argv, *_):
-                return deepcopy(value["cli_version"] if argv[1] == "version" else value["client_version"])
-            calls = []
-            def case(*args, **kwargs):
-                calls.append(kwargs)
-                return deepcopy(value["results"][args[4]])
-            substitutions = {"do_case": case,
-                             "version_evidence": version, "vendor_bootstrap_attested": lambda: True,
-                             "AGENT_BINARIES": {"cursor-agent": "/fixture/cursor-agent"},
-                             "isolated_client_env": lambda *args: {}, "published_audit_temp_parent": lambda: None}
-            for mode, expected_code in (("native", 1), ("cursor-prepared-skills-installation", 0)):
-                calls.clear()
-                argv = ["audit", "--cli", str(cli), "--kind", "skill", "--target", "cursor",
-                        "--limit", "30", "--report-dir", str(root / mode), "--acceptance", mode]
-                with mock.patch.dict(main.__globals__, substitutions), mock.patch("sys.argv", argv), \
-                     mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="x86_64"), \
-                     contextlib.redirect_stdout(io.StringIO()):
-                    self.assertEqual(main(), expected_code)
-                written = json.loads((root / mode / "cursor-skill.json").read_text())
-                self.assertEqual(written["passed"], 0)
-                self.assertEqual(len(calls), 30)
-                self.assertTrue(all(call == ({} if mode == "native" else {"installation_audit": mode}) for call in calls))
-                self.assertTrue(all(row["status"] == "incomplete-native-proof" for row in written["results"]))
-                if mode != "native":
-                    self.assertTrue(written["installation_acceptance_passed"])
-                    self.assertFalse(written["native_activation_qualified"])
+        for kind, executable, acceptance in (
+                ("skill", "cursor-agent", "cursor-prepared-skills-installation"),
+                ("plugin", "cursor", "cursor-prepared-installation")):
+            with self.subTest(kind=kind):
+                self.check_explicit_cursor_mode(main, kind, executable, acceptance)
 
     def test_explicit_main_mode_rejects_wrong_route_before_any_execution(self):
         main = run_path(str(ROOT / "scripts/live-install-audit.py"))["main"]
@@ -740,6 +715,39 @@ class PreparedInstallationTest(unittest.TestCase):
                           env, root, 30, capture_full=True)
             self.assertIsNone(result["_json"])
             self.assertIsNone(result["exit_code"])
+
+    def check_explicit_cursor_mode(self, main, kind, executable, acceptance):
+        value = report(kind)
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp).resolve()
+            cli = root / "agentplugins"; cli.write_text("fixture")
+            def version(argv, *_):
+                return deepcopy(value["cli_version"] if argv[1] == "version" else value["client_version"])
+            calls = []
+            def case(*args, **kwargs):
+                calls.append(kwargs)
+                return deepcopy(value["results"][args[4]])
+            substitutions = {"do_case": case,
+                             "version_evidence": version, "vendor_bootstrap_attested": lambda: True,
+                             "AGENT_BINARIES": {executable: "/fixture/" + executable},
+                             "isolated_client_env": lambda *args: {}, "published_audit_temp_parent": lambda: None}
+            for mode, expected_code in (("native", 1), (acceptance, 0)):
+                calls.clear()
+                argv = ["audit", "--cli", str(cli), "--kind", kind, "--target", "cursor",
+                        "--limit", "30", "--report-dir", str(root / mode), "--acceptance", mode]
+                with mock.patch.dict(main.__globals__, substitutions), mock.patch("sys.argv", argv), \
+                     mock.patch("sys.platform", "linux"), mock.patch("platform.machine", return_value="x86_64"), \
+                     contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(main(), expected_code)
+                written = json.loads((root / mode / f"cursor-{kind}.json").read_text())
+                self.assertEqual(written["passed"], 0)
+                self.assertEqual(len(calls), 30)
+                self.assertTrue(all(call == ({} if mode == "native" else {"installation_audit": mode}) for call in calls))
+                self.assertEqual(written["results"], value["results"])
+                self.assertEqual(written["prepared_lifecycle_passed"], value["prepared_lifecycle_passed"])
+                if mode != "native":
+                    self.assertTrue(written["installation_acceptance_passed"])
+                    self.assertFalse(written["native_activation_qualified"])
 
 
 if __name__ == "__main__":

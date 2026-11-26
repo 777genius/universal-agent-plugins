@@ -37,7 +37,7 @@ func approveCursorMCP(ctx context.Context, env clients.Env, request domain.Activ
 	if err != nil {
 		return false, err
 	}
-	if strings.TrimSpace(string(version.Stdout)) != "2026.09.18-9a7762b" {
+	if !cursorQualifiedApprovalVersion(strings.TrimSpace(string(version.Stdout))) {
 		return false, fmt.Errorf("cursor MCP approval format is not qualified for this agent version")
 	}
 	key, err := cursorOwnedApprovalKey(env, request, name)
@@ -226,4 +226,12 @@ func cursorJSONSeparators(body []byte) []byte {
 		}
 	}
 	return output.Bytes()
+}
+
+// The first version is qualified by the original native fingerprint spike.
+// The second is independently qualified by pinned Cursor 2026.10.22 genuine
+// two-project MCP cycle, PR #521, run 41046185239 / job 124032227409.
+// Both tests observed the exact approval-store fingerprint after native enable.
+func cursorQualifiedApprovalVersion(version string) bool {
+	return version == "2026.09.18-9a7762b" || version == "2026.10.22-27dcf5f"
 }
