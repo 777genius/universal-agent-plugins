@@ -90,9 +90,17 @@ func classifyClaudeEntry(value any, expectedID, expectedPath, expectedScope stri
 	if !idOK || !scopeOK || !enabledOK || !pathOK || id == "" || scope == "" || !filepath.IsAbs(installPath) {
 		return StatusUnknown, false, false
 	}
-	// Claude Code prints one local-scope row per project, differing only in projectPath.
-	project, _ := entry["projectPath"].(string)
-	identity := id + "\x00" + scope + "\x00" + filepath.Clean(installPath) + "\x00" + project
+	// Claude Code prints one local/project-scope row per project. Keep
+	// user/managed entries globally unique: projectPath must not let malformed
+	// rows evade duplicate detection for the managed identity.
+	identity := id + "\x00" + scope + "\x00" + filepath.Clean(installPath)
+	if project, hasProject := entry["projectPath"]; hasProject {
+		path, valid := project.(string)
+		if !valid || !filepath.IsAbs(path) || filepath.Clean(path) != path || (scope != "local" && scope != "project") {
+			return StatusUnknown, false, false
+		}
+		identity += "\x00" + path
+	}
 	if _, duplicate := seen[identity]; duplicate {
 		return StatusUnknown, false, false
 	}
@@ -120,7 +128,7 @@ func claudeBuiltinListIdentity(entry map[string]any) (string, bool) {
 	scope, scopeOK := entry["scope"].(string)
 	_, enabledOK := entry["enabled"].(bool)
 	name, builtin := strings.CutSuffix(id, "@builtin")
-	if !idOK || !scopeOK || !enabledOK || scope == "" || !builtin || name == "" {
+	if !idOK || !scopeOK || !enabledOK || scope != "user" || !builtin || name == "" {
 		return "", false
 	}
 	return id + "\x00" + scope, true
