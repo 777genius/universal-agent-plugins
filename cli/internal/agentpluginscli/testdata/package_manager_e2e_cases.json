@@ -61,6 +61,9 @@
     "native-config-obstruction"
   ],
   "agreement": [
+    "local-skill-snapshot-lifecycle",
+    "local-skill-cold-source-integrity",
+    "local-skill-foreign-os-warm-replay",
     "manifest-rejections",
     "saved-source-admission-refusal",
     "oversized-agreement-refusal",

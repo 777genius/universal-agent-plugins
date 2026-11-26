@@ -178,3 +178,54 @@ func TestLocalSkillSelectionRefusalsDoNotWrite(t *testing.T) {
 		})
 	}
 }
+
+func TestLocalSkillRelativeDirectoryUsesCanonicalSnapshotIdentity(t *testing.T) {
+	j, root := localSkillJourney(t)
+	t.Chdir(filepath.Dir(root))
+	j.run(t, "skills", "add", "./review", "--target", "codex", "--yes", "--format", "json")
+	reqs, _ := j.intent(t)
+	if reqs.Dependencies["review"].Local.Path != filepath.ToSlash(root) {
+		t.Fatal("relative source was saved against a future working directory")
+	}
+}
+
+func TestLocalSkillPathHazardsRefuseBeforePublication(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows symlink creation needs an explicit host privilege")
+	}
+	for _, hazard := range []string{"root-link", "resource-escape", "document-link"} {
+		t.Run(hazard, func(t *testing.T) {
+			j, root := localSkillJourney(t)
+			outside := filepath.Join(t.TempDir(), "outside")
+			if err := os.WriteFile(outside, []byte("private outside bytes"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			switch hazard {
+			case "root-link":
+				link := filepath.Join(t.TempDir(), "review")
+				if err := os.Symlink(root, link); err != nil {
+					t.Fatal(err)
+				}
+				root = link
+			case "resource-escape":
+				if err := os.Symlink(outside, filepath.Join(root, "resource")); err != nil {
+					t.Fatal(err)
+				}
+			case "document-link":
+				if err := os.Rename(filepath.Join(root, "SKILL.md"), filepath.Join(root, "document.md")); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink("document.md", filepath.Join(root, "SKILL.md")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, _, err := j.cli.execute(false, "skills", "add", root, "--target", "codex", "--yes", "--format", "json"); err == nil {
+				t.Fatal("accepted unsafe local Skill source", hazard)
+			}
+			mp, _ := j.cli.app.dependencyPaths()
+			if _, err := os.Stat(mp); !os.IsNotExist(err) || len(j.state(t).Installations) != 0 {
+				t.Fatal("unsafe source published an installation")
+			}
+		})
+	}
+}
