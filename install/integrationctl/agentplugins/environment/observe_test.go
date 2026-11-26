@@ -1,6 +1,7 @@
 package environment
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -28,7 +29,7 @@ func TestObserveIncludesUnmanagedSiblingsAndRejectsReceiptMismatch(t *testing.T)
 	receipt := domain.EnvironmentReceipt{ReceiptID: "r", EnvironmentID: EnvironmentUserDefault, Alias: "review", ClientID: "codex", InstallationID: "i", ClientBindingID: "b", SourceKey: "github:acme/tools:", PackageDigest: "digest"}
 	view := installer.Inspection{EnvironmentReceipts: []domain.EnvironmentReceipt{receipt}, Installations: []installer.InspectedInstallation{{InstallationID: "i", SourceKey: receipt.SourceKey, Bindings: []installer.InspectedBinding{{BindingID: "b", ClientID: "codex", TreeDigest: "digest", Materialization: "materialized", LifecycleConverged: true}, {BindingID: "foreign", ClientID: "claude"}}}}}
 	observed, err := Observe(view)
-	if err != nil || len(observed) != 2 || !observed[0].Managed || observed[1].Managed {
+	if err != nil || len(observed) != 2 || !observed[0].Managed || observed[0].OwnerEnvironmentID != receipt.EnvironmentID || observed[1].Managed {
 		t.Fatalf("observe: %+v %v", observed, err)
 	}
 	pkg := LockedPackage{Alias: "review", SourceKey: receipt.SourceKey}
@@ -71,5 +72,38 @@ func TestLifecycleFactsManualReadiness(t *testing.T) {
 	retry, facts := LifecycleFacts(binding)
 	if retry || len(facts) != 2 || facts[1] != "auth_failed" {
 		t.Fatalf("manual authentication failure hidden: %v %v", retry, facts)
+	}
+}
+
+func TestObservePreservesForeignOwnerIdentity(t *testing.T) {
+	owner := domain.EnvironmentReceipt{ReceiptID: "foreign-owner", EnvironmentID: "another-environment", InstallationID: "i", ClientBindingID: "b", SourceKey: "git:source", PackageDigest: "digest"}
+	view := installer.Inspection{Installations: []installer.InspectedInstallation{{InstallationID: "i", SourceKey: owner.SourceKey, Bindings: []installer.InspectedBinding{{BindingID: "b", ClientID: "codex", Owner: &owner, TreeDigest: "digest", Materialization: "materialized", LifecycleConverged: true}}}}}
+	for _, withReceipt := range []bool{false, true} {
+		if withReceipt {
+			view.EnvironmentReceipts = []domain.EnvironmentReceipt{owner}
+		}
+		observed, err := Observe(view)
+		if err != nil || len(observed) != 1 || observed[0].Managed || observed[0].Receipt != nil || observed[0].OwnerEnvironmentID != owner.EnvironmentID {
+			t.Fatalf("foreign owner lost or adopted: %+v, %v", observed, err)
+		}
+		var foreign *ForeignBindingError
+		if !errors.As(CheckSourceOwnership(LockedPackage{SourceKey: owner.SourceKey}, observed), &foreign) || foreign.Bindings[0].Reason != "foreign_environment" {
+			t.Fatalf("foreign environment misclassified: %+v", foreign)
+		}
+	}
+	view.Recovery.Required = true
+	if _, err := Observe(view); !errors.Is(err, installer.ErrRecoveryRequired) {
+		t.Fatalf("recovery lost precedence: %v", err)
+	}
+}
+
+func TestObserveRetainedInstallationHasNoForeignBinding(t *testing.T) {
+	view := installer.Inspection{Installations: []installer.InspectedInstallation{{InstallationID: "retained", SourceKey: "git:source", DataRetained: true}}}
+	observed, err := Observe(view)
+	if err != nil || len(observed) != 0 {
+		t.Fatalf("retained data became a live binding: %+v, %v", observed, err)
+	}
+	if err := CheckSourceOwnership(LockedPackage{SourceKey: "git:source"}, observed); err != nil {
+		t.Fatalf("retained data intercepted installer pin checks: %v", err)
 	}
 }

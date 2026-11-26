@@ -152,6 +152,9 @@ type installFailure struct {
 	Next      string
 	Retryable bool
 	Detail    string
+
+	// Keep the run-wide stop policy when a binding's displayed kind becomes SKIPPED.
+	stopsNamespaceRetry bool
 }
 
 // describeBindingFailure explains why one binding did not succeed. A binding
@@ -170,6 +173,7 @@ func describeBindingFailure(outcome environment.BindingOutcome) *installFailure 
 		}
 	}
 	cause := failure.Kind
+	failure.stopsNamespaceRetry = cause == failureProcessCleanup || cause == failureRecovery
 	if outcome.Status == environment.BindingNotAttempted && cause != failureProcessCleanup {
 		failure.Kind = failureSkipped
 	}
@@ -178,6 +182,7 @@ func describeBindingFailure(outcome environment.BindingOutcome) *installFailure 
 		// A skipped agent is only worth retrying when what stopped the run can be fixed by retrying.
 		_, _, failure.Retryable = applyFailureWording(cause)
 	}
+	explainRetainedRevision(&failure, cause, outcome.Err)
 	return &failure
 }
 
@@ -186,7 +191,21 @@ func describeBindingFailure(outcome environment.BindingOutcome) *installFailure 
 func describeSyncFailure(err error) *installFailure {
 	failure := installFailure{Kind: failureKindOf(err), Detail: errorText(err)}
 	failure.Summary, failure.Next, failure.Retryable = applyFailureWording(failure.Kind)
+	explainRetainedRevision(&failure, failure.Kind, err)
 	return &failure
+}
+
+const retainedRevisionSummary = "This Directory installation has no installed targets."
+const retainedRevisionGuidance = "Replacing its recorded release through add is not supported, and update requires an installed target. The recorded revision is kept."
+
+func explainRetainedRevision(failure *installFailure, cause failureKind, err error) {
+	if cause != failureUpdateRequired || !errors.Is(err, domain.ErrRetainedRevisionChange) {
+		return
+	}
+	if failure.Kind != failureSkipped {
+		failure.Summary = retainedRevisionSummary
+	}
+	failure.Next, failure.Retryable = retainedRevisionGuidance, false
 }
 
 func failureKindOfOutcome(outcome installer.Outcome) failureKind {
@@ -206,7 +225,7 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 	case failureProcessCleanup:
 		return "The agent's process cleanup could not be confirmed.", "Confirm the agent's processes have stopped before starting another installation.", false
 	case failureRecovery:
-		return "An earlier installation was interrupted and needs recovery first.", "Run `agentplugins doctor`, follow its steps, then try again.", false
+		return "The installation needs recovery before more changes.", "Run `agentplugins doctor`, follow its steps, then try again.", false
 	case failureSecurityBlocked:
 		return "The automated security check blocked this item.", "Review the findings before installing it.", false
 	case failureForeignTarget:
@@ -238,7 +257,7 @@ func applyFailureWording(kind failureKind) (summary, next string, retryable bool
 	case failureSkipped:
 		return "Not attempted because an earlier problem stopped the installation.", "Retry this agent once the earlier problem is resolved.", true
 	}
-	return "The installation did not complete for this agent.", "Retry, or hand the technical log to an agent to diagnose.", true
+	return "The installation did not complete for this agent.", "Retry, or ask an agent to diagnose the per-agent results and failure codes.", true
 }
 
 // installFailureWithCause keeps a classifiable cause without putting its

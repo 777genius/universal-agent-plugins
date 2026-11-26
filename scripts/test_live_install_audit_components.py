@@ -152,14 +152,17 @@ class PublishedCatalogNativeProofTest(unittest.TestCase):
         # package lifecycles can qualify as non-native negative coverage.
         for source in sources:
             for version in ("agentplugins 0.1.95", "agentplugins 0.1.101",
-                            "agentplugins 0.1.102"):
+                            "agentplugins 0.1.102", "agentplugins 0.1.115"):
                 with self.subTest(source=source, version=version):
                     self.assertTrue(audit.expected_negative_coverage(
                         {**row, "source": source}, version))
-        for version in (None, "agentplugins 0.1.103", "agentplugins 0.2.0"):
+        for version in (None, "agentplugins 0.1.103", "agentplugins 0.2.0",
+                        "agentplugins 0.1.114", "agentplugins 0.1.116",
+                        "agentplugins 0.1.115-other", "0.1.115"):
             self.assertFalse(audit.expected_negative_coverage(row, version))
         for key, bad in (
             ("source", "github:unknown/plugin@" + "a" * 40),
+            ("source", sources[0].rsplit("@", 1)[0] + "@" + "0" * 40),
             ("status", "passed"),
             ("target", "claude"),
             ("native_identity_files", ["opencode/opencode.json"]),
@@ -175,9 +178,10 @@ class PublishedCatalogNativeProofTest(unittest.TestCase):
             ("install", {"exit_code": 1}),
             ("cleanup", {"exit_code": 1}),
         ):
-            with self.subTest(key=key):
-                self.assertFalse(audit.expected_negative_coverage(
-                    {**row, key: bad}, "agentplugins 0.1.102"))
+            for version in ("agentplugins 0.1.102", "agentplugins 0.1.115"):
+                with self.subTest(key=key, version=version):
+                    self.assertFalse(audit.expected_negative_coverage(
+                        {**row, key: bad}, version))
 
     def test_pi_explicit_unsupported_refusals_never_become_native_pass(self):
         audit = load_audit()

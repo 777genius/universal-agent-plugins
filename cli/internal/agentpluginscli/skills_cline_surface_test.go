@@ -118,3 +118,92 @@ func TestRawProjectSkillsPreserveActualClineSurface(t *testing.T) {
 		})
 	}
 }
+
+func TestRawProjectSkillsClineRepeatQueriesFreshCatalogWithoutRewriting(t *testing.T) {
+	journey, runner, source := rawClineSurfaceFixture(t, []domain.ClientSurface{{ID: "cline_cli", Detected: true, Evidence: "actual host observation"}})
+	argv := []string{"skills", "add", source, "--skill", "pdf", "--target", "cline", "--scope", "project", "--project-root", runner.project, "--no-ui", "--yes", "--format", "json"}
+	first := journey.run(t, argv...)
+	var firstDocument map[string]any
+	if err := json.Unmarshal([]byte(first), &firstDocument); err != nil || firstDocument["readiness"] != "ready" || runner.calls == 0 {
+		t.Fatalf("first add did not observe the selected CLI catalog: %s %v", first, err)
+	}
+	state := journey.state(t)
+	binding := savedJourneyBinding(t, state, "cline")
+	if len(state.Installations) != 1 || state.Installations[0].InstallationID == "" || binding.Activation != domain.ActivationActive {
+		t.Fatalf("first add lacks its exact Active installation: %+v", state)
+	}
+	installationID := state.Installations[0].InstallationID
+	managed := savedJourneyTree(t, binding.TargetLocator)
+	native := savedJourneyTree(t, filepath.Join(runner.project, ".cline"))
+	userRoot := filepath.Join(filepath.Dir(runner.project), "home", ".cline")
+	user := savedJourneyTree(t, userRoot)
+	held := map[string][]byte{}
+	for _, name := range []string{".uap/state-v2.json", "uap.toml", "uap.lock", "foreign.txt"} {
+		body, err := os.ReadFile(filepath.Join(runner.project, filepath.FromSlash(name)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		held[name] = body
+	}
+	calls := runner.calls
+	repeated := journey.run(t, argv...)
+	var document map[string]any
+	if err := json.Unmarshal([]byte(repeated), &document); err != nil {
+		t.Fatal(err)
+	}
+	items, ok := document["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("repeat lost its selected item: %s", repeated)
+	}
+	item, ok := items[0].(map[string]any)
+	if !ok || item["alias"] != "pdf" || item["targetId"] != "cline" || item["status"] != "unchanged" || document["readiness"] != "ready" || runner.calls <= calls {
+		t.Fatalf("repeat reused readiness without a fresh selected catalog: %s calls=%d before=%d", repeated, runner.calls, calls)
+	}
+	after := journey.state(t)
+	if len(after.Installations) != 1 || after.Installations[0].InstallationID != installationID || !reflect.DeepEqual(binding, savedJourneyBinding(t, after, "cline")) {
+		t.Fatal("read-only repeat changed installation or binding identity")
+	}
+	if !reflect.DeepEqual(managed, savedJourneyTree(t, binding.TargetLocator)) || !reflect.DeepEqual(native, savedJourneyTree(t, filepath.Join(runner.project, ".cline"))) || !reflect.DeepEqual(user, savedJourneyTree(t, userRoot)) {
+		t.Fatal("fresh repeat catalog changed managed, native or original User bytes")
+	}
+	for name, body := range held {
+		current, err := os.ReadFile(filepath.Join(runner.project, filepath.FromSlash(name)))
+		if err != nil || string(current) != string(body) {
+			t.Fatalf("read-only repeat changed Project authority %s: %v", name, err)
+		}
+	}
+}
+
+func TestRawProjectSkillsAbsoluteClineExecutableDoesNotInventSurface(t *testing.T) {
+	for _, scenario := range []struct {
+		name     string
+		surfaces []domain.ClientSurface
+	}{
+		{"absent", nil},
+		{"editor only", []domain.ClientSurface{{ID: "cline_vscode_extension", Detected: true}}},
+		{"CLI unavailable", []domain.ClientSurface{{ID: "cline_cli", Detected: false}}},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			journey, runner, source := rawClineSurfaceFixture(t, scenario.surfaces)
+			observed, err := journey.cli.app.Detector.Detect(t.Context())
+			if err != nil || len(observed) != 1 {
+				t.Fatalf("fixture detector: %+v %v", observed, err)
+			}
+			dependencyWrite(t, runner.executable, "inert executable is not observed CLI authority")
+			if err := os.Chmod(runner.executable, 0700); err != nil {
+				t.Fatal(err)
+			}
+			observed[0].ExecutablePath = runner.executable
+			journey.cli.app.Detector = staticDetector{clients: observed}
+			output := journey.run(t, "skills", "add", source, "--skill", "pdf", "--target", "cline", "--scope", "project", "--project-root", runner.project, "--no-ui", "--yes", "--format", "json")
+			var document map[string]any
+			if err := json.Unmarshal([]byte(output), &document); err != nil {
+				t.Fatal(err)
+			}
+			binding := savedJourneyBinding(t, journey.state(t), "cline")
+			if runner.calls != 0 || document["readiness"] == "ready" || binding.Activation != domain.ActivationPrepared || binding.Verification != domain.VerificationInstalled {
+				t.Fatalf("absolute executable invented CLI surface authority: calls=%d binding=%+v output=%s", runner.calls, binding, output)
+			}
+		})
+	}
+}

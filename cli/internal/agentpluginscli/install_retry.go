@@ -41,14 +41,14 @@ func retryFailedAgents(cmd *cobra.Command, app App, opts *options, err error, re
 		}
 	}
 	if _, writeErr := fmt.Fprintf(cmd.ErrOrStderr(), "Retrying %d agent(s)…\n", len(targets)); writeErr != nil {
-		return errors.Join(err, writeErr)
+		return errors.Join(err, installOutputError(writeErr))
 	}
 	rerr := rerun(strings.Join(public, ","), pending)
 	if rerr != nil {
 		return errors.Join(err, rerr)
 	}
 	if len(pending) > 0 {
-		return fmt.Errorf("%s still need attention; see the technical log", strings.Join(pending, ", "))
+		return fmt.Errorf("%s still need attention; follow their per-agent results and next steps", strings.Join(pending, ", "))
 	}
 	return nil
 }
@@ -82,19 +82,20 @@ func hasSingleTargetBinding(app App, loaded loadedPackage, target domain.ClientI
 	return ok && installationHasTarget(installation, target, string(app.scope()))
 }
 
-func (app App) recordSingleAdd(cmd *cobra.Command, opts *options, client domain.ClientID, alias string, err error) {
+func (app App) recordSingleAdd(cmd *cobra.Command, opts *options, client domain.ClientID, alias string, err error) error {
 	if err == nil {
-		return
+		return nil
 	}
 	item := agentItem{Alias: alias, ClientID: string(client), Status: "failed", failure: describeSyncFailure(err)}
 	outcome := app.finishInstall(opts, "add", []agentItem{item})
-	if outcome.LogFile != "" && opts.format == "human" {
-		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Technical details: %s\n", prompt.SafeText(outcome.LogFile))
+	if opts.format == "human" {
+		return errors.Join(humanInstallApplyError(opts.format, outcome, err), installOutputError(renderInstallRecord(cmd.ErrOrStderr(), outcome)))
 	}
+	return err
 }
 
 func retryAllowed(cmd *cobra.Command, app App, opts *options, err error) bool {
-	return err != nil && !domain.IsUnclosedClientProbe(err) && app.Terminal && opts.format == "human" && !opts.yes && !opts.dryRun &&
+	return err != nil && !errors.Is(err, errInstallOutput) && !domain.IsUnclosedClientProbe(err) && app.Terminal && opts.format == "human" && !opts.yes && !opts.dryRun &&
 		opts.retryAttempt < maxSkillsRetries && cmd.Context().Err() == nil && opts.installResult != nil
 }
 
@@ -129,7 +130,7 @@ func retryConverge(cmd *cobra.Command, app App, opts *options, err error, rerun 
 	}
 	opts.retryAttempt++
 	if _, writeErr := fmt.Fprintf(cmd.ErrOrStderr(), "Retrying %d agent(s)…\n", len(retryable)); writeErr != nil {
-		return errors.Join(err, writeErr)
+		return errors.Join(err, installOutputError(writeErr))
 	}
 	if retryErr := rerun(); retryErr != nil {
 		return errors.Join(err, retryErr)

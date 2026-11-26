@@ -192,7 +192,11 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         body = (WORKFLOW.parent / "agentplugins-windows-firebase-capture-probe.yml").read_text()
         self.assertRegex(body, r"(?m)^  pull_request:\s*$")
         self.assertRegex(body, r"(?m)^  workflow_dispatch:\s*$")
-        self.assertNotIn("workflow_dispatch", body.split("    steps:", 1)[0].split("jobs:", 1)[1])
+        # An event-dependent timeout does not disable automatic execution.
+        # The source job itself must remain unconditional on every event.
+        header = body.split("    steps:", 1)[0].split("jobs:", 1)[1]
+        self.assertNotRegex(header, r"(?m)^    (?:if|'if'|\"if\")\s*:",
+                            "Firebase source job must stay unconditional")
         events = body.split("  workflow_dispatch:", 1)[0]
         for path in ("scripts/firebase_runtime_failure.py",
                      "scripts/test_firebase_runtime_failure.py"):
@@ -209,6 +213,8 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         self.assertIn("if: ${{ !cancelled() }}", build)
         self.assertIn("go build -trimpath -ldflags='-X main.version=0.1.115'", build)
         source = steps["Genuine current-source Firebase add, repeat, native attribution and remove"]
+        source_version = re.search(r"main\.version=([0-9.]+)", build).group(1)
+        self.assertIn("assert cli_version == 'agentplugins " + source_version + "'", source)
         self.assertIn("if: ${{ !cancelled() && steps.source-build.outcome == 'success' }}", source)
         self.assertIn("AUDIT_VENDOR_OUTCOME: ${{ steps.native-bootstrap.outcome }}", source)
         self.assertIn("assert actual_head == os.environ['GITHUB_SHA'] and clean_worktree", source)
@@ -219,6 +225,19 @@ class PackageManagerCIPolicyTests(unittest.TestCase):
         artifact = steps["Preserve current-source Firebase evidence on failure"]
         self.assertIn("if: always()", artifact)
         self.assertIn("source-firebase-claude.json", artifact)
+
+    def test_firebase_automatic_policy_rejects_actual_job_conditions(self):
+        body = (WORKFLOW.parent / "agentplugins-windows-firebase-capture-probe.yml").read_text()
+        for key, condition in (("if", "${{ github.event_name == 'workflow_dispatch' }}"),
+                               ("'if'", "false"),
+                               ('"if"', "${{ needs.legacy.result == 'success' }}")):
+            with self.subTest(key=key, condition=condition):
+                gated = body.replace("    runs-on: windows-2025",
+                                     f"    {key}: {condition}\n    runs-on: windows-2025", 1)
+                self.assertNotEqual(gated, body)
+                with patch.object(Path, "read_text", return_value=gated), \
+                     self.assertRaisesRegex(AssertionError, "Firebase source job must stay unconditional"):
+                    self.test_firebase_current_source_proof_stays_automatic_and_independent()
 
     def test_firebase_legacy_control_requires_manual_execution_and_native_proof(self):
         body = (WORKFLOW.parent / "agentplugins-windows-firebase-capture-probe.yml").read_text()

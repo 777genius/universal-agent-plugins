@@ -35,7 +35,8 @@ func TestCursorNativeApprovalPreservesDisablementAndMalformedPolicy(t *testing.T
 				t.Fatal(err)
 			}
 			runner := &cursorApprovalRunner{}
-			env := clients.Env{NativeConfig: nativeconfig.New(), Runner: runner, LookupExecutable: func(string) (string, error) { return "/fake/cursor-agent", nil }}
+			executable := cursorApprovalExecutable(t)
+			env := clients.Env{NativeConfig: nativeconfig.New(), Runner: runner, LookupExecutable: func(string) (string, error) { return executable, nil }}
 			if _, err := approveCursorMCP(context.Background(), env, request, "audit"); err == nil {
 				t.Fatal("approved despite existing policy")
 			}
@@ -55,11 +56,12 @@ func TestCursorNativeApprovalPinsProjectProfileAndExactServer(t *testing.T) {
 	project := request.Plan.TargetContext.ProjectRoot
 	root := request.Client.ConfigRoot
 	runner := &cursorApprovalRunner{}
+	executable := cursorApprovalExecutable(t)
 	env := clients.Env{NativeConfig: kernel, Runner: runner, LookupExecutable: func(name string) (string, error) {
 		if name != "cursor-agent" {
 			t.Fatal(name)
 		}
-		return "/fake/cursor-agent", nil
+		return executable, nil
 	}}
 	t.Setenv("CURSOR_API_KEY", "must-not-inherit")
 	t.Setenv("CURSOR_DATA_DIR", root)
@@ -72,7 +74,7 @@ func TestCursorNativeApprovalPinsProjectProfileAndExactServer(t *testing.T) {
 		t.Fatal("unexpected command count")
 	}
 	command := runner.commands[0]
-	if !reflect.DeepEqual(command.Argv, []string{"/fake/cursor-agent", "--version"}) || command.Dir != project {
+	if !reflect.DeepEqual(command.Argv, []string{executable, "--version"}) || command.Dir != project {
 		t.Fatalf("wrong command %+v", command)
 	}
 	text := strings.Join(command.Env, "\n")
@@ -138,7 +140,8 @@ func TestCursorReadOnlyObservationReportsPendingApprovalOnly(t *testing.T) {
 	request, kernel := cursorApprovalFixture(t)
 	t.Setenv("XDG_CONFIG_HOME", "")
 	runner := &cursorListingRunner{listing: "audit: " + cursorNeedsApprovalStatus + "\n"}
-	env := clients.Env{NativeConfig: kernel, Runner: runner, LookupExecutable: func(string) (string, error) { return "/fake/cursor-agent", nil }}
+	executable := cursorApprovalExecutable(t)
+	env := clients.Env{NativeConfig: kernel, Runner: runner, LookupExecutable: func(string) (string, error) { return executable, nil }}
 	approvals := cursorMCPPolicyPath(request, "mcp-approvals.json")
 
 	request.VerifyOnly = true

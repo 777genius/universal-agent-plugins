@@ -119,11 +119,12 @@ func (p *PreparedSkillsBatch) ApplyWithProgress(ctx context.Context, progress fu
 	defer p.mu.Unlock()
 	result := SkillsBatchResult{Status: "failed", Items: []SkillsBatchItem{}, RepairInstructions: []string{}}
 	if p.closed || p.applied {
-		return result, errors.New("skill plan closed or already applied")
+		err := errors.New("skill plan closed or already applied")
+		return failedSkillsBatch(p.actions, err), err
 	}
 	// Check the original authority before creating a lock in the selected root.
 	if err := p.checkInputs(); err != nil {
-		return result, err
+		return failedSkillsBatch(p.actions, err), err
 	}
 	p.applied = true
 	adapter := &dependencyInstaller{app: p.app, opts: p.app.skillsOptions(), detected: p.request.detected, beforeApply: p.checkInputs, trustAliases: append([]string(nil), p.request.aliases...)}
@@ -178,8 +179,6 @@ func skillsBatchItems(actions []SkillsAction, outcomes []environment.BindingOutc
 		item := SkillsBatchItem{Alias: action.Alias, ClientID: action.ClientID, Action: action.Action, TargetPath: action.TargetPath, CandidateID: action.CandidateID, Status: "not_attempted"}
 		outcome, observed := byBinding[skillsBindingKey(action.Alias, action.ClientID, action.Action)]
 		switch {
-		case action.Action == "unchanged":
-			item.Status = "unchanged"
 		case observed:
 			item.Status, item.Reason = outcomeStatusReason(outcome)
 			item.failure = describeBindingFailure(outcome)
@@ -192,9 +191,17 @@ func skillsBatchItems(actions []SkillsAction, outcomes []environment.BindingOutc
 			item.Reason = applyErr.Error()
 			item.failure = describeSyncFailure(applyErr)
 		}
+		item.failure = normalizeAgentItem(agentItem{Status: item.Status, failure: item.failure}).failure
 		items = append(items, item)
 	}
 	return items, mutated
+}
+
+// A refused reviewed batch still has one result per requested binding. Planned
+// unchanged actions are not completed observations when a required check fails.
+func failedSkillsBatch(actions []SkillsAction, cause error) SkillsBatchResult {
+	items, _ := skillsBatchItems(actions, nil, cause)
+	return SkillsBatchResult{Status: "failed", Items: items, RepairInstructions: []string{}}
 }
 
 func emitSkillsProgress(observer func(SkillsProgress), event SkillsProgress) {

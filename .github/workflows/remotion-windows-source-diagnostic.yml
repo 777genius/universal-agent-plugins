@@ -2,7 +2,7 @@ name: Diagnostic pinned Remotion Windows Skill acquisition
 
 on:
   pull_request:
-    paths: ['.github/workflows/remotion-windows-source-diagnostic.yml', 'scripts/remotion_published_windows_long_temp_e2e.py']
+    paths: ['.github/workflows/remotion-windows-source-diagnostic.yml', 'scripts/remotion_published_windows_long_temp_e2e.py', 'scripts/test_remotion_published_windows_diagnostics.py']
   workflow_dispatch:
 
 # Replace superseded PR checks; preserve exact push, scheduled and manual runs.
@@ -210,8 +210,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  published-remotion-v0102:
-    name: Published npm 0.1.102 / Codex Remotion long TEMP
+  published-remotion-v0116:
+    name: Published npm 0.1.116 / Codex Remotion long TEMP
     runs-on: windows-2025
     timeout-minutes: 45
     steps:
@@ -229,10 +229,17 @@ jobs:
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.0.0
         with:
           python-version: '3.12'
+      - name: Verify bounded failure diagnostics before native execution
+        shell: pwsh
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python -m unittest discover -s scripts -p test_remotion_published_windows_diagnostics.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Install exact published npm CLI and pinned native Codex
         shell: pwsh
         run: |
-          npm.cmd install --global --ignore-scripts universal-agent-plugins@0.1.102
+          npm.cmd install --global --ignore-scripts universal-agent-plugins@0.1.116
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm.cmd install --global '@openai/codex@0.153.4'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -252,7 +259,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4.6.2
         with:
-          name: remotion-windows-published-0.1.102
-          path: ${{ runner.temp }}\remotion-windows-published-0.1.102.json
+          name: remotion-windows-published-0.1.116
+          path: ${{ runner.temp }}\remotion-windows-published-0.1.116.json
           if-no-files-found: warn
           retention-days: 7

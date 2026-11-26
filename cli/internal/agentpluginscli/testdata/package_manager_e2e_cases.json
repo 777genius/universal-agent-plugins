@@ -76,6 +76,7 @@
     "lock-read-only-no-publication",
     "lock-only-preserves-installed",
     "source-origin-rebind-refusal",
+    "retained-directory-reinstall",
     "lock-empty-existing-refusal",
     "absent-empty-distinct",
     "direct-source-promotion",

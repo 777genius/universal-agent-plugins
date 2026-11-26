@@ -24,7 +24,7 @@ type skillsAddOptions struct {
 func newSkillsCommand(app App, opts *options) *cobra.Command {
 	root := &cobra.Command{Use: "skills", Short: "Install raw Agent Skills from GitHub or HTTPS publisher indexes"}
 	selection := &skillsAddOptions{}
-	add := &cobra.Command{Use: "add <owner/repository or HTTPS URL>", Short: "Select and install raw Skills through the saved environment installer", Long: "Select Skills from a public GitHub repository, folder or SKILL.md URL.\nHTTPS publishers expose a complete .well-known Skills index; use --skill with an exact name.\n\nExplicit --skill, --path, --target and exact file/folder URLs use terminal review.\n--ui opens interactive selection and cannot combine with --skill, --target or --dry-run.\nJSON and non-interactive use require explicit selections, targets and --yes (except --dry-run).\nTerminal selection: arrows move, space toggles Skills, / opens search, and Enter reviews.\nWhile searching, Enter applies the filter. Esc or Ctrl+C cancels.\nWith --plain: numbers toggle Skills, /query searches, / clears the filter,\nclear removes all selections, done reviews, q or Enter cancels.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error { return selection.run(cmd, app, opts, args[0]) }}
+	add := &cobra.Command{Use: "add <owner/repository or HTTPS URL>", Short: "Select and install raw Skills through the saved environment installer", Long: "Select Skills from a public GitHub repository, folder or SKILL.md URL.\nHTTPS publishers expose a complete .well-known Skills index; use --skill with an exact name.\n\nExplicit --skill, --path, --target and exact file/folder URLs use terminal review.\n--ui opens interactive selection and cannot combine with --skill, --target or --dry-run.\nJSON and non-interactive use require explicit selections, targets and --yes (except --dry-run).\nTerminal selection: arrows move, space toggles Skills, / opens search, and Enter reviews.\nWhile searching, Enter applies the filter. Esc or Ctrl+C cancels.\nWith --plain: numbers toggle Skills, /query searches, / clears the filter,\nnext/prev browse pages, selected shows your basket, all returns to the catalog,\nclear removes all selections, done reviews, q or Enter cancels.", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error { return selection.run(cmd, app, opts, args[0]) }}
 	add.Flags().StringSliceVar(&selection.names, "skill", nil, "exact Skill name (repeatable; ambiguity requires --path)")
 	add.Flags().StringVar(&selection.folder, "path", "", "exact repository-relative Skill folder (empty selects repository root)")
 	add.Flags().StringVar(&selection.ref, "ref", "", "exact Git ref when a URL boundary is ambiguous")
@@ -66,6 +66,10 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 	if err != nil {
 		return renderSkillsCommandIssue(cmd, opts, err)
 	}
+	app, promptErr := resolveSkillsInteraction(cmd, app, opts, interactive)
+	if promptErr != nil && !errors.Is(promptErr, prompt.ErrPromptUnavailable) {
+		return promptErr
+	}
 	requested, err := parseTargetOption(opts.target)
 	if err != nil {
 		return renderSkillsCommandIssue(cmd, opts, err)
@@ -80,9 +84,18 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 	if err := cmd.Context().Err(); err != nil {
 		return err
 	}
+	if promptErr != nil && selection.requiresInteraction(opts, true) {
+		return promptErr
+	}
 	if isWebsiteSkillInput(input) {
 		return selection.runWebsite(cmd, app, opts, input, interactive)
 	}
+	return selection.runGit(cmd, app, opts, input, interactive, promptErr)
+}
+
+// Git source lifetime encloses both browser ownership and any safe terminal
+// handoff. Common flags, scope and interaction-host resolution stay in run.
+func (selection *skillsAddOptions) runGit(cmd *cobra.Command, app App, opts *options, input string, interactive bool, promptErr error) error {
 	request := SkillsPickerRequest{Input: input, Ref: selection.ref, Path: selection.folder, PathSet: cmd.Flags().Changed("path")}
 	if request.PathSet {
 		if err := sourceacquisition.ValidateSkillPath(request.Path); err != nil {
@@ -96,6 +109,9 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 		return err
 	}
 	defer session.cleanup()
+	if promptErr != nil && selection.requiresInteraction(opts, len(selection.names) > 0 || request.PathSet || session.source.ExactPath) {
+		return promptErr
+	}
 	browser := selection.useBrowserPicker(interactive, opts, request.PathSet, session.source.ExactPath)
 	if browser {
 		handled, err := runSkillsBrowser(cmd, app, opts, session, selection.ui)
@@ -106,7 +122,7 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 	return runSkillsTerminal(cmd, app, opts, session, selection.names, interactive, selection.yes)
 }
 func (selection *skillsAddOptions) useBrowserPicker(interactive bool, opts *options, pathSet, exactPath bool) bool {
-	return selection.ui || interactive && !selection.noUI && !opts.dryRun && len(selection.names) == 0 && !pathSet && !exactPath && opts.target == ""
+	return selection.ui || interactive && !selection.noUI && !opts.plain && !opts.dryRun && len(selection.names) == 0 && !pathSet && !exactPath && opts.target == ""
 }
 
 func runSkillsBrowser(cmd *cobra.Command, app App, opts *options, session *skillsCatalogSession, explicit bool) (bool, error) {
@@ -120,33 +136,19 @@ func runSkillsBrowser(cmd *cobra.Command, app App, opts *options, session *skill
 	}
 	server, err := session.startPicker(cmd.Context())
 	if err != nil {
-		return true, err
+		if explicit || cmd.Context().Err() != nil {
+			return true, err
+		}
+		_, writeErr := fmt.Fprintln(&planWriter{writer: reviewWriter(cmd, app)}, "Browser picker could not start; continuing with terminal selection. Use --no-ui to select it directly.")
+		return false, writeErr
 	}
-	defer server.Close()
-	if err := openSkillsBrowser(cmd.Context(), server.URL()); err == nil {
-		_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "Skills picker opened. Keep this command running while reviewing and installing.")
-		return true, waitForSkillsPicker(cmd.Context(), server)
-	}
-	// Display a capability URL only for the human opening this local tab, never
-	// in structured output or provider logs. Keep it usable until fallback is chosen.
-	_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "Browser could not open. Picker URL: %s\n", server.URL())
-	prompted, err := withPrompter(cmd, app, opts)
-	if err != nil {
-		return true, err
-	}
-	answer, err := prompted.Prompter.Confirm(cmd.Context(), prompt.ConfirmationRequest{Title: "Continue with terminal selection?", Default: true})
-	if err != nil {
-		return true, err
-	}
-	if !answer.Accepted {
-		return true, waitForSkillsPicker(cmd.Context(), server)
-	}
-	return false, nil
+	return runSkillsBrowserSession(cmd, app, opts, server, openSkillsBrowser)
 }
+
 func waitForSkillsPicker(ctx context.Context, server *skillspicker.Server) error {
 	select {
 	case <-server.Done():
-		return nil
+		return ctx.Err()
 	case <-ctx.Done():
 		return ctx.Err()
 	}

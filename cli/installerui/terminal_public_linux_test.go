@@ -337,7 +337,9 @@ func TestTerminalViewportResizePTY(t *testing.T) {
 					}
 				}
 			})
-			ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+			// Allow 63 key events, rerenders and resize under coverage before
+			// the final selection completes; all behavioral assertions stay strict.
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			got, err := p.SelectMany(ctx, MultiSelectRequest{SelectRequest: SelectRequest{Title: "Viewport fixture", Options: options}})
 			out := finish()

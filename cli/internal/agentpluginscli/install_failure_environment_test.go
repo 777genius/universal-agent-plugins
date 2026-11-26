@@ -150,9 +150,9 @@ func TestEnvironmentClassificationDoesNotMislabelNetworkCauses(t *testing.T) {
 	}
 }
 
-// A refusal only gets the plain public error when the person can fix the cause
-// and the technical chain really landed in a log; every other case keeps the
-// original error and writes nothing.
+// Refusals outside the existing fixable machine-error policy keep their
+// established error and no-log behavior. Disabled and failed machine-error
+// recording are qualified separately by the command diagnostic tests.
 func TestRefusedGroupKeepsOriginalErrorWhenPlainWordingWouldLoseDetail(t *testing.T) {
 	permission := fmt.Errorf("create client target root: %w", &fs.PathError{Op: "mkdir", Path: "/p", Err: syscall.EACCES})
 	cases := map[string]struct {
@@ -163,7 +163,6 @@ func TestRefusedGroupKeepsOriginalErrorWhenPlainWordingWouldLoseDetail(t *testin
 	}{
 		"planned phase":         {"planned", "human", true, permission},
 		"json output":           {"preparation_failed", "json", true, permission},
-		"no log directory":      {"preparation_failed", "human", false, permission},
 		"cancel in url error":   {"preparation_failed", "human", true, &url.Error{Op: "Get", URL: "https://x", Err: context.Canceled}},
 		"recovery and denied":   {"preparation_failed", "human", true, fmt.Errorf("%w: %w", installer.ErrRecoveryRequired, permission)},
 		"tls authority failure": {"preparation_failed", "human", true, &url.Error{Op: "Get", URL: "https://x", Err: x509.UnknownAuthorityError{}}},

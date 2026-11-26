@@ -1,4 +1,10 @@
-"""Receipt-bound signed Project cache retirement; never native writer closure."""
+"""Receipt-bound signed Project cache retirement; never native writer closure.
+
+The caller must supply the genuine successful published remove receipt. That
+adapter validates the managed digest before and after retirement using the
+existing packagesnapshot.Builder authority. This helper joins its held byte
+image to that receipt; it does not independently recompute the Go tree digest.
+"""
 import hashlib
 import json
 import os
@@ -11,7 +17,10 @@ import sys
 _CUSTODY = run_path(str(Path(__file__).with_name("claude_cache_retirement_audit.py")))
 require = _CUSTODY["require"]
 
-# Exact published 0.1.115 producer contract for this immutable signed closure:
+# Reused from reviewed donor 9385bab57af7733090f08d2d6f1f62d44060cd0e,
+# blob 1e1b939db2ff67617658bd92712cf94ae7051097. The Claude adapter subtree
+# is byte-identical between immutable published tags 0.1.115 and 0.1.116.
+# Exact published 0.1.115/0.1.116 contract for this immutable signed closure:
 # marketing-kit contains only Skills; Playwright contains a local stdio MCP.
 # With absent catalog evidence, the active/installed/allowed native qualifiers
 # produce not_required for these two aliases. Remote Notion/HubSpot remain
@@ -307,6 +316,8 @@ class SignedClosureRetirement:
             require((info.st_mode, info.st_dev, info.st_ino, info.st_uid, info.st_gid) == identity)
         for owner in self.owners:
             _CUSTODY["named_directory"](owner["parent"], owner["parent_fd"])
+            if "retired_parent_entries" in owner:
+                require(_CUSTODY["entries"](owner["parent_fd"]) == owner["retired_parent_entries"])
 
     def close(self):
         while self.fds:
@@ -340,7 +351,7 @@ class SignedClosureRetirement:
         require(stat.S_IMODE(info.st_mode) == 0o700 and info.st_uid == os.geteuid()
                 and set(_CUSTODY["entries"](fd)) == {"retired"})
         owner.update(quarantine=quarantine, quarantine_fd=fd, quarantine_identity=(info.st_mode, info.st_uid),
-                     moved=quarantine / "retired")
+                     moved=quarantine / "retired", retired_parent_entries=dict(after))
         _CUSTODY["named_directory"](owner["moved"], owner["cache_fd"])
         after, _, _ = _CUSTODY["tree"](owner["cache_fd"])
         marker = after.pop(".orphaned_at", None)
@@ -409,6 +420,12 @@ class SignedClosureRetirement:
                 self.checkpoint()
             return {"status": "verified-unchanged-signed-project-cache-retirement-at-user-removal",
                     "scope": "project", "writer_closure_claimed": False,
+                    "retired_bytes_present": True, "physical_absence_qualified": False,
+                    "writer_closure_qualified": False, "full_native_removal_qualified": False,
+                    "managed_digest_independently_recomputed_by_harness": False,
+                    "managed_digest_validation_authority": "genuine-published-cli-remove",
+                    "custody_validation_authority": "held-descriptor-image-and-namespace-equality",
+                    "raw_native_residuals": sorted(set(residuals)),
                     "matched_residual_count": len(set(residuals))}
         except BaseException:
             self.close()
@@ -444,6 +461,12 @@ class SignedClosureRetirement:
             self.recheck()
             proof = {"status": "verified-signed-closure-cache-retirement-at-checkpoint",
                     "scope": "project", "writer_closure_claimed": False,
+                    "retired_bytes_present": True, "physical_absence_qualified": False,
+                    "writer_closure_qualified": False, "full_native_removal_qualified": False,
+                    "managed_digest_independently_recomputed_by_harness": False,
+                    "managed_digest_validation_authority": "genuine-published-cli-remove",
+                    "custody_validation_authority": "held-descriptor-image-and-namespace-equality",
+                    "raw_native_residuals": sorted(set(residuals)),
                     "matched_residual_count": len(set(residuals)),
                     "members": [{"distribution": owner["distribution"], "receipt": owner["receipt"],
                         "binding_at_capture": owner["binding_at_capture"],

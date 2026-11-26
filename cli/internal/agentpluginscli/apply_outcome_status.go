@@ -2,6 +2,7 @@ package agentpluginscli
 
 import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 // outcomeStatusReason is the single mapping from one binding outcome to the
@@ -20,7 +21,8 @@ func outcomeStatusReason(outcome environment.BindingOutcome) (status, reason str
 			status = string(outcome.Result.Outcome)
 		}
 		reason = outcome.Result.Reason
-		if outcome.Status == environment.BindingFailed && outcome.Result.Outcome != "" {
+		if outcome.Status == environment.BindingFailed && outcome.Result.Outcome != "" &&
+			outcome.Result.Outcome != installer.OutcomeCompleted && outcome.Result.Outcome != installer.OutcomeUnchanged {
 			status = string(outcome.Result.Outcome)
 		}
 	}

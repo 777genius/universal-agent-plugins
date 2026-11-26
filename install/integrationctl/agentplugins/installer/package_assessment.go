@@ -60,6 +60,9 @@ func (e *Engine) refuseRecordedDigestRewrite(installationID, desired string) err
 	}
 	recorded := installation.Source.TreeDigest
 	if recorded != "" && recorded != desired {
+		if installation.OriginMode == domain.OriginModeDirectory && installation.Directory != nil && len(installation.Clients) == 0 {
+			return wrapLifecycleError(fmt.Errorf("%w: requested package bytes differ from the recorded revision", domain.ErrRetainedRevisionChange))
+		}
 		return fmt.Errorf("%w: recorded digest %s desired %s", ErrUpdateRequired, recorded, desired)
 	}
 	return nil
@@ -130,6 +133,11 @@ func (e *Engine) reuseMatchingSourceIdentity(installationID string, snapshot *do
 func wrapLifecycleError(err error) error {
 	if err == nil {
 		return nil
+	}
+	if errors.Is(err, domain.ErrRetainedRevisionChange) {
+		// Keep the existing conflict classification without rendering its
+		// generic update advice, which requires an installed target.
+		return &domain.TypedError{Text: err.Error(), Kind: ErrUpdateRequired, Cause: err}
 	}
 	msg := err.Error()
 	if errors.Is(err, usecase.ErrProjectionRefreshRequired) ||

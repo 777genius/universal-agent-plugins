@@ -313,6 +313,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
         with self.fixture() as case:
             new = self.record(case, 1)
             original, read = new.read_bytes(), os.read
+            interval = (case["phase_started"], case["clock"].now())
+            final = case["audit"].snapshot([case["profile"]])
             changed = []
             def swap(fd, count):
                 block = read(fd, count)
@@ -368,6 +370,8 @@ class WindowsGeminiRuntimeContracts(unittest.TestCase):
     def test_descriptor_transfer_failure_closes_only_its_untransferred_handle(self):
         with self.fixture() as case:
             new = self.record(case, 1)
+            interval = (case["phase_started"], case["clock"].now())
+            final = case["audit"].snapshot([case["profile"]])
             native, opened = case["observer"].windows, []
             original = native.kernel.OpenFileById
             def capture(*args):
