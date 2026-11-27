@@ -13,6 +13,7 @@ import re
 from runpy import run_path
 import stat
 import sys
+import time
 
 _CUSTODY = run_path(str(Path(__file__).with_name("claude_cache_retirement_audit.py")))
 require = _CUSTODY["require"]
@@ -159,6 +160,152 @@ def require_owned_residuals(audit, residuals, allowed):
         diagnostic["unexpected_residual_count"] = len(unexpected)
         raise ValueError("Claude cache retirement has unowned native residuals: "
                          + json.dumps(diagnostic, sort_keys=True))
+
+
+
+# Fixed private-fixture labels only. These observations establish no User ownership.
+_DIAGNOSTIC_USER_KEYS = tuple(alias + "@skills-dir" for alias in
+    ("marketing-kit", "notion", "hubspot-crm", "playwright"))
+
+
+def _diagnostic_digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode()).hexdigest()
+
+
+def _diagnostic_image(fd, audit, body=None):
+    """Bounded old-FD read uses pread, leaving the authority's offset untouched."""
+    before = os.fstat(fd)
+    require(stat.S_ISREG(before.st_mode) and before.st_nlink in (0, 1)
+            and before.st_uid == os.geteuid() and stat.S_IMODE(before.st_mode) == 0o600
+            and 0 < before.st_size <= 1 << 20)
+    if body is None:
+        body = os.pread(fd, (1 << 20) + 1, 0)
+    require(type(body) is bytes and len(body) == before.st_size
+            and _CUSTODY["_FILES"]["identity"](before)
+            == _CUSTODY["_FILES"]["identity"](os.fstat(fd)))
+    document = json.loads(body.decode("utf-8"), object_pairs_hook=audit["_unique_json_object"],
+                          parse_constant=lambda _: require(False))
+    require(type(document) is dict)
+    return {"identity": _CUSTODY["_FILES"]["identity"](before),
+            "uid": before.st_uid, "gid": before.st_gid,
+            "sha256": hashlib.sha256(body).hexdigest(), "document": document}
+
+
+def _diagnostic_capture(subject):
+    try:
+        require(not subject.finished and subject.retired_allowed is not None)
+        path = subject.profile / ".claude.json"
+        rows = [row for row in subject.passive_usage if row["path"] == path]
+        require(len(rows) == 1)
+        row = rows[0]
+        held = _diagnostic_image(row["fd"], subject.audit)
+        before = path.lstat()
+        fd = _CUSTODY["_FILES"]["open_member"](path)
+        try:
+            # Reuse the complete bounded/no-follow reader, never a pathname read.
+            body, error = subject.audit["copilot_settings_read"](path, subject.case)
+            require(error is None and type(body) is str)
+            named = _diagnostic_image(fd, subject.audit, body.encode())
+            require(named["identity"][3] == 1
+                    and named["identity"] == _CUSTODY["_FILES"]["identity"](before)
+                    == _CUSTODY["_FILES"]["identity"](path.lstat()))
+        finally:
+            os.close(fd)
+        current = os.fstat(row["fd"])
+        require(held["identity"] == _CUSTODY["_FILES"]["identity"](current)
+                and (held["uid"], held["gid"]) == (current.st_uid, current.st_gid))
+        return {"status": "observed", "named": named, "held": held,
+                "expected_image_equal": (held["identity"], held["uid"], held["gid"], held["sha256"]) == row["image"]}
+    except Exception:
+        return {"status": "unavailable", "code": "bounded_config_observation_unavailable"}
+
+
+def _diagnostic_foreign(document):
+    foreign = dict(document)
+    if type(document.get("pluginUsage")) is dict:
+        foreign["pluginUsage"] = {key: value for key, value in document["pluginUsage"].items()
+                                  if key not in _DIAGNOSTIC_USER_KEYS}
+    return foreign
+
+
+def _diagnostic_document(image, start_ms, end_ms, previous=None):
+    document = image["document"]
+    usage = document.get("pluginUsage")
+    valid_usage = type(usage) is dict
+    foreign = _diagnostic_foreign(document)
+    fixed = {}
+    for key in _DIAGNOSTIC_USER_KEYS:
+        present = key in usage if valid_usage else None
+        row = usage[key] if present else None
+        object_row = type(row) is dict
+        unchanged = (previous is not None and type(previous.get("pluginUsage")) is dict
+                     and key in previous["pluginUsage"] and present
+                     and _CUSTODY["same_json"](previous["pluginUsage"][key], row))
+        stamp = row.get("lastUsedAt") if object_row else None
+        fixed[key] = {"present": present,
+            "closed_row_shape": object_row and set(row) == {"usageCount", "lastUsedAt", "lastUsedNumStartups"},
+            "usage_count_exact_zero": object_row and type(row.get("usageCount")) is int and row["usageCount"] == 0,
+            "startups_exact_zero": object_row and type(row.get("lastUsedNumStartups")) is int and row["lastUsedNumStartups"] == 0,
+            "timestamp_in_window": type(stamp) is int and start_ms <= stamp <= end_ms,
+            "row_unchanged": bool(unchanged),
+            "row_sha256": _diagnostic_digest(row) if present else None}
+    others = sorted(set(usage) - set(_DIAGNOSTIC_USER_KEYS)) if valid_usage else []
+    return {"raw_sha256": image["sha256"], "json_sha256": _diagnostic_digest(document),
+            "foreign_json_sha256": _diagnostic_digest(foreign),
+            "metadata_sha256": _diagnostic_digest((image["identity"], image["uid"], image["gid"])),
+            "first_start_version_matches": document.get("firstStartVersion") == "2.1.263",
+            "usage_object": valid_usage, "fixed_fixture_keys": fixed,
+            "other_usage_key_count": len(others),
+            "other_usage": [{"name_json_sha256": _diagnostic_digest(key),
+                             "row_sha256": _diagnostic_digest(usage[key])} for key in others[:8]],
+            "omitted_other_usage_keys": max(0, len(others) - 8)}
+
+
+def observe_user_initialize_diagnostic(subject, action, sink):
+    """Measure one native capture; never adopt bytes or change retirement state."""
+    before = _diagnostic_capture(subject)
+    start_ms = time.time_ns() // 1_000_000
+    returned, checked = False, False
+    try:
+        subject.checkpoint()
+        checked = True
+        result = action()
+        returned = True  # capture itself still checks exit/error/stderr/binary.
+        return result
+    finally:
+        end_ms = time.time_ns() // 1_000_000
+        after = _diagnostic_capture(subject)
+        observation = {"diagnostic_only": True, "ownership": "ownership_unqualified",
+                       "native_capture_returned": returned, "pre_initialize_checkpoint_passed": checked,
+                       "initialization_qualified": False, "clock_window_valid": start_ms <= end_ms,
+                       "before": {"status": before["status"]}, "after": {"status": after["status"]}}
+        try:
+            for label, image in (("before", before), ("after", after)):
+                if image["status"] == "observed":
+                    previous = before["named"]["document"] if label == "after" and before["status"] == "observed" else None
+                    observation[label].update(_diagnostic_document(image["named"], start_ms, end_ms, previous))
+                    observation[label]["retirement_fd_raw_sha256"] = image["held"]["sha256"]
+                    observation[label]["retirement_fd_link_count"] = image["held"]["identity"][3]
+                    observation[label]["named_joins_retirement_fd"] = image["named"]["identity"] == image["held"]["identity"]
+                    observation[label]["retirement_image_equal"] = image["expected_image_equal"]
+                else:
+                    observation[label]["code"] = image["code"]
+            if before["status"] == after["status"] == "observed":
+                a, b = before["named"], after["named"]
+                observation.update(
+                    same_named_inode=a["identity"][:2] == b["identity"][:2],
+                    same_named_metadata=(a["identity"], a["uid"], a["gid"]) == (b["identity"], b["uid"], b["gid"]),
+                    full_json_equal=_CUSTODY["same_json"](a["document"], b["document"]),
+                    foreign_json_equal=_CUSTODY["same_json"](_diagnostic_foreign(a["document"]), _diagnostic_foreign(b["document"])),
+                    old_fd_same_inode=before["held"]["identity"][:2] == after["held"]["identity"][:2],
+                    old_fd_bytes_equal=before["held"]["sha256"] == after["held"]["sha256"])
+        except Exception:
+            observation = {"diagnostic_only": True, "ownership": "ownership_unqualified",
+                           "status": "unavailable", "code": "projection_unavailable",
+                           "native_capture_returned": returned, "pre_initialize_checkpoint_passed": checked,
+                           "initialization_qualified": False}
+        sink.append(observation)
 
 
 class SignedClosureRetirement:

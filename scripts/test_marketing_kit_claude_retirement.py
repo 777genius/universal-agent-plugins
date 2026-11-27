@@ -12,6 +12,8 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+import marketing_kit_claude_retirement as retirement
+
 from marketing_kit_claude_retirement import (SignedClosureRetirement, observe_project_checkpoint,
                                            project_checkpoint_summary)
 
@@ -169,6 +171,149 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 if name in identities:
                     result.add(".claude/" + (Path(base) / name).relative_to(profile).as_posix() + ": directory")
         return result
+
+
+    @contextmanager
+    def user_diagnostic_fixture(self):
+        with self.fixture() as f:
+            path, _, document = self.author_passive_usage(f, temporary=False)
+            document["foreign"]["private"] = "PRIVATE_VALUE"
+            path.write_text(json.dumps(document))
+            subject = self.capture(f)
+            self.retire(f)
+            subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f), keep_open=True)
+            yield f, subject, path
+
+    def test_user_initialize_diagnostic_observes_without_adopting_bytes(self):
+        keys = tuple(alias + "@skills-dir" for alias in ("marketing-kit", "notion", "hubspot-crm", "playwright"))
+        clock = 1795750000000
+        for mode in ("atomic", "inplace", "same-json"):
+            with self.subTest(mode=mode), self.user_diagnostic_fixture() as (f, subject, path):
+                descriptors = tuple(subject.fds)
+                passive = copy.deepcopy(subject.passive_usage)
+                contract = copy.deepcopy(subject.usage_contract)
+                allowed = set(subject.retired_allowed)
+                offsets = {row["fd"]: os.lseek(row["fd"], 0, os.SEEK_CUR)
+                           for row in subject.passive_usage}
+                original = path.read_bytes()
+                document = json.loads(original)
+                if mode != "same-json":
+                    for key in keys:
+                        document["pluginUsage"][key] = {"usageCount": 0, "lastUsedAt": clock + 1,
+                                                       "lastUsedNumStartups": 0}
+                result = object()
+                def writer():
+                    body = original if mode == "same-json" else json.dumps(document).encode()
+                    if mode == "inplace":
+                        path.write_bytes(body)
+                    else:
+                        replacement = path.with_name("diagnostic-pending")
+                        replacement.write_bytes(body); replacement.chmod(0o600)
+                        replacement.replace(path)
+                    return result
+                sink = []
+                with patch.object(retirement.time, "time_ns", side_effect=[clock * 1_000_000, (clock + 5) * 1_000_000]):
+                    self.assertIs(retirement.observe_user_initialize_diagnostic(subject, writer, sink), result)
+                self.assertEqual(tuple(subject.fds), descriptors)
+                self.assertEqual(subject.passive_usage, passive)
+                self.assertEqual(subject.usage_contract, contract)
+                self.assertEqual(subject.retired_allowed, allowed)
+                self.assertFalse(subject.finished)
+                self.assertEqual({fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in offsets}, offsets)
+                row = sink[0]
+                self.assertTrue(row["diagnostic_only"])
+                self.assertEqual(row["ownership"], "ownership_unqualified")
+                self.assertTrue(row["pre_initialize_checkpoint_passed"])
+                self.assertTrue(row["native_capture_returned"])
+                self.assertFalse(row["initialization_qualified"])
+                self.assertTrue(row["foreign_json_equal"])
+                self.assertEqual(row["same_named_inode"], mode == "inplace")
+                self.assertEqual(row["old_fd_bytes_equal"], mode != "inplace")
+                self.assertEqual(row["after"]["retirement_fd_link_count"], 1 if mode == "inplace" else 0)
+                self.assertEqual(row["full_json_equal"], mode == "same-json")
+                if mode != "same-json":
+                    for key in keys:
+                        observed = row["after"]["fixed_fixture_keys"][key]
+                        for flag in ("present", "closed_row_shape", "usage_count_exact_zero",
+                                     "startups_exact_zero", "timestamp_in_window"):
+                            self.assertTrue(observed[flag], (key, flag))
+                serialized = json.dumps(row)
+                self.assertNotIn("PRIVATE_VALUE", serialized)
+                self.assertNotIn(str(f["root"]), serialized)
+                for owner in f["owners"]:
+                    self.assertNotIn(owner["key"], serialized)
+                with self.assertRaises(ValueError):
+                    subject.checkpoint()  # Every changed image remains refused.
+
+    def test_user_initialize_diagnostic_hashes_unknown_data_and_bad_rows(self):
+        clock = 1795750000000
+        key = "marketing-kit@skills-dir"
+        for mutation in ("foreign", "unknown-key", "extra-field", "positive", "boolean", "bad-time"):
+            with self.subTest(mutation=mutation), self.user_diagnostic_fixture() as (f, subject, path):
+                document = json.loads(path.read_text())
+                document["pluginUsage"][key] = {"usageCount": 0, "lastUsedAt": clock + 1,
+                                               "lastUsedNumStartups": 0}
+                if mutation == "foreign": document["PRIVATE_NAME"] = "PRIVATE_VALUE"
+                elif mutation == "unknown-key": document["pluginUsage"]["PRIVATE_NAME"] = "PRIVATE_VALUE"
+                elif mutation == "extra-field": document["pluginUsage"][key]["PRIVATE_NAME"] = "PRIVATE_VALUE"
+                elif mutation == "positive": document["pluginUsage"][key]["usageCount"] = 1
+                elif mutation == "boolean": document["pluginUsage"][key]["lastUsedNumStartups"] = False
+                elif mutation == "bad-time": document["pluginUsage"][key]["lastUsedAt"] = True
+                sink = []
+                with patch.object(retirement.time, "time_ns", side_effect=[clock * 1_000_000, (clock + 5) * 1_000_000]):
+                    retirement.observe_user_initialize_diagnostic(subject, lambda: path.write_text(json.dumps(document)), sink)
+                row = sink[0]
+                if mutation in ("foreign", "unknown-key"):
+                    self.assertFalse(row["foreign_json_equal"])
+                observed = row["after"]["fixed_fixture_keys"][key]
+                if mutation == "extra-field": self.assertFalse(observed["closed_row_shape"])
+                elif mutation == "positive": self.assertFalse(observed["usage_count_exact_zero"])
+                elif mutation == "boolean": self.assertFalse(observed["startups_exact_zero"])
+                elif mutation == "bad-time": self.assertFalse(observed["timestamp_in_window"])
+                serialized = json.dumps(row)
+                self.assertNotIn("PRIVATE_NAME", serialized)
+                self.assertNotIn("PRIVATE_VALUE", serialized)
+                with self.assertRaises(ValueError):
+                    subject.checkpoint()
+
+    def test_user_initialize_diagnostic_failure_never_masks_writer_or_precheck(self):
+        for mutation in ("writer", "reader", "projection", "precheck"):
+            with self.subTest(mutation=mutation), self.user_diagnostic_fixture() as (f, subject, path):
+                marker = RuntimeError("PRIVATE_VALUE")
+                calls, sink = [], []
+                def writer():
+                    calls.append(True)
+                    document = json.loads(path.read_text())
+                    document["foreign"]["changed"] = "PRIVATE_VALUE"
+                    path.write_text(json.dumps(document))
+                    raise marker
+                if mutation == "precheck":
+                    path.write_text(path.read_text() + " ")
+                if mutation == "reader":
+                    original = subject.audit["copilot_settings_read"]
+                    def unavailable(*args):
+                        if calls: raise OSError("PRIVATE_NAME PRIVATE_VALUE")
+                        return original(*args)
+                    context = patch.dict(subject.audit, {"copilot_settings_read": unavailable})
+                elif mutation == "projection":
+                    context = patch.object(retirement, "_diagnostic_digest", side_effect=ValueError("PRIVATE_NAME"))
+                else:
+                    context = patch.dict({}, {})
+                with context:
+                    with self.assertRaises(ValueError if mutation == "precheck" else RuntimeError) as raised:
+                        retirement.observe_user_initialize_diagnostic(subject, writer, sink)
+                if mutation != "precheck":
+                    self.assertIs(raised.exception, marker)
+                    self.assertEqual(calls, [True])
+                    with self.assertRaises(ValueError): subject.checkpoint()
+                else:
+                    self.assertEqual(calls, [])
+                    self.assertFalse(sink[0]["pre_initialize_checkpoint_passed"])
+                    self.assertFalse(sink[0]["native_capture_returned"])
+                if mutation == "reader": self.assertEqual(sink[0]["after"]["status"], "unavailable")
+                if mutation == "projection": self.assertEqual(sink[0]["status"], "unavailable")
+                self.assertNotIn("PRIVATE_NAME", json.dumps(sink))
+                self.assertNotIn("PRIVATE_VALUE", json.dumps(sink))
 
     def author_passive_usage(self, f, temporary=True):
         usage = {owner["key"]: {"usageCount": 0, "lastUsedAt": 1795729883121,

@@ -2309,7 +2309,15 @@ def main():
             def claude_before_remove(e, p, scope, label):
                 if claude_discovery is None:
                     return None
-                return claude_read(e, p, lambda: claude_discovery.before_remove(e, p, scope, label), initializing=True)
+                options = {}
+                if scope == "user" and e is env and p == project_a and claude_a_retirement is not None:
+                    def initialize(action):
+                        return claude_retirement["observe_user_initialize_diagnostic"](
+                            claude_a_retirement, action,
+                            report.setdefault("claude_user_initialize_diagnostics", []))
+                    options["initialize"] = initialize
+                return claude_read(e, p, lambda: claude_discovery.before_remove(
+                    e, p, scope, label, **options), initializing=True)
 
             def claude_after_remove(e, p, before, label):
                 if claude_discovery is not None:

@@ -106,6 +106,31 @@ class ClaudeRemovalDiscoveryContracts(unittest.TestCase):
             return record, body, stderr
         return subject, env, project, state, run
 
+
+    def test_initialize_diagnostic_seam_is_exact_and_keeps_native_refusals(self):
+        for mutation in (None, "exit", "timeout", "stderr"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                subject, env, project, state, run = self.fixture(Path(temporary).resolve())
+                boundaries = []
+                def initialize(action):
+                    self.assertEqual(state["calls"], [["--version"], ["plugin", "list", "--json"]])
+                    boundaries.append("before")
+                    try:
+                        return action()
+                    finally:
+                        boundaries.append("after")
+                def selected_run(*args, **kwargs):
+                    state["mutation"] = mutation if args[0][1:] == list(discovery.INITIALIZE_ARGS) else None
+                    return run(*args, **kwargs)
+                with patch.dict(discovery._PROBE, {"run_probe": selected_run}):
+                    if mutation is None:
+                        subject.before_remove(env, project, "project", "A", initialize=initialize)
+                    else:
+                        with self.assertRaises(ValueError):
+                            subject.before_remove(env, project, "project", "A", initialize=initialize)
+                self.assertEqual(boundaries, ["before", "after"])
+                self.assertEqual(state["calls"][-1], list(discovery.INITIALIZE_ARGS))
+
     def test_fresh_before_and_after_require_native_version_registration_and_skills(self):
         with TemporaryDirectory() as temporary:
             subject, env, project, state, run = self.fixture(Path(temporary).resolve())

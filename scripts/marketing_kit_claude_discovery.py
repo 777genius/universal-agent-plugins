@@ -241,16 +241,24 @@ class RemovalDiscovery:
         return stdout, {key: record[key] for key in (
             "probe", "exit", "error", "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256")}
 
-    def observe(self, env, project, label):
+    def observe(self, env, project, label, *, initialize=None):
         version, _ = self.capture(env, project, ("--version",), label + "-version")
         require(version.strip() == b"2.1.263 (Claude Code)")
         listing, listing_record = self.capture(env, project, ("plugin", "list", "--json"), label + "-registration")
-        initialized, initialized_record = self.capture(env, project, INITIALIZE_ARGS,
-            label + "-skills", INITIALIZE)
+        def capture_initialize():
+            return self.capture(env, project, INITIALIZE_ARGS, label + "-skills", INITIALIZE)
+        if initialize is None:
+            initialized, initialized_record = capture_initialize()
+        else:
+            initialized, initialized_record = initialize(capture_initialize)
+            require(type(initialized_record) is dict and initialized_record.get("exit") == 0
+                    and initialized_record.get("error") is None
+                    and initialized_record.get("stderr_bytes") == 0)
         return registrations(listing), commands(initialized), [listing_record, initialized_record]
 
-    def before_remove(self, env, project, scope, label):
-        rows, skills, records = self.observe(env, project, label + "-before")
+    def before_remove(self, env, project, scope, label, *, initialize=None):
+        options = {"initialize": initialize} if initialize is not None else {}
+        rows, skills, records = self.observe(env, project, label + "-before", **options)
         selected = [row for row in rows if owned(row["id"])]
         require(len(selected) == 4 and {row["id"].split("@", 1)[0] for row in selected}
                 == {"marketing-kit", "notion", "hubspot-crm", "playwright"}

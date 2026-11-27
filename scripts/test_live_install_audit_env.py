@@ -2906,13 +2906,20 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         class ClaudeDiscovery:
             def __init__(self, *args):
                 pass
-            def before_remove(self, env, project, scope, label):
+            def before_remove(self, env, project, scope, label, *, initialize=None):
                 phases.append("claude-before:" + label)
                 if project.parent.name == "B":
                     self_case.assertIn("cold locked restore", phases)
                 if project.parent.name == "C":
                     self_case.assertIn("User cold locked restore C", phases)
-                mutate_claude("before", project)
+                self_case.assertEqual(initialize is not None,
+                    scope == "user" and project.parent.name == "A")
+                action = lambda: mutate_claude("before", project)
+                if initialize is None:
+                    action()
+                else:
+                    phases.append("claude-initialize-diagnostic:" + label)
+                    initialize(action)
                 return {"scope": scope}
             def after_remove(self, env, project, before, label):
                 phases.append("claude-after:" + label)
@@ -2999,6 +3006,24 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     self.assertTrue(all(retirement.finished for retirement in retirements)
                                     if project_remove_error not in ("remove A", "remove B") else not retirements[-1].finished)
             return code, json.loads(report_path.read_text()), phases
+
+    def test_marketing_kit_claude_diagnostic_routes_only_user_a_initialize(self):
+        code, report, phases = self._exercise_marketing_kit_scope_report("claude")
+        self.assertEqual(code, 0, report.get("failure"))
+        self.assertEqual([phase for phase in phases if phase.startswith("claude-initialize-diagnostic:")],
+                         ["claude-initialize-diagnostic:User A remove"])
+        self.assertLess(phases.index("claude-before:User A remove"),
+                        phases.index("claude-initialize-diagnostic:User A remove"))
+        self.assertLess(phases.index("claude-initialize-diagnostic:User A remove"), phases.index("User remove"))
+        self.assertEqual(len(report["claude_user_initialize_diagnostics"]), 1)
+        diagnostic = report["claude_user_initialize_diagnostics"][0]
+        self.assertTrue(diagnostic["diagnostic_only"])
+        self.assertEqual(diagnostic["ownership"], "ownership_unqualified")
+        self.assertTrue(diagnostic["pre_initialize_checkpoint_passed"])
+        self.assertTrue(diagnostic["native_capture_returned"])
+        self.assertFalse(diagnostic["initialization_qualified"])
+        self.assertEqual(diagnostic["before"]["status"], "unavailable")
+        self.assertEqual(diagnostic["after"]["status"], "unavailable")
 
     def test_marketing_kit_real_codex_main_captures_evidence_before_cleanup(self):
         for cleanup_failure in (False, True):
