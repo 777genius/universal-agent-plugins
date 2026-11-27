@@ -577,6 +577,63 @@ native Claude case skipped because the pinned executable is unavailable. Root
 and independent final-diff review passed; whitespace checks passed. The genuine
 Claude case and full lifecycle remain required on the final supported CI source.
 
+### R21 - Integrate merged native custody and byte-pool diagnostics
+
+Main `c9e52bf9` now includes merged #1133. Its functional Claude custody and
+runtime-byte diagnostic changes overlap R18/R20 and make head `64e62f12`
+unmergeable. Integrate this main into the existing PR; do not import unmerged
+#1078 or #1135 work. The other inherited workflow, discovery, orchestration and
+Copilot refusal changes remain exactly as merged upstream. R19 Kiro diagnostics
+and the Enterprise production implementation remain unchanged.
+
+Keep main's single retained-tree reader, including independent fixed 256 MiB
+ordinary and qualified-runtime pools, its captured limits and structured partial
+byte checkpoint. Preserve main's four pool regressions and six Windsurf
+diagnostic regressions, plus all five R18 regressions. Adapt three R18 message
+assertions to the stable upstream refusal and verify the checkpoint's refused
+pool, fixed limit, attempted size, partial fully-read counters and descriptor
+cleanup. Do not grant unqualified or near-prefix data extra runtime capacity.
+
+Keep main's rooted no-follow Claude member walk, original-descriptor `pread`,
+offset preservation, User receipt transitions, capture-one/finish-two temporary
+bound, ABA defenses and late held-descriptor checks. Rehome bounded R20 metadata
+diagnostics at the existing named-member, held-descriptor and initial descriptor
+metadata guards. Named members still require one link; an original held inode
+may have zero or one after an authorized replacement. Preserve lazy comparisons
+and owner-before-mode order. Cache the existing owner comparison instead of
+calling `geteuid()` again. Annotation performs no new filesystem observations or
+content reads and adds no paths, filenames or inode numbers. Original I/O
+exceptions, refusal type and acceptance remain unchanged. This supplies failure
+evidence; it does not establish the cause of the earlier Claude refusal.
+
+Three independent plan critiques approved this integration boundary. Local
+shared-reader tests passed 51/51 in 2.685 seconds and Copilot refusal tests
+passed 13/13 in 0.405 seconds, with no skips. The complete Claude retirement and
+discovery selection ran 82 tests in 45.742 seconds: 81 passed and the genuine
+native case explicitly skipped because the pinned executable is unavailable.
+Three focused methods also passed, covering actual finish refusals, lazy named
+observations and unchanged I/O exceptions. The initial full Windsurf invocation
+did not pass because `/usr/bin/go` is not a Go compiler. After selecting an
+existing Go 1.26.11 installation, the canonical projection oracle built with
+`GOTOOLCHAIN=local` and `GOPROXY=off`: all 66 Windsurf tests passed in 25.097
+seconds without skips. No dependency download or pin substitution was needed.
+Independent actual-diff review confirmed all 46 main reader tests and 68 main
+Claude retirement tests remain unchanged, R19 remains exact HEAD, and all 11
+other integration files are byte-identical to main. Root review, Python parsing
+and whitespace checks also passed.
+
+The complete Kiro, prepared-installation and environment selection ran 468 tests
+in 104.302 seconds: 455 passed and 13 Windows-only contracts skipped on Linux.
+Both R19 diagnostic regressions and both new main Claude routing/failure tests
+executed and passed. These local contracts do not claim native lifecycle proof.
+
+Review the actual combined diff, publish the coherent merge commit in this PR,
+and qualify that source through the required supported-runner gates. Results
+from `64e62f12` and earlier revisions remain historical. The genuine Claude and
+original full Firebase lifecycles, final required/core/package-manager and Pi
+checks, ordinary expected-head merge, and actual-main verification remain
+required. No release, tag or npm publication is authorized by this work.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test

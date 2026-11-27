@@ -338,6 +338,169 @@ ulimit() {
             else: changed[key] += "other"
             self.assertFalse(installation.firebase_runtime_profile(changed, config))
 
+    def test_generic_total_byte_refusal_keeps_original_type_message_and_no_notes(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            (root / "private-file").write_bytes(b"XYZ")
+            with patch.dict(installation.HeldTree.__init__.__globals__, TOTAL_LIMIT=1), \
+                    self.assertRaisesRegex(ValueError, "^retention total bytes exceed bound$") as caught:
+                installation.HeldTree(root)
+            self.assertIs(type(caught.exception), ValueError)
+            self.assertFalse(hasattr(caught.exception, "__notes__"))
+            tree = caught.exception.retention_byte_checkpoint[0]
+            self.assertEqual(tree.fds, {})
+            self.assertEqual(tree.quota.owned, set())
+            self.assertEqual(tree.quota.scans, 0)
+
+    def test_total_byte_refusal_reports_only_partial_numeric_namespaces_and_closes_all_fds(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            observer = object.__new__(WindsurfInstallationAudit)
+            observer.data = root
+            prefix = "plugin-data/private-receipt/npm-runtime/private-lock/node_modules"
+            cache = root / "plugin-data/private-receipt/npm-cache"
+            cache.mkdir(parents=True)
+            (cache / "private-cache-name").write_bytes(b"XYZ")
+            runtime = root / prefix
+            runtime.mkdir(parents=True)
+            (runtime / "private-module-name").write_bytes(b"AB")
+            fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            self.addCleanup(os.close, fd)
+            globals_ = installation.HeldTree.__init__.__globals__
+            with patch.dict(globals_, TOTAL_LIMIT=3), \
+                    self.assertRaisesRegex(ValueError, "^retention total bytes exceed bound$") as caught:
+                observer.data_frame(fd, {prefix})
+            error = caught.exception
+            self.assertIs(type(error), ValueError)
+            tree, refused, next_bytes, limit, refused_pool = error.retention_byte_checkpoint
+            self.assertEqual(refused_pool, "ordinary")
+            self.assertEqual((tree.total, next_bytes, limit), (3, 2, 3))
+            self.assertEqual(tree.fds, {})
+            self.assertEqual(tree.quota.owned, set())
+            self.assertEqual(tree.quota.scans, 0)
+            prefix_note = "Devin Global capture byte observations: "
+            self.assertEqual(len(error.__notes__), 1)
+            self.assertTrue(error.__notes__[0].startswith(prefix_note))
+            diagnostic = json.loads(error.__notes__[0][len(prefix_note):])
+            self.assertIs(diagnostic["diagnostic_only"], True)
+            self.assertEqual(diagnostic["status"], "partial-unqualified")
+            self.assertEqual(diagnostic["fully_read_bytes"], 3)
+            self.assertEqual(diagnostic["refused_pool"], "ordinary")
+            self.assertEqual(diagnostic["byte_pools"], {
+                "ordinary": {"fully_read_bytes": 3, "limit_bytes": 3},
+                "qualified-runtime": {"fully_read_bytes": 0, "limit_bytes": 0}})
+            self.assertEqual(diagnostic["captured_members"], len(tree.nodes))
+            self.assertEqual(diagnostic["next_file_bytes_unread"], 2)
+            self.assertEqual(diagnostic["next_file_namespace"], "npm-node-modules")
+            self.assertEqual(diagnostic["namespaces"]["npm-cache"]["fully_read_bytes"], 3)
+            self.assertEqual(sum(row["fully_read_bytes"] for row in diagnostic["namespaces"].values()), 3)
+            report = self.audit["bounded_error_traceback"](error)
+            for secret in ("private-receipt", "private-lock", "private-cache-name", "private-module-name", "XYZ"):
+                self.assertNotIn(secret, report)
+            self.assertNotIn(hashlib.sha256(b"XYZ").hexdigest(), report)
+
+    def test_capture_byte_diagnostic_failure_never_changes_the_original_refusal(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            observer = object.__new__(WindsurfInstallationAudit)
+            observer.data = root
+            (root / "private-file").write_bytes(b"XYZ")
+            fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            self.addCleanup(os.close, fd)
+            with patch.dict(installation.HeldTree.__init__.__globals__, TOTAL_LIMIT=1), \
+                    patch.object(installation, "capture_byte_diagnostic", side_effect=ValueError("PRIVATE-DETAIL")), \
+                    self.assertRaisesRegex(ValueError, "^retention total bytes exceed bound$") as caught:
+                observer.data_frame(fd, {"plugin-data/unit/npm-runtime/lock/node_modules"})
+            self.assertIs(type(caught.exception), ValueError)
+            self.assertEqual(caught.exception.__notes__, ["Devin Global capture byte observations unavailable"])
+            self.assertNotIn("PRIVATE-DETAIL", self.audit["bounded_error_traceback"](caught.exception))
+
+    def test_byte_diagnostic_identifies_refused_pool_when_physical_total_exceeds_one_pool(self):
+        for scope in ("ordinary", "qualified-runtime"):
+            with self.subTest(scope=scope), TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                observer = object.__new__(WindsurfInstallationAudit)
+                observer.data = root
+                prefix = "a/node_modules" if scope == "ordinary" else "z/node_modules"
+                runtime = root / prefix
+                runtime.mkdir(parents=True)
+                (runtime / "private-a").write_bytes(b"AB")
+                managed = root / "managed"; managed.mkdir()
+                (managed / "private-file").write_bytes(b"XYZ")
+                if scope == "ordinary":
+                    (root / "zz-private-file").write_bytes(b"Q")
+                else:
+                    (runtime / "private-b").write_bytes(b"CD")
+                fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+                self.addCleanup(os.close, fd)
+                with patch.dict(installation.HeldTree.__init__.__globals__, TOTAL_LIMIT=3, RUNTIME_TOTAL_LIMIT=3), \
+                        self.assertRaises(ValueError) as caught:
+                    observer.data_frame(fd, {prefix}, runtime_prefixes=(prefix,))
+                error = caught.exception
+                diagnostic = json.loads(error.__notes__[0].split(": ", 1)[1])
+                self.assertEqual(diagnostic["refused_pool"], scope)
+                self.assertEqual(diagnostic["fully_read_bytes"], 5)
+                self.assertEqual(diagnostic["limit_bytes"], 3)
+                self.assertEqual(diagnostic["byte_pools"], {
+                    "ordinary": {"fully_read_bytes": 3, "limit_bytes": 3},
+                    "qualified-runtime": {"fully_read_bytes": 2, "limit_bytes": 3}})
+                self.assertEqual(diagnostic["status"], "partial-unqualified")
+                self.assertTrue(diagnostic["diagnostic_only"])
+                self.assertEqual(sum(row["fully_read_bytes"] for row in diagnostic["namespaces"].values()), 5)
+                self.assertEqual(error.retention_byte_checkpoint[0].quota.owned, set())
+                report = self.audit["bounded_error_traceback"](error)
+                for private in ("private-a", "private-b", "private-file", "XYZ"):
+                    self.assertNotIn(private, report)
+
+    def test_only_receipt_and_exact_source_profile_can_split_combined_byte_capacity(self):
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            runtime, state = self.author_runtime(observer, identity="firebase")
+            record = state["installations"][0]
+            config = json.loads(next((observer.data / "store").rglob("runtime.json")).read_text())
+            node_modules = runtime / "node_modules"
+            # Scale both pools to the inert fixture's ordinary bytes. This
+            # includes its real receipt/state/source documents, not a mock reader.
+            ordinary = sum(path.stat().st_size for path in observer.data.rglob("*")
+                           if path.is_file() and not path.is_symlink() and node_modules not in path.parents)
+            original_runtime = sum(path.stat().st_size for path in node_modules.rglob("*")
+                                   if path.is_file() and not path.is_symlink())
+            self.assertGreater(ordinary, original_runtime)
+            (node_modules / "unit/padding").write_bytes(b"P" * (ordinary - original_runtime))
+            with patch.object(installation, "FIREBASE_RUNTIME_SOURCE", copy.deepcopy(record["source"])), \
+                    patch.object(installation, "FIREBASE_RUNTIME_CONFIG", config), \
+                    patch.object(installation, "FIREBASE_RUNTIME_MANIFEST", record["package"]["manifest_digest"]), \
+                    patch.dict(installation.HeldTree.__init__.__globals__, TOTAL_LIMIT=ordinary, RUNTIME_TOTAL_LIMIT=ordinary):
+                saved = observer.saved_image()
+                prefix = node_modules.relative_to(observer.data).as_posix()
+                self.assertEqual(saved["runtime_prefixes"], (prefix,))
+                # The directory name and valid owned receipt are insufficient
+                # after any independently pinned source field differs.
+                with patch.object(installation, "FIREBASE_RUNTIME_SOURCE", {**record["source"], "resolved_revision": "b" * 40}), \
+                        self.assertRaisesRegex(ValueError, "^retention total bytes exceed bound$"):
+                    observer.saved_image()
+                for path in (runtime.parent.parent / "npm-cache/blob", observer.data / "managed/blob"):
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(b"X")
+                    with self.subTest(path=path.relative_to(observer.data).as_posix()), \
+                            self.assertRaisesRegex(ValueError, "^retention total bytes exceed bound$") as caught:
+                        observer.saved_image()
+                    self.assertEqual(caught.exception.retention_byte_checkpoint[-1], "ordinary")
+                    path.unlink()
+
+    def test_other_capture_refusals_have_no_byte_checkpoint_or_diagnostic_note(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            observer = object.__new__(WindsurfInstallationAudit)
+            observer.data = root
+            (root / "private-link").symlink_to("missing")
+            fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            self.addCleanup(os.close, fd)
+            with self.assertRaisesRegex(ValueError, "retention symlink is not an npm bin member") as caught:
+                observer.data_frame(fd, {"plugin-data/unit/npm-runtime/lock/node_modules"})
+            self.assertFalse(hasattr(caught.exception, "retention_byte_checkpoint"))
+            self.assertFalse(hasattr(caught.exception, "__notes__"))
+
     def test_exact_runtime_profile_is_required_before_scoped_reader_capacity(self):
         # Only this inert fixture substitutes independent production pins. The
         # actual source-byte, marker, receipt and original-source readers stay real.

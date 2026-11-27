@@ -613,7 +613,7 @@ class RuntimeEnvelopeTests(unittest.TestCase):
 
     def test_each_byte_class_refuses_overflow_without_borrowing_and_preserves_caller_fd(self):
         for ordinary, runtime, scope, consumed in (
-                (9, 1, "ordinary", (4, 0)), (1, 9, "qualified runtime", (1, 4))):
+                (9, 1, "ordinary", (4, 0)), (1, 9, "qualified-runtime", (1, 4))):
             with self.subTest(scope=scope), self.byte_limits():
                 self.byte_fixture(ordinary, runtime)
                 quota = API["Descriptors"](runtime_envelope=True)
@@ -621,10 +621,15 @@ class RuntimeEnvelopeTests(unittest.TestCase):
                 try:
                     with self.assertRaises(ValueError) as failure:
                         self.capture(runtime_prefixes=("runtime/node_modules",), quota=quota)
-                    self.assertEqual(str(failure.exception),
-                                     f"retention {scope} total bytes exceed bound "
-                                     f"(partial fully-read ordinary={consumed[0]}, runtime={consumed[1]}; "
-                                     "next_stat_bytes=5; limit=8)")
+                    expected = ("retention qualified runtime bytes exceed bound"
+                                if scope == "qualified-runtime" else "retention total bytes exceed bound")
+                    self.assertEqual(str(failure.exception), expected)
+                    tree, _, attempted, limit, refused_pool = failure.exception.retention_byte_checkpoint
+                    self.assertEqual((refused_pool, limit, attempted), (scope, 8, 5))
+                    self.assertEqual((tree.ordinary_total, tree.runtime_total), consumed)
+                    self.assertEqual(tree.total, sum(consumed))
+                    self.assertEqual((tree.ordinary_limit, tree.runtime_limit), (8, 8))
+                    self.assertEqual(tree.fds, {})
                     self.assertEqual(quota.owned, {original})
                     self.assertEqual(quota.scans, 0)
                     os.fstat(original)
@@ -634,8 +639,14 @@ class RuntimeEnvelopeTests(unittest.TestCase):
     def test_unqualified_bytes_retain_original_aggregate_bound(self):
         self.byte_fixture(8, 8)
         quota = API["Descriptors"]()
-        with self.byte_limits(), self.assertRaisesRegex(ValueError, "ordinary total bytes exceed bound"):
+        with self.byte_limits(), self.assertRaisesRegex(
+                ValueError, "^retention total bytes exceed bound$") as failure:
             self.capture(quota=quota)
+        tree, _, attempted, limit, refused_pool = failure.exception.retention_byte_checkpoint
+        self.assertEqual((refused_pool, limit, attempted), ("ordinary", 8, 4))
+        self.assertEqual((tree.total, tree.ordinary_total, tree.runtime_total), (8, 8, 0))
+        self.assertEqual((tree.ordinary_limit, tree.runtime_limit), (8, 0))
+        self.assertEqual(tree.fds, {})
         self.assertEqual(quota.owned, set())
 
     def test_near_prefix_bytes_cannot_use_runtime_capacity(self):
@@ -644,8 +655,14 @@ class RuntimeEnvelopeTests(unittest.TestCase):
         sibling.mkdir()
         (sibling / "extra").write_bytes(b"extra")
         quota = API["Descriptors"](runtime_envelope=True)
-        with self.byte_limits(), self.assertRaisesRegex(ValueError, "ordinary total bytes exceed bound"):
+        with self.byte_limits(), self.assertRaisesRegex(
+                ValueError, "^retention total bytes exceed bound$") as failure:
             self.capture(runtime_prefixes=("runtime/node_modules",), quota=quota)
+        tree, _, attempted, limit, refused_pool = failure.exception.retention_byte_checkpoint
+        self.assertEqual((refused_pool, limit, attempted), ("ordinary", 8, 5))
+        self.assertEqual((tree.total, tree.ordinary_total, tree.runtime_total), (12, 4, 8))
+        self.assertEqual((tree.ordinary_limit, tree.runtime_limit), (8, 8))
+        self.assertEqual(tree.fds, {})
         self.assertEqual(quota.owned, set())
 
     def test_runtime_byte_capacity_keeps_per_file_bound(self):
@@ -663,6 +680,81 @@ class RuntimeEnvelopeTests(unittest.TestCase):
             self.capture(quota=quota)
         self.assertEqual(quota.owned, set())
         self.assertEqual(quota.scans, 0)
+
+    def test_separate_byte_pools_read_and_hold_combined_bytes_above_old_total(self):
+        runtime = self.root / "runtime/node_modules"
+        runtime.mkdir(parents=True)
+        ordinary, dependency = self.root / "managed", runtime / "dependency"
+        ordinary.write_bytes(b"ABCDEF")
+        dependency.write_bytes(b"uvwxyz")
+        globals_ = API["HeldTree"].__init__.__globals__
+        with patch.dict(globals_, TOTAL_LIMIT=6, RUNTIME_TOTAL_LIMIT=6):
+            # The old one-pool arithmetic refuses these same twelve bytes.
+            quota = API["Descriptors"]()
+            with self.assertRaisesRegex(ValueError, "^retention total bytes exceed bound$"):
+                self.capture(quota=quota)
+            self.assertEqual(quota.owned, set())
+            tree = self.capture(runtime_prefixes=("runtime/node_modules",))
+        self.assertEqual((tree.total, tree.ordinary_total, tree.runtime_total), (12, 6, 6))
+        for relative, body in (("managed", b"ABCDEF"), ("runtime/node_modules/dependency", b"uvwxyz")):
+            self.assertEqual(tree.nodes[relative][2], {"bytes": 6, "sha256": hashlib.sha256(body).hexdigest()})
+            self.assertEqual(os.pread(tree.fds[relative], 6, 0), body)
+        tree.verify()
+        original = dependency.stat()
+        dependency.write_bytes(b"UVWXYZ")
+        os.utime(dependency, ns=(original.st_atime_ns, original.st_mtime_ns))
+        with self.assertRaises(ValueError): tree.verify()
+        descriptors = tuple(tree.fds.values())
+        tree.close()
+        self.assertEqual(tree.quota.owned, set())
+        for fd in descriptors:
+            with self.assertRaises(OSError): os.fstat(fd)
+
+    def test_runtime_byte_pool_cannot_borrow_unused_ordinary_capacity(self):
+        runtime = self.root / "runtime/node_modules"
+        runtime.mkdir(parents=True)
+        (runtime / "a").write_bytes(b"1234")
+        (runtime / "b").write_bytes(b"567")
+        quota = API["Descriptors"](runtime_envelope=True)
+        original = quota.open(self.root, os.O_RDONLY | os.O_DIRECTORY, budget=API["Budget"]())
+        self.addCleanup(lambda: quota.close_all(tuple(quota.owned)))
+        with patch.dict(API["HeldTree"].__init__.__globals__, TOTAL_LIMIT=100, RUNTIME_TOTAL_LIMIT=6), \
+                self.assertRaisesRegex(ValueError, "^retention qualified runtime bytes exceed bound$") as caught:
+            self.capture(runtime_prefixes=("runtime/node_modules",), quota=quota)
+        tree, _, unread, limit, scope = caught.exception.retention_byte_checkpoint
+        self.assertEqual((tree.total, tree.ordinary_total, tree.runtime_total, unread, limit, scope),
+                         (4, 0, 4, 3, 6, "qualified-runtime"))
+        self.assertEqual(quota.owned, {original})
+        self.assertEqual(quota.scans, 0)
+        os.fstat(original)
+
+    def test_cache_managed_scanner_store_and_similarly_named_paths_cannot_borrow_runtime_bytes(self):
+        (self.root / "runtime/node_modules").mkdir(parents=True)
+        for relative in ("npm-cache/blob", "managed/blob", "security/blob", "store/blob",
+                         "runtime/node_modules-extra/blob", "other/node_modules/blob"):
+            with self.subTest(relative=relative):
+                path = self.root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"1234567")
+                quota = API["Descriptors"](runtime_envelope=True)
+                with patch.dict(API["HeldTree"].__init__.__globals__, TOTAL_LIMIT=6, RUNTIME_TOTAL_LIMIT=100), \
+                        self.assertRaisesRegex(ValueError, "^retention total bytes exceed bound$") as caught:
+                    self.capture(runtime_prefixes=("runtime/node_modules",), quota=quota)
+                tree, _, unread, limit, scope = caught.exception.retention_byte_checkpoint
+                self.assertEqual((tree.total, tree.ordinary_total, tree.runtime_total, unread, limit, scope),
+                                 (0, 0, 0, 7, 6, "ordinary"))
+                self.assertEqual(quota.owned, set())
+                path.unlink()
+
+    def test_scoped_byte_capacity_preserves_per_file_limit(self):
+        runtime = self.root / "node_modules"
+        runtime.mkdir()
+        (runtime / "dependency").write_bytes(b"1234")
+        quota = API["Descriptors"](runtime_envelope=True)
+        with patch.dict(API["HeldTree"].__init__.__globals__, FILE_LIMIT=3, TOTAL_LIMIT=100, RUNTIME_TOTAL_LIMIT=100), \
+                self.assertRaisesRegex(ValueError, "bounded exclusively linked regular data"):
+            self.capture(runtime_prefixes=("node_modules",), quota=quota)
+        self.assertEqual(quota.owned, set())
 
     def test_qualified_runtime_over_10000_keeps_all_original_descriptors_and_bytes(self):
         self.files(self.root / "runtime/node_modules/a", 5000)

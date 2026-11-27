@@ -13,6 +13,7 @@ import re
 from runpy import run_path
 import stat
 import sys
+import time
 
 _CUSTODY = run_path(str(Path(__file__).with_name("claude_cache_retirement_audit.py")))
 require = _CUSTODY["require"]
@@ -161,6 +162,223 @@ def require_owned_residuals(audit, residuals, allowed):
                          + json.dumps(diagnostic, sort_keys=True))
 
 
+
+# Fixed private-fixture labels only. These observations establish no User ownership.
+_DIAGNOSTIC_USER_KEYS = tuple(alias + "@skills-dir" for alias in
+    ("marketing-kit", "notion", "hubspot-crm", "playwright"))
+
+
+def _diagnostic_digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode()).hexdigest()
+
+
+def _annotate_passive_custody(error, phase, observations, reasons):
+    """Annotate only captured metadata; never read or rediscover authority."""
+    def facts(info):
+        if info is None:
+            return None
+        return {"type": "regular" if stat.S_ISREG(info.st_mode) else "other",
+                "mode": format(stat.S_IMODE(info.st_mode), "04o"),
+                "nlink": info.st_nlink, "uid": info.st_uid,
+                "gid": info.st_gid, "size": info.st_size}
+    diagnostic = {"phase": phase,
+                  "observations": {name: facts(info) for name, info in observations.items()},
+                  "reasons": reasons}
+    error.passive_file_custody_diagnostics = diagnostic
+    error.args = (str(error) + "; passive_file_custody=" + json.dumps(diagnostic, sort_keys=True),)
+
+
+def _diagnostic_image(fd, audit):
+    """Bounded old-FD read uses pread, leaving the authority's offset untouched."""
+    before = os.fstat(fd)
+    owner_matches = None
+    try:
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink in (0, 1)
+                and (owner_matches := before.st_uid == os.geteuid())
+                and stat.S_IMODE(before.st_mode) == 0o600
+                and 0 < before.st_size <= 1 << 20)
+    except ValueError as error:
+        _annotate_passive_custody(error, "descriptor-metadata", {"fstat": before},
+            {"not_regular": not stat.S_ISREG(before.st_mode),
+             "link_count": before.st_nlink not in (0, 1),
+             "mode": stat.S_IMODE(before.st_mode) != 0o600,
+             "owner": None if owner_matches is None else not owner_matches,
+             "size": not 0 < before.st_size <= 1 << 20})
+        raise
+    body = os.pread(fd, (1 << 20) + 1, 0)
+    require(type(body) is bytes and len(body) == before.st_size
+            and _CUSTODY["_FILES"]["identity"](before)
+            == _CUSTODY["_FILES"]["identity"](os.fstat(fd)))
+    document = json.loads(body.decode("utf-8"), object_pairs_hook=audit["_unique_json_object"],
+                          parse_constant=lambda _: require(False))
+    require(type(document) is dict)
+    return {"identity": _CUSTODY["_FILES"]["identity"](before),
+            "uid": before.st_uid, "gid": before.st_gid,
+            "sha256": hashlib.sha256(body).hexdigest(), "document": document}
+
+
+def _diagnostic_named_image(path, case, audit, *, held_fd=None):
+    """Use the existing no-follow member walk and read its exact held file."""
+    before = path.lstat()
+    identity = _CUSTODY["_FILES"]["identity"]
+    case_fd = _CUSTODY["open_directory"](case)
+    try:
+        with audit["WINDSURF_GLOBAL_AUDIT"]["member"](case_fd, path.relative_to(case).as_posix()) as fd:
+            _CUSTODY["named_directory"](case, case_fd)
+            opened = named = None
+            try:
+                require(before.st_nlink == 1 and identity(before) == identity(opened := os.fstat(fd))
+                        == identity(named := path.lstat()))
+            except ValueError as error:
+                _annotate_passive_custody(error, "named-member",
+                    {"lstat": before, "member_fstat": opened, "named_lstat": named},
+                    {"link_count": before.st_nlink != 1,
+                     "identity": ((opened is not None and identity(before) != identity(opened))
+                                  or (named is not None and identity(opened) != identity(named)))})
+                raise
+            if held_fd is not None:
+                held = None
+                try:
+                    require(identity(before) == identity(held := os.fstat(held_fd)))
+                except ValueError as error:
+                    _annotate_passive_custody(error, "held-descriptor",
+                        {"lstat": before, "held_fstat": held}, {"identity": True})
+                    raise
+            image = _diagnostic_image(fd if held_fd is None else held_fd, audit)
+            require(image["identity"] == identity(before) == identity(path.lstat()))
+            _CUSTODY["named_directory"](case, case_fd)
+        return image
+    finally:
+        os.close(case_fd)
+
+
+def _diagnostic_capture(subject):
+    result = {"status": "unavailable", "code": "bounded_config_observation_unavailable",
+              "named": None, "held": None, "expected_image_equal": None}
+    try:
+        require(not subject.finished and subject.retired_allowed is not None)
+    except Exception:
+        return result
+    path = subject.profile / ".claude.json"
+    try:
+        result["named"] = _diagnostic_named_image(path, subject.case, subject.audit)
+        result["status"] = "observed"
+    except Exception:
+        pass
+    try:
+        rows = [row for row in subject.passive_usage if row["path"] == path]
+        require(len(rows) == 1)
+        row = rows[0]
+        held = _diagnostic_image(row["fd"], subject.audit)
+        current = os.fstat(row["fd"])
+        require(held["identity"] == _CUSTODY["_FILES"]["identity"](current)
+                and (held["uid"], held["gid"]) == (current.st_uid, current.st_gid))
+        result["held"] = held
+        result["expected_image_equal"] = (
+            held["identity"], held["uid"], held["gid"], held["sha256"]) == row["image"]
+    except Exception:
+        pass
+    return result
+
+
+def _diagnostic_foreign(document):
+    foreign = dict(document)
+    if type(document.get("pluginUsage")) is dict:
+        foreign["pluginUsage"] = {key: value for key, value in document["pluginUsage"].items()
+                                  if key not in _DIAGNOSTIC_USER_KEYS}
+    return foreign
+
+
+def _diagnostic_document(image, start_ms, end_ms, previous=None):
+    document = image["document"]
+    usage = document.get("pluginUsage")
+    valid_usage = type(usage) is dict
+    foreign = _diagnostic_foreign(document)
+    fixed = {}
+    for key in _DIAGNOSTIC_USER_KEYS:
+        present = key in usage if valid_usage else None
+        row = usage[key] if present else None
+        object_row = type(row) is dict
+        comparable = (previous is not None and type(previous.get("pluginUsage")) is dict
+                      and key in previous["pluginUsage"] and present)
+        unchanged = _CUSTODY["same_json"](previous["pluginUsage"][key], row) if comparable else None
+        stamp = row.get("lastUsedAt") if object_row else None
+        fixed[key] = {"present": present,
+            "closed_row_shape": object_row and set(row) == {"usageCount", "lastUsedAt", "lastUsedNumStartups"},
+            "usage_count_exact_zero": object_row and type(row.get("usageCount")) is int and row["usageCount"] == 0,
+            "startups_exact_zero": object_row and type(row.get("lastUsedNumStartups")) is int and row["lastUsedNumStartups"] == 0,
+            "timestamp_in_window": None if start_ms is None else type(stamp) is int and start_ms <= stamp <= end_ms,
+            "row_unchanged": unchanged,
+            "row_sha256": _diagnostic_digest(row) if present else None}
+    others = sorted(set(usage) - set(_DIAGNOSTIC_USER_KEYS)) if valid_usage else []
+    return {"raw_sha256": image["sha256"], "json_sha256": _diagnostic_digest(document),
+            "foreign_json_sha256": _diagnostic_digest(foreign),
+            "metadata_sha256": _diagnostic_digest((image["identity"], image["uid"], image["gid"])),
+            "first_start_version_matches": document.get("firstStartVersion") == "2.1.263",
+            "usage_object": valid_usage, "fixed_fixture_keys": fixed,
+            "other_usage_key_count": len(others),
+            "other_usage": [{"name_json_sha256": _diagnostic_digest(key),
+                             "row_sha256": _diagnostic_digest(usage[key])} for key in others[:8]],
+            "omitted_other_usage_keys": max(0, len(others) - 8)}
+
+
+def observe_user_initialize_diagnostic(subject, action, sink):
+    """Measure one native capture; never adopt bytes or change retirement state."""
+    before = _diagnostic_capture(subject)
+    returned, checked = False, False
+    action_start_ms = None
+    try:
+        subject.checkpoint()
+        checked = True
+        action_start_ms = time.time_ns() // 1_000_000
+        result = action()
+        returned = True  # capture itself still checks exit/error/stderr/binary.
+        return result
+    finally:
+        end_ms = time.time_ns() // 1_000_000
+        after = _diagnostic_capture(subject)
+        observation = {"diagnostic_only": True, "ownership": "ownership_unqualified",
+                       "native_capture_returned": returned, "pre_initialize_checkpoint_passed": checked,
+                       "initialization_qualified": False,
+                       "clock_window_valid": action_start_ms is not None and action_start_ms <= end_ms,
+                       "old_fd_same_inode": None, "old_fd_bytes_equal": None,
+                       "before": {"status": before["status"]}, "after": {"status": after["status"]}}
+        try:
+            for label, image in (("before", before), ("after", after)):
+                observation[label].update(retirement_fd_raw_sha256=None, retirement_fd_link_count=None,
+                                          named_joins_retirement_fd=None, retirement_image_equal=None)
+                if image["status"] == "observed":
+                    previous = before["named"]["document"] if label == "after" and before["status"] == "observed" else None
+                    observation[label].update(_diagnostic_document(
+                        image["named"], action_start_ms, end_ms, previous))
+                else:
+                    observation[label]["code"] = image["code"]
+                if image["held"] is not None:
+                    observation[label]["retirement_fd_raw_sha256"] = image["held"]["sha256"]
+                    observation[label]["retirement_fd_link_count"] = image["held"]["identity"][3]
+                    observation[label]["named_joins_retirement_fd"] = (
+                        image["named"]["identity"] == image["held"]["identity"] if image["named"] is not None else None)
+                    observation[label]["retirement_image_equal"] = image["expected_image_equal"]
+            if before["status"] == after["status"] == "observed":
+                a, b = before["named"], after["named"]
+                observation.update(
+                    same_named_inode=a["identity"][:2] == b["identity"][:2],
+                    same_named_metadata=(a["identity"], a["uid"], a["gid"]) == (b["identity"], b["uid"], b["gid"]),
+                    full_json_equal=_CUSTODY["same_json"](a["document"], b["document"]),
+                    foreign_json_equal=_CUSTODY["same_json"](_diagnostic_foreign(a["document"]), _diagnostic_foreign(b["document"])))
+            if before["held"] is not None and after["held"] is not None:
+                observation.update(
+                    old_fd_same_inode=before["held"]["identity"][:2] == after["held"]["identity"][:2],
+                    old_fd_bytes_equal=before["held"]["sha256"] == after["held"]["sha256"])
+        except Exception:
+            observation = {"diagnostic_only": True, "ownership": "ownership_unqualified",
+                           "status": "unavailable", "code": "projection_unavailable",
+                           "native_capture_returned": returned, "pre_initialize_checkpoint_passed": checked,
+                           "initialization_qualified": False}
+        sink.append(observation)
+
+
 class SignedClosureRetirement:
     """Hold all four owned caches continuously across one Project removal."""
 
@@ -168,6 +386,8 @@ class SignedClosureRetirement:
         self.fds, self.owners, self.anchors = [], [], {}
         self.passive_usage = []
         self.usage_contract = None
+        self.detached_usage = []
+        self.user_usage = None
         self.finished = False
         self.retired_allowed = None
         if checkpoint_diagnostics is not None:
@@ -231,44 +451,16 @@ class SignedClosureRetirement:
         return _checkpoint_document(self.audit, self.case, path)
 
     def passive_image(self, path, fd):
-        """Read through the shared bounded reader while retaining the same inode."""
-        identity = _CUSTODY["_FILES"]["identity"]
-        before = path.lstat()
-        opened = None
-        try:
-            require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
-                    and stat.S_IMODE(before.st_mode) == 0o600 and before.st_uid == os.geteuid()
-                    and 0 < before.st_size <= 1 << 20
-                    and identity(before) == identity(opened := os.fstat(fd)))
-        except ValueError as error:
-            # Fixed metadata only: never disclose paths, bytes or inode numbers.
-            def facts(info):
-                return {"type": "regular" if stat.S_ISREG(info.st_mode) else "other",
-                        "mode": format(stat.S_IMODE(info.st_mode), "04o"),
-                        "nlink": info.st_nlink, "uid": info.st_uid,
-                        "gid": info.st_gid, "size": info.st_size}
-            diagnostic = {"lstat": facts(before), "fstat": facts(opened) if opened is not None else None,
-                "fstat_observed": opened is not None,
-                "identity_matches": identity(before) == identity(opened) if opened is not None else None,
-                "reasons": {"not_regular": not stat.S_ISREG(before.st_mode),
-                    "link_count": before.st_nlink != 1,
-                    "mode": stat.S_IMODE(before.st_mode) != 0o600,
-                    "owner": before.st_uid != os.geteuid(),
-                    "size": not 0 < before.st_size <= 1 << 20,
-                    "identity": opened is not None and identity(before) != identity(opened)}}
-            error.passive_file_custody_diagnostics = diagnostic
-            error.args = (str(error) + "; passive_file_custody=" + json.dumps(diagnostic, sort_keys=True),)
-            raise
-        body, error = self.audit["copilot_settings_read"](path, self.case)
-        require(error is None and type(body) is str
-                and identity(before) == identity(path.lstat()) == identity(os.fstat(fd)))
-        return (identity(before), before.st_uid, before.st_gid, hashlib.sha256(body.encode()).hexdigest())
+        """Join the original FD to the no-follow walk and hash that exact FD."""
+        image = _diagnostic_named_image(path, self.case, self.audit, held_fd=fd)
+        return (image["identity"], image["uid"], image["gid"], image["sha256"])
 
     def held_passive_document(self, path):
         require(stat.S_ISREG(path.lstat().st_mode))
         fd = _CUSTODY["_FILES"]["open_member"](path); self.fds.append(fd)
-        image = self.passive_image(path, fd)
-        document = self.document(path)
+        observed = _diagnostic_named_image(path, self.case, self.audit, held_fd=fd)
+        image = (observed["identity"], observed["uid"], observed["gid"], observed["sha256"])
+        document = observed["document"]
         require(self.passive_image(path, fd) == image)
         return document, {"path": path, "fd": fd, "image": image}
 
@@ -304,7 +496,7 @@ class SignedClosureRetirement:
         # complete foreign projection and subset of the same four usage rows.
         temporary = [path for path in self.profile.iterdir()
                      if re.fullmatch(r"\.claude\.json\.tmp\.[1-9][0-9]{0,9}\.[0-9a-f]{12}", path.name)]
-        require(len(temporary) <= 1)
+        self.require_temporary_bound(temporary, "capture")
         for path in temporary:
             pending, held = self.held_passive_document(path)
             require(type(pending) is dict and type(pending.get("pluginUsage")) is dict)
@@ -315,6 +507,66 @@ class SignedClosureRetirement:
                     and _CUSTODY["same_json"](dict(pending, pluginUsage={
                         key: row for key, row in pending_usage.items() if key not in keys}), foreign))
             self.passive_usage.append(held)
+
+    def require_temporary_bound(self, temporary, phase):
+        """Bound the phase before strict member validation; diagnostics grant no authority."""
+        require(phase in ("capture", "finish"))
+        limit = 1 if phase == "capture" else 2
+        if len(temporary) <= limit:
+            return
+        prebound = {row["path"] for row in self.passive_usage[1:]} if phase == "finish" else set()
+        observed = set(temporary)
+        detail = {"diagnostic_only": True, "ownership": "ownership_unqualified",
+                  "phase": phase, "temporary_count": len(temporary),
+                  "prebound_temporary_count": len(prebound),
+                  "observed_prebound_temporary_count": len(observed & prebound),
+                  "new_temporary_count": len(observed - prebound),
+                  "limit": limit, "members": [], "omitted_count": max(0, len(temporary) - 8)}
+        for path in sorted(temporary[:8], key=lambda p: p.name):
+            member = {"status": "unavailable"}
+            try:
+                member["name_sha256"] = _diagnostic_digest(path.name)
+                before = path.lstat()
+                member["regular_0600_owner_single_link"] = (
+                    stat.S_ISREG(before.st_mode) and stat.S_IMODE(before.st_mode) == 0o600
+                    and before.st_uid == os.geteuid() and before.st_nlink == 1)
+                require(member["regular_0600_owner_single_link"])
+                image = _diagnostic_named_image(path, self.case, self.audit)
+                joined = (image["identity"] == _CUSTODY["_FILES"]["identity"](before)
+                          == _CUSTODY["_FILES"]["identity"](path.lstat()))
+                member["named_held_identity_equal"] = joined
+                require(joined)
+                member["raw_sha256"] = image["sha256"]
+                member["bytes"] = image["identity"][4]
+                member["same_original_owner"] = (image["uid"], image["gid"]) == self.passive_usage[0]["image"][1:3]
+                document, contract = image["document"], self.usage_contract
+                usage = document.get("pluginUsage")
+                member["usage_object"] = type(usage) is dict
+                require(member["usage_object"])
+                keys = set(contract["rows"])
+                selected = keys.intersection(usage)
+                member["selected_original_row_count"] = len(selected)
+                member["original_rows_unchanged"] = all(
+                    _CUSTODY["same_json"](usage[key], contract["rows"][key]) for key in selected)
+                member["foreign_json_equal"] = _CUSTODY["same_json"](
+                    dict(document, pluginUsage={key: value for key, value in usage.items() if key not in keys}),
+                    contract["foreign"])
+                old = next((row for row in self.passive_usage[1:] if row["path"] == path), None)
+                member["previously_held"] = old is not None
+                member["nonempty_original_subset"] = bool(selected)
+                member["new_temporary_strict_subset"] = None if old else 0 < len(selected) < len(keys)
+                if old:
+                    held = _diagnostic_image(old["fd"], self.audit)
+                    member["old_temporary_image_unchanged"] = (
+                        (image["identity"], image["uid"], image["gid"], image["sha256"])
+                        == (held["identity"], held["uid"], held["gid"], held["sha256"]) == old["image"])
+                member["status"] = "observed"
+            except Exception:
+                member["code"] = "bounded_temporary_observation_unavailable"
+            detail["members"].append(member)
+        error = ValueError("passive usage temporary bound: " + json.dumps(detail, sort_keys=True))
+        error.claude_temporary_bound_diagnostic = detail
+        raise error
 
     def validate_usage_deletion(self, document):
         """Only receipt-owned zero-count rows may disappear; all other JSON stays exact."""
@@ -338,12 +590,9 @@ class SignedClosureRetirement:
         require((before.st_dev, before.st_ino, before.st_mode) == old_main["image"][0][:3]
                 and before.st_nlink in (0, 1) and before.st_uid == old_main["image"][1]
                 and before.st_gid == old_main["image"][2] and before.st_size <= 1 << 20)
-        with os.fdopen(os.dup(old_main["fd"]), "rb") as stream:
-            stream.seek(0); body = stream.read((1 << 20) + 1)
-        require(len(body) <= 1 << 20 and _CUSTODY["_FILES"]["identity"](before)
-                == _CUSTODY["_FILES"]["identity"](os.fstat(old_main["fd"])))
-        self.validate_usage_deletion(json.loads(body, object_pairs_hook=self.audit["_unique_json_object"],
-                                               parse_constant=lambda _: require(False)))
+        held_main = _diagnostic_image(old_main["fd"], self.audit)
+        require(held_main["identity"] == _CUSTODY["_FILES"]["identity"](before))
+        self.validate_usage_deletion(held_main["document"])
         document, main = self.held_passive_document(old_main["path"])
         self.validate_usage_deletion(document)
         same_main = main["image"][0][:2] == old_main["image"][0][:2]
@@ -353,17 +602,24 @@ class SignedClosureRetirement:
                 and main["image"][1:3] == old_main["image"][1:3])
         temporary = [path for path in self.profile.iterdir()
                      if re.fullmatch(r"\.claude\.json\.tmp\.[1-9][0-9]{0,9}\.[0-9a-f]{12}", path.name)]
-        require(len(temporary) <= 1)
+        self.require_temporary_bound(temporary, "finish")
+        original_temporary = {row["path"]: row for row in old_temporary}
         for row in old_temporary:
             require(row["path"] in temporary and self.passive_image(row["path"], row["fd"]) == row["image"])
         following = [main]
         for path in temporary:
             pending, held = self.held_passive_document(path)
+            original = original_temporary.get(path)
+            require(original is None or held["image"] == original["image"])
             self.validate_usage_deletion(pending)
             selected = set(pending["pluginUsage"]).intersection(self.usage_contract["rows"])
-            require(bool(selected) and (path in {row["path"] for row in old_temporary} or len(selected) < 4)
+            require(bool(selected) and (original is not None or len(selected) < 4)
                     and held["image"][1:3] == main["image"][1:3])
             following.append(held)
+        # Reopening cannot refresh old custody, including a replacement after
+        # the reopened read. Close this window through the original held FDs.
+        for row in old_temporary:
+            require(self.passive_image(row["path"], row["fd"]) == row["image"])
         # After the one receipt-authorized transition, every future checkpoint
         # again requires exact post-removal inode, metadata and byte equality.
         self.passive_usage = following
@@ -372,13 +628,178 @@ class SignedClosureRetirement:
         return {".claude/" + row["path"].relative_to(self.profile).as_posix() for row in self.passive_usage}
 
     def passive_usage_proof(self):
-        return {"native_version": "2.1.263", "receipt_bound_key_count": 4 if self.passive_usage else 0,
+        proof = {"native_version": "2.1.263", "receipt_bound_key_count": 4 if self.passive_usage else 0,
                 "preserved_foreign_document": True,
                 "foreign_document_equality": "strict-decoded-json",
                 "post_removal_bytes_and_identity_held": True,
                 "files": [{"name": row["path"].name, "sha256": row["image"][-1]} for row in self.passive_usage]}
+        if self.user_usage is not None:
+            proof["user_initialize_transition"] = {
+                "authority": "same signed public/recorded User binding and committed receipt checks",
+                "phase": self.user_usage["phase"], "receipt_bound_user_key_count": 4,
+                "original_project_usage_contract_preserved": True,
+                "main_image_authority": "explicit bounded User initialize, not original Project bytes",
+                "exact_four_user_remove_receipts_qualified": self.user_usage["phase"] in ("removed", "finished"),
+                "detached_original_images_held": len(self.detached_usage),
+                "user_owners": {alias: {"installation_id_sha256": _diagnostic_digest(owner["installation_id"]),
+                    "binding_id_sha256": _diagnostic_digest(owner["binding_id"])}
+                    for alias, owner in self.user_usage["owners"].items()},
+                "full_native_removal_qualified": False, "writer_closure_qualified": False}
+        return proof
 
-    def capture(self, alias, distribution, pin, public, record):
+    def user_initialize_authority(self, data, public_rows):
+        """Bind this one User cohort through the existing signed receipt checker."""
+        self.checkpoint()
+        require(self.user_usage is None and Path(data) == self.home.parent / "data"
+                and type(public_rows) is list and len(public_rows) == 4)
+        state_path = Path(data) / "state-v2.json"
+        state = self.document(state_path)
+        require(type(state.get("schema_version")) is int and state["schema_version"] == 5)
+        records = [row for row in state["installations"] if row.get("clients")]
+        require(len(records) == 4)
+        owners = {}
+        for alias, distribution in self.audit["MARKETING_KIT_DISTRIBUTIONS"].items():
+            selected = [row for row in public_rows if row.get("directory", {}).get("recorded_distribution") == distribution]
+            require(len(selected) == 1)
+            public = selected[0]
+            selected = [row for row in records if row.get("installation_id") == public.get("installation_id")]
+            require(len(selected) == 1)
+            pin = self.audit["MARKETING_KIT_SIGNED_CLOSURE"][distribution]
+            binding, _, active = self.selected_binding(alias, distribution, pin, public, selected[0], "user")
+            owners[alias] = {"id": alias + "@skills-dir", "version": pin["package_version"],
+                "scope": "user", "enabled": True, "installPath": str(active),
+                "installation_id": public["installation_id"], "binding_id": binding["client_binding_id"]}
+        for field in ("installation_id", "binding_id", "installPath"):
+            require(len({row[field] for row in owners.values()}) == 4)
+        return {"owners": owners, "state_path": state_path, "state": state,
+                "phase": "before", "pending": None}
+
+    def user_initialize_guards(self):
+        """Keep every original authority except the explicitly pending main name."""
+        self.recheck(check_usage=False)
+        temporary = {path for path in self.profile.iterdir()
+                     if re.fullmatch(r"\.claude\.json\.tmp\.[1-9][0-9]{0,9}\.[0-9a-f]{12}", path.name)}
+        require(temporary == {row["path"] for row in self.passive_usage[1:]})
+        for row in self.passive_usage[1:]:
+            require(self.passive_image(row["path"], row["fd"]) == row["image"])
+        for row in self.detached_usage:
+            image = _diagnostic_image(row["fd"], self.audit)
+            require((image["identity"], image["uid"], image["gid"], image["sha256"]) == row["image"])
+
+    def stage_user_initialize(self, authority, action, native_rows, *, removed=False, observer=None):
+        """Hold a candidate; complete native and caller guards must precede commit."""
+        self.checkpoint()
+        self.user_initialize_guards()
+        require(type(removed) is bool and authority["pending"] is None
+                and authority["phase"] == ("removed" if removed else "before")
+                and type(native_rows) is list and (observer is None or callable(observer)))
+        owners = authority["owners"]
+        selected = [row for row in native_rows if row["id"].split("@", 1)[0].casefold() in owners]
+        if removed:
+            require(not selected and self.user_usage is authority)
+        else:
+            require(len(selected) == 4 and {row["id"] for row in selected} == {row["id"] for row in owners.values()}
+                    and _CUSTODY["same_json"](self.document(authority["state_path"]), authority["state"]))
+            for row in selected:
+                owner = owners[row["id"].split("@", 1)[0]]
+                require(all(type(row.get(key)) is type(owner[key]) and row[key] == owner[key]
+                            for key in ("id", "version", "scope", "enabled", "installPath")))
+        if not self.passive_usage:
+            raise ValueError("Claude User initialization requires a held passive .claude.json baseline")
+        old = self.passive_usage[0]
+        before = _diagnostic_image(old["fd"], self.audit)
+        require((before["identity"], before["uid"], before["gid"], before["sha256"]) == old["image"])
+        start, end = None, None
+        def capture():
+            nonlocal start, end
+            require(start is None)
+            start = time.time_ns() // 1_000_000
+            try:
+                return action()
+            finally:
+                end = time.time_ns() // 1_000_000
+        result = capture() if observer is None else observer(capture)
+        require(type(start) is int and type(end) is int and start <= end
+                and type(result) is tuple and len(result) == 2
+                and type(result[1]) is dict and result[1].get("exit") == 0
+                and result[1].get("error") is None and result[1].get("stderr_bytes") == 0)
+        document, following = self.held_passive_document(old["path"])
+        require(following["image"][1:3] == old["image"][1:3])
+        if removed:
+            require(_CUSTODY["same_json"](document, before["document"]))
+        else:
+            keys = {row["id"] for row in owners.values()}
+            usage = document.get("pluginUsage")
+            prior = before["document"].get("pluginUsage")
+            require(type(usage) is dict and type(prior) is dict and not keys.intersection(prior)
+                    and keys <= set(usage))
+            for key in keys:
+                row = usage[key]
+                require(type(row) is dict and set(row) == {"usageCount", "lastUsedAt", "lastUsedNumStartups"}
+                        and type(row["usageCount"]) is int and row["usageCount"] == 0
+                        and type(row["lastUsedNumStartups"]) is int and row["lastUsedNumStartups"] == 0
+                        and type(row["lastUsedAt"]) is int and start <= row["lastUsedAt"] <= end)
+            require(_CUSTODY["same_json"](dict(document, pluginUsage={
+                key: row for key, row in usage.items() if key not in keys}), before["document"]))
+        held = _diagnostic_image(old["fd"], self.audit)
+        same = following["image"][0][:2] == old["image"][0][:2]
+        require((removed or not same) and held["sha256"] == old["image"][-1]
+                and held["identity"][:3] == old["image"][0][:3]
+                and held["identity"][4:6] == old["image"][0][4:6]
+                and (held["uid"], held["gid"]) == old["image"][1:3]
+                and held["identity"][3] == (1 if same else 0)
+                and (not same or following["image"] == old["image"]))
+        authority["pending"] = {"old": old, "following": following,
+            "detached_image": (held["identity"], held["uid"], held["gid"], held["sha256"]),
+            "same_inode": same, "removed": removed, "native_rows": native_rows}
+        # Do not replace passive_usage here: before/after_remove still has to
+        # validate the complete native Skill response and all outer guards.
+        return result
+
+    def commit_user_initialize(self, authority, native_proof):
+        pending = authority["pending"]
+        require(type(pending) is dict and native_proof["scope"] == "user"
+                and native_proof["home"] == str(self.home) and native_proof["project"] == str(self.project)
+                and _CUSTODY["same_json"](native_proof["native_rows"], pending["native_rows"]))
+        self.user_initialize_guards()
+        old, following = pending["old"], pending["following"]
+        require(self.passive_usage[0] is old
+                and self.passive_image(following["path"], following["fd"]) == following["image"])
+        held = _diagnostic_image(old["fd"], self.audit)
+        require((held["identity"], held["uid"], held["gid"], held["sha256"]) == pending["detached_image"])
+        if not pending["same_inode"]:
+            self.detached_usage.append(dict(old, image=pending["detached_image"]))
+            self.passive_usage = [following, *self.passive_usage[1:]]
+        self.user_usage = authority
+        authority["phase"] = "finished" if pending["removed"] else "initialized"
+        authority["pending"] = None
+        self.checkpoint()
+
+    def user_remove_receipt(self, authority, cleanup):
+        """Only the complete four-member User receipt may authorize the next read."""
+        self.checkpoint()
+        require(self.user_usage is authority and authority["phase"] == "initialized"
+                and authority["pending"] is None and cleanup["result"] == "success"
+                and cleanup["outcome"] == "completed" and cleanup["scope"] == "user"
+                and type(cleanup["actions"]) is list and type(cleanup["results"]) is list
+                and len(cleanup["actions"]) == len(cleanup["results"]) == 4)
+        observed = set()
+        for action, result in zip(cleanup["actions"], cleanup["results"]):
+            alias = action["alias"]
+            require(alias in authority["owners"] and alias not in observed)
+            owner = authority["owners"][alias]
+            require(action["action"] == result["operation"] == "remove"
+                    and action["client_id"] == result["client_id"] == "claude"
+                    and action["installation_id"] == result["installation_id"] == owner["installation_id"]
+                    and action["binding_id"] == owner["binding_id"] and result["outcome"] == "completed")
+            observed.add(alias)
+        require(observed == set(authority["owners"]))
+        authority["phase"] = "removed"
+        self.checkpoint()
+
+    def selected_binding(self, alias, distribution, pin, public, record, scope):
+        """Share the same signed/public/recorded/path/receipt authority for both scopes."""
+        require(scope in ("project", "user"))
         require(record["declared_name"] == record["package"]["declared_name"] == public["name"] == alias
                 and record.get("origin_mode") == "directory"
                 and type(public.get("installation_id")) is str and bool(public["installation_id"]))
@@ -403,7 +824,7 @@ class SignedClosureRetirement:
         binding_id, binding = next(iter(record["clients"].items()))
         require(type(binding_id) is str and bool(binding_id) and binding["client_binding_id"] == binding_id)
         expected_authentication = expected_project_authentication(alias, binding)
-        checkpoint = {"client_id": ("claude",), "scope": ("project",),
+        checkpoint = {"client_id": ("claude",), "scope": (scope,),
                 # Installed but unready MCPs and untrusted/suppressed plugins
                 # can remain prepared in the published adapter. Exact cache,
                 # registry and receipt ownership below is still mandatory.
@@ -428,7 +849,8 @@ class SignedClosureRetirement:
         physical = binding["physical_artifact_id"]
         require(type(physical) is str and physical == physical.strip() and bool(physical)
                 and physical not in (".", "..") and Path(physical).name == physical)
-        active = self.project / ".claude/skills" / physical
+        active = ((self.project / ".claude/skills") if scope == "project"
+                  else self.profile / "skills") / physical
         require(binding["target_locator"] == str(active)
                 and self.audit["path_inside_case"](active, self.case))
         receipts = binding["receipts"]
@@ -437,6 +859,11 @@ class SignedClosureRetirement:
                         and row["active_path"] == str(active) and type(row["operation_id"]) is str
                         and bool(row["operation_id"]) for row in receipts)
                 and len({row["operation_id"] for row in receipts}) == len(receipts))
+        return binding, readiness, active
+
+    def capture(self, alias, distribution, pin, public, record):
+        binding, readiness, active = self.selected_binding(alias, distribution, pin, public, record, "project")
+        binding_id, physical = binding["client_binding_id"], binding["physical_artifact_id"]
         objects = [row for row in binding["native_objects"] if row["kind"] == "claude_project_plugin_cache"]
         require(len(objects) == 1)
         receipt = objects[0]
@@ -483,8 +910,16 @@ class SignedClosureRetirement:
             if "retired_parent_entries" in owner:
                 require(_CUSTODY["entries"](owner["parent_fd"]) == owner["retired_parent_entries"])
         if check_usage:
+            if self.user_usage is not None:
+                require({path for path in self.profile.iterdir() if re.fullmatch(
+                    r"\.claude\.json\.tmp\.[1-9][0-9]{0,9}\.[0-9a-f]{12}", path.name)}
+                    == {row["path"] for row in self.passive_usage[1:]})
             for row in self.passive_usage:
                 require(self.passive_image(row["path"], row["fd"]) == row["image"])
+            for row in self.detached_usage:
+                image = _diagnostic_image(row["fd"], self.audit)
+                require((image["identity"], image["uid"], image["gid"], image["sha256"]) == row["image"]
+                        and image["identity"][3] == 0)
 
     def close(self):
         while self.fds:
@@ -551,8 +986,9 @@ class SignedClosureRetirement:
                 allowed.add(relative + ": directory")
         return allowed
 
-    def recheck(self):
-        self.guard()
+    def recheck(self, *, check_usage=True):
+        require(type(check_usage) is bool)
+        self.guard(check_usage=check_usage)
         for owner in self.owners:
             _CUSTODY["named_directory"](owner["quarantine"], owner["quarantine_fd"])
             _CUSTODY["named_directory"](owner["moved"], owner["cache_fd"])
@@ -564,7 +1000,7 @@ class SignedClosureRetirement:
                     and not owner["cache"].exists() and not owner["cache"].is_symlink()
                     and not owner["active"].exists() and not owner["active"].is_symlink())
         self.registries_removed()
-        self.guard()
+        self.guard(check_usage=check_usage)
 
     def checkpoint(self):
         """Recheck the same continuously held, successfully retired authority."""

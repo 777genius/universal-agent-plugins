@@ -241,16 +241,25 @@ class RemovalDiscovery:
         return stdout, {key: record[key] for key in (
             "probe", "exit", "error", "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256")}
 
-    def observe(self, env, project, label):
+    def observe(self, env, project, label, *, initialize=None):
         version, _ = self.capture(env, project, ("--version",), label + "-version")
         require(version.strip() == b"2.1.263 (Claude Code)")
         listing, listing_record = self.capture(env, project, ("plugin", "list", "--json"), label + "-registration")
-        initialized, initialized_record = self.capture(env, project, INITIALIZE_ARGS,
-            label + "-skills", INITIALIZE)
-        return registrations(listing), commands(initialized), [listing_record, initialized_record]
+        rows = registrations(listing)
+        def capture_initialize():
+            return self.capture(env, project, INITIALIZE_ARGS, label + "-skills", INITIALIZE)
+        if initialize is None:
+            initialized, initialized_record = capture_initialize()
+        else:
+            initialized, initialized_record = initialize(capture_initialize, rows)
+            require(type(initialized_record) is dict and initialized_record.get("exit") == 0
+                    and initialized_record.get("error") is None
+                    and initialized_record.get("stderr_bytes") == 0)
+        return rows, commands(initialized), [listing_record, initialized_record]
 
-    def before_remove(self, env, project, scope, label):
-        rows, skills, records = self.observe(env, project, label + "-before")
+    def before_remove(self, env, project, scope, label, *, initialize=None):
+        options = {"initialize": initialize} if initialize is not None else {}
+        rows, skills, records = self.observe(env, project, label + "-before", **options)
         selected = [row for row in rows if owned(row["id"])]
         require(len(selected) == 4 and {row["id"].split("@", 1)[0] for row in selected}
                 == {"marketing-kit", "notion", "hubspot-crm", "playwright"}
@@ -258,13 +267,15 @@ class RemovalDiscovery:
                 and "marketing-kit:campaign-planning" in skills
                 and skills["marketing-kit:campaign-planning"].get("builtin") is not True)
         return {"home": env["HOME"], "project": str(project), "scope": scope,
+                "native_rows": rows,
                 "foreign_registrations": [row for row in rows if not owned(row["id"])],
                 "foreign_skills": {key: value for key, value in skills.items() if not owned(key)},
                 "records": records}
 
-    def after_remove(self, env, project, before, label):
+    def after_remove(self, env, project, before, label, *, initialize=None):
         require(before["home"] == env["HOME"] and before["project"] == str(project))
-        rows, skills, records = self.observe(env, project, label + "-after")
+        options = {"initialize": initialize} if initialize is not None else {}
+        rows, skills, records = self.observe(env, project, label + "-after", **options)
         # The existing repo mcp-list helper discards the exit error and only
         # checks positive transport substrings. No exact absence parser exists.
         # Retain the genuine effective-discovery output for hosted review;
@@ -276,6 +287,7 @@ class RemovalDiscovery:
                 and canonical(rows) == canonical(before["foreign_registrations"])
                 and canonical(skills) == canonical(before["foreign_skills"]))
         return {"status": "verified-registration-and-skill-absence", "scope": before["scope"],
+                "home": env["HOME"], "project": str(project), "native_rows": rows,
                 "plugin_registration_absence_qualified": True, "skill_discovery_absence_qualified": True,
                 "foreign_native_inventory_preserved": True, "mcp_discovery_absence_qualified": False,
                 "mcp_discovery_boundary": "Skill initialize uses an empty strict MCP configuration; no effective MCP absence claim",

@@ -16,10 +16,11 @@ import tomllib
 
 FILE_LIMIT = 64 << 20
 TOTAL_LIMIT = 256 << 20
+# One shared byte pool for the caller-qualified dependency scope.
+RUNTIME_TOTAL_LIMIT = 256 << 20
 MEMBER_LIMIT = 10000
 # One separately qualified dependency subtree; never an ownership grant.
 RUNTIME_MEMBER_LIMIT = 24576
-RUNTIME_TOTAL_LIMIT = 256 << 20
 DEPTH_LIMIT = 64
 FD_LIMIT = 2 * MEMBER_LIMIT + 3 * DEPTH_LIMIT + 1
 SECONDS_LIMIT = 5
@@ -148,6 +149,8 @@ class HeldTree:
         self.runtime_prefixes = _runtime_prefixes(runtime_prefixes)
         self.ordinary_members, self.runtime_members = 0, 0
         self.ordinary_total, self.runtime_total = 0, 0
+        self.ordinary_limit = TOTAL_LIMIT
+        self.runtime_limit = RUNTIME_TOTAL_LIMIT if self.runtime_prefixes else 0
         self.quota = quota if quota is not None else Descriptors(runtime_envelope=bool(self.runtime_prefixes))
         budget = budget if budget is not None else Budget()
         self.fds, self.nodes, self.ancestors, self.total = {}, {}, {}, 0
@@ -235,7 +238,23 @@ class HeldTree:
                 if self._names(fd, budget) != names:
                     raise ValueError("retention members changed during capture")
             else:
-                digest = self._capture_file(relative, fd, before, budget)
+                scoped = self._runtime_member(relative)
+                used = self.runtime_total if scoped else self.ordinary_total
+                limit = self.runtime_limit if scoped else self.ordinary_limit
+                if used + before.st_size > limit:
+                    error = ValueError("retention qualified runtime bytes exceed bound" if scoped
+                                       else "retention total bytes exceed bound")
+                    # Partial observations only; the caller can diagnose the
+                    # existing refusal without another filesystem traversal.
+                    error.retention_byte_checkpoint = (self, relative, before.st_size, limit,
+                                                       "qualified-runtime" if scoped else "ordinary")
+                    raise error
+                digest = _read_regular(fd, before, budget)
+                self.total += digest["bytes"]
+                if scoped:
+                    self.runtime_total += digest["bytes"]
+                else:
+                    self.ordinary_total += digest["bytes"]
                 self.nodes[relative] = ("file", _identity(before), digest)
         if (_identity(os.fstat(fd)) != _identity(before)
                 or _identity(self._named(relative)) != _identity(before)):
@@ -244,23 +263,6 @@ class HeldTree:
 
     def _runtime_member(self, relative):
         return any(relative == prefix or relative.startswith(prefix + "/") for prefix in self.runtime_prefixes)
-
-    def _capture_file(self, relative, fd, before, budget):
-        scoped = self._runtime_member(relative)
-        consumed = self.runtime_total if scoped else self.ordinary_total
-        limit = RUNTIME_TOTAL_LIMIT if scoped else TOTAL_LIMIT
-        if consumed + before.st_size > limit:
-            scope = "qualified runtime" if scoped else "ordinary"
-            raise ValueError(f"retention {scope} total bytes exceed bound "
-                             f"(partial fully-read ordinary={self.ordinary_total}, runtime={self.runtime_total}; "
-                             f"next_stat_bytes={before.st_size}; limit={limit})")
-        digest = _read_regular(fd, before, budget)
-        if scoped:
-            self.runtime_total += digest["bytes"]
-        else:
-            self.ordinary_total += digest["bytes"]
-        self.total += digest["bytes"]
-        return digest
 
     def _claim_member(self, relative):
         if self._runtime_member(relative):
