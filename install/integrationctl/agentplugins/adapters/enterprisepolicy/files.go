@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"unicode"
 
@@ -74,14 +75,17 @@ func loadLayer(candidate Path) (Layer, error) {
 		return layer, layerError(err, layer)
 	}
 	layer.Path = path
-	if err := checkPolicyParent(path); err != nil {
-		return layer, layerError(err, layer)
-	}
-	_, err = os.Lstat(path)
+	accessPath := policyFilesystemPath(path)
+	_, err = os.Lstat(accessPath)
 	if errors.Is(err, os.ErrNotExist) && !candidate.Required {
+		// An absent automatic layer must not impose new directory requirements
+		// on installations without policy. A dangling leaf link is present.
 		return layer, nil
 	}
 	if err != nil {
+		if parentErr := checkPolicyParent(accessPath); parentErr != nil {
+			return layer, layerError(parentErr, layer)
+		}
 		return layer, layerError(&ConfigError{Code: "required_file_unavailable", cause: err}, layer)
 	}
 	layer.Present = true
@@ -111,14 +115,34 @@ func policyPath(raw string) (string, error) {
 	return path, nil
 }
 
+func policyFilesystemPath(path string) string {
+	if runtime.GOOS == "darwin" {
+		return darwinPolicyPath(path)
+	}
+	return path
+}
+
+// Only macOS's fixed system aliases have canonical policy locations. Resolving
+// arbitrary links would let a user-controlled ancestor redirect policy input.
+func darwinPolicyPath(path string) string {
+	for _, alias := range []string{"/var", "/tmp", "/etc"} {
+		if path == alias || strings.HasPrefix(path, alias+"/") {
+			return "/private" + path
+		}
+	}
+	return path
+}
+
 // ReadFile reuses the bounded stable-file reader used for dependency authority
-// documents. Neither a symlink nor a FIFO can become executable policy input.
+// documents, checking every ancestor before and after the read. This refuses
+// linked paths; it is not a concurrent directory-isolation or sandbox API.
 func ReadFile(raw string) (domain.InstallPolicy, error) {
 	path, err := policyPath(raw)
 	if err != nil {
 		return domain.InstallPolicy{}, err
 	}
 	layer := Layer{Path: path}
+	path = policyFilesystemPath(path)
 	if err := checkPolicyParent(path); err != nil {
 		return domain.InstallPolicy{}, layerError(err, layer)
 	}
@@ -126,21 +150,26 @@ func ReadFile(raw string) (domain.InstallPolicy, error) {
 	if err != nil {
 		return domain.InstallPolicy{}, layerError(&ConfigError{Code: "unreadable_or_unsafe_file", cause: err}, layer)
 	}
+	if err := checkPolicyParent(path); err != nil {
+		return domain.InstallPolicy{}, layerError(err, layer)
+	}
 	policy, err := Decode(body)
 	return policy, layerError(err, layer)
 }
 
 func checkPolicyParent(path string) error {
 	for parent := filepath.Dir(path); ; parent = filepath.Dir(parent) {
+		next := filepath.Dir(parent)
 		info, err := os.Lstat(parent)
 		if err == nil {
 			if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 				return configError("unsafe_parent_directory")
 			}
-			return nil
-		}
-		if !errors.Is(err, os.ErrNotExist) || filepath.Dir(parent) == parent {
+		} else if !errors.Is(err, os.ErrNotExist) || next == parent {
 			return &ConfigError{Code: "parent_directory_unavailable", cause: err}
+		}
+		if next == parent {
+			return nil
 		}
 	}
 }

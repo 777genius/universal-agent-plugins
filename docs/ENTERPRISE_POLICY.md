@@ -116,6 +116,14 @@ removing or changing policy rules requires a new review. Comment-only edits do
 not change the policy decision. The decision is fixed at the final gate before
 effects; transaction rollback and recovery retain their safety guarantees.
 
+Present and explicitly required policy files must have no symbolic links in their
+ancestor directories. On macOS, only the fixed `/var`, `/tmp` and `/etc` system
+aliases use their `/private` locations; arbitrary user links are not resolved.
+A missing automatic policy remains optional under a linked home or project
+directory, while a dangling link at the policy filename is refused. Ancestry is
+checked before and after the bounded file read; these checks do not isolate the
+read from concurrent directory replacement.
+
 Administrators must protect the machine policy and its directory against writes
 by ordinary users. The policy governs this UAP binary; it does not prevent a
 machine administrator from replacing the binary or a user from manually editing

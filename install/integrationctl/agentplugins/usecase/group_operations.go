@@ -146,9 +146,9 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 			return session.result, err
 		}
 	}
-	// Callers can change any target from a progress callback. Reobserve every
-	// identity after the final callback, before building or committing state.
-	if err := session.reobserveGroupIdentity(); err != nil {
+	// Callers can change targets or policy from a progress callback. Recheck
+	// both after the final callback, before building or committing state.
+	if err := session.recheckGroupCommit(); err != nil {
 		return session.result, err
 	}
 	session.buildDesiredGroupState()

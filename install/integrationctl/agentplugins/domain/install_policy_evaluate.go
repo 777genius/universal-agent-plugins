@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"bytes"
+	"encoding/json"
 	"slices"
 	"strings"
 )
@@ -103,8 +105,15 @@ func evaluatePolicyComponents(p InstallPolicy, e PackageEnvelope, add policyDeni
 }
 
 func policyRawExtensionsPresent(raw []byte) bool {
-	switch strings.TrimSpace(string(raw)) {
-	case "", "null", "{}", "[]":
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return false
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, raw); err != nil {
+		return true
+	}
+	switch compact.String() {
+	case "null", "{}", "[]":
 		return false
 	default:
 		return true

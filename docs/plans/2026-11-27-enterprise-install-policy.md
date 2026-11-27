@@ -334,6 +334,15 @@ local archive pin facts, session boundaries, UX/JSON diagnostics and the final
 repair distinction were independently reread. Identified blocking findings were
 fixed. Source review is not a substitute for the execution evidence below.
 
+R14 external review: all ancestor components of active/required policy files are
+checked around the bounded read; optional absent policies retain no-policy
+behavior and macOS fixed system aliases retain configured path diagnostics.
+Valid JSON emptiness is semantic rather than formatting-dependent. Group apply
+rechecks policy after the final configuring callback and identity observation,
+before desired state/kernel effects. Independent reread approved these fixes;
+focused domain/adapter and core policy/SDK regressions passed. The SDK reason
+mapping comment was already addressed and its callback regression was rerun.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test

@@ -92,6 +92,13 @@ func (session *groupSession) admitGroupMutation() error {
 	return session.service.recheckInstallationPolicy(session.ctx)
 }
 
+func (session *groupSession) recheckGroupCommit() error {
+	if err := session.reobserveGroupIdentity(); err != nil {
+		return err
+	}
+	return session.service.recheckInstallationPolicy(session.ctx)
+}
+
 func (service *Service) admitBindingPolicy(ctx context.Context, input BindingChangeInput, origin domain.OriginMode) error {
 	_, err := service.admitInstallationInputs(ctx, []AddInput{{
 		Envelope: input.Envelope, OriginMode: origin, Scope: service.scope(),
