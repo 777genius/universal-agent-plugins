@@ -10,6 +10,7 @@ from runpy import run_path
 import stat
 import subprocess
 import sys
+import textwrap
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -119,18 +120,24 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         observer = WindsurfInstallationAudit(cli, env, case / "project", case, self.audit)
         return observer, env
 
-    def author_runtime(self, observer):
+    def author_runtime(self, observer, *, identity="unit-runtime", nested=False):
         """Independent minimal owned runtime; no npm command or native execution."""
-        identity, uid = "unit-runtime", "39b5780a-ea06-41f3-9b42-41918272b260"
+        uid = "39b5780a-ea06-41f3-9b42-41918272b260"
         physical = identity + "-" + hashlib.sha256(uid.encode()).hexdigest()[:12]
-        lock = b'{"lockfileVersion":3,"requires":true,"packages":{"":{"dependencies":{"unit":"1.0.0"}},"node_modules/unit":{"version":"1.0.0"}}}'
+        lock = b'{"lockfileVersion":3,"requires":true,"packages":{"":{"dependencies":{"unit":"1.0.0"}},"node_modules/unit":{"version":"1.0.0","bin":{"unit":"bin.js"}}}}'
+        if nested:
+            locked = json.loads(lock)
+            locked["packages"]["node_modules/unit"]["dependencies"] = {"nested-unit": "1.0.0"}
+            locked["packages"]["node_modules/unit/node_modules/nested-unit"] = {
+                "version": "1.0.0", "bin": {"nested-unit": "bin.js"}}
+            lock = json.dumps(locked, separators=(",", ":")).encode()
         package = b'{"private":true,"dependencies":{"unit":"1.0.0"}}'
         lock_digest = "sha256:" + hashlib.sha256(lock).hexdigest()
         config = {"schema_version": 1, "package": "unit", "version": "1.0.0",
                   "entrypoint": "node_modules/unit/bin.js", "package_lock_sha256": lock_digest,
                   "omit_optional": False}
         prefix = "io.github.777genius.agentplugins/runtime/"
-        files = {"plugin.json": b'{"name":"unit-runtime","version":"1.0.0"}',
+        files = {"plugin.json": json.dumps({"name": identity, "version": "1.0.0"}, separators=(",", ":")).encode(),
                  prefix + "runtime.json": json.dumps(config).encode(),
                  prefix + "package.json": package, prefix + "package-lock.json": lock,
                  prefix + "launcher.mjs": b"// inert\n"}
@@ -146,6 +153,11 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
         (runtime / "node_modules/unit").mkdir()
         (runtime / "node_modules/unit/bin.js").write_bytes(b"console.log('inert');\n")
         (runtime / "node_modules/.bin/unit").symlink_to("../unit/bin.js")
+        if nested:
+            (runtime / "node_modules/unit/node_modules/.bin").mkdir(parents=True)
+            (runtime / "node_modules/unit/node_modules/nested-unit").mkdir()
+            (runtime / "node_modules/unit/node_modules/nested-unit/bin.js").write_bytes(b"// nested inert bin\n")
+            (runtime / "node_modules/unit/node_modules/.bin/nested-unit").symlink_to("../nested-unit/bin.js")
         for name, body in (("package.json", package), ("package-lock.json", lock)):
             (runtime / name).write_bytes(body)
         marker = {"schema_version": 1, "lock_digest": lock_digest, "package": "unit", "version": "1.0.0",
@@ -157,7 +169,10 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                        ("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + str(data)).encode()).hexdigest()}
         (data / ".agentplugins-data-owner.json").write_text(json.dumps(receipt))
         state = {"schema_version": 5, "installations": [{"installation_id": uid, "declared_name": identity,
-                 "clients": {}, "data_retained": True, "source": {"tree_digest": pin["tree_digest"]}, "data_receipts": {receipt_id: receipt}}]}
+                 "clients": {}, "data_retained": True,
+                 "source": {"repository": "fixture/registry", "package_subpath": "plugins/" + identity,
+                            "resolved_revision": "a" * 40, "tree_digest": pin["tree_digest"]},
+                 "package": {"manifest_digest": pin["manifest_digest"]}, "data_receipts": {receipt_id: receipt}}]}
         (observer.data / "state-v2.json").write_text(json.dumps(state))
         return runtime, state
 
@@ -244,6 +259,128 @@ class WindsurfInstallationAuditTest(unittest.TestCase):
                     self.assertEqual(retained["runtime_authority"], original["runtime_authority"])
                 else:
                     with self.assertRaises(ValueError): observer.saved_image()
+
+    def test_source_lock_declared_nested_bins_keep_same_nearest_node_modules(self):
+        for mutation in ("unchanged", "cross-container", "unlisted-name", "wrong-target", "unlocked-container"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
+                observer, _ = self.fixture(Path(temporary).resolve())
+                runtime, _ = self.author_runtime(observer, nested=True)
+                link = runtime / "node_modules/unit/node_modules/.bin/nested-unit"
+                if mutation == "cross-container":
+                    link.unlink(); link.symlink_to("../../bin.js")
+                elif mutation == "unlisted-name": link.rename(link.with_name("unlisted"))
+                elif mutation == "wrong-target":
+                    (link.parent.parent / "nested-unit/other.js").write_bytes(b"unlisted target")
+                    link.unlink(); link.symlink_to("../nested-unit/other.js")
+                elif mutation == "unlocked-container":
+                    (runtime / "node_modules/foreign/node_modules/.bin").mkdir(parents=True)
+                    (runtime / "node_modules/foreign/node_modules/bin.js").write_bytes(b"unlisted package")
+                    (runtime / "node_modules/foreign/node_modules/.bin/foreign").symlink_to("../bin.js")
+                if mutation == "unchanged":
+                    image = observer.saved_image()
+                    self.assertEqual(sum(row["kind"] == "link" for row in image["runtime_authority"].values()), 2)
+                else:
+                    with self.assertRaises(ValueError): observer.saved_image()
+
+    def test_workflow_provisions_only_soft_fd_capacity_within_existing_hard_limit(self):
+        lines = (ROOT / ".github/workflows/live-install-remaining-clients.yml").read_text().splitlines()
+        start = next(index for index, line in enumerate(lines) if line.lstrip().startswith("audit_fd_minimum="))
+        indent = len(lines[start]) - len(lines[start].lstrip())
+        end = next(index for index in range(start + 1, len(lines)) if lines[index] == " " * (indent - 2) + "fi")
+        block = textwrap.dedent("\n".join(lines[start:end]))
+        from codex_plugin_retention_audit import Descriptors
+        required = Descriptors(runtime_envelope=True).limit
+        stub = r'''
+set -euo pipefail
+fake_soft="$FD_SOFT"
+ulimit() {
+  case "$*" in
+    -Sn) printf '%s\n' "$fake_soft" ;;
+    -Hn) printf '%s\n' "$FD_HARD" ;;
+    "-S -n "*) printf '%s\n' "$*" >> "$FD_CALLS"; fake_soft="$3" ;;
+    *) exit 99 ;;
+  esac
+}
+'''
+        for soft, hard, changed, code in (("1024", "65536", True, 0),
+                ("65536", "65536", False, 0), ("1024", "16384", False, 1),
+                ("unlimited", "unlimited", False, 0), ("1024", "unlimited", True, 0)):
+            with self.subTest(soft=soft, hard=hard), TemporaryDirectory() as temporary:
+                calls = Path(temporary) / "fd-calls"
+                env = {"PATH": os.pathsep.join((str(Path(sys.executable).parent), os.defpath)),
+                       "FD_SOFT": soft, "FD_HARD": hard, "FD_CALLS": str(calls)}
+                result = subprocess.run(["bash", "-c", stub + block], cwd=ROOT, env=env,
+                                        capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, code, result.stderr)
+                self.assertEqual(calls.read_text().splitlines() if calls.exists() else [],
+                                 [f"-S -n {required}"] if changed else [])
+                if code:
+                    self.assertIn(f"host hard limit is {hard}", result.stderr)
+                else:
+                    expected_soft = str(required) if changed else soft
+                    self.assertIn(f"required={required} soft={expected_soft} hard={hard}", result.stdout)
+
+    def test_firebase_capacity_profile_is_closed_to_every_pinned_input(self):
+        record = {"declared_name": "firebase", "source": copy.deepcopy(installation.FIREBASE_RUNTIME_SOURCE),
+                  "package": {"manifest_digest": installation.FIREBASE_RUNTIME_MANIFEST}}
+        config = copy.deepcopy(installation.FIREBASE_RUNTIME_CONFIG)
+        self.assertTrue(installation.firebase_runtime_profile(record, config))
+        for key in installation.FIREBASE_RUNTIME_SOURCE:
+            changed = copy.deepcopy(record); changed["source"][key] += "other"
+            self.assertFalse(installation.firebase_runtime_profile(changed, config))
+        for key in config:
+            changed = copy.deepcopy(config)
+            changed[key] = False if type(changed[key]) is bool else True if type(changed[key]) is int else changed[key] + "other"
+            self.assertFalse(installation.firebase_runtime_profile(record, changed))
+        for key in ("declared_name", "manifest_digest"):
+            changed = copy.deepcopy(record)
+            if key == "manifest_digest": changed["package"][key] += "other"
+            else: changed[key] += "other"
+            self.assertFalse(installation.firebase_runtime_profile(changed, config))
+
+    def test_exact_runtime_profile_is_required_before_scoped_reader_capacity(self):
+        # Only this inert fixture substitutes independent production pins. The
+        # actual source-byte, marker, receipt and original-source readers stay real.
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            runtime, state = self.author_runtime(observer, identity="firebase")
+            record = state["installations"][0]
+            source = record["source"]
+            config = json.loads(next((observer.data / "store").rglob("runtime.json")).read_text())
+            with patch.object(installation, "FIREBASE_RUNTIME_SOURCE", copy.deepcopy(source)), \
+                    patch.object(installation, "FIREBASE_RUNTIME_CONFIG", config), \
+                    patch.object(installation, "FIREBASE_RUNTIME_MANIFEST", record["package"]["manifest_digest"]):
+                padding = runtime / "node_modules/unit/padding"; padding.mkdir()
+                for index in range(10001):
+                    directory = padding / str(index // 5000); directory.mkdir(exist_ok=True)
+                    (directory / str(index)).touch()
+                saved = observer.saved_image()
+                self.assertEqual(saved["runtime_prefixes"], ((runtime / "node_modules").relative_to(observer.data).as_posix(),))
+                record["source"]["resolved_revision"] = "b" * 40
+                (observer.data / "state-v2.json").write_text(json.dumps(state))
+                with self.assertRaisesRegex(ValueError, "member bound|tree exceeds bound"):
+                    observer.saved_image()
+
+    def test_only_source_qualified_saved_frames_get_the_streamed_16mib_digest(self):
+        with TemporaryDirectory() as temporary:
+            observer, _ = self.fixture(Path(temporary).resolve())
+            record = {"declared_name": "firebase", "source": copy.deepcopy(installation.FIREBASE_RUNTIME_SOURCE),
+                "package": {"manifest_digest": installation.FIREBASE_RUNTIME_MANIFEST},
+                "data_receipts": {"fixture": {"physical_backend_id": "firebase-123456789abc"}}}
+            prefix = "plugin-data/firebase-123456789abc/npm-runtime/" + installation.FIREBASE_RUNTIME_CONFIG["package_lock_sha256"][7:] + "/node_modules"
+            saved = {"documents": {"state-v2.json": {"installations": [record]}},
+                     "runtime_prefixes": (prefix,), "runtime_authority": {"complete_bytes": "x" * (5 << 20)}}
+            expected = hashlib.sha256(json.dumps(saved, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+            self.assertEqual(observer.saved_digest(saved), expected)
+            saved["runtime_authority"]["complete_bytes"] += "last-byte"
+            self.assertNotEqual(observer.saved_digest(saved), expected)
+            for mutation in ("no-profile", "wrong-prefix", "wrong-source", "oversized"):
+                changed = copy.deepcopy(saved)
+                if mutation == "no-profile": changed["runtime_prefixes"] = ()
+                elif mutation == "wrong-prefix": changed["runtime_prefixes"] = (prefix + "other",)
+                elif mutation == "wrong-source": changed["documents"]["state-v2.json"]["installations"][0]["source"]["tree_digest"] = "sha256:" + "0" * 64
+                else: changed["runtime_authority"]["complete_bytes"] = "x" * (16 << 20)
+                with self.subTest(mutation=mutation), self.assertRaises(ValueError): observer.saved_digest(changed)
 
     def test_runtime_reader_preserves_all_original_custody_entry_exclusions(self):
         for excluded in (".git", ".uap-integrations.lock", ".plugin-kit-ai.lock"):

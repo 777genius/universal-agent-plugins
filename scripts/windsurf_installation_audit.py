@@ -10,6 +10,7 @@ from functools import lru_cache
 import hashlib
 import json
 import os
+import posixpath
 from pathlib import Path
 import re
 import stat
@@ -42,6 +43,36 @@ PREPARED_GIT_PINS = {
         "manifest_digest": "sha256:3014016b8d78767b677a5a0b0ce05c03260caa15ecca6ff2efbecf79cf89a661",
     },
 }
+# Measured exact signed Firebase runtime: 19,465 node_modules members. This
+# closed fixture profile never grants capacity to another source or namespace.
+FIREBASE_RUNTIME_SOURCE = {
+    "repository": "777genius/universal-agent-plugins-registry", "package_subpath": "plugins/firebase",
+    "resolved_revision": "d9c8d778200d51ae941d86bb69af23534cd1c8f7",
+    "tree_digest": "sha256:023f63215112b322f30ed694b6611258ba04d059654a1b0155a8867226dfe4c3"}
+FIREBASE_RUNTIME_MANIFEST = "sha256:a6438b9ba1ab794020b8dd463a80d03bbd6e797bc8b7d3d1551ce97190a3cedc"
+FIREBASE_RUNTIME_CONFIG = {
+    "schema_version": 1, "package": "firebase-tools", "version": "15.35.0",
+    "entrypoint": "node_modules/firebase-tools/lib/bin/firebase.js",
+    "package_lock_sha256": "sha256:2bcb58637dc986c4caf43571e4e509ab05048d1e5ef994061ec1b1935bc5e41d",
+    "omit_optional": True}
+FIREBASE_FRAME_LIMIT = 16 << 20
+
+
+def firebase_runtime_profile(record, config):
+    """Select capacity only from the independently pinned immutable tuple."""
+    if type(record) is not dict:
+        return False
+    source, package = record.get("source"), record.get("package")
+    return (record.get("declared_name") == "firebase"
+            and type(source) is dict and all(source.get(key) == value for key, value in FIREBASE_RUNTIME_SOURCE.items())
+            and type(package) is dict and package.get("manifest_digest") == FIREBASE_RUNTIME_MANIFEST
+            and encoded(config, 1 << 20) == encoded(FIREBASE_RUNTIME_CONFIG, 1 << 20))
+
+
+def nearest_node_modules(relative):
+    return next((parent.as_posix() for parent in Path(relative).parents if parent.name == "node_modules"), None)
+
+
 CLIENT_VERSION = "devin 3000.12.57 (96542e930752)"
 CLI_VERSION = "agentplugins 0.1.115"
 ROOT = Path(__file__).resolve().parents[1]
@@ -395,7 +426,7 @@ class WindsurfInstallationAudit:
 
     def runtime_roots(self, data_fd, state):
         """Qualify npm link namespaces from retained ownership and source bytes."""
-        roots = set()
+        roots, runtime_prefixes, bins = set(), set(), {}
         for record in state["installations"]:
             receipts = record.get("data_receipts", {})
             require(type(receipts) is dict)
@@ -464,14 +495,49 @@ class WindsurfInstallationAudit:
                             "omit_optional": config.get("omit_optional", False)}
                 require(encoded(strict_json(read_file(data_fd, runtime + "/.agentplugins-runtime.json")[0]), 1 << 20)
                         == encoded(expected, 1 << 20))
-                roots.add(runtime + "/node_modules")
-        return roots
+                node_modules = runtime + "/node_modules"
+                roots.add(node_modules)
+                if firebase_runtime_profile(record, config):
+                    runtime_prefixes.add(node_modules)
+                for link, targets in self.locked_bin_targets(runtime, lock_body).items():
+                    bins.setdefault(link, set()).update(targets)
+        require(len(runtime_prefixes) <= 1)
+        return roots, tuple(sorted(runtime_prefixes)), bins
 
-    def data_frame(self, data_fd, roots):
+    @staticmethod
+    def locked_bin_targets(runtime, lock_body):
+        """Use authenticated v3 lock bin declarations, never another npm resolver."""
+        locked = strict_json(lock_body)
+        require(type(locked) is dict and type(locked.get("packages")) is dict)
+        result = {}
+        for package_path, package in locked["packages"].items():
+            require(type(package) is dict)
+            declared = package.get("bin", {})
+            if not declared:
+                continue
+            require(type(package_path) is str and package_path.startswith("node_modules/")
+                    and not Path(package_path).is_absolute() and ".." not in Path(package_path).parts
+                    and "\\" not in package_path and str(Path(package_path)) == package_path
+                    and type(declared) is dict)
+            container = nearest_node_modules(package_path)
+            require(container is not None)
+            for name, target in declared.items():
+                require(type(name) is str and 0 < len(name) <= 255 and Path(name).name == name
+                        and name not in (".", "..") and "\\" not in name and "\0" not in name
+                        and type(target) is str and bool(target) and not Path(target).is_absolute()
+                        and ".." not in Path(target).parts and "\\" not in target)
+                destination = posixpath.normpath(runtime + "/" + package_path + "/" + target)
+                require(nearest_node_modules(destination) == runtime + "/" + container)
+                link = runtime + "/" + container + "/.bin/" + name
+                result.setdefault(link, set()).add(destination)
+        return result
+
+    def data_frame(self, data_fd, roots, *, runtime_prefixes=(), bins=None):
         """Reuse held full-byte custody; only qualified npm .bin links may pass."""
+        require(set(runtime_prefixes) <= roots)
         if not roots:
             return frame(data_fd)
-        tree = HeldTree(self.data, bin_links=True)
+        tree = HeldTree(self.data, bin_links=True, runtime_prefixes=runtime_prefixes)
         try:
             require(self.directory_identity(os.fstat(tree.fds["."]))
                     == self.directory_identity(os.fstat(data_fd)))
@@ -487,10 +553,12 @@ class WindsurfInstallationAudit:
                             ".uap-integrations.lock", ".plugin-kit-ai.lock")))
                 row = {"kind": "dir" if kind == "directory" else kind, **facts(info)}
                 if kind == "link":
-                    root = str(Path(relative).parent.parent)
-                    require(root in roots and Path(relative).parent.name == ".bin")
+                    container = Path(relative).parent.parent.as_posix()
+                    require(Path(relative).parent.name == ".bin" and Path(container).name == "node_modules"
+                            and any(container == root or container.startswith(root + "/") for root in roots))
                     target = tree._link_target(name, value)
-                    require(target.startswith(root + "/"))
+                    require(nearest_node_modules(target) == container
+                            and bins is not None and target in bins.get(relative, set()))
                     row["target"] = value
                 elif kind == "file":
                     row["sha256"] = value["sha256"]
@@ -527,8 +595,8 @@ class WindsurfInstallationAudit:
                 state = docs.get("state-v2.json", {"schema_version": 5, "installations": []})
                 require(type(state) is dict and type(state.get("schema_version")) is int
                         and state["schema_version"] == 5 and type(state.get("installations")) is list)
-                roots = self.runtime_roots(data_fd, state)
-                observed = self.data_frame(data_fd, roots)
+                roots, runtime_prefixes, bins = self.runtime_roots(data_fd, state)
+                observed = self.data_frame(data_fd, roots, runtime_prefixes=runtime_prefixes, bins=bins)
                 require(all(observed[name] == {"kind": "file", **fact}
                             for name, fact in authorities.items()))
                 for record in state["installations"]:
@@ -552,7 +620,10 @@ class WindsurfInstallationAudit:
                             source_image = frame(source_fd)
                             sources[source_relative] = {"image": source_image,
                                 "digest": immutable_source_digest(source_fd, source_image)}
-                require(observed == self.data_frame(data_fd, self.runtime_roots(data_fd, state)))
+                closing_roots, closing_prefixes, closing_bins = self.runtime_roots(data_fd, state)
+                require((roots, runtime_prefixes, bins) == (closing_roots, closing_prefixes, closing_bins)
+                        and observed == self.data_frame(data_fd, closing_roots,
+                            runtime_prefixes=closing_prefixes, bins=closing_bins))
         except OSError as error:
             raise ValueError("Devin Global saved installation authority is unavailable") from error
         finally:
@@ -573,13 +644,36 @@ class WindsurfInstallationAudit:
         # well as the qualified node_modules link namespace.
         runtime_paths = {Path(root).parent.as_posix() for root in roots}
         return {"documents": docs, "blobs": blobs, "authorities": authorities, "deliveries": deliveries,
-                "sources": sources,
+                "sources": sources, "runtime_prefixes": runtime_prefixes,
                 "runtime_authority": {key: value for key, value in observed.items()
                     if any(key == root or key.startswith(root + "/") for root in runtime_paths)},
                 "managed_authority": {key: value for key, value in observed.items() if key.startswith("managed/")},
                 "ancillary": content(ancillary),
                 "managed": content({key: value for key, value in observed.items()
                                     if key.startswith("managed/")})}
+
+    def saved_digest(self, saved):
+        """Hash every canonical byte; only the closed measured frame gets 16 MiB."""
+        prefixes = saved.get("runtime_prefixes", ())
+        if not prefixes:
+            return digest(saved)
+        require(type(prefixes) is tuple and len(prefixes) == 1)
+        state = saved.get("documents", {}).get("state-v2.json", {})
+        records = state.get("installations", [])
+        selected = [record for record in records if firebase_runtime_profile(record, FIREBASE_RUNTIME_CONFIG)]
+        require(len(selected) == 1)
+        expected = {"plugin-data/" + receipt["physical_backend_id"] + "/npm-runtime/"
+                    + FIREBASE_RUNTIME_CONFIG["package_lock_sha256"][7:] + "/node_modules"
+                    for receipt in selected[0].get("data_receipts", {}).values()}
+        require(set(prefixes) == expected)
+        encoder = json.JSONEncoder(sort_keys=True, separators=(",", ":"), allow_nan=False)
+        result, count = hashlib.sha256(), 0
+        for block in encoder.iterencode(saved):
+            body = block.encode("utf-8")
+            count += len(body)
+            require(count <= FIREBASE_FRAME_LIMIT)
+            result.update(body)
+        return result.hexdigest()
 
     @staticmethod
     def saved_intent(saved):
@@ -859,9 +953,9 @@ class WindsurfInstallationAudit:
                                   else "restored-original-image"),
                 "retained_infrastructure": list(self.retained_infrastructure),
                 "terminal_native_image": image_fact(self.terminal_image),
-                "initial_saved_authority_sha256": digest(self.initial_saved),
+                "initial_saved_authority_sha256": self.saved_digest(self.initial_saved),
                 "observations": [{"argv": argv, "json_sha256": digest(outcome.get("_json"), 1 << 20),
-                                  "native_image": image_fact(image), "saved_authority_sha256": digest(saved)}
+                                  "native_image": image_fact(image), "saved_authority_sha256": self.saved_digest(saved)}
                                  for (argv, outcome, image), saved in zip(self.observations, self.saved_observations)]}
 
     @staticmethod
