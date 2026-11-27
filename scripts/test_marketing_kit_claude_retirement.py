@@ -251,6 +251,57 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 with self.assertRaises(ValueError): subject.finish(f["cleanup"], raw, lambda: self.scan(f))
                 self.assertEqual(subject.fds, [])
 
+    def test_post_remove_temporary_custody_refusal_has_only_bounded_metadata(self):
+        for mutation in ("mode", "empty", "identity"):
+            with self.subTest(mutation=mutation), self.fixture() as f:
+                _, pending, document = self.author_passive_usage(f, temporary=False)
+                subject = self.capture(f)
+                self.retire(f)
+                del document["pluginUsage"][f["owners"][0]["key"]]
+                pending.write_text(json.dumps(document)); pending.chmod(0o600)
+                if mutation == "mode": pending.chmod(0o644)
+                elif mutation == "empty": pending.write_bytes(b"")
+                original = subject.passive_image
+                def image(path, fd):
+                    if mutation == "identity" and path == pending:
+                        replacement = pending.with_name("private-replacement")
+                        replacement.write_bytes(pending.read_bytes()); replacement.chmod(0o600)
+                        replacement.replace(pending)
+                    if path != pending:
+                        return original(path, fd)
+                    # Failed custody must not perform another descriptor read:
+                    # short-circuit refusals read none; identity refusal reads once.
+                    real_fstat, descriptor_reads = os.fstat, []
+                    def bounded_fstat(opened_fd):
+                        descriptor_reads.append(opened_fd)
+                        self.assertEqual(mutation, "identity")
+                        self.assertEqual(len(descriptor_reads), 1)
+                        return real_fstat(opened_fd)
+                    with patch("os.fstat", bounded_fstat):
+                        try:
+                            return original(path, fd)
+                        finally:
+                            self.assertEqual(len(descriptor_reads), int(mutation == "identity"))
+                raw = self.scan(f)
+                with patch.object(subject, "passive_image", image), self.assertRaisesRegex(
+                        ValueError, "Claude cache retirement authority is unresolved") as raised:
+                    subject.finish(f["cleanup"], raw, lambda: self.scan(f))
+                diagnostic = raised.exception.passive_file_custody_diagnostics
+                reason = {"mode": "mode", "empty": "size", "identity": "identity"}[mutation]
+                self.assertTrue(diagnostic["reasons"][reason])
+                self.assertEqual(sum(diagnostic["reasons"].values()), 1)
+                self.assertEqual(diagnostic["fstat_observed"], mutation == "identity")
+                self.assertIs(diagnostic["identity_matches"], False if mutation == "identity" else None)
+                if mutation != "identity":
+                    self.assertIsNone(diagnostic["fstat"])
+                for name in (("lstat", "fstat") if mutation == "identity" else ("lstat",)):
+                    self.assertEqual(set(diagnostic[name]), {"type", "mode", "nlink", "uid", "gid", "size"})
+                serialized = str(raised.exception)
+                self.assertLess(len(serialized), 1000)
+                for private in (str(f["root"]), pending.name, "pluginUsage", "lastUsedAt", "foreign"):
+                    self.assertNotIn(private, serialized)
+                self.assertEqual(subject.fds, [])
+
     def test_only_valid_remove_admits_usage_deletion_and_one_native_temporary_once(self):
         for transition in ("in_place", "atomic", "new_temporary", "wrong_receipt"):
             with self.subTest(transition=transition), self.fixture() as f:

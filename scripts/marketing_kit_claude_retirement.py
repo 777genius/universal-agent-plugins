@@ -234,10 +234,31 @@ class SignedClosureRetirement:
         """Read through the shared bounded reader while retaining the same inode."""
         identity = _CUSTODY["_FILES"]["identity"]
         before = path.lstat()
-        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
-                and stat.S_IMODE(before.st_mode) == 0o600 and before.st_uid == os.geteuid()
-                and 0 < before.st_size <= 1 << 20
-                and identity(before) == identity(os.fstat(fd)))
+        opened = None
+        try:
+            require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
+                    and stat.S_IMODE(before.st_mode) == 0o600 and before.st_uid == os.geteuid()
+                    and 0 < before.st_size <= 1 << 20
+                    and identity(before) == identity(opened := os.fstat(fd)))
+        except ValueError as error:
+            # Fixed metadata only: never disclose paths, bytes or inode numbers.
+            def facts(info):
+                return {"type": "regular" if stat.S_ISREG(info.st_mode) else "other",
+                        "mode": format(stat.S_IMODE(info.st_mode), "04o"),
+                        "nlink": info.st_nlink, "uid": info.st_uid,
+                        "gid": info.st_gid, "size": info.st_size}
+            diagnostic = {"lstat": facts(before), "fstat": facts(opened) if opened is not None else None,
+                "fstat_observed": opened is not None,
+                "identity_matches": identity(before) == identity(opened) if opened is not None else None,
+                "reasons": {"not_regular": not stat.S_ISREG(before.st_mode),
+                    "link_count": before.st_nlink != 1,
+                    "mode": stat.S_IMODE(before.st_mode) != 0o600,
+                    "owner": before.st_uid != os.geteuid(),
+                    "size": not 0 < before.st_size <= 1 << 20,
+                    "identity": opened is not None and identity(before) != identity(opened)}}
+            error.passive_file_custody_diagnostics = diagnostic
+            error.args = (str(error) + "; passive_file_custody=" + json.dumps(diagnostic, sort_keys=True),)
+            raise
         body, error = self.audit["copilot_settings_read"](path, self.case)
         require(error is None and type(body) is str
                 and identity(before) == identity(path.lstat()) == identity(os.fstat(fd)))

@@ -532,6 +532,51 @@ Whitespace and Python compilation checks passed. Fresh supported-runner
 execution, the original failure diagnosis and actual-main qualification remain
 outstanding.
 
+### R20 - Bound Claude temporary-file refusal diagnostics
+
+Head `31cb7e2e` passed all 15 Core fast and all 10 Required jobs. Its supported
+package-manager four-host and Pi three-host artifacts were independently checked.
+Kiro plugin job `140711595610` completed 29 installation lifecycles and one exact
+signed refusal; artifact `15233039162` matched its ZIP SHA-256 and the current
+acceptance function independently accepted its report. The four earlier failing
+Kiro cases passed with unchanged pins and custody requirements. This establishes
+installation coverage, not Kiro native runtime, authentication or tools. All 60
+Windsurf observer tests also ran successfully without skips on the current Linux
+Cursor job. These are evidence for that head, not automatic qualification of a
+later source revision.
+
+Claude Marketing job `140673480347` then failed before the published `0.1.116`
+lifecycle began. Its genuine pinned Claude `2.1.263` regression passed in the
+first 38-test selection, then failed when repeated in the 48-test Claude selection.
+The main passive document passed; a post-uninstall `.claude.json.tmp.*` failed
+the existing file-custody predicate. The traceback does not distinguish its mode,
+link count, owner, size or descriptor identity. This is not evidence of a network
+failure and does not justify normalizing permissions, changing pins or relaxing
+the refusal.
+
+The correction preserves the exact short-circuit predicate and the same raised
+ValueError. It retains the metadata snapshot already used by the predicate and
+appends a fixed diagnostic object: file type, mode, link count, UID/GID, size and
+identity equality. The descriptor snapshot is explicitly unavailable when an
+earlier condition short-circuits. No extra filesystem probe, pathname, inode
+number, file bytes, retry or acceptance exception is introduced. Regressions use
+the actual finish/cleanup path for unsafe mode, an empty temporary and a replaced
+pathname, preserving refusal and closed descriptor custody.
+
+The inspected main remains `48793197`. Open PR #1133 owns separate functional
+Claude retirement and User-profile corrections; this diagnostic does not import
+or claim those changes. Budget: about 25 diagnostic lines and 50 regression lines;
+complexity 2/10, confidence 8/10 pending supported native execution. Root and an
+independent actual-diff reviewer identified and corrected a second-snapshot
+diagnostic ambiguity before publication. This correction supplies failure
+evidence; it is not a successful Marketing Kit lifecycle.
+
+The focused regression passed all three real-filesystem subcases. The complete
+affected local selection ran 39 tests in 31.279 seconds: 38 passed and the genuine
+native Claude case skipped because the pinned executable is unavailable. Root
+and independent final-diff review passed; whitespace checks passed. The genuine
+Claude case and full lifecycle remain required on the final supported CI source.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test
