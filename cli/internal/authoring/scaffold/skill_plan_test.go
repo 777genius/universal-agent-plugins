@@ -69,7 +69,11 @@ func skillTree(t *testing.T, root string) map[string]string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer parent.Close()
+	defer func() {
+		if err := parent.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	info, err := parent.Lstat(leaf)
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +103,11 @@ func skillTree(t *testing.T, root string) map[string]string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer held.Close()
+	defer func() {
+		if err := held.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	now, err := held.Stat(".")
 	if err != nil || !os.SameFile(info, now) {
 		t.Fatalf("snapshot root changed at open: %v", err)

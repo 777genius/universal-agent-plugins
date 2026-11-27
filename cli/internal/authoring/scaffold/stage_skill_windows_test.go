@@ -194,7 +194,11 @@ func TestWindowsSkillTreeRetainsGuardedStage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer parent.Close()
+	defer func() {
+		if err := parent.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	guard, err := makePrivateSkillStage(parent, "stage")
 	if err != nil {
 		t.Fatal(err)
@@ -259,8 +263,10 @@ func TestWindowsSkillTreeRetainsGuardedStage(t *testing.T) {
 		t.Helper()
 		_, err := os.ReadDir(stagePath)
 		var native *os.PathError
+		// Match the native type too: errors.Is alone would also admit wrappers.
 		if !errors.As(err, &native) || native.Op != "open" || native.Path != stagePath ||
-			native.Err != windows.ERROR_SHARING_VIOLATION {
+			!errors.Is(native.Err, windows.ERROR_SHARING_VIOLATION) ||
+			reflect.TypeOf(native.Err) != reflect.TypeOf(windows.ERROR_SHARING_VIOLATION) {
 			t.Fatalf("ordinary directory open must fail with exact sharing violation: %v", err)
 		}
 	}
@@ -298,7 +304,9 @@ func TestWindowsSkillTreeRetainsGuardedStage(t *testing.T) {
 		_ = windows.CloseHandle(reader)
 		t.Fatal("snapshot released stage protection")
 	}
-	if err != windows.STATUS_SHARING_VIOLATION {
+	// A matching NTSTATUS inside a wrapper is still not the native refusal.
+	if !errors.Is(err, windows.STATUS_SHARING_VIOLATION) ||
+		reflect.TypeOf(err) != reflect.TypeOf(windows.STATUS_SHARING_VIOLATION) {
 		t.Fatalf("source-reader protection refusal changed after snapshots: %v", err)
 	}
 }
