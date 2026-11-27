@@ -51,7 +51,7 @@ func newPartialRemovalFixture(t *testing.T) (cliFixture, []string, func()) {
 	if err != nil || len(state.Installations) != 1 || len(state.Installations[0].Clients) != 2 {
 		t.Fatalf("installed fixture: %+v, %v", state, err)
 	}
-	var managed []string
+	managed := make([]string, 0, len(state.Installations[0].Clients))
 	for _, binding := range state.Installations[0].Clients {
 		managed = append(managed, binding.TargetLocator)
 	}
@@ -59,7 +59,8 @@ func newPartialRemovalFixture(t *testing.T) (cliFixture, []string, func()) {
 	if err := os.WriteFile(foreign, []byte("preserve unrelated managed-root bytes\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	retained := []string{foreign}
+	retained := make([]string, 1, 1+len(state.Installations[0].DataReceipts))
+	retained[0] = foreign
 	if len(state.Installations[0].DataReceipts) == 0 {
 		t.Fatal("fixture has no plugin data to distinguish from managed packages")
 	}

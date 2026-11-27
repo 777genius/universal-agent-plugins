@@ -1,6 +1,6 @@
 # Batch Update and Partial Removal Follow-up
 
-Status: v3 — two independent planning rounds completed; baseline regressions reproduced, bounded implementation in progress.
+Status: implemented and independently reviewed in two code rounds; final platform qualification in progress.
 Date: 2026-11-27
 Baseline: `main@472d0b157f21b1b5c2a5b716ccc8f49577e7262f`
 Delivery: one Draft PR; publish every commit immediately.
@@ -272,3 +272,22 @@ still do not manufacture error values. This ninth test is also registered in the
 
 No engine, port interface, flag, workflow or public JSON changes were introduced. Full local
 checks, another final-source review, Ready PR qualification and actual-merge qualification remain.
+
+## Implementation review R2 and local qualification
+
+Three independent final-source reviewers approved implementation commit
+`4111541a816648c25c7efe9f4cc8fd52a074d9c2`, tree
+`70427c1952e243b3c887a702f4c8fc6ce2418d72`. The R1 detection-cause finding is closed.
+All nine focused regression tests passed, and the existing PM evolution group executed all
+22 registered cases successfully (including all eight additions), without failed/skipped cases.
+
+Full lint initially reported only two slice preallocation suggestions and a redundant explicit
+error type in new tests. Those mechanical test-only corrections preserve the reviewed production
+code and assertions. No lint rule, exclusion, test selection or safety check was relaxed.
+
+The full local `make test-core` was attempted. Real process/Git tests refuse this executor's
+missing `/proc/<pid>/task/<tid>/children` interface, and Unix-socket tests receive operation-not-permitted.
+This is not a successful core run; the normal hosted Core/Required checks must execute those cases.
+The local focused/case results do not substitute for the remaining PR and actual-merge gates.
+Final qualification URLs and exact source identities belong in the PR evidence, so recording
+their completion does not create a new source commit needing another CI cycle.

@@ -93,7 +93,7 @@ func TestPublicUpdateAllPreflightRetainsCausesAndSoleResult(t *testing.T) {
 					ctx, cancel := context.WithCancel(t.Context())
 					defer cancel()
 					sentinel := errors.New("opaque-preflight-source-184731")
-					var cause error = fmt.Errorf("%w: %w", sentinel, fs.ErrPermission)
+					cause := fmt.Errorf("%w: %w", sentinel, fs.ErrPermission)
 					switch failure {
 					case "usage":
 						cause = CLIUsageError{Code: "TIMEOUT", Message: "opaque-preflight-usage-184731"}
