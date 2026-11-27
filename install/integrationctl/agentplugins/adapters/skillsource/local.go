@@ -48,7 +48,7 @@ func localDirectoryAncestry(directory string) error {
 			return err
 		}
 		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-			return fmt.Errorf("local Skill ancestry must contain regular directories")
+			return fmt.Errorf("local Skill path component %q is not a regular directory (symlinks are rejected); pass the resolved path", current)
 		}
 		if filepath.Dir(current) == current {
 			return nil

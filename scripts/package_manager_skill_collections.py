@@ -1,6 +1,8 @@
 """Production CLI local collection proof; native runtime discovery is not qualified."""
 
+import os
 from pathlib import Path
+import stat
 
 from package_manager_binary import FOREIGN_SETTINGS, FOREIGN_SKILL, read_json, require
 
@@ -14,9 +16,32 @@ def skill_bytes(name):
 
 
 def tree_bytes(root):
-    """Snapshot durable bytes, including membership, without following symlinks."""
-    return {str(path.relative_to(root)): path.read_bytes()
-            for path in root.rglob("*") if path.is_file() and not path.is_symlink()}
+    """Snapshot entry kinds, link destinations and file bytes without following links."""
+    def entry(path):
+        mode = path.lstat().st_mode
+        if stat.S_ISLNK(mode):
+            return ("symlink", os.readlink(path))
+        if stat.S_ISDIR(mode):
+            return ("directory",)
+        if stat.S_ISREG(mode):
+            return ("file", path.read_bytes())
+        return ("other", stat.S_IFMT(mode))
+
+    try:
+        result = {".": entry(root)}
+    except FileNotFoundError:
+        return {}
+    if result["."][0] != "directory":
+        return result
+
+    def failed(error):
+        raise error
+
+    for directory, directories, files in os.walk(root, followlinks=False, onerror=failed):
+        for name in directories + files:
+            path = Path(directory) / name
+            result[str(path.relative_to(root))] = entry(path)
+    return result
 
 
 def run_collections(run, binary, scratch, env):
@@ -72,7 +97,7 @@ def _collections(run, binary, scratch, env, facts):
             and sorted(row.get("name") for row in listing.get("candidates", [])) == sorted(NAMES),
             "collection listing lost candidates or invented a Git revision")
     require((tree_bytes(home), tree_bytes(native), tree_bytes(source)) == before,
-            "read-only collection listing changed durable bytes")
+            "read-only collection listing changed entries or durable bytes")
     first = command("binary-collection-add", "skills", "add", source, "--all", "--target", "gemini", "--yes")
     require(first.get("result") == "success", "collection all-selection did not succeed")
     for name in NAMES:
@@ -94,8 +119,10 @@ def _collections(run, binary, scratch, env, facts):
         require(not (native / "skills" / name).exists(), "removal retained owned Skill")
     require(settings.read_bytes() == FOREIGN_SETTINGS and foreign.read_bytes() == FOREIGN_SKILL,
             "collection lifecycle changed foreign native bytes")
-    require(all((source / relative).read_bytes() == data for relative, data in original_source.items()),
-            "collection lifecycle changed source bytes")
+    current_source = tree_bytes(source)
+    require(all(current_source.get(relative) == value
+                for relative, value in original_source.items()),
+            "collection lifecycle changed source entries or bytes")
     facts["assertions"] = ["read_only_local_listing", "two_local_skills_all_selection",
                            "unchanged_repeat_no_drift", "update_does_not_enroll_sibling",
                            "owned_removal_preserves_foreign_bytes"]

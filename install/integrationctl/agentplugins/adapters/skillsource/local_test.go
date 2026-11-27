@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -106,6 +107,12 @@ func TestLocalScanRejectsObservedLinks(t *testing.T) {
 	if err != nil || len(catalog.Candidates) != 1 || catalog.Candidates[0].Status != "invalid" {
 		t.Fatalf("followed root document: %+v %v", catalog, err)
 	}
+	writeLocalSkill(t, root, "real")
+	regularPath := filepath.Join(root, "real")
+	catalog, err = ScanLocal(t.Context(), regularPath, ScanPolicy{})
+	if err != nil || !catalog.Complete || len(catalog.Candidates) != 1 || catalog.Candidates[0].Status != "available" {
+		t.Fatalf("regular directory rejected: %+v %v", catalog, err)
+	}
 	parent := physicalLocalTemp(t)
 	alias := filepath.Join(parent, "alias")
 	if err := os.Symlink(root, alias); err != nil {
@@ -114,8 +121,11 @@ func TestLocalScanRejectsObservedLinks(t *testing.T) {
 	if _, err := ScanLocal(t.Context(), alias, ScanPolicy{}); err == nil {
 		t.Fatal("accepted linked root")
 	}
-	if _, err := ScanLocal(t.Context(), filepath.Join(alias, "linked"), ScanPolicy{}); err == nil {
-		t.Fatal("accepted linked ancestor")
+	if _, err := ScanLocal(t.Context(), filepath.Join(alias, "real"), ScanPolicy{}); err == nil || !strings.Contains(err.Error(), fmt.Sprintf("%q", alias)) {
+		t.Fatalf("linked ancestor was not identified: %v", err)
+	}
+	if _, err := LocalSkillPath(alias, "real"); err == nil {
+		t.Fatal("selected Skill through linked ancestor")
 	}
 }
 
