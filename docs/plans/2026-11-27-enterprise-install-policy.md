@@ -1,6 +1,8 @@
 # Enterprise installation policy
 
-Status: draft design, revision 1. No implementation or new qualification claimed.
+Status: revised design, revision 2. Independent first-round findings incorporated;
+second-round source and UX reviews approved; core reviewer implementing the
+accepted integration refinements. Implementation started; no qualification claimed.
 Owner request: research APM and ToolHive, synthesize a convenient modular design,
 review and refine it, implement in one Draft PR, publish each commit immediately,
 exercise important end-to-end paths, fix review findings, ordinary merge and verify.
@@ -60,7 +62,10 @@ avoid its changed fixtures/workflows. No existing enterprise feature PR found.
 
 ## Configuration contract
 
-Keep `schema_version: 1` and existing `sources.allow_hosts`, `sources.deny_hosts`,
+Reuse the existing YAML language and parser, with `schema_version: 2` for the
+new layered policy. Continue accepting schema 1 with its exact legacy semantics
+(including rejection of local sources, even with no host rule); new fields require
+schema 2. The shared rule model retains `sources.allow_hosts`, `sources.deny_hosts`,
 `integrity.require_pinned_git`, `integrity.require_archive_sha256` and
 `mcp.allowed_transports` fields. Existing explicit dependency `--policy` remains
 an additive local restriction and retains its documented command scope.
@@ -78,7 +83,17 @@ Add bounded optional rules:
 - `mcp.allow_hosts` / `deny_hosts` for remote MCP endpoint hosts. This controls
   declarations, not subsequent redirects, DNS resolution or runtime egress.
 
-Omitted allow-list means unrestricted; present empty list means allow none.
+For schema 2, omitted allow-list means unrestricted; present empty list means
+allow none. Local satisfies source-kind rules but cannot satisfy a present host
+or repository allow-list. A host deny-list alone does not deny a local source.
+Archive/web/local cannot satisfy repository allow-lists by looking like Git URLs.
+Directory uses its signed repository identity; manifest.repository is ignored.
+Concrete Git URL precedes shorthand; normalize scheme/host, SSH username, terminal
+.git and GitHub owner/repository case. Reject encoded separators, credentials in
+HTTPS URLs, ambiguous authorities and nondefault ports for repository matching.
+Preserve non-GitHub repository path case. Namespace wildcard matches repository
+paths under that prefix at a slash boundary, including nested namespaces; package
+subpaths do not alter repository identity. No suffix/substr host matching.
 Reject null, unknown fields, duplicate keys, YAML aliases/merge keys, invalid
 types/values, multiple documents, unsupported schema and oversized documents.
 No arbitrary commands or expressions in policy. No warning-only installation
@@ -88,7 +103,10 @@ Layers in order for explanation (all conjunctive, no weaker override):
 
 1. Machine policy: fixed platform location (`/etc/agentplugins/policy.yaml`,
    `/Library/Application Support/AgentPlugins/policy.yaml`, Windows system-wide
-   ProgramData `AgentPlugins/policy.yaml`). Optional until present.
+   ProgramData `AgentPlugins/policy.yaml`, resolved with the Windows Known Folder API,
+   not the user-controlled environment). Optional until present. HOME/XDG/UAP
+   environment settings never relocate the machine layer. Use an injected path
+   list in tests; there is no production machine-policy bypass selector.
 2. User policy: `<user-home>/.config/agentplugins/policy.yaml`.
 3. Project policy: `<selected-project-root>/uap-policy.yaml`; for User operations
    use the invocation working directory. No walking arbitrary ancestor trees.
@@ -96,8 +114,15 @@ Layers in order for explanation (all conjunctive, no weaker override):
    additive, never replaces machine/user/project rules. Existing `--policy`
    applies additionally in its current dependency commands.
 
-Read discovered files on every operation, not once per daemon. A file present
-at review that disappears before apply is a changed-policy refusal. Missing
+File-location configuration belongs to App/Engine; policy snapshots belong to
+one reviewed operation. Freeze selected project/invocation roots and all
+candidate locations including absent optional paths. Before apply reread the
+same locations and compare the semantic fingerprint of rules plus layer
+presence. Added/deleted/changed rules invalidate review; comments do not. Fresh
+preparation captures a new snapshot and does not poison a long-lived daemon.
+UAP does not lock an administrator out of changing policy while an already
+authorized transaction runs; its decision is fixed at the last pre-effect gate.
+Rollback/recovery of that transaction must finish safely. Missing
 explicit paths, permission errors, symlinks/nonregular files and malformed
 configured policy refuse installation. Error output avoids full source URLs,
 arguments, environment values and untrusted terminal control characters.
@@ -113,7 +138,9 @@ Composition roots inject the same gate into the CLI, installer facade and
 usecase service. No new installer/resolver/store/framework or feature flag.
 
 Usecase admission runs before host preparation and mutation recovery for every
-AddInput, including groups. Recheck current policy at the final apply boundary.
+AddInput. For groups, complete the admission pass for every input before any
+client host preparation. SDK preparation also checks immediately after package
+loading and before prepareOpenCodeHost, which precedes the usecase. Recheck current policy at the final apply boundary.
 Installer preview/apply must preserve policy authority across user confirmation;
 long-lived management sessions cannot reuse an old successful decision forever.
 No per-target filtering or silent partial install to make policy pass.
@@ -123,13 +150,32 @@ Enforcement matrix to complete before implementation approval:
 | Path | Required admission point |
 | --- | --- |
 | Direct/Directory add and standalone Skills | Known source before acquisition where available; actual envelope before host preparation/apply |
-| Dependency graph including transitives and warm cache | All prospective nodes before environment intent/lock/manifest publication |
+| Dependency graph including transitives and warm cache | Selected closure including unchanged required nodes before environment publication |
 | update/repair/sync/locked replay | Reevaluate actual retained source, requested pin and envelope; no grandfathered allow |
 | import --install | Before `transfer.publish`, then normal shared apply gate |
 | Browser management | Same preparation/application boundary; revalidate after retained review |
 | Installer SDK | Explicit injectable gate, shared usecase enforcement; no global singleton |
-| switch/rebind/migrate format | Audit whether they activate content; gate any activation/provenance replacement |
+| switch/rebind/migrate format | Gate active switch and proposed retained source/envelope before provenance replacement |
 | remove/export/read/rollback | Do not require install permission; retain ownership and recovery checks |
+
+Reuse `applyPreparedDependencies` and the existing environmentapp `Recheck` /
+`CheckInputs` seams, including per-binding checks. Import-install has a separate
+mandatory check in `commitDependencyTransferInstall` before `transfer.publish`.
+Do not gate unrelated retained packages when an operation selects a smaller
+closure; remove-only work does not acquire install permission.
+
+Requested integrity is not resolved integrity. CLI/source/graph checks use the
+original selector/checksum and recheck authoritative locked intent. The shared
+request may carry these explicit facts when they are available; SDK checks do
+not infer an original request from a resolved commit. If a Git/archive pin rule
+requires unavailable original intent, refuse rather than claim it was pinned.
+Directory is a distinct source kind with existing signed immutable provenance.
+Local/normalized web Skills do not acquire imaginary Git pin requirements.
+
+Existing loaders already reject auto-discoverable hooks directories and explicit
+native hook declarations. Preserve those checks and their regressions. This PR
+does not add a hooks detector or claim to identify all executable behavior;
+`components.denied: [extensions]` includes raw/unknown extension declarations.
 
 Do not place universal denial in a raw loader that is also used to remove or
 inspect a now-forbidden package. Policy may read an already admitted snapshot;
@@ -138,12 +184,19 @@ canonical identity, not a network firewall.
 
 ## User experience
 
-`agentplugins policy init [path]` creates a commented schema-1 example without
+`agentplugins policy init [path]` creates a commented schema-2 example without
 overwriting files. `policy validate <path>` checks configuration without fetching
 packages. `policy status` displays effective layers and rules with their paths;
-`--require-policy` makes an empty configuration fail in CI. `policy check <source>`
-checks the actual package for chosen scope/targets and explains all relevant
-denials without installation/native activation. Support existing human/JSON
+`--require-policy` requires at least one effective restriction (an all-unrestricted
+template is reported as such). `policy check` checks the existing verified declared
+closure without install effects; it can reuse offline dependency-check machinery.
+`policy check <source>` is a package inspection with explicit target(s). It reports
+its coverage; if dependencies are declared, root-only inspection is incomplete
+and nonzero rather than falsely claiming closure approval. `--policy <path>` on
+checks adds a candidate policy without replacing active layers. Checks may fetch
+immutable bytes into temporary snapshots/cache but never prepare hosts, recover
+mutating journals, write intent/receipts/trust or activate clients. A check is not
+a saved authorization for later installation. Support existing human/JSON
 conventions and nonzero refusal status. The existing `deps check --policy`
 continues to audit a verified offline closure using the same rules.
 
@@ -188,7 +241,8 @@ Complexity: 6/10. Target maintainability/reliability: 9/10. Initial confidence:
 - Missing required policy, malformed/unknown/null/duplicate config, symlinks and
   changed/deleted policy between review/apply fail closed with no managed changes.
 - Updates, repair, sync, import-install and management do not bypass policy.
-- Full native-plugin inventories cannot hide MCP/hooks in a Skills-only claim.
+- Full native-plugin inventories cannot hide MCP/extension components in a
+  Skills-only claim; existing hook-source refusals remain intact.
 - Approved installation works; tightening blocks subsequent update/repair;
   ownership-safe removal still works, including invalid policy.
 - SDK policy injection and current production CLI composition are both exercised.
@@ -197,4 +251,41 @@ Complexity: 6/10. Target maintainability/reliability: 9/10. Initial confidence:
 
 ## Review log
 
-R1–R3 independent critiques pending. Revision 1 is not implementation approval.
+R1 source/schema review: found legacy local semantics, canonical-repository and
+requested-pin ambiguities. Revision 2 uses one shared model/parser with explicit
+schema-1 compatibility and schema-2 neutral defaults; documents canonical identity
+and original intent rather than resolved hashes.
+
+R2 architecture/enforcement review: found early SDK host work, group preparation
+ordering, warm-cache/unchanged dependencies, import publication and retained
+provenance paths. Revision 2 names both publication gates and the before-host
+admission points, and fixes snapshot lifetime and removal semantics.
+
+R3 ToolHive/UX review: found Windows environment path bypass, hook claim mismatch,
+partial check semantics and unrestricted-template ambiguity. Revision 2 requires
+Known Folder lookup, preserves existing loader hook rejection, explicitly reports
+check coverage, supports additive candidate checks and useful status discovery.
+
+R4 revised source review: GO with explicit partial-source semantics, rejection of
+conflicting envelope/source identities, and no classification for an unrestricted
+schema-2 configuration. Accepted. Original pin facts remain trusted orchestration
+inputs, never invented from resolved commits.
+
+R5 revised UX/system review: GO. Candidate paths and absent layers are visible;
+validate is independent of broken active policy; package-only check cannot claim
+closure approval. No additional presets, wizard or elevated writer.
+
+R6 integration refinement: usecase/facade worker owns early all-input admission,
+per-review fingerprint and final pre-effect gate; root owns both environment
+publication paths, original pin facts and CLI/management session composition.
+
+R7 root scope/API review: one `ports.InstallationPolicy.Check(ctx, request)`
+returns a semantic fingerprint or typed refusal. `domain.InstallPolicyRequest`
+contains Source, OriginMode, optional Envelope, Scope, Targets and optional
+original GitPinned/ArchivePinned facts. Source-only calls defer component/MCP and
+missing target/scope rules; final calls reject missing constrained facts. A nil
+gate preserves compatibility. Files adapter owns candidate layers and strict
+loading; fresh operation sessions own comparison, never the long-lived engine.
+The SDK exposes an immutable WithInstallationPolicy clone for composition.
+Workers edit disjoint domain/adapter, usecase/facade and CLI command/doc slices;
+root publishes coherent commits and owns integration. No second policy engine.
