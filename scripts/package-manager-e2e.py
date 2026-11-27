@@ -21,6 +21,7 @@ import tempfile
 import time
 
 from package_manager_binary import run_installations
+from package_manager_skill_collections import run_collections
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -36,6 +37,17 @@ COMPOSED_TESTS = [
     "TestProjectComposedSourceLifecycleSeparatesUserAndProjects",
     "TestProjectComposedAgreementColdRestoreUsesPortablePins",
     "TestProjectCursorComposedSourceLifecycle",
+]
+
+COLLECTION_TESTS = [
+    "TestLocalCollectionListAndDryRunAreReadOnly",
+    "TestLocalCollectionCodexClaudeLifecycle",
+    "TestLocalCollectionRefusalsAndExactSelection",
+    "TestLocalSingleSkillRepeatKeepsSavedPinWithoutSource",
+    "TestSkillsAllGitSourceScope",
+    "TestSkillsAllRejectsAmbiguousGitCollectionBeforeEffects",
+    "TestSkillsAllWebsiteComposedLifecycle",
+    "TestSkillsAllWebsiteChangedIndexRefusesBeforeEffects",
 ]
 
 
@@ -193,7 +205,8 @@ class Run:
         self.catalog_required += [f"{ROOT_TEST}/{group}/{case}" for group in self.groups for case in catalog[group]]
         self.install_required = [INSTALL_ROOT_TEST] + [f"{INSTALL_ROOT_TEST}/{case}" for case in installations]
         self.composed_required = [name + "/zip" for name in COMPOSED_TESTS] + COMPOSED_TESTS
-        self.required = self.catalog_required + self.install_required + self.composed_required
+        self.collection_required = list(COLLECTION_TESTS)
+        self.required = self.catalog_required + self.install_required + self.composed_required + self.collection_required
         self.report = {
             "schema_version": 2, "suite": suite, "status": "running",
             "full_qualification": False, "source": source_identity(env),
@@ -206,7 +219,7 @@ class Run:
                                for case in catalog[group]],
             "boundaries": ["Security assessment and verified Directory inputs are fixtures in composed cases.",
                            "Native agent sessions, authentication, MCP execution and model calls are not qualified.",
-                           "The unchanged executable separately installs a local synthetic plugin using the real pinned production scanner.",
+                           "The unchanged executable separately installs a local synthetic plugin and a local Skill collection using the real pinned production scanner.",
                            "The scanner is downloaded from its public release into a cold disposable profile; no scanner assessment is preseeded."],
             "phases": [],
         }
@@ -352,6 +365,14 @@ class Run:
                 # Retain independent catalog results even when public scanner
                 # acquisition or an executable postcondition fails.
                 print(str(error), file=sys.stderr)
+        binary_collections = False
+        if built:
+            try:
+                collection_env = isolated_environment(scratch / "binary-collection-profile",
+                                                      {key: self.env[key] for key in ["GOPATH", "GOCACHE"]})
+                binary_collections = run_collections(self, binary, scratch, collection_env)
+            except (OSError, ValueError, KeyError, IndexError, TypeError, AttributeError, RuntimeError) as error:
+                print(str(error), file=sys.stderr)
         selection = "^TestPackageManagerE2E$" if self.report["suite"] == "full" else "^TestPackageManagerE2E/(" + "|".join(self.groups) + ")$"
         catalog = self.command("catalog", ["go", "test", "-tags=uappm_e2e", "-count=1", "-timeout=12m", "-json",
                                            "./cli/internal/agentpluginscli", "-run", selection],
@@ -362,12 +383,17 @@ class Run:
         composed = self.command("composition", ["go", "test", "-count=1", "-timeout=12m", "-json",
                                                   "./cli/cmd/agentplugins", "-run", "^(" + "|".join(COMPOSED_TESTS) + ")$/^zip$"],
                                 "production_composed", required=self.composed_required, package=MAIN_PACKAGE)
+        collections = self.command("collections", ["go", "test", "-count=1", "-timeout=12m", "-json",
+                                                    "./cli/internal/agentpluginscli", "-run",
+                                                    "^(" + "|".join(COLLECTION_TESTS) + ")$"],
+                                   "composed_cli", required=self.collection_required, package=CLI_PACKAGE)
         stable = self.report["source"] == source_identity(self.env)
         self.report["source_unchanged_during_run"] = stable
         if not stable:
             self.report["error"] = "Source changed during execution; rerun against a stable checkout."
             print(self.report["error"], file=sys.stderr)
-        passed = built and smoke and binary_installations and catalog and installations and composed and stable
+        passed = (built and smoke and binary_installations and binary_collections
+                  and catalog and installations and composed and collections and stable)
         self.report.update(status="pass" if passed else "fail", full_qualification=passed and self.report["suite"] == "full")
         self.save()
         return passed

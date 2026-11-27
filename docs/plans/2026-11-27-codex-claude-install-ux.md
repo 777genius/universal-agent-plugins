@@ -1,6 +1,6 @@
 # Codex and Claude installation convenience
 
-Status: revised draft plan; independent review rounds 1-2 complete.
+Status: implementation in progress; three plan-review rounds complete.
 Base: `942716eff44e787d5627e9f0ffbd2c2b83e57839` (`main`, 2026-11-27).
 Delivery: one draft PR; push every commit immediately. No release or merge is
 part of this draft-only request.
@@ -172,8 +172,20 @@ Codex/Claude profiles. Preserve other agents' checkouts and test caches.
   precedence, real enumeration bounds, rooted reads, selection/content timing,
   exact flag conflicts, HTTPS expectations and data-oriented selector reuse.
   Raised the production estimate floor to 420 LOC. No new installer/framework.
-- Round 3, revised plan/safety critique: pending.
-- Implementation review: pending; address material findings before final tests.
+- Round 3, revised plan/safety critique: both independent critics approved the
+  bounded design. No installer, state engine, preference store or browser work.
+- Implementation review round 1: corrected recursive enumeration budget
+  propagation and directory admission; preserved re-add of an existing saved
+  single Skill after its source/document disappears; rejected explicitly empty
+  `--skill` together with `--all` before acquisition. Added regressions.
+- Implementation review round 2: both independent reviewers found no remaining
+  material defect after the fixes. Added real TLS two-Skill/two-client coverage
+  and a changed-index refusal checked through the existing typed stale error.
+- Focused verification: local collection Codex/Claude lifecycle, local single
+  Skill compatibility, strict all-selection and HTTPS collection tests pass.
+  The production executable collection fixture also passes using Gemini and
+  the real scanner; it does not claim native Codex/Claude runtime proof.
+- Final lint/core/package-manager verification: pending.
 
 Done for this request means implemented bounded changes, pushed draft PR,
 recorded passing local checks and E2E with honest native/OS evidence, and no

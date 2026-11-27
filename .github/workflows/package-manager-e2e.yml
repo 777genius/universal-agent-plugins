@@ -14,6 +14,8 @@ on:
       - '**/go.sum'
       - 'scripts/package-manager-e2e.py'
       - 'scripts/package_manager_binary.py'
+      - 'scripts/package_manager_skill_collections.py'
+      - 'scripts/test_package_manager_skill_collections.py'
       - 'scripts/test_package_manager_e2e.py'
       - 'scripts/test_package_manager_ci_policy.py'
       - '.github/workflows/agentplugins-native-clients.yml'
@@ -32,6 +34,8 @@ on:
       - '**/go.sum'
       - 'scripts/package-manager-e2e.py'
       - 'scripts/package_manager_binary.py'
+      - 'scripts/package_manager_skill_collections.py'
+      - 'scripts/test_package_manager_skill_collections.py'
       - 'scripts/test_package_manager_e2e.py'
       - 'scripts/test_package_manager_ci_policy.py'
       - '.github/workflows/agentplugins-native-clients.yml'
@@ -66,6 +70,8 @@ jobs:
           python-version: '3.12'
       - name: Check evidence rejection cases
         run: python -B -m unittest discover -s scripts -p test_package_manager_e2e.py
+      - name: Check collection evidence rejection cases
+        run: python -B -m unittest discover -s scripts -p test_package_manager_skill_collections.py
       - name: Check CI policy rejection cases
         run: python -B -m unittest discover -s scripts -p test_package_manager_ci_policy.py
 

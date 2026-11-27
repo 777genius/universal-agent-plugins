@@ -125,6 +125,7 @@ class EvidenceAcceptanceTests(unittest.TestCase):
             run.catalog_required = ["catalog-case"]
             run.install_required = ["installation-case"]
             run.composed_required = ["composition-case"]
+            run.collection_required = ["collection-case"]
             run.report = {"suite": "full", "source": {"commit": "unchanged"}, "phases": []}
             (root / ("agentplugins.exe" if os.name == "nt" else "agentplugins")).write_bytes(b"fixture")
             called = []
@@ -136,14 +137,41 @@ class EvidenceAcceptanceTests(unittest.TestCase):
             with patch.object(run, "command", side_effect=command), \
                     patch.object(run, "smoke", side_effect=KeyError("missing smoke diagnostic")), \
                     patch.object(RUNNER, "run_installations", return_value=True), \
+                    patch.object(RUNNER, "run_collections", return_value=True), \
                     patch.object(RUNNER, "source_identity", return_value={"commit": "unchanged"}):
                 self.assertFalse(run.execute(root))
 
             self.assertIn("missing smoke diagnostic", run.report.get("smoke_error", ""))
-            self.assertEqual(called, ["build", "catalog", "installations", "composition"])
+            self.assertEqual(called, ["build", "catalog", "installations", "composition", "collections"])
             self.assertEqual(run.report["status"], "fail")
             self.assertFalse(run.report["full_qualification"])
             self.assertEqual(json.loads((root / "report.json").read_text())["status"], "fail")
+
+    def test_collection_failure_cannot_qualify_other_passing_phases(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = RUNNER.Run.__new__(RUNNER.Run)
+            run.directory = root
+            run.env = {"GOPATH": str(root / "gopath"), "GOCACHE": str(root / "gocache")}
+            run.groups = RUNNER.CATALOG_GROUPS
+            run.catalog_required = ["catalog-case"]
+            run.install_required = ["installation-case"]
+            run.composed_required = ["composition-case"]
+            run.collection_required = list(RUNNER.COLLECTION_TESTS)
+            run.report = {"suite": "full", "source": {"commit": "unchanged"}, "phases": []}
+            (root / ("agentplugins.exe" if os.name == "nt" else "agentplugins")).write_bytes(b"fixture")
+            with patch.object(run, "command", return_value=True) as commands, \
+                    patch.object(run, "smoke", return_value=True), \
+                    patch.object(RUNNER, "run_installations", return_value=True), \
+                    patch.object(RUNNER, "run_collections", side_effect=RuntimeError("collection failed")), \
+                    patch.object(RUNNER, "source_identity", return_value={"commit": "unchanged"}):
+                self.assertFalse(run.execute(root))
+            self.assertEqual(run.report["status"], "fail")
+            self.assertFalse(run.report["full_qualification"])
+            phase = next(call for call in commands.call_args_list if call.args[0] == "collections")
+            self.assertEqual(phase.kwargs["required"], RUNNER.COLLECTION_TESTS)
+            self.assertEqual(phase.kwargs["package"], RUNNER.CLI_PACKAGE)
+            self.assertNotIn("-tags=uappm_e2e", phase.args[1])
 
     def test_nested_binary_installation_error_is_reported(self):
         import package_manager_binary
