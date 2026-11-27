@@ -1,6 +1,6 @@
 # Batch Update and Partial Removal Follow-up
 
-Status: v3 — two independent critique/revision rounds completed; approved for bounded implementation. Code and test implementation has not started.
+Status: v3 — two independent planning rounds completed; baseline regressions reproduced, bounded implementation in progress.
 Date: 2026-11-27
 Baseline: `main@472d0b157f21b1b5c2a5b716ccc8f49577e7262f`
 Delivery: one Draft PR; publish every commit immediately.
@@ -12,8 +12,8 @@ Keep mass updates consistent with targeted updates, preserve actionable failure 
 and describe partial removal accurately. Reuse existing installer authorities and presenters.
 A smaller change is preferable when an existing path already satisfies the requirement.
 
-The first candidate is a strong source-level hypothesis, not an executed defect.
-The other two have source-level evidence; all corrections require meaningful public-path tests.
+All three candidates now have executed public-path regression evidence. The initial hypotheses,
+planning decisions and subsequent runtime evidence are recorded separately below.
 
 ## Scope A — current Directory release and an outdated projection
 
@@ -141,6 +141,7 @@ Current open PRs were checked at their actual heads:
 - #1114: deferred Skill resources/MCP probe plan.
 - #530: frozen VS Code and associated harness/scanner work.
 - #832: held Codex environment-name security investigation.
+- #1130: separate enterprise installation policy plan; no implementation overlap at this checkpoint.
 
 None currently changes the proposed update/removal presentation files.
 Recheck before implementation and before merge; preserve independent work.
@@ -160,10 +161,10 @@ Do not reopen deferred/frozen work or absorb unrelated failures into this PR.
    use ordinary expected-head merge, and verify the actual merged source and its required checks.
 
 A source review, a test declaration or an unexecuted workflow is not runtime evidence.
-The local executor is currently unavailable; obtain Draft RED through existing Core/test-core
-(exact make test-core). Required/test, full PM E2E and native runtime skip Draft, so those are
-not Draft evidence. Use their normal Ready transition rather than adding a workflow or weakening a gate. If execution returns, use the
-standard local commands without redundant reruns.
+The local executor returned during test preparation. The official Go 1.26.11 archive was
+verified against its published digest and used for local RED, avoiding an extra CI wait.
+Existing Draft Core/test-core still runs exact make test-core. Required/test, full PM E2E
+and native runtime skip Draft; use their normal Ready transition for final qualification.
 
 ## Verification and acceptance
 
@@ -224,11 +225,37 @@ executed RED/GREEN evidence separate from these planning approvals. No new scope
 | Item | Estimate |
 | --- | --- |
 | Production changes | 50–120 added/substantially changed lines, usually 2–4 existing files |
-| Regression tests | 350–650 lines after signed-reader, JSON-ownership and removal-stage controls; reuse fixtures |
+| Regression tests | Initial 350–650-line estimate; actual 835 lines before final review, including real signed-reader and failure/output controls; reuse fixtures |
 | Catalog and plan | Existing catalog registrations and this document only |
 | Complexity | 3/10; no new architecture or authority |
 | Reliability benefit | 7/10 for the bounded consistency/error/partial-result cases |
-| Current diagnostic confidence | A 8/10, B 9/10, C 9/10; runtime confirmation still required |
+| Current diagnostic confidence | A/B/C reproduced against unchanged production code; final GREEN still required |
 | Completion confidence | 8/10, conditional on executed tests and normal qualification |
 
 These are planning estimates, not line-count targets or claims of successful execution.
+
+## Executed regression checkpoint
+
+Before production changes, the local focused suite executed all eight new top-level tests.
+The test-only commit retains these oracles and registers seven public-command scenarios in
+the existing PM evolution catalog. The eighth is the small removal wording boundary control.
+
+- A: targeted refresh/repeat and healthy actual no-change pass. Signed revoked/suspended,
+  unavailable Directory and recorded-pin refusals pass. Batch current-release refresh fails
+  because it skips the missing generated command; drift and blocking security are also
+  skipped. A targeted security control first witnesses the evaluator and refuses without effects.
+- B: all 32 saved/imperative cause/output combinations reproduce loss of original errors;
+  refused/partial JSON output also loses its writer cause. Persistent/native profile snapshots
+  and activation-call counts stay unchanged. Both successful-preview controls pass.
+- C: only partial human wording fails (the first client says `removed` before managed cleanup).
+  The independent JSON contract, public retry after removing only the fault, retained data,
+  ordinary success and five other presentation-stage controls pass.
+
+Test preparation found and fixed two fixture mistakes before accepting RED: data receipts are
+a map, and the minimal plugin does not request PLUGIN_DATA. Both fixtures now declare a real
+PLUGIN_DATA reference before installation/signing, without fabricating receipts. Review also
+added valid-JSON signature tampering, the security invocation witness, native-profile snapshots,
+and an exact safe error-summary assertion. These are test corrections, not product defects.
+
+Preimplementation source refresh found main `864829036a932a8c22ab7074b94b79dc70ff8021`
+(#1128, two conformance documentation files) and the new #1130 plan; neither changes this scope.

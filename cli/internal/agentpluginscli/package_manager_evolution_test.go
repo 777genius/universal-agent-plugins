@@ -35,6 +35,13 @@ func packageManagerEvolutionCases() map[string]func(*testing.T) {
 		"update-attention-classification": TestPublicOrdinaryUpdateClassifiesFailureWithoutLogs,
 		"update-mixed-peer-attention":     TestPublicOrdinaryUpdateMixedAttentionPreservesSuccessfulPeer,
 		"update-apply-output-causes":      TestPublicOrdinaryUpdateJoinsApplyAndOutputFailures,
+		"update-all-current-projection":   TestUpdateAllCurrentDirectoryRefreshesOlderCommandProjection,
+		"update-current-noop":             TestCurrentDirectoryHealthyCommandUpdateIsNoChange,
+		"update-all-current-refusals":     TestUpdateAllCurrentDirectoryProjectionRetainsRefusals,
+		"update-all-preflight-causes":     TestPublicUpdateAllPreflightRetainsCausesAndSoleResult,
+		"update-all-preview-output":       TestPublicUpdateAllPreflightSuccessfulPreviewOutputFailure,
+		"remove-partial-stage-retry":      TestGroupedRemovalReportsExternalStageBeforeManagedCleanup,
+		"remove-success-retained-data":    TestGroupedRemovalSuccessSeparatesRetainedPluginData,
 	}
 }
 
