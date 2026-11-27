@@ -13,7 +13,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
-func writeCollectionSkill(t *testing.T, root, folder, name string) string {
+func writeCollectionSkill(t *testing.T, root, folder, name string) {
 	t.Helper()
 	directory := filepath.Join(root, folder)
 	if err := os.MkdirAll(filepath.Join(directory, "scripts"), 0700); err != nil {
@@ -26,7 +26,6 @@ func writeCollectionSkill(t *testing.T, root, folder, name string) string {
 	if err := os.WriteFile(filepath.Join(directory, "scripts", "check.sh"), []byte("#!/bin/sh\nexit 97\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	return directory
 }
 
 func localCollectionJourney(t *testing.T) (savedJourney, string) {

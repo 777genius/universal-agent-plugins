@@ -30,7 +30,7 @@ func (p *allWebsitePublisher) serve(w http.ResponseWriter, r *http.Request) {
 		if p.sibling {
 			names = append(names, "later")
 		}
-		skills := []map[string]any{}
+		skills := make([]map[string]any, 0, len(names))
 		for _, name := range names {
 			description := "Read harmless documentation"
 			if p.stale && p.indexes > 1 {
