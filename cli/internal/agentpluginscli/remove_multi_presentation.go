@@ -21,7 +21,7 @@ func renderRemoveMultiResult(cmd *cobra.Command, opts *options, result removeMul
 		return err
 	}
 	for _, target := range result.Targets {
-		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", target.Target, removeStatusText(target.Status)); err != nil {
+		if _, err := fmt.Fprintf(cmd.OutOrStdout(), "  %s: %s\n", target.Target, removeTargetStatusText(result.Status, target.Status)); err != nil {
 			return err
 		}
 		if target.Status == "blocked" && target.Output.NextAction != "" {
@@ -49,6 +49,14 @@ func renderRemoveMultiResult(cmd *cobra.Command, opts *options, result removeMul
 		}
 	}
 	return nil
+}
+
+func removeTargetStatusText(groupStatus, targetStatus string) string {
+	if targetStatus == string(usecase.GroupTargetExternalCompleted) &&
+		groupStatus != string(usecase.GroupPhaseCompleted) && groupStatus != "data_retained" {
+		return removeStatusText(string(usecase.GroupTargetExternalPartial))
+	}
+	return removeStatusText(targetStatus)
 }
 
 // removeStatusText keeps JSON statuses stable while human output reads as text.
