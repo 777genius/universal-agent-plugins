@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"unsafe"
@@ -181,5 +182,131 @@ func TestWindowsSkillStageExcludesReaderDescent(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+// The old filepath.WalkDir oracle opens the guarded directory without DELETE
+// sharing and fails before any replacement attack. Snapshot reads must coexist
+// with the live guard, retain every entry and leave reader protection unchanged.
+func TestWindowsSkillTreeRetainsGuardedStage(t *testing.T) {
+	parentPath := tempRoot(t)
+	parent, err := os.OpenRoot(parentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := parent.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	guard, err := makePrivateSkillStage(parent, "stage")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := guard.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	for _, name := range []string{"stage/empty-dir", "stage/payload"} {
+		if err := parent.Mkdir(name, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	doc := "---\nname: fixture\ndescription: Exact snapshot bytes.\n---\n\nBody.\n"
+	raw := string([]byte{0, 255, '\n'})
+	files := map[string]string{
+		"sibling":                 "unrelated sibling",
+		"stage/empty-file":        "",
+		"stage/payload/SKILL.md":  doc,
+		"stage/payload/raw.bin":   raw,
+		"stage/payload/read-only": "read-only bytes",
+	}
+	for name, body := range files {
+		f, err := parent.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, writeErr := f.WriteString(body)
+		if err := errors.Join(writeErr, f.Close()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := parent.Chmod("stage/payload/read-only", 0400); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := parent.Chmod("stage/payload/read-only", 0600); err != nil {
+			t.Error(err)
+		}
+	}()
+	target := filepath.Join("payload", "raw.bin")
+	if err := parent.Symlink(target, "stage/byte-link"); err != nil {
+		t.Fatal(err)
+	}
+	modes := map[string]os.FileMode{}
+	for _, name := range []string{".", "sibling", "stage", "stage/empty-dir", "stage/empty-file",
+		"stage/payload", "stage/payload/SKILL.md", "stage/payload/raw.bin", "stage/payload/read-only", "stage/byte-link"} {
+		info, err := parent.Lstat(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		modes[name] = info.Mode()
+	}
+	if modes["stage/payload/read-only"].Perm()&0200 != 0 ||
+		modes["stage/payload/raw.bin"].Perm()&0200 == 0 ||
+		modes["stage/byte-link"]&os.ModeSymlink == 0 {
+		t.Fatalf("fixture did not establish distinct file modes and a symlink: %v", modes)
+	}
+	stagePath := filepath.Join(parentPath, "stage")
+	assertOrdinaryReadDenied := func() {
+		t.Helper()
+		_, err := os.ReadDir(stagePath)
+		var native *os.PathError
+		// Match the native type too: errors.Is alone would also admit wrappers.
+		if !errors.As(err, &native) || native.Op != "open" || native.Path != stagePath ||
+			!errors.Is(native.Err, windows.ERROR_SHARING_VIOLATION) ||
+			reflect.TypeOf(native.Err) != reflect.TypeOf(windows.ERROR_SHARING_VIOLATION) {
+			t.Fatalf("ordinary directory open must fail with exact sharing violation: %v", err)
+		}
+	}
+	assertOrdinaryReadDenied()
+	wantStage := map[string]string{
+		".":                                   modes["stage"].String(),
+		"empty-dir":                           modes["stage/empty-dir"].String(),
+		"empty-file":                          modes["stage/empty-file"].String(),
+		"payload":                             modes["stage/payload"].String(),
+		filepath.Join("payload", "SKILL.md"):  modes["stage/payload/SKILL.md"].String() + doc,
+		filepath.Join("payload", "raw.bin"):   modes["stage/payload/raw.bin"].String() + raw,
+		filepath.Join("payload", "read-only"): modes["stage/payload/read-only"].String() + "read-only bytes",
+		"byte-link":                           modes["stage/byte-link"].String() + target,
+	}
+	if got := skillTree(t, stagePath); !reflect.DeepEqual(got, wantStage) {
+		t.Fatalf("guarded stage snapshot mismatch:\ngot:  %#v\nwant: %#v", got, wantStage)
+	}
+	wantParent := map[string]string{
+		".":       modes["."].String(),
+		"sibling": modes["sibling"].String() + "unrelated sibling",
+	}
+	for name, value := range wantStage {
+		key := "stage"
+		if name != "." {
+			key = filepath.Join(key, name)
+		}
+		wantParent[key] = value
+	}
+	if got := skillTree(t, parentPath); !reflect.DeepEqual(got, wantParent) {
+		t.Fatalf("parent snapshot omitted or altered guarded entries:\ngot:  %#v\nwant: %#v", got, wantParent)
+	}
+	assertOrdinaryReadDenied()
+	reader, err := skillStageReader(stagePath)
+	if err == nil {
+		_ = windows.CloseHandle(reader)
+		t.Fatal("snapshot released stage protection")
+	}
+	// A matching NTSTATUS inside a wrapper is still not the native refusal.
+	if !errors.Is(err, windows.STATUS_SHARING_VIOLATION) ||
+		reflect.TypeOf(err) != reflect.TypeOf(windows.STATUS_SHARING_VIOLATION) {
+		t.Fatalf("source-reader protection refusal changed after snapshots: %v", err)
 	}
 }

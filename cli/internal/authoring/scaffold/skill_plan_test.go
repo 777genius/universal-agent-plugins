@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -57,30 +58,73 @@ func skillFixture(t *testing.T) (string, SkillPlan, SkillSourceGate) {
 func skillTree(t *testing.T, root string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
-	err := filepath.WalkDir(root, func(p string, d os.DirEntry, e error) error {
-		if e != nil {
-			return e
+	clean := filepath.Clean(root)
+	parentPath, leaf := filepath.Dir(clean), filepath.Base(clean)
+	if parentPath == clean {
+		leaf = "."
+	}
+	// Bootstrap outside a guarded leaf: os.OpenRoot itself uses a pathname
+	// open on Windows, while relative Root opens share DELETE access.
+	parent, err := os.OpenRoot(parentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := parent.Close(); err != nil {
+			t.Error(err)
 		}
-		rel, _ := filepath.Rel(root, p)
-		info, e := d.Info()
-		if e != nil {
-			return e
-		}
+	}()
+	info, err := parent.Lstat(leaf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := func(r *os.Root, name string, info os.FileInfo) (string, error) {
 		v := info.Mode().String()
-		if d.Type()&os.ModeSymlink != 0 {
-			target, e := os.Readlink(p)
-			if e != nil {
-				return e
-			}
-			v += target
-		} else if !d.IsDir() {
-			b, e := os.ReadFile(p)
-			if e != nil {
-				return e
-			}
-			v += string(b)
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, err := r.Readlink(name)
+			return v + target, err
 		}
-		out[rel] = v
+		if !info.IsDir() {
+			body, err := r.ReadFile(name)
+			return v + string(body), err
+		}
+		return v, nil
+	}
+	// A root file or link is one entry, as with filepath.WalkDir. In
+	// particular, never descend into the target of a root symlink.
+	if !info.IsDir() {
+		out["."], err = value(parent, leaf, info)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	held, err := parent.OpenRoot(leaf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := held.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
+	now, err := held.Stat(".")
+	if err != nil || !os.SameFile(info, now) {
+		t.Fatalf("snapshot root changed at open: %v", err)
+	}
+	err = fs.WalkDir(held.FS(), ".", func(name string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := held.Lstat(name)
+		if err != nil {
+			return err
+		}
+		v, err := value(held, name, info)
+		if err != nil {
+			return err
+		}
+		out[filepath.FromSlash(name)] = v
 		return nil
 	})
 	if err != nil {
@@ -88,6 +132,36 @@ func skillTree(t *testing.T, root string) map[string]string {
 	}
 	return out
 }
+
+func TestSkillTreeRootLeafSnapshots(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "file")
+	body := []byte{'a', 0, 'b', 255}
+	if err := os.WriteFile(file, body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := skillTree(t, file); !reflect.DeepEqual(got, map[string]string{".": info.Mode().String() + string(body)}) {
+		t.Fatalf("root file snapshot changed: %+v", got)
+	}
+	for _, target := range []string{t.TempDir(), filepath.Join(root, "missing")} {
+		link := filepath.Join(t.TempDir(), "link")
+		if err := os.Symlink(target, link); err != nil {
+			t.Fatal(err)
+		}
+		info, err := os.Lstat(link)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := skillTree(t, link); !reflect.DeepEqual(got, map[string]string{".": info.Mode().String() + target}) {
+			t.Fatalf("root symlink snapshot changed: %+v", got)
+		}
+	}
+}
+
 func TestSkillPlanProfileAndImmutableBoundary(t *testing.T) {
 	for _, tc := range []struct {
 		name, desc string

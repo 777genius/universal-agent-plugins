@@ -95,18 +95,3 @@ was OPEN, unmerged, at head `6b0210e4bee84d8bea3f200091badbe796a5c88f`
 on 2026-09-06. Its draft 1.1 container change does not settle published 1.0
 member interpretation. Unknown schema versions, including draft 1.1, remain
 unsupported. Revisit this bounded interpretation after authoritative clarification.
-
-Status reviewed again on 2026-11-26: [PR #82](https://github.com/agentplugins/agent-plugins-spec/pull/82)
-merged on 2026-11-06 at `f903079e82636e411a1de782cea4a126c58d88be` and
-[issue #77](https://github.com/agentplugins/agent-plugins-spec/issues/77) closed
-the same day. The merged proposal changes the 1.1 working draft: a malformed
-`extensions` container becomes fatal, while unknown top-level fields remain the
-loading exception. Its compatibility statement explicitly leaves published 1.0
-unchanged. This supersedes the open/closed status recorded above, not the
-historical review or the pinned 1.0 loading contract.
-
-The distinction in the table therefore still applies: a malformed 1.0 container
-is reported and ignored, unknown object-valued namespaces remain opaque, and
-malformed namespace members retain the documented rejection policy. The upstream
-draft does not itself authorize a 1.0 behavior change or establish client runtime
-readiness. Pinned schemas, corpus expectations and supported versions are unchanged.
