@@ -95,7 +95,7 @@ override a denial from another layer.
 | --- | --- | --- |
 | Machine, Linux | `/etc/agentplugins/policy.yaml` | When present |
 | Machine, macOS | `/Library/Application Support/AgentPlugins/policy.yaml` | When present |
-| Machine, Windows | System ProgramData known folder, `AgentPlugins\policy.yaml` | When present |
+| Machine, Windows | Registered system ProgramData directory, `AgentPlugins\policy.yaml` | When present |
 | User | `<user-home>/.config/agentplugins/policy.yaml` | When present |
 | Project | `<selected-project-root>/uap-policy.yaml` | When present |
 | Explicit deployment | File named by `UAP_POLICY_FILE` | When the variable is configured |
@@ -107,8 +107,13 @@ directory. UAP does not walk parent directories looking for policies. Use
 exactly which paths are being checked, including absent files.
 
 Machine policy is resolved independently of user `HOME`, XDG or UAP environment
-settings. On Windows, the operating system's ProgramData known folder is used;
-changing the `ProgramData` environment variable does not relocate machine policy.
+settings. On Windows, UAP reads the protected machine ProgramData registration.
+It preserves an administrator-configured absolute directory and resolves
+`SystemDrive`, `SystemRoot` and `windir` tokens from the operating system's shared
+Windows directory. Omitting or overriding `ProgramData`, `ALLUSERSPROFILE` or
+`SystemDrive` in the caller's environment does not relocate machine policy.
+An unreadable or invalid registration remains an error; it never means that
+machine policy is absent.
 
 An explicit file that is missing, an unreadable file, a symlink/nonregular file,
 or an invalid policy blocks installation. During a reviewed operation, adding,

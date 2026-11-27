@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review, labeled]
     paths:
       - '.github/workflows/pi-project-native.yml'
+      - 'cli/cmd/agentplugins/compose_policy*.go'
       - 'scripts/pi_project_native_e2e.py'
       - 'scripts/pi_project_components_native_e2e.py'
       - 'scripts/test_pi_project_components_native_e2e.py'
@@ -29,6 +30,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/pi-project-native.yml'
+      - 'cli/cmd/agentplugins/compose_policy*.go'
       - 'scripts/pi_project_native_e2e.py'
       - 'scripts/pi_project_components_native_e2e.py'
       - 'scripts/test_pi_project_components_native_e2e.py'
@@ -93,6 +95,8 @@ jobs:
       - name: Verify scoped Pi adapter and real UAP facade before native runtime
         working-directory: install/integrationctl/agentplugins
         run: go test -count=1 -timeout=180s ./clients/pi ./clients/all ./planner ./installer -run 'TestPi(Project|Public|Bootstrap|User|Refine|Scoped)'
+      - name: Verify enterprise policy composition under isolated process environments
+        run: go test -count=1 -timeout=180s -v -run '^TestEnterprisePolicy' ./cli/cmd/agentplugins
       - name: Verify Python runner syntax without writing into source checkout
         shell: bash
         run: |

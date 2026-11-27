@@ -377,6 +377,48 @@ cannot select another transport. Explicit source kinds retain their behavior.
 Focused regressions compare browser admission with the offline resolver and
 observe actual HTTPS requests and injected Git acquisition separately.
 
+### R17 — Windows machine path under isolated process environments
+
+The bf12c87c Pi Windows job 140367431796 exposed a production regression:
+public skills add fails during composition when the child environment omits
+SystemDrive, ProgramData and ALLUSERSPROFILE. Its scoped SDK preflight and genuine
+Pi project trust/A/B lifecycle had already passed. The public child isolates user and
+application roots; that isolation remains part of the acceptance test.
+
+Correction boundary: Windows CLI composition, focused regression coverage, the
+existing Pi preflight selection, and deployment documentation. Read the protected
+64-bit HKLM ProfileList ProgramData registration, retain a configured absolute
+directory, and expand only supported machine tokens from the trusted system
+Windows directory. Preserve registry string-type semantics and administrative
+relocation through the existing x/sys string decoder. Validation covers the
+decoded path, not raw UTF-16 encoding or trailing registry data after a NUL.
+Never expand caller-controlled environment variables, mutate the process
+environment, select a default folder instead of the registered folder, or turn
+a lookup error into an absent policy. Validate the resolved directory and retain
+genuine registry, API, close and filesystem errors. The existing policy adapter
+continues to own optional-file discovery and ancestor/leaf checks.
+
+Validation: fresh test subprocesses with omitted and poisoned machine aliases,
+isolated profile/application roots, and an unchanged authoritative machine layer;
+native normal-environment parity with the Windows known folder; small registered
+path cases for relocation, trusted expansion and malformed/unresolved refusal.
+Run the focused EnterprisePolicy composition selection from the repository root
+in the existing Pi native preflight on its three hosts. Both PR and main-push
+path filters include the policy composition files. The real public Pi Skills/MCP
+journey remains unchanged and must pass on the corrected source. No new CI job,
+runner route, dependency, permission, exception, flag or runtime policy engine
+is introduced.
+
+Estimated additional scope: under 120 production lines and 220 test lines, plus
+one focused CI selection and documentation. Complexity 3/10; intended reliability
+8/10; confidence 7/10 pending native execution. Two independent reviews of the
+correction and its qualification boundary precede publication.
+
+Primary references: [machine ProgramData registration](https://learn.microsoft.com/en-us/troubleshoot/windows-server/remote/internal-error-has-occurred-connecting-remote-machine#check-registry-configurations),
+[trusted shared Windows directory](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getsystemwindowsdirectoryw),
+and [known-folder retrieval flags](https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/ne-shlobj_core-known_folder_flag).
+This section records a planned correction, not a passing execution result.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test
