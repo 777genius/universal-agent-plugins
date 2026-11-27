@@ -419,6 +419,76 @@ Primary references: [machine ProgramData registration](https://learn.microsoft.c
 and [known-folder retrieval flags](https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/ne-shlobj_core-known_folder_flag).
 This section records a planned correction, not a passing execution result.
 
+### R18 — Qualified runtime bytes remain independently bounded
+
+The original 30-source Windsurf prepared-installation job 140491530891 failed
+on Firebase case 6 at head 713053bf (checkout c5f816bd, identical source tree).
+The unchanged strict audit attempted all 30 cases and refused qualification:
+`HeldTree._capture` exceeded the combined 256 MiB byte bound. Artifact
+15203313236 was independently read and SHA-256 verified as
+`a24071579a84596a729c2fcfc7bbfe839c914f7e12d8a9d7a3246d0a9c2aa3d9`.
+The error row contains no completed footprint; the failure is not evidence
+that Firebase's authenticated runtime alone exceeds 256 MiB.
+
+The earlier same-pin, script-disabled fixture measurement in merged
+[#1126](https://github.com/777genius/universal-agent-plugins/pull/1126)
+records 242,615,124 regular-file bytes across the owned fixture, 19,465 runtime
+entries and 23 npm bin links. This supports a bounded accounting correction,
+not a claim that the currently failed native tree was completely measured.
+
+Correction boundary: the shared retained-tree reader, its focused regression
+tests, and this plan. Reuse the existing canonical one-prefix classification
+and the caller's unchanged receipt/source/manifest/configuration qualification.
+Retain one aggregate 256 MiB ordinary-data limit and a separate fixed 256 MiB
+limit for that qualified runtime subtree. Neither class borrows unused bytes
+from the other; no prefix gives no additional capacity. Keep the complete
+`self.total` and `fully_read_bytes` evidence across both classes. Check a
+file's class bound before its full read; charge both class and aggregate
+counters only after that read succeeds. A refusal may report its resource
+class, partial fully-read counters, next stat size and fixed bound, without
+paths or contents. Those counters are not a completed-tree measurement.
+
+Keep the per-file bound, five-second cooperative deadline, depth, directory,
+member and aggregate descriptor quotas, exclusive regular-file requirements,
+authenticated bin links, full hashing, held descriptors, identity/membership
+checks and closing verification unchanged. Capture the entire data tree in
+one custody graph. Do not alter Windsurf source qualification, observations,
+native acceptance, fixtures, expected refusals, workflow routing, timeouts,
+permissions or dependencies. This does not grant installation authority or
+claim atomic snapshots or writer closure.
+
+Validation: small real-filesystem tests with scaled byte constants prove both
+classes can simultaneously reach their own bound while retaining every object
+and byte; either class exceeding its bound refuses despite unused capacity in
+the other; default/no-prefix and near-prefix siblings remain ordinary; all
+failure-owned descriptors close. Verify complete aggregate evidence, runtime
+mutation refusal, and the unchanged per-file guard. Existing invalid/multiple/
+missing-prefix, source-tuple, link, timing and custody regressions remain in
+force. Run the shared-reader and Windsurf observer contract suites.
+
+The original full Firebase reader and prepared lifecycle must then pass on the
+published correction under the unchanged strict audit. Successful full capture
+will establish current fit within both fixed class limits; until then this is
+a candidate correction, not native qualification. If a class still exceeds
+its cap, retain FAIL and investigate the measured offending class rather than
+raising the ordinary bound or bypassing custody. The combined source includes
+main a88b22c2 and retains its eight batch-update/removal fixes.
+
+Pre-implementation review: independently approved the bounded accounting plan
+and explicit qualification boundary; a second pass preserved aggregate evidence,
+post-read charging, exact prefix boundaries and diagnostic honesty. Review the
+actual diff before publication. No source commit is withheld after creation.
+
+Local qualification of the R18 candidate: all 47 shared-reader tests passed
+in 3.697 seconds, including the five new byte-accounting regressions and the
+existing 10,000-member custody controls. Independent actual-diff review found
+no remaining issue. The existing Windsurf runtime/source-profile controls
+passed, but its complete 60-test invocation did not pass: the projection oracle
+could not build. An explicit build with the existing Go toolchain and downloads
+disabled confirmed that golang.org/x/sys v0.44.0 is absent from the local cache.
+No dependency was installed or substituted. The complete observer contracts and
+actual Firebase lifecycle remain required on the supported CI runner.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test
