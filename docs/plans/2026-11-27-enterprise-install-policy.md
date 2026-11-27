@@ -489,6 +489,49 @@ disabled confirmed that golang.org/x/sys v0.44.0 is absent from the local cache.
 No dependency was installed or substituted. The complete observer contracts and
 actual Firebase lifecycle remain required on the supported CI runner.
 
+### R19 - Preserve Kiro finalization failure diagnostics
+
+Current-source Kiro plugin job 140615547142 in run 46017064716 attempted all
+30 cases on checkout 7c5b81fa (the same tree as head 731d8c7). Cases 1, 2, 3
+and 16 reached the unchanged six-observation custody assertion without a
+complete lifecycle. The outer handler replaced their result rows with a
+generic exception, losing the initial add/list outcomes. Artifact 15222303169
+has verified ZIP SHA-256
+`31bb81637f14d9f0d274485d1b9f993e83f003cdbd0beb02db8900a75fc7d398`.
+The other 25 positive cases and the one expected negative retained their
+custody evidence; the complete audit failed and remains unqualified.
+
+Independent inspection of production signed snapshot 49, its signature, all
+four source tuples and immutable manifests found no fixture drift. The
+artifact cannot establish the original installation refusal or source/state
+mismatch. Do not change pins or classify these cases as expected negatives.
+
+The correction preserves bounded public command outcomes, signed-source
+observations, public states and the observation count when Kiro finalization
+raises. It attaches diagnostics to the same exception and re-raises it; the
+outer handler records them alongside the unchanged harness-error status.
+It does not export full streams, decoded private receipts or native images,
+read more files, perform more commands, or change six-observation, source,
+custody, lifecycle or final acceptance requirements. Earlier guard failures
+remain outside this narrowly scoped diagnostic correction.
+
+Budget: about 20 harness lines and 60-120 regression/documentation lines.
+Complexity 3/10; target reliability 9/10; confidence 8/10 pending execution.
+Two independent plan critiques approved this boundary. Regressions exercise
+the actual case/finalization and report path for refused or unmatched initial
+installation, retaining failure and skipped phases. Review the written diff,
+publish in this PR, then use supported CI to identify and address the original
+cause. This diagnostic correction is not a Kiro lifecycle PASS.
+
+Written-diff review found no remaining issue. All 33 existing and added Kiro
+observer/runner tests passed locally in 7.079 seconds with no skips; the two
+focused diagnostic tests also passed independently in 0.850 seconds. They
+exercise the actual case/finalizer for an initial refusal and an unmatched
+signed receipt, and the actual report handler with unsuccessful acceptance.
+Whitespace and Python compilation checks passed. Fresh supported-runner
+execution, the original failure diagnosis and actual-main qualification remain
+outstanding.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test

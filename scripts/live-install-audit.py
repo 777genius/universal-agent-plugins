@@ -4690,7 +4690,21 @@ def _do_case(cli, target, kind, item, index, runroot, plugin_declared_names,
         row["windsurf_installation_audit"] = windsurf_installation.finish(
             row, item, index, installation_fixtures)
     if kiro_installation is not None:
-        row["kiro_installation_custody"] = kiro_installation.finish(row, item, index, installation_fixtures)
+        try:
+            row["kiro_installation_custody"] = kiro_installation.finish(row, item, index, installation_fixtures)
+        except Exception as error:
+            # Keep the original public failure when final custody is incomplete.
+            # Row outcomes already contain bounded tails only; observations hold
+            # full receipts and native images and must not enter the report.
+            error.kiro_installation_diagnostics = {
+                "status": "unresolved", "observation_count": len(kiro_installation.observations),
+                "public_status": row.get("status"),
+                "commands": {phase: row.get(phase) for phase in PREPARED_INSTALLATION["COMMANDS"]},
+                "signed_release_observation": row.get("signed_release_observation"),
+                "public_target_states": row.get("public_target_states"),
+                "listed_identity": row.get("listed_identity"),
+            }
+            raise
     return row
 
 
@@ -5720,6 +5734,8 @@ def main():
                     result["windsurf_global_native_proof"] = e.audit_evidence
                 if isinstance(getattr(e, "windsurf_installation_diagnostics", None), dict):
                     result["windsurf_installation_diagnostics"] = e.windsurf_installation_diagnostics
+                if isinstance(getattr(e, "kiro_installation_diagnostics", None), dict):
+                    result["kiro_installation_diagnostics"] = e.kiro_installation_diagnostics
                 if args.target == "copilot" and args.kind == "skill" and isinstance(
                         getattr(e, "copilot_project_skill_proof", None), dict):
                     result["copilot_project_skill_proof"] = e.copilot_project_skill_proof
