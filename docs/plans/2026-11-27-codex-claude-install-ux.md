@@ -1,6 +1,7 @@
 # Codex and Claude installation convenience
 
-Status: implementation in progress; three plan-review rounds complete.
+Status: implemented; three plan-review rounds complete. Qualification results
+are tracked in [draft PR #1135](https://github.com/777genius/universal-agent-plugins/pull/1135).
 Base: `942716eff44e787d5627e9f0ffbd2c2b83e57839` (`main`, 2026-11-27).
 Delivery: one draft PR; push every commit immediately. No release or merge is
 part of this draft-only request.
@@ -85,7 +86,8 @@ later updates do not automatically enroll newly added siblings.
 - Extract small data-oriented selection helpers from the current terminal
   wrappers. Do not construct a fake Git session with missing fields. HTTPS
   all-selection uses the existing `ListHTTPSkills` capability and carries its
-  index/tree expectations into prepared selections.
+  index expectation into prepared selections. Existing acquisition resolves and
+  verifies tree identity; the catalog does not invent a tree digest.
 - Preserve explicit target behavior and project/user scope defaults. Do not
   add preference storage, client-ID branches, schema changes or migrations.
 
@@ -181,11 +183,22 @@ Codex/Claude profiles. Preserve other agents' checkouts and test caches.
 - Implementation review round 2: both independent reviewers found no remaining
   material defect after the fixes. Added real TLS two-Skill/two-client coverage
   and a changed-index refusal checked through the existing typed stale error.
+- Final harness review: preserved the restricted-host archive suite by keeping
+  its six local/HTTPS collection cases separate from the two full-suite Git
+  cases. Required execution and explicit exclusion inventories agree with the
+  command selection. A new archive/full regression passes, and independent
+  source review found no remaining material defect in this correction.
 - Focused verification: local collection Codex/Claude lifecycle, local single
   Skill compatibility, strict all-selection and HTTPS collection tests pass.
   The production executable collection fixture also passes using Gemini and
-  the real scanner; it does not claim native Codex/Claude runtime proof.
-- Final lint/core/package-manager verification: pending.
+  the real scanner; that initial direct run predates the final review changes
+  and does not qualify the final revision or native Codex/Claude runtime.
+  All 39 Python package-manager harness tests pass after the archive correction.
+- Final qualification record: PR #1135 records the tested revision, actual
+  lint/core/package-manager results and environment limits. The portable runner
+  captures source and binary identities for its full or explicit archive suite;
+  an archive result always retains `full_qualification: false`. Queued, skipped,
+  interrupted or unexecuted checks are not passing evidence.
 
 Done for this request means implemented bounded changes, pushed draft PR,
 recorded passing local checks and E2E with honest native/OS evidence, and no
