@@ -68,7 +68,7 @@ func collectionDurableTree(t *testing.T, j savedJourney) map[string]savedJourney
 		t.Fatal(err)
 	}
 	// Only the known advisory lease may change between identical operations.
-	delete(files, filepath.ToSlash(lease))
+	delete(files, lease)
 	return files
 }
 
