@@ -1,8 +1,10 @@
 # Enterprise installation policy
 
-Status: revised design, revision 2. Independent first-round findings incorporated;
-second-round source and UX reviews approved; core reviewer implementing the
-accepted integration refinements. Implementation started; no qualification claimed.
+Status: implementation checkpoint; Draft PR #1130 remains blocked and is not
+ready to merge. Plan revision 2 and the shared policy model/adapter/core gates
+are published. CLI integration and subsequent fixes were written in the working
+checkout, but the execution environment became unavailable before they could
+be committed, published and qualified. See the checkpoint below.
 Owner request: research APM and ToolHive, synthesize a convenient modular design,
 review and refine it, implement in one Draft PR, publish each commit immediately,
 exercise important end-to-end paths, fix review findings, ordinary merge and verify.
@@ -289,3 +291,112 @@ loading; fresh operation sessions own comparison, never the long-lived engine.
 The SDK exposes an immutable WithInstallationPolicy clone for composition.
 Workers edit disjoint domain/adapter, usecase/facade and CLI command/doc slices;
 root publishes coherent commits and owns integration. No second policy engine.
+
+## Implementation checkpoint — 2026-11-27
+
+### Published state
+
+PR #1130, branch `feat/enterprise-policy-20261127`, contains the reviewed plan
+and commit `893a97241b994bd130c7b4508a0fcbbe350e9623`: the shared domain policy
+model, narrow installation-policy port, layered file adapter and initial core
+admission gates. This is a partial implementation, not an enabled end-user
+Enterprise feature. Do not mark ready or merge this checkpoint.
+
+The execution environment became unavailable during the combined verification
+pass. GitHub remained accessible. There is no confirmation that uncommitted
+working-tree files can currently be recovered, and no final qualification claim.
+
+### Working-tree work awaiting recovery and publication
+
+The following changes had been implemented or reviewed locally but are not
+included in the published feature commit:
+
+- CLI policy composition for machine, user, project and additive file layers;
+  fresh operation sessions; source checks before acquisition; original requested
+  pin facts; selected dependency closure and publication/apply checks.
+- `policy init/validate/status/check`, safe structured refusal diagnostics,
+  additive candidate checks, guide and architecture documentation.
+- CLI, SDK and management refinements for retained inputs, policy changes,
+  unchanged dependencies, removal-only operations and read-only validation.
+- Focused regressions plus three production-composition archive E2E cases.
+- Additional review fixes and the saved-repair correction described below.
+  The final repair patch was submitted to the executor without a successful
+  response; inspect its actual on-disk state before applying or publishing it.
+
+Recover and inspect the existing checkout before creating any replacement.
+Preserve uncommitted work. Check for partial or truncated files after the earlier
+disk-pressure errors, then publish a coherent integration checkpoint promptly.
+
+### Review findings incorporated in the local integration
+
+R8 combined path review: policy applies to selected additions/updates and their
+transitive closure, including warm and unchanged packages. Unrelated retained
+packages must not block a selected operation merely because they would now be
+denied. Cold acquisition still needs source admission. Validated removal-only
+plans bypass installation admission while preserving ownership and integrity
+checks. Ordinary read-only validation must not become unusable under a denied
+or malformed installation policy.
+
+R9 lifecycle and diagnostics review: a fresh user operation must receive a fresh
+policy session; preparation and apply within one operation retain the same
+session. Check all group inputs before host preparation. Preserve original
+requested pin facts through facade and binding inputs. Emit one safe structured
+JSON result on a late refusal; preserve typed causes and writer failures.
+
+R10 saved-repair review, still requiring completion and tests:
+
+1. Recorded resolved Git commits and archive digests authorize exact acquisition;
+   they do not prove that the original user requested a pinned source. Reset
+   synthesized requested facts to unknown, then recover them only from a valid
+   saved agreement matching alias, source key, tree digest, manifest digest and
+   immutable revision. Alias equality is necessary: another alias must never
+   lend its requested intent to a historical receipt.
+2. Check the selected transitive closure for repair before preparation and again
+   before apply. The root must remain the exact recorded repair revision even
+   when current desired intent points to a newer revision. Check known sources
+   before cold reads, hydrate missing recorded executable inventory, verify
+   actual declared edges, and evaluate full envelopes. Missing historical
+   dependency evidence must fail closed rather than silently approving only the
+   root. Keep the existing resolver, acquisition identity and persisted formats.
+3. Cover both ordinary repair and management repair; apply must reuse the
+   operation's policy session. Preserve existing rollback and removal behavior.
+
+### Observed verification and limits
+
+- Targeted shared domain/adapter and initial core admission tests passed before
+  later integration refinements.
+- The three tagged production-composition Enterprise archive E2E cases passed
+  locally in 3.065 seconds: source refusal before HTTP; tightening with safe
+  removal and a fresh operation; import-install refusal before publication.
+  This result predates subsequent diagnostics and repair corrections and is not
+  qualification of the final source or of the published partial feature.
+- Focused CLI tests exposed restricted-host Git fixture failures and a fixture
+  setup bug. Removal cases were rewritten to real local TLS archives; their
+  final rerun was still pending. Do not count the earlier failing run as a pass.
+- Required lint found three concrete complexity/size issues; local refactors
+  addressed them. The last rerun lost its execution environment before returning
+  a result. Full `make test-core` and final portable package-manager qualification
+  were not completed.
+- At the published feature head, Dependency Review succeeded; core/required and
+  several other GitHub workflows were queued, while Draft-only skips remained
+  skipped. Queued or skipped checks are not passing checks. No inline review
+  threads were present when the interruption status was recorded.
+
+### Resume and merge gates
+
+1. Recover the working tree, inspect the saved-repair patch state, include the
+   alias-match correction, and add real archive regressions for floating versus
+   explicitly pinned repair, denied transitives, changed desired root, alias
+   isolation, policy changes before apply and effect-free refusals.
+2. Run formatting, diff checks and required `make lint`; rerun affected policy,
+   legacy-schema, diagnostic, removal, scope, read-only and repair tests plus
+   shared core admission tests. Use one bounded compilation process if the
+   execution host remains resource-constrained.
+3. Run `make test-core`, the three tagged Enterprise E2E cases and the relevant
+   documented portable package-manager archive suite with sources frozen. Keep
+   actual Git/native-runtime environment limitations explicit; do not bypass
+   source guards or claim real vendor execution from isolated fixtures.
+4. Publish each completed commit immediately. Review the exact final source and
+   remote review threads/checks, fix concrete findings, then mark the PR ready.
+5. Perform the ordinary expected-head merge only after these gates, and verify
+   the actual merged main revision. Do not release or tag.
