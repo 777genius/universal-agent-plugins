@@ -557,5 +557,109 @@ class RetentionLifecycleIntegrationTests(unittest.TestCase):
         self.assertNotIn("codex_system_skill_retention", row)
 
 
+@unittest.skipUnless(sys.platform == "linux", "Linux fd custody only")
+class RuntimeEnvelopeTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+
+    def files(self, root, count):
+        root.mkdir(parents=True, exist_ok=True)
+        for index in range(count):
+            (root / str(index)).touch()
+
+    def capture(self, **kwargs):
+        tree = API["HeldTree"](self.root, **kwargs)
+        self.addCleanup(tree.close)
+        return tree
+
+    def counter(self, prefixes):
+        tree = object.__new__(API["HeldTree"])
+        tree.runtime_prefixes = API["_runtime_prefixes"](prefixes)
+        tree.ordinary_members = tree.runtime_members = 0
+        return tree
+
+    def test_default_still_refuses_10001_actual_members_and_closes_descriptors(self):
+        self.files(self.root, 10000)  # Root directory is the 10,001st member.
+        quota = API["Descriptors"]()
+        with self.assertRaisesRegex(ValueError, "tree exceeds bound"):
+            self.capture(quota=quota)
+        self.assertEqual(quota.owned, set())
+        self.assertEqual(quota.scans, 0)
+
+    def test_qualified_runtime_over_10000_keeps_all_original_descriptors_and_bytes(self):
+        self.files(self.root / "runtime/node_modules/a", 5000)
+        self.files(self.root / "runtime/node_modules/b", 5000)
+        tree = self.capture(runtime_prefixes=("runtime/node_modules",))
+        self.assertEqual((tree.ordinary_members, tree.runtime_members), (2, 10003))
+        self.assertEqual(len(tree.nodes), 10005)
+        self.assertEqual(len(tree.fds), len(tree.nodes) + len(tree.ancestors))
+        self.assertEqual(tree.quota.limit, API["FD_LIMIT"] + 24576)
+        tree.verify()
+        (self.root / "runtime/node_modules/a/0").write_bytes(b"changed")
+        with self.assertRaises(ValueError): tree.verify()
+        descriptors = tuple(tree.fds.values())
+        tree.close()
+        self.assertEqual(tree.quota.owned, set())
+        for fd in descriptors:
+            with self.assertRaises(OSError): os.fstat(fd)
+
+    def test_outside_runtime_still_has_one_aggregate_10000_member_budget(self):
+        (self.root / "runtime/node_modules").mkdir(parents=True)
+        self.files(self.root / "outside-a", 5000)
+        self.files(self.root / "outside-b", 5000)
+        quota = API["Descriptors"](runtime_envelope=True)
+        with self.assertRaisesRegex(ValueError, "tree exceeds bound"):
+            self.capture(runtime_prefixes=("runtime/node_modules",), quota=quota)
+        self.assertEqual(quota.owned, set())
+
+    def test_scoped_boundary_is_fixed_and_cannot_borrow_unused_ordinary_members(self):
+        tree = self.counter(("runtime/node_modules",))
+        tree._claim_member("runtime/node_modules")
+        for index in range(24575): tree._claim_member("runtime/node_modules/" + str(index))
+        self.assertEqual(tree.runtime_members, 24576)
+        with self.assertRaisesRegex(ValueError, "fixed member bound"):
+            tree._claim_member("runtime/node_modules/extra")
+        tree._claim_member(".")
+        for index in range(9999): tree._claim_member("runtime/node_modules-extra/" + str(index))
+        self.assertEqual(tree.ordinary_members, 10000)
+        with self.assertRaisesRegex(ValueError, "tree exceeds bound"):
+            tree._claim_member("outside")
+
+    def test_unsafe_multiple_overlapping_and_missing_prefixes_refuse_before_authority(self):
+        invalid = (None, "node_modules", ("",), (".",), ("/node_modules",), ("../node_modules",),
+                   ("a//node_modules",), ("a/./node_modules",), ("a/../node_modules",), ("node_modules/",),
+                   ("a\\node_modules",), ("C:/node_modules",), ("a/\n/node_modules",), ("runtime",),
+                   ("node_modules", "other/node_modules"), ("node_modules", "node_modules/a/node_modules"))
+        for prefixes in invalid:
+            with self.subTest(prefixes=prefixes), self.assertRaises(ValueError):
+                self.capture(runtime_prefixes=prefixes)
+        for kind in ("missing", "file", "link"):
+            path = self.root / "node_modules"
+            if path.is_symlink() or path.exists(): path.unlink()
+            if kind == "file": path.touch()
+            if kind == "link": path.symlink_to("missing-target")
+            with self.subTest(kind=kind), self.assertRaises(ValueError):
+                self.capture(runtime_prefixes=("node_modules",))
+
+    def test_explicit_shared_quota_is_never_widened_and_cleanup_keeps_its_original_fd(self):
+        (self.root / "node_modules").mkdir()
+        quota = API["Descriptors"]()
+        original = quota.open(self.root, os.O_RDONLY | os.O_DIRECTORY, budget=API["Budget"]())
+        self.addCleanup(lambda: quota.close_all(tuple(quota.owned)))
+        tree = self.capture(runtime_prefixes=("node_modules",), quota=quota)
+        self.assertIs(tree.quota, quota)
+        self.assertFalse(quota.runtime_envelope)
+        self.assertEqual(quota.limit, API["FD_LIMIT"])
+        tree.close()
+        self.assertEqual(quota.owned, {original})
+        globals_ = API["HeldTree"].__init__.__globals__
+        with patch.dict(globals_, FD_LIMIT=2), self.assertRaisesRegex(ValueError, "descriptor quota"):
+            self.capture(runtime_prefixes=("node_modules",), quota=quota)
+        self.assertEqual(quota.owned, {original})
+        self.assertEqual(quota.scans, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

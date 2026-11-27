@@ -667,6 +667,19 @@ jobs:
           fi
           if [[ "$AUDIT_TARGET" == windsurf && "$AUDIT_KIND" == plugin ]]; then
             [[ "$(command -v go)" == "$audit_go" ]]
+            # Hold the complete qualified runtime within the host's existing
+            # hard limit. The reader keeps its separate finite object quotas.
+            audit_fd_minimum="$(PYTHONPATH=scripts python3 -c 'from codex_plugin_retention_audit import Descriptors; print(Descriptors(runtime_envelope=True).limit)')"
+            audit_fd_soft="$(ulimit -Sn)"
+            audit_fd_hard="$(ulimit -Hn)"
+            if [[ "$audit_fd_hard" != unlimited && "$audit_fd_hard" -lt "$audit_fd_minimum" ]]; then
+              printf 'Windsurf custody requires %s descriptors; host hard limit is %s\n' "$audit_fd_minimum" "$audit_fd_hard" >&2
+              exit 1
+            fi
+            if [[ "$audit_fd_soft" != unlimited && "$audit_fd_soft" -lt "$audit_fd_minimum" ]]; then
+              ulimit -S -n "$audit_fd_minimum"
+            fi
+            printf 'Windsurf custody descriptors: required=%s soft=%s hard=%s\n' "$audit_fd_minimum" "$(ulimit -Sn)" "$audit_fd_hard"
           fi
           if [[ "$AUDIT_TARGET" == kiro && "$AUDIT_KIND" == plugin ]]; then
             [[ "$(command -v docker)" == "$RUNNER_TEMP/vendor-root/usr/bin/docker" ]]

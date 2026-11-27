@@ -17,6 +17,8 @@ import tomllib
 FILE_LIMIT = 64 << 20
 TOTAL_LIMIT = 256 << 20
 MEMBER_LIMIT = 10000
+# One separately qualified dependency subtree; never an ownership grant.
+RUNTIME_MEMBER_LIMIT = 24576
 DEPTH_LIMIT = 64
 FD_LIMIT = 2 * MEMBER_LIMIT + 3 * DEPTH_LIMIT + 1
 SECONDS_LIMIT = 5
@@ -35,13 +37,21 @@ class Budget:
 
 class Descriptors:
     """One aggregate quota for both retained trees and transient authority reads."""
-    def __init__(self):
+    def __init__(self, *, runtime_envelope=False):
+        if type(runtime_envelope) is not bool:
+            raise ValueError("retention runtime descriptor envelope must be explicit")
+        self.runtime_envelope = runtime_envelope
         self.owned = set()
         self.scans = 0
 
+    @property
+    def limit(self):
+        # Retain the existing shared-tree/ancestor reserve plus one finite scope.
+        return FD_LIMIT + (RUNTIME_MEMBER_LIMIT if self.runtime_envelope else 0)
+
     def open(self, path, flags, *, parent=None, budget):
         budget.check()
-        if len(self.owned) + self.scans >= FD_LIMIT:
+        if len(self.owned) + self.scans >= self.limit:
             raise ValueError("retention aggregate descriptor quota exceeded")
         fd = os.open(path, flags, dir_fd=parent)
         self.owned.add(fd)
@@ -116,10 +126,27 @@ def _read_regular(fd, before, budget, *, collect=False, limit=None):
     return (result, b"".join(chunks)) if collect else result
 
 
+def _runtime_prefixes(values):
+    """Resource scopes only: the caller must establish receipt/source authority."""
+    if type(values) not in (tuple, list, set, frozenset) or len(values) > 1:
+        raise ValueError("retention permits at most one qualified runtime prefix")
+    for value in values:
+        if (type(value) is not str or not re.fullmatch(r"[A-Za-z0-9_.@/-]{1,4096}", value)
+                or Path(value).is_absolute() or Path(value).as_posix() != value
+                or any(part in ("", ".", "..") for part in value.split("/"))
+                or value.split("/")[-1] != "node_modules" or len(value.split("/")) > DEPTH_LIMIT):
+            raise ValueError("retention runtime prefix is not canonical node_modules authority")
+    return tuple(values)
+
+
 class HeldTree:
-    def __init__(self, root, *, bin_links=False, quota=None, budget=None):
+    """Hold every original object; callers qualify any extended runtime scope."""
+
+    def __init__(self, root, *, bin_links=False, quota=None, budget=None, runtime_prefixes=()):
         self.root, self.bin_links = Path(root), bin_links
-        self.quota = quota if quota is not None else Descriptors()
+        self.runtime_prefixes = _runtime_prefixes(runtime_prefixes)
+        self.ordinary_members, self.runtime_members = 0, 0
+        self.quota = quota if quota is not None else Descriptors(runtime_envelope=bool(self.runtime_prefixes))
         budget = budget if budget is not None else Budget()
         self.fds, self.nodes, self.ancestors, self.total = {}, {}, {}, 0
         try:
@@ -133,6 +160,8 @@ class HeldTree:
                 self.fds[("ancestor", str(parent))] = fd
                 self.ancestors[parent] = _object(os.fstat(fd))
             self._capture(".", None, str(self.root), 0, budget)
+            if any(self.nodes.get(prefix, (None,))[0] != "directory" for prefix in self.runtime_prefixes):
+                raise ValueError("retention runtime prefix is not a captured directory")
             self.verify(budget=budget)
             budget.check()
         except BaseException:
@@ -154,7 +183,7 @@ class HeldTree:
     def _names(self, fd, budget):
         budget.check()
         # CPython scandir(fd) owns one temporary duplicate descriptor.
-        if len(self.quota.owned) + self.quota.scans >= FD_LIMIT:
+        if len(self.quota.owned) + self.quota.scans >= self.quota.limit:
             raise ValueError("retention directory scan descriptor quota exceeded")
         self.quota.scans += 1
         try:
@@ -172,7 +201,8 @@ class HeldTree:
 
     def _capture(self, relative, parent, name, depth, budget):
         budget.check()
-        if depth > DEPTH_LIMIT or len(self.nodes) >= MEMBER_LIMIT:
+        self._claim_member(relative)
+        if depth > DEPTH_LIMIT:
             raise ValueError("retention tree exceeds bound")
         before = os.stat(name, dir_fd=parent, follow_symlinks=False)
         mode = before.st_mode
@@ -212,6 +242,17 @@ class HeldTree:
                 or _identity(self._named(relative)) != _identity(before)):
             raise ValueError("retention object changed during capture")
         budget.check()
+
+    def _claim_member(self, relative):
+        scoped = any(relative == prefix or relative.startswith(prefix + "/") for prefix in self.runtime_prefixes)
+        if scoped:
+            if self.runtime_members >= RUNTIME_MEMBER_LIMIT:
+                raise ValueError("retention qualified runtime exceeds fixed member bound")
+            self.runtime_members += 1
+        else:
+            if self.ordinary_members >= MEMBER_LIMIT:
+                raise ValueError("retention tree exceeds bound")
+            self.ordinary_members += 1
 
     def _link_target(self, relative, target):
         if not target or Path(target).is_absolute() or target.endswith(("/", "/.")):
