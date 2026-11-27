@@ -92,7 +92,7 @@ type SkillSourceGate func(context.Context, string) (func(context.Context) error,
 // When skills is absent, publish the entire new skills directory in one rename;
 // a concurrent creator wins or loses that same no-replace operation cleanly.
 func ApplySkill(ctx context.Context, p SkillPlan, exactRoot string, gate SkillSourceGate, validate SkillValidation) (Result, error) {
-	return applySkill(ctx, p, exactRoot, gate, validate, applyOps{write: writeTree, rename: renameExclusive})
+	return applySkill(ctx, p, exactRoot, gate, validate, applyOps{write: writeTree, publish: renamePackage})
 }
 
 func applySkill(ctx context.Context, p SkillPlan, exactRoot string, gate SkillSourceGate, validate SkillValidation, ops applyOps) (result Result, err error) {
@@ -215,9 +215,15 @@ func applySkill(ctx context.Context, p SkillPlan, exactRoot string, gate SkillSo
 		}
 	}()
 	stage := ".authoring-" + rand.Text()
-	if e = makePrivateStage(parent, stage); e != nil {
+	stageGuard, e := makePrivateSkillStage(parent, stage)
+	if e != nil {
 		return result, e
 	}
+	defer func() {
+		if e := stageGuard.Close(); e != nil {
+			err = errors.Join(err, &CleanupError{e})
+		}
+	}()
 	stageInfo, e := parent.Lstat(stage)
 	if e != nil {
 		return result, &CleanupError{e}
@@ -287,24 +293,9 @@ func applySkill(ctx context.Context, p SkillPlan, exactRoot string, gate SkillSo
 	if e = validate(ctx, body); e != nil {
 		return result, e
 	}
-	if e = verifyTree(ctx, payload, files); e != nil {
-		return result, e
-	}
-	if e = precondition(); e != nil {
-		return result, e
-	}
-	reservationNow, e := source.Lstat(reservation)
-	if e != nil || !os.SameFile(reserved, reservationNow) {
-		return result, errors.New("skill reservation ownership changed")
-	}
-	now, e = parent.Lstat(stage)
-	if e != nil || !os.SameFile(stageInfo, now) {
-		return result, errors.New("stage ownership changed")
-	}
-	now, e = owned.Lstat("payload")
-	if e != nil || !now.IsDir() || now.Mode()&os.ModeSymlink != 0 || !os.SameFile(payloadInfo, now) {
-		return result, errors.New("payload ownership changed")
-	}
+	publication := skillPublication{ctx: ctx, precondition: precondition, source: source, parent: parent,
+		owned: owned, payload: payload, reservation: reservation, stage: stage,
+		reserved: reserved, stageInfo: stageInfo, payloadInfo: payloadInfo, files: files}
 	from, e := owned.Open(".")
 	if e != nil {
 		return result, e
@@ -313,8 +304,9 @@ func applySkill(ctx context.Context, p SkillPlan, exactRoot string, gate SkillSo
 	if e != nil {
 		return result, errors.Join(e, from.Close())
 	}
-	e = ctx.Err()
-	if e == nil {
+	if ops.publish != nil {
+		e = ops.publish(ctx, from, "payload", to, destination, publication.check)
+	} else if e = publication.check(); e == nil {
 		e = ops.rename(from, "payload", to, destination)
 	}
 	if e == nil {

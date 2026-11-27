@@ -292,22 +292,33 @@ func TestInitCollisionCancelAndConcurrent(t *testing.T) {
 			if strings.HasPrefix(kind, "concurrent") {
 				start := make(chan struct{})
 				var wg sync.WaitGroup
-				results := make(chan report.Report, 2)
+				type attempt struct {
+					Report report.Report
+					Err    error
+				}
+				results := make(chan attempt, 2)
 				for i := 0; i < 2; i++ {
 					wg.Add(1)
-					go func() { defer wg.Done(); <-start; r, _ := s.Init(context.Background(), req); results <- r }()
+					go func() {
+						defer wg.Done()
+						<-start
+						r, err := s.Init(context.Background(), req)
+						results <- attempt{r, err}
+					}()
 				}
 				close(start)
 				wg.Wait()
 				close(results)
 				committed := 0
+				var observed []attempt
 				for r := range results {
-					if r.Committed {
+					observed = append(observed, r)
+					if r.Report.Committed {
 						committed++
 					}
 				}
 				if committed != 1 {
-					t.Fatalf("expected one commit, got %d", committed)
+					t.Fatalf("expected one commit, got %d: attempts=%+v", committed, observed)
 				}
 			} else {
 				ctx, cancel := context.WithCancel(context.Background())

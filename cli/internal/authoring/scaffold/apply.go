@@ -57,7 +57,7 @@ func Apply(ctx context.Context, p Plan, o ApplyOptions) (Result, error) {
 type applyOps struct {
 	write  func(context.Context, *os.Root, []File) error
 	rename func(*os.File, string, *os.File, string) error
-	// Package publication alone supports a checked retry; ApplySkill uses rename.
+	// Checked publication revalidates the complete package or Skill authority.
 	publish func(context.Context, *os.File, string, *os.File, string, func() error) error
 }
 
