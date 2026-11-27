@@ -53,7 +53,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
 
-    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.os == 'ubuntu-latest' && matrix.os || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
+    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.os == 'ubuntu-latest' && matrix.os || github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && matrix.os || startsWith(matrix.os, 'ubuntu-') && (vars.CI_POLYGLOT_SMOKE_RUNNER || vars.CI_CORE_TEST_RUNNER || vars.CI_LINUX_RUNNER || matrix.os) || matrix.os }}
     steps:
       - uses: actions/checkout@v6
 
