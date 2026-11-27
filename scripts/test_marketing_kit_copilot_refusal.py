@@ -34,7 +34,7 @@ class CopilotConsentDiagnosticContracts(unittest.TestCase):
                   "scope": "project", "attempt": 1, "os": "linux", "arch": "amd64"}
         bindings = [{"type": "binding", "alias": alias, "client": "copilot", "status": "incomplete",
                      "code": "FAILED", "summary": "The installation did not complete for this agent.",
-                     "detail": f"{alias}/copilot: incomplete: {REASON}"} for alias, _ in receipts]
+                     "detail": REASON} for alias, _ in receipts]
         return [header, *bindings]
 
     def write_log(self, data, receipts, *, records=None, name=LOG_NAME, body=None):
@@ -105,6 +105,20 @@ class CopilotConsentDiagnosticContracts(unittest.TestCase):
             self.assertEqual(RUNNER["copilot_cold_data_snapshot"](data), checkpoints[0])
             self.assertTrue((data / "logs" / LOG_NAME).is_file())
             self.assertFalse((Path(env["HOME"]) / ".copilot/config.json").exists())
+
+    def test_prefixed_sync_error_detail_cannot_replace_released_installer_error(self):
+        # Released apply_package.go returns the incomplete result together with
+        # its error, so coordinator.applyBinding preserves that error verbatim.
+        # Its alias/client prefix belongs only to the nil-error fallback branch.
+        with TemporaryDirectory() as directory:
+            _, _, data, before, receipts = self.fixture(Path(directory))
+            records = self.records(receipts)
+            for record in records[1:]:
+                self.assertEqual(record["detail"], REASON)
+                record["detail"] = f'{record["alias"]}/copilot: incomplete: {REASON}'
+            self.write_log(data, receipts, records=records)
+            with self.assertRaisesRegex(AssertionError, "differs from verified consent refusal"):
+                self.check(data, before, receipts)
 
     def test_valid_log_stays_in_complete_snapshot(self):
         with TemporaryDirectory() as directory:
