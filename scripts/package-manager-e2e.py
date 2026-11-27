@@ -119,7 +119,7 @@ def isolated_environment(root, caches):
         "GOROOT", "GOTOOLCHAIN", "GOPROXY", "GOSUMDB", "GONOSUMDB", "GONOPROXY",
         "GOPRIVATE", "CGO_ENABLED", "CC", "CXX", "SDKROOT", "DEVELOPER_DIR",
         "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "SSL_CERT_FILE",
-        "SSL_CERT_DIR", "GOMAXPROCS",
+        "SSL_CERT_DIR", "GOMAXPROCS", "GOGC", "GOMEMLIMIT",
     }
     env = {}
     for key, value in sorted(os.environ.items()):

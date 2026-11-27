@@ -18,6 +18,22 @@ SPEC.loader.exec_module(RUNNER)
 
 
 class EvidenceAcceptanceTests(unittest.TestCase):
+    def test_isolated_environment_preserves_go_limits_and_strips_account_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.dict(os.environ, {"GOGC": "25", "GOMEMLIMIT": "512MiB", "GOMAXPROCS": "2",
+                                         "OPENAI_API_KEY": "fixture-secret", "ANTHROPIC_API_KEY": "fixture-secret",
+                                         "GITHUB_TOKEN": "fixture-secret", "CODEX_HOME": "/fixture/account",
+                                         "CLAUDE_CONFIG_DIR": "/fixture/account"}, clear=True):
+                env = RUNNER.isolated_environment(root, {"GOCACHE": str(root / "go-cache")})
+            self.assertEqual(env["GOGC"], "25")
+            self.assertEqual(env["GOMEMLIMIT"], "512MiB")
+            self.assertEqual(env["GOMAXPROCS"], "2")
+            for key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN"):
+                self.assertNotIn(key, env)
+            self.assertEqual(env["CODEX_HOME"], str(root / "codex"))
+            self.assertEqual(env["CLAUDE_CONFIG_DIR"], str(root / "claude"))
+
     def test_empty_duplicate_or_unsafe_case_inventory_is_refused(self):
         for cases in [[], {}, ["same", "same"], ["a/b"], [""], [1], ["PASS"]]:
             with self.subTest(cases=cases), self.assertRaises(ValueError):
