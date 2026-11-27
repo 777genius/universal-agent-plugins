@@ -1,6 +1,6 @@
 # Batch Update and Partial Removal Follow-up
 
-Status: v2 — R1 findings incorporated; second independent review pending. Implementation has not started.
+Status: v3 — two independent critique/revision rounds completed; approved for bounded implementation. Code and test implementation has not started.
 Date: 2026-11-27
 Baseline: `main@472d0b157f21b1b5c2a5b716ccc8f49577e7262f`
 Delivery: one Draft PR; publish every commit immediately.
@@ -207,6 +207,17 @@ Independent A/B and C reviewers requested revisions before implementation. Accep
 - execute Draft RED through Core, then mark Ready before full qualification.
 
 No source, test, CI or release implementation was added during R1.
+
+## R2 review and final implementation boundary
+
+Both independent reviewers approved v2 after checking the revised source/fixture contracts.
+A/B review confirmed that current-release preparation retains existing authority, signed-byte
+verification remains honestly bounded, and the safe wrapper/result-reported marker protects
+typed causes and single JSON ownership. C review confirmed that only external-completed target
+wording needs enclosing outcome context; use the operation status, not a failure count.
+
+v3 records those approvals before any test or production implementation. Keep code review and
+executed RED/GREEN evidence separate from these planning approvals. No new scope was added in R2.
 
 ## Estimates and confidence
 
