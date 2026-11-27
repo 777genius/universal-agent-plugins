@@ -324,6 +324,44 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     self.assertFalse(sink[0]["native_capture_returned"])
                     self.assertFalse(sink[0]["clock_window_valid"])
 
+    def test_user_initialize_missing_passive_baseline_refuses_before_capture_or_observer(self):
+        for baseline in ("absent", "no-owned-usage"):
+            with self.subTest(baseline=baseline):
+                with self.fixture() as f:
+                    path = f["profile"] / ".claude.json"
+                    if baseline == "no-owned-usage":
+                        path.write_text(json.dumps({"firstStartVersion": "2.1.263", "pluginUsage": {},
+                                                    "foreign": {"preserve": "original"}}))
+                        path.chmod(0o600)
+                    original = path.read_bytes() if path.exists() else None
+                    subject = self.capture(f)
+                    self.retire(f)
+                    subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f), keep_open=True)
+                    self.assertEqual(subject.passive_usage, [])
+                    self.assertIsNone(subject.usage_contract)
+                    authority, native, _ = self.user_authority_fixture(f, subject)
+                    descriptors = tuple(subject.fds)
+                    offsets = {fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in descriptors}
+                    captures, observations = [], []
+                    with self.assertRaisesRegex(ValueError,
+                            r"^Claude User initialization requires a held passive \.claude\.json baseline$"):
+                        subject.stage_user_initialize(authority, lambda: captures.append(True), native,
+                            observer=lambda capture: observations.append(True))
+                    self.assertEqual(captures, [])
+                    self.assertEqual(observations, [])
+                    self.assertIsNone(authority["pending"])
+                    self.assertEqual(authority["phase"], "before")
+                    self.assertIsNone(subject.user_usage)
+                    self.assertEqual(subject.detached_usage, [])
+                    self.assertEqual(tuple(subject.fds), descriptors)
+                    self.assertEqual({fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in descriptors}, offsets)
+                    self.assertEqual(path.read_bytes() if path.exists() else None, original)
+                    subject.checkpoint()
+                self.assertEqual(subject.fds, [])
+                for fd in descriptors:
+                    with self.assertRaises(OSError):
+                        os.fstat(fd)
+
     def test_user_initialize_receipt_bound_full_lifecycle_retains_original_descriptors(self):
         with self.user_diagnostic_fixture() as (f, subject, path):
             authority, native, receipt = self.user_authority_fixture(f, subject)
@@ -701,14 +739,22 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 if temporary:
                     second.write_bytes(expected); second.chmod(0o600)
                 original_open, original_pread = os.open, os.pread
-                opened, read_bodies, swaps = [], [], []
+                opened, read_bodies, redirected = [], [], []
+                home_identity = (f["home"].stat().st_dev, f["home"].stat().st_ino)
+                shadow_identity = (shadow.stat().st_dev, shadow.stat().st_ino)
+                descriptors = tuple(subject.fds)
+                offsets = {fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in descriptors}
                 def open_aba(name, *args, **kwargs):
-                    if name == path.name and "dir_fd" in kwargs and not swaps:
-                        swaps.append(True)
+                    parent = kwargs.get("dir_fd")
+                    if (name == f["profile"].name and args[0] & os.O_DIRECTORY
+                            and parent is not None
+                            and (os.fstat(parent).st_dev, os.fstat(parent).st_ino) == home_identity):
                         f["profile"].rename(parked)
                         shadow.rename(f["profile"])
                         try:
                             fd = original_open(name, *args, **kwargs)
+                            info = os.fstat(fd)
+                            redirected.append((info.st_dev, info.st_ino))
                         finally:
                             f["profile"].rename(shadow)
                             parked.rename(f["profile"])
@@ -728,13 +774,16 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                         with self.assertRaisesRegex(ValueError, "passive usage temporary bound") as caught:
                             subject.require_temporary_bound([pending, second], "capture")
                         detail = caught.exception.claude_temporary_bound_diagnostic
-                        self.assertEqual(detail["members"][0]["status"], "unavailable")
+                        self.assertTrue(all(row["status"] == "unavailable" for row in detail["members"]))
                         self.assertNotIn(hashlib.sha256(foreign).hexdigest(), json.dumps(detail))
                     else:
                         with self.assertRaises(ValueError):
                             retirement._diagnostic_named_image(path, f["root"], f["audit"])
-                self.assertEqual(swaps, [True])
-                self.assertNotIn(foreign, read_bodies)
+                self.assertEqual(redirected, [shadow_identity] * (2 if temporary else 1))
+                self.assertEqual(read_bodies, [])
+                self.assertTrue(opened)
+                self.assertEqual(tuple(subject.fds), descriptors)
+                self.assertEqual({fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in descriptors}, offsets)
                 for fd in opened:
                     with self.assertRaises(OSError):
                         os.fstat(fd)
@@ -1284,13 +1333,21 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 shadow.mkdir(); (shadow / path.name).write_bytes(foreign)
                 (shadow / path.name).chmod(0o600)
                 original_open, original_pread = os.open, os.pread
-                opened, reads, swaps = [], [], []
+                opened, reads, redirected = [], [], []
+                home_identity = (f["home"].stat().st_dev, f["home"].stat().st_ino)
+                shadow_identity = (shadow.stat().st_dev, shadow.stat().st_ino)
                 original_descriptors = tuple(subject.fds)
+                offsets = {fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in original_descriptors}
                 def open_aba(name, *args, **kwargs):
-                    if name == path.name and "dir_fd" in kwargs and not swaps:
-                        swaps.append(True)
+                    parent = kwargs.get("dir_fd")
+                    if (name == f["profile"].name and args[0] & os.O_DIRECTORY
+                            and parent is not None
+                            and (os.fstat(parent).st_dev, os.fstat(parent).st_ino) == home_identity):
                         f["profile"].rename(parked); shadow.rename(f["profile"])
-                        try: fd = original_open(name, *args, **kwargs)
+                        try:
+                            fd = original_open(name, *args, **kwargs)
+                            info = os.fstat(fd)
+                            redirected.append((info.st_dev, info.st_ino))
                         finally:
                             f["profile"].rename(shadow); parked.rename(f["profile"])
                     else: fd = original_open(name, *args, **kwargs)
@@ -1303,10 +1360,18 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     with self.assertRaises(ValueError):
                         if operation == "image": subject.passive_image(path, held["fd"])
                         else: subject.held_passive_document(path)
-                self.assertEqual(swaps, [True])
-                self.assertNotIn(foreign, reads)
+                self.assertEqual(redirected, [shadow_identity])
+                self.assertEqual(reads, [])
+                self.assertTrue(opened)
+                retained = set(subject.fds)
+                self.assertEqual(len(retained - set(original_descriptors)), 1 if operation == "document" else 0)
+                for fd in set(opened) - retained:
+                    with self.assertRaises(OSError): os.fstat(fd)
+                for fd in retained:
+                    os.fstat(fd)
+                self.assertEqual({fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in original_descriptors}, offsets)
                 subject.close()
-                for fd in set((*opened, *original_descriptors)):
+                for fd in set(opened) | retained:
                     with self.assertRaises(OSError): os.fstat(fd)
 
     def test_passive_usage_rejects_same_inode_rewrites_without_owned_deletion(self):

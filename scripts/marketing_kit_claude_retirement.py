@@ -662,6 +662,8 @@ class SignedClosureRetirement:
                 owner = owners[row["id"].split("@", 1)[0]]
                 require(all(type(row.get(key)) is type(owner[key]) and row[key] == owner[key]
                             for key in ("id", "version", "scope", "enabled", "installPath")))
+        if not self.passive_usage:
+            raise ValueError("Claude User initialization requires a held passive .claude.json baseline")
         old = self.passive_usage[0]
         before = _diagnostic_image(old["fd"], self.audit)
         require((before["identity"], before["uid"], before["gid"], before["sha256"]) == old["image"])
