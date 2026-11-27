@@ -2751,11 +2751,11 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 self.assertions.assertEqual(set(public), runner["EXPECTED"])
                 return {"phase": "before", "pending": False, "data": data}
 
-            def stage_user_initialize(self, authority, action, rows, *, removed=False):
+            def stage_user_initialize(self, authority, action, rows, *, removed=False, observer=None):
                 self.checkpoint()
                 self.assertions.assertEqual(authority["phase"], "removed" if removed else "before")
                 self.assertions.assertFalse(authority["pending"])
-                result = action()
+                result = action() if observer is None else observer(action)
                 authority["pending"] = True
                 phases.append("claude-user-pending:" + ("after" if removed else "before"))
                 return result

@@ -2325,10 +2325,10 @@ def main():
                     authority = claude_a_retirement.user_initialize_authority(
                         Path(e["AGENTPLUGINS_HOME"]), read_inventory(options.cli, e, p, "claude", "user"))
                     def initialize(action, native_rows):
-                        return claude_retirement["observe_user_initialize_diagnostic"](
-                            claude_a_retirement,
-                            lambda: claude_a_retirement.stage_user_initialize(authority, action, native_rows),
-                            report.setdefault("claude_user_initialize_diagnostics", []))
+                        return claude_a_retirement.stage_user_initialize(authority, action, native_rows,
+                            observer=lambda capture: claude_retirement["observe_user_initialize_diagnostic"](
+                                claude_a_retirement, capture,
+                                report.setdefault("claude_user_initialize_diagnostics", [])))
                     probe_options["initialize"] = initialize
                 try:
                     before = claude_read(e, p, lambda: claude_discovery.before_remove(

@@ -1,5 +1,6 @@
 """Real filesystem controls for signed four-package Claude cache custody."""
 import copy
+import ast
 from contextlib import ExitStack, contextmanager
 import hashlib
 import json
@@ -232,6 +233,96 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             subject.stage_user_initialize(authority, writer, native, removed=removed)
         return {"scope": "user", "home": str(subject.home), "project": str(subject.project),
                 "native_rows": copy.deepcopy(native)}
+
+    def main_user_initialize(self, subject, authority, action, native, sink):
+        # Exercise the actual nested main seam without module startup or clients.
+        source = getattr(self, "user_initialize_main_source", None)
+        if source is None:
+            source = (ROOT / "scripts/marketing-kit-project-release-e2e.py").read_text()
+        main = ast.parse(source)
+        owner = next(node for node in ast.walk(main) if isinstance(node, ast.FunctionDef)
+                     and node.name == "claude_before_remove")
+        initialize = next(node for node in ast.walk(owner) if isinstance(node, ast.FunctionDef)
+                          and node.name == "initialize")
+        namespace = {"authority": authority, "claude_a_retirement": subject,
+                     "claude_retirement": retirement.__dict__,
+                     "report": {"claude_user_initialize_diagnostics": sink}}
+        exec(compile(ast.Module(body=[initialize], type_ignores=[]), "<actual-main-initialize>", "exec"), namespace)
+        return namespace["initialize"](action, native)
+
+    def diagnostic_user_writer(self, path, clock, *, checkpoint_timestamp=False, invalid_count=False):
+        document = json.loads(path.read_bytes())
+        stamp = clock[0] - 5 if checkpoint_timestamp else clock[0] + 1
+        for key in retirement._DIAGNOSTIC_USER_KEYS:
+            document["pluginUsage"][key] = {"usageCount": 1 if invalid_count else 0,
+                "lastUsedAt": stamp, "lastUsedNumStartups": 0}
+        replacement = path.with_name("diagnostic-initialize-replacement")
+        replacement.write_text(json.dumps(document)); replacement.chmod(0o600); replacement.replace(path)
+        clock[0] += 5
+        return b"held native capture", {"exit": 0, "error": None, "stderr_bytes": 0}
+
+    def test_main_user_observer_excludes_stage_and_observer_checkpoint_timestamps(self):
+        with self.user_diagnostic_fixture() as (f, subject, path):
+            authority, native, _ = self.user_authority_fixture(f, subject)
+            sink, clock = [], [1795750000000]
+            checkpoint = subject.checkpoint
+            calls = []
+            def checked():
+                calls.append("checkpoint")
+                checkpoint()
+                clock[0] += 10
+            with patch.object(subject, "checkpoint", side_effect=checked), \
+                    patch.object(retirement.time, "time_ns", side_effect=lambda: clock[0] * 1_000_000):
+                with self.assertRaises(ValueError):
+                    self.main_user_initialize(subject, authority,
+                        lambda: self.diagnostic_user_writer(path, clock, checkpoint_timestamp=True), native, sink)
+            self.assertEqual(calls, ["checkpoint", "checkpoint"])
+            self.assertEqual(len(sink), 1)
+            self.assertTrue(sink[0]["clock_window_valid"])
+            for row in sink[0]["after"]["fixed_fixture_keys"].values():
+                self.assertFalse(row["timestamp_in_window"])
+            self.assertIsNone(authority["pending"])
+
+    def test_main_user_observer_records_successful_capture_before_stage_validation_refuses(self):
+        with self.user_diagnostic_fixture() as (f, subject, path):
+            authority, native, _ = self.user_authority_fixture(f, subject)
+            sink, clock = [], [1795750000000]
+            old = subject.passive_usage[0]
+            offsets = {row["fd"]: os.lseek(row["fd"], 0, os.SEEK_CUR) for row in subject.passive_usage}
+            with patch.object(retirement.time, "time_ns", side_effect=lambda: clock[0] * 1_000_000):
+                with self.assertRaises(ValueError):
+                    self.main_user_initialize(subject, authority,
+                        lambda: self.diagnostic_user_writer(path, clock, invalid_count=True), native, sink)
+            self.assertTrue(sink[0]["native_capture_returned"])
+            self.assertTrue(sink[0]["pre_initialize_checkpoint_passed"])
+            self.assertFalse(sink[0]["initialization_qualified"])
+            self.assertIs(subject.passive_usage[0], old)
+            self.assertIsNone(authority["pending"])
+            self.assertEqual({fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in offsets}, offsets)
+
+    def test_main_user_observer_never_runs_capture_when_either_precheckpoint_refuses(self):
+        for refused in (1, 2):
+            with self.subTest(checkpoint=refused), self.user_diagnostic_fixture() as (f, subject, path):
+                authority, native, _ = self.user_authority_fixture(f, subject)
+                checkpoint = subject.checkpoint
+                sink, calls, captures = [], [], []
+                def checked():
+                    calls.append("checkpoint")
+                    if len(calls) == refused:
+                        raise ValueError("injected precheckpoint refusal")
+                    checkpoint()
+                with patch.object(subject, "checkpoint", side_effect=checked):
+                    with self.assertRaisesRegex(ValueError, "injected precheckpoint"):
+                        self.main_user_initialize(subject, authority, lambda: captures.append(True), native, sink)
+                self.assertEqual(captures, [])
+                self.assertIsNone(authority["pending"])
+                if refused == 1:
+                    self.assertEqual(sink, [])
+                else:
+                    self.assertEqual(len(sink), 1)
+                    self.assertFalse(sink[0]["pre_initialize_checkpoint_passed"])
+                    self.assertFalse(sink[0]["native_capture_returned"])
+                    self.assertFalse(sink[0]["clock_window_valid"])
 
     def test_user_initialize_receipt_bound_full_lifecycle_retains_original_descriptors(self):
         with self.user_diagnostic_fixture() as (f, subject, path):

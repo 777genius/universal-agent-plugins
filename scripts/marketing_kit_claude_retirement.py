@@ -644,13 +644,13 @@ class SignedClosureRetirement:
             image = _diagnostic_image(row["fd"], self.audit)
             require((image["identity"], image["uid"], image["gid"], image["sha256"]) == row["image"])
 
-    def stage_user_initialize(self, authority, action, native_rows, *, removed=False):
+    def stage_user_initialize(self, authority, action, native_rows, *, removed=False, observer=None):
         """Hold a candidate; complete native and caller guards must precede commit."""
         self.checkpoint()
         self.user_initialize_guards()
         require(type(removed) is bool and authority["pending"] is None
                 and authority["phase"] == ("removed" if removed else "before")
-                and type(native_rows) is list)
+                and type(native_rows) is list and (observer is None or callable(observer)))
         owners = authority["owners"]
         selected = [row for row in native_rows if row["id"].split("@", 1)[0].casefold() in owners]
         if removed:
@@ -665,10 +665,18 @@ class SignedClosureRetirement:
         old = self.passive_usage[0]
         before = _diagnostic_image(old["fd"], self.audit)
         require((before["identity"], before["uid"], before["gid"], before["sha256"]) == old["image"])
-        start = time.time_ns() // 1_000_000
-        result = action()
-        end = time.time_ns() // 1_000_000
-        require(start <= end and type(result) is tuple and len(result) == 2
+        start, end = None, None
+        def capture():
+            nonlocal start, end
+            require(start is None)
+            start = time.time_ns() // 1_000_000
+            try:
+                return action()
+            finally:
+                end = time.time_ns() // 1_000_000
+        result = capture() if observer is None else observer(capture)
+        require(type(start) is int and type(end) is int and start <= end
+                and type(result) is tuple and len(result) == 2
                 and type(result[1]) is dict and result[1].get("exit") == 0
                 and result[1].get("error") is None and result[1].get("stderr_bytes") == 0)
         document, following = self.held_passive_document(old["path"])
