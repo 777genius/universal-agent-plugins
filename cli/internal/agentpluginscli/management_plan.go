@@ -42,11 +42,12 @@ func (b *ManagementBackend) finishManagementPreparation(ctx context.Context, pre
 		if err := request.lock.Validate(request.requirements); err != nil {
 			return nil, err
 		}
-		if err := verifyDependencyDeclarations(ctx, preview, request.lock); err != nil {
+		if err := verifySelectedPolicyDeclarations(ctx, preview, request.lock, request.aliases, request.removalOnly); err != nil {
 			return nil, err
 		}
 	}
-	p := &managementPrepared{backend: b, app: b.app, preview: preview, cleanup: cleanup, input: input, clients: clients, request: request}
+	app := b.app.withEnterprisePolicyGate(preview.InstallationPolicy)
+	p := &managementPrepared{backend: b, app: app, preview: preview, cleanup: cleanup, input: input, clients: clients, request: request}
 	p.app.dependencySnapshots = preview.dependencySnapshots
 	actions, detected, paths, err := p.prepareBindings(ctx, nil)
 	if err != nil {
@@ -169,7 +170,7 @@ func (p *managementPrepared) prepareBindings(ctx context.Context, prior []depend
 	paths := skillBindingPaths(view, actions)
 	warnings := []string{}
 	externalUninstalls := map[string]bool{}
-	adapter := &dependencyInstaller{previewExternalUninstalled: externalUninstalls, app: p.preview, opts: &options{externalUninstalled: p.input.ExternalUninstalled}, detected: detected, previewPaths: paths, operationIDs: p.operationIDs, previewWarnings: &warnings}
+	adapter := &dependencyInstaller{previewExternalUninstalled: externalUninstalls, app: p.preview, opts: &options{externalUninstalled: p.input.ExternalUninstalled}, detected: detected, previewPaths: paths, operationIDs: p.operationIDs, previewWarnings: &warnings, removalOnly: p.request.removalOnly}
 	actions, err = preflightDependencyAdapter(ctx, adapter, actions)
 	if err != nil {
 		return nil, nil, nil, err

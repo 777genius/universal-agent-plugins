@@ -37,7 +37,7 @@ func (app App) forOptions(opts *options) (App, error) {
 			return App{}, err
 		}
 	}
-	return selected, nil
+	return selected.withEnterprisePolicySession(), nil
 }
 
 // Scope selection is independent of installed-state inspection. Read-only

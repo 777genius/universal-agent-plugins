@@ -106,7 +106,7 @@ func TestInstallationPolicySDKRechecksAfterProgressCallback(t *testing.T) {
 	f.cfg.OnCommittedBinding = func(context.Context, BindingFacts) error { handoffs++; return nil }
 	f.reopen(t)
 	result, err := f.execute(t, OpInstall)
-	if !errors.Is(err, domain.ErrInstallPolicyChanged) || result.Mutated || handoffs != 0 || f.state(t) != "" {
+	if !errors.Is(err, domain.ErrInstallPolicyChanged) || result.Reason != "policy_changed" || result.Mutated || handoffs != 0 || f.state(t) != "" {
 		t.Fatalf("late SDK policy change crossed stage: result=%+v err=%v handoffs=%d", result, err, handoffs)
 	}
 	if _, err := os.Stat(f.skill); !os.IsNotExist(err) {
@@ -160,6 +160,23 @@ func TestInstallationPolicySDKChecksEveryGroupEnvelope(t *testing.T) {
 	handle, err := f.engine.Prepare(t.Context(), f.req)
 	if !errors.Is(err, denied) || handle != nil || !reflect.DeepEqual(seen, []domain.ClientID{domain.ClientCline, domain.ClientCodex}) || f.state(t) != "" {
 		t.Fatalf("group policy admission incomplete: handle=%v err=%v seen=%v", handle, err, seen)
+	}
+}
+
+func TestInstallationPolicySDKDoesNotDowngradeAcquiredGroupProvenance(t *testing.T) {
+	f := newProjectFilesFixture(t, "cline", "default")
+	f.req.AcquiredSnapshot = &domain.AcquiredSnapshot{OriginMode: domain.OriginModeDirectory}
+	f.req.Targets = []ClientTarget{
+		{ClientID: "cline", ClientConfigRoot: f.user},
+		{ClientID: "codex", ClientConfigRoot: filepath.Join(f.base, "user", ".codex")},
+	}
+	f.engine = f.engine.WithInstallationPolicy(installerPolicyFunc(func(context.Context, domain.InstallPolicyRequest) (string, error) {
+		t.Fatal("unsupported acquired group was reinterpreted as a direct local package")
+		return "", nil
+	}))
+	handle, err := f.engine.Prepare(t.Context(), f.req)
+	if !errors.Is(err, ErrInvalidRequest) || handle != nil || f.state(t) != "" {
+		t.Fatalf("group acquisition provenance was silently ignored: handle=%v err=%v", handle, err)
 	}
 }
 

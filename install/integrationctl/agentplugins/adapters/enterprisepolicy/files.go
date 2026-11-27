@@ -82,7 +82,7 @@ func loadLayer(candidate Path) (Layer, error) {
 		return layer, nil
 	}
 	if err != nil {
-		return layer, layerError(configError("required_file_unavailable"), layer)
+		return layer, layerError(&ConfigError{Code: "required_file_unavailable", cause: err}, layer)
 	}
 	layer.Present = true
 	layer.Policy, err = ReadFile(path)
@@ -95,7 +95,7 @@ func layerError(err error, layer Layer) error {
 	}
 	var config *ConfigError
 	if errors.As(err, &config) {
-		return &ConfigError{Layer: layer.Layer, Path: layer.Path, Code: config.Code}
+		return &ConfigError{Layer: layer.Layer, Path: layer.Path, Code: config.Code, cause: config.cause}
 	}
 	return &ConfigError{Layer: layer.Layer, Path: layer.Path, Code: "unavailable"}
 }
@@ -124,7 +124,7 @@ func ReadFile(raw string) (domain.InstallPolicy, error) {
 	}
 	body, err := atomicfile.ReadBoundedRegularFile(path, MaxBytes)
 	if err != nil {
-		return domain.InstallPolicy{}, layerError(configError("unreadable_or_unsafe_file"), layer)
+		return domain.InstallPolicy{}, layerError(&ConfigError{Code: "unreadable_or_unsafe_file", cause: err}, layer)
 	}
 	policy, err := Decode(body)
 	return policy, layerError(err, layer)
@@ -140,7 +140,7 @@ func checkPolicyParent(path string) error {
 			return nil
 		}
 		if !errors.Is(err, os.ErrNotExist) || filepath.Dir(parent) == parent {
-			return configError("parent_directory_unavailable")
+			return &ConfigError{Code: "parent_directory_unavailable", cause: err}
 		}
 	}
 }

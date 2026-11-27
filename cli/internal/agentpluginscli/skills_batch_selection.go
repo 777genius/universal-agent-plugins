@@ -57,6 +57,9 @@ func (candidate *skillsBatchCandidate) prefetchRawSkills(ctx context.Context, ap
 		if err != nil || req.Git == nil {
 			continue
 		}
+		if err := app.checkEnterpriseRequirement(ctx, req, nil); err != nil {
+			continue
+		}
 		// resolveSkill rejects this selection before downloading; do not either.
 		if skillDirectoryMismatch(req.Git.Skill, req.Git.Path) {
 			continue

@@ -169,7 +169,7 @@ func runAddManyLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *op
 			OriginMode:                       loaded.origin, DirectoryResolution: cloneDirectoryOrigin(loaded.directory),
 			DistributionSuspended: loaded.distributionSuspended, ReleaseRevoked: loaded.releaseRevoked,
 		}
-		inputs[index] = input
+		inputs[index] = withEnterprisePins(input, clientPackage)
 	}
 	operationID, err := newOperationGroupID()
 	if err != nil {

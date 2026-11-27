@@ -136,7 +136,7 @@ func (selection savedLifecycleSelection) candidate(cmd *cobra.Command, app App, 
 	switch operation {
 	case "remove":
 		requirements = removeSavedTargets(requirements, dependencyRootKey(requirements, snapshot.Lock, selection.alias), selection.targets)
-		locked, err = (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun}}).Resolve(cmd.Context(), requirements, snapshot.Lock, "")
+		locked, err = (environment.Coordinator{EnvironmentID: app.environmentID(), Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun, retainForRemoval: true}}).Resolve(cmd.Context(), requirements, snapshot.Lock, "")
 	case "update":
 		requirements, locked, err = selection.update(cmd, app, opts, snapshot)
 	default:

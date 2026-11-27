@@ -28,7 +28,9 @@ func normalizePolicySource(source domain.SourceIdentity, origin domain.OriginMod
 		return normalizePolicyGit(source)
 	case "archive":
 		if localPolicyPath(source.SourceURL) {
-			return localPolicySource(source.SourceURL), nil
+			local := localPolicySource(source.SourceURL)
+			local.facts.Archive = true
+			return local, nil
 		}
 		return normalizePolicyRemote("archive", source.SourceURL)
 	case "https-skill", "web":
@@ -107,7 +109,7 @@ func normalizePolicyRemote(kind, raw string) (normalizedSource, error) {
 	if err != nil || !domain.ValidPolicyHost(strings.ToLower(u.Hostname())) {
 		return normalizedSource{}, errSourceAuthority
 	}
-	return normalizedSource{facts: domain.InstallPolicySource{Kind: kind, Host: strings.ToLower(u.Hostname())}, authority: endpoint}, nil
+	return normalizedSource{facts: domain.InstallPolicySource{Kind: kind, Host: strings.ToLower(u.Hostname()), Archive: kind == "archive"}, authority: endpoint}, nil
 }
 
 func normalizePolicyGit(source domain.SourceIdentity) (normalizedSource, error) {
@@ -189,7 +191,7 @@ func policyRequestSource(req domain.InstallPolicyRequest) (domain.SourceIdentity
 }
 
 func samePolicySource(a domain.SourceIdentity, an normalizedSource, b domain.SourceIdentity, bn normalizedSource) bool {
-	if an.facts.Kind != bn.facts.Kind || an.authority != bn.authority || a.PackageSubpath != b.PackageSubpath {
+	if an.facts.Kind != bn.facts.Kind || an.facts.Archive != bn.facts.Archive || an.authority != bn.authority || a.PackageSubpath != b.PackageSubpath {
 		return false
 	}
 	for _, pair := range [][2]string{{a.ResolvedRevision, b.ResolvedRevision}, {a.ArchiveSHA256, b.ArchiveSHA256}} {

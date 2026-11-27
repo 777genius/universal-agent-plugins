@@ -55,6 +55,9 @@ func (app App) acquireDiscovery(ctx context.Context, selector string, request pa
 }
 
 func (app App) acquireLocal(ctx context.Context, requested string) (loadedPackage, error) {
+	if err := app.checkEnterpriseLocal(ctx, requested); err != nil {
+		return loadedPackage{}, err
+	}
 	if app.SourceAcquirer == nil {
 		return loadedPackage{}, fmt.Errorf("package source acquirer is unavailable")
 	}
@@ -74,6 +77,10 @@ func (app App) acquireLocal(ctx context.Context, requested string) (loadedPackag
 }
 
 func (app App) acquireGitHub(ctx context.Context, requested, repository, revision, subpath, expectedDigest string) (loadedPackage, error) {
+	source := domain.SourceIdentity{SourceKind: "git", Repository: repository, RequestedSource: requested, ResolvedRevision: revision, PackageSubpath: subpath}
+	if err := app.checkEnterpriseSource(ctx, source, domain.OriginModeDirect); err != nil {
+		return loadedPackage{}, err
+	}
 	if app.SourceAcquirer == nil {
 		return loadedPackage{}, fmt.Errorf("package source acquirer is unavailable")
 	}

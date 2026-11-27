@@ -80,11 +80,14 @@ func preparedInstallationPolicyRequests(prepared *PreparedOperation) []domain.In
 		}}
 	}
 	requests := make([]domain.InstallPolicyRequest, len(prepared.envelopes))
+	// Group sealing supports direct sources only. Acquired Directory provenance
+	// is a single-target contract and is rejected before group preparation.
 	for i := range prepared.envelopes {
 		gitPinned, archivePinned := targetPolicyPins(req, req.Targets[i])
 		requests[i] = domain.InstallPolicyRequest{
 			Source: prepared.envelopes[i].Source, Envelope: &prepared.envelopes[i],
-			Scope: req.Scope, Targets: []domain.ClientID{domain.ClientID(req.Targets[i].ClientID)},
+			OriginMode: domain.OriginModeDirect,
+			Scope:      req.Scope, Targets: []domain.ClientID{domain.ClientID(req.Targets[i].ClientID)},
 			GitPinned: gitPinned, ArchivePinned: archivePinned,
 		}
 	}

@@ -14,6 +14,7 @@ import (
 // PrepareSkills acquires exact selected commits in disposable storage and prepares
 // one complete candidate graph. It never writes intent, persistent cache or profiles.
 func (app App) PrepareSkills(ctx context.Context, input SkillsBatchRequest) (plan *PreparedSkillsBatch, err error) {
+	app = app.withEnterprisePolicySession()
 	if len(input.Selections) == 0 || len(input.TargetIDs) == 0 {
 		return nil, errors.New("explicit skills and targets required")
 	}
@@ -72,14 +73,14 @@ func (candidate *skillsBatchCandidate) resolve(ctx context.Context, app App) (en
 	if err != nil {
 		return environment.Lock{}, nil, nil, err
 	}
-	if err = verifyDependencyDeclarations(ctx, app, locked); err != nil {
+	aliases := savedClosureAliases(candidate.snapshot.Lock, locked, candidate.aliases)
+	if err = verifySelectedPolicyDeclarations(ctx, app, locked, aliases, false); err != nil {
 		return environment.Lock{}, nil, nil, err
 	}
 	manifest, err := editEnvironmentIntent(candidate.snapshot, candidate.requirements)
 	if err != nil {
 		return environment.Lock{}, nil, nil, err
 	}
-	aliases := savedClosureAliases(candidate.snapshot.Lock, locked, candidate.aliases)
 	if err = verifyUnselectedPins(candidate.snapshot.Lock, locked, aliases); err != nil {
 		return environment.Lock{}, nil, nil, err
 	}

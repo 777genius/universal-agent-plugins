@@ -24,6 +24,8 @@ type dependencyResolver struct {
 	requirements environment.Requirements
 	app          App
 	dryRun       bool
+	// Graph reduction may read retained pins without acquiring install permission.
+	retainForRemoval bool
 	// rawSkills optionally supplies raw Skill fetches started ahead of selection.
 	rawSkills *rawSkillPrefetch
 	// gitRoots optionally supplies fresh Git root reads started ahead of the solver.
@@ -105,6 +107,9 @@ func (resolver dependencyResolver) Resolve(ctx context.Context, requirement envi
 	if previous != nil && !update && sameRequestedSelector(requirement, *previous) {
 		return *previous, nil
 	}
+	if err := resolver.app.checkEnterpriseRequirement(ctx, requirement, targets); err != nil {
+		return environment.LockedPackage{}, err
+	}
 	if requirement.Local != nil {
 		return resolver.resolveLocalSkill(ctx, requirement, targets)
 	}
@@ -173,6 +178,9 @@ func (resolver dependencyResolver) resolveGit(ctx context.Context, requirement e
 }
 
 func (resolver dependencyResolver) resolveArchive(ctx context.Context, requirement environment.Requirement, targets []string) (environment.LockedPackage, error) {
+	if err := resolver.app.checkEnterpriseRequirement(ctx, requirement, targets); err != nil {
+		return environment.LockedPackage{}, err
+	}
 	source := requirement.Archive
 	direct, err := resolver.app.directAcquirer()
 	if err != nil {
@@ -202,6 +210,9 @@ func (resolver dependencyResolver) resolveArchive(ctx context.Context, requireme
 }
 
 func (resolver dependencyResolver) resolveGitSelector(ctx context.Context, source *environment.GitSource) (sourceacquisition.RefResolution, error) {
+	if err := resolver.app.checkEnterpriseRequirement(ctx, environment.Requirement{Git: source}, nil); err != nil {
+		return sourceacquisition.RefResolution{}, err
+	}
 	if source.Selector.Kind == environment.SelectorCommit {
 		return sourceacquisition.RefResolution{Commit: source.Selector.Value}, nil
 	}

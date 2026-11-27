@@ -3,6 +3,8 @@ package enterprisepolicy
 import (
 	"context"
 	"errors"
+	"net/url"
+	"strings"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
@@ -36,7 +38,10 @@ func (s Snapshot) Check(req domain.InstallPolicyRequest) (string, error) {
 }
 
 func checkLayer(policy domain.InstallPolicy, req domain.InstallPolicyRequest) []domain.InstallPolicyViolation {
-	_, normalized, err := policyRequestSource(req)
+	source, normalized, err := policyRequestSource(req)
+	if policy.SchemaVersion == 1 && !legacySourceShape(source) {
+		return sourceViolation("legacy policy requires a recognized HTTPS/SSH remote source")
+	}
 	if errors.Is(err, errSourceMismatch) {
 		return sourceViolation("requested origin disagrees with the actual package source")
 	}
@@ -47,6 +52,20 @@ func checkLayer(policy domain.InstallPolicy, req domain.InstallPolicyRequest) []
 		return sourceViolation("Git repository authority is ambiguous or uses a nondefault port")
 	}
 	return domain.EvaluateInstallPolicy(policy, req, normalized.facts)
+}
+
+// Schema 1 accepted HTTPS/SSH URLs and GitHub repository coordinates, not SCP
+// syntax. Keep that installed contract even though schema 2 recognizes SCP.
+func legacySourceShape(source domain.SourceIdentity) bool {
+	raw := source.SourceURL
+	if raw == "" && source.WebSkill != nil {
+		raw = source.WebSkill.URL
+	}
+	if raw == "" {
+		return source.Repository != ""
+	}
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "https" || u.Scheme == "ssh") && domain.ValidPolicyHost(strings.ToLower(u.Hostname()))
 }
 
 func repositoryConstrained(policy domain.InstallPolicy) bool {

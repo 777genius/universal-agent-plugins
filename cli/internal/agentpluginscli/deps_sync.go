@@ -59,7 +59,7 @@ func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Pac
 }
 
 func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, actions []dependencyAction, detected map[domain.ClientID]domain.DetectedClient, consent ...map[string]bool) ([]dependencyAction, error) {
-	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, trustAliases: explicitAddAliases(cmd, dependencyActionAliases(actions))}
+	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, trustAliases: explicitAddAliases(cmd, dependencyActionAliases(actions)), removalOnly: cmd != nil && cmd.Name() == "remove"}
 	if err := adapter.preflightProjectVersions(cmd.Context(), actions); err != nil {
 		return nil, err
 	}
@@ -70,6 +70,9 @@ func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, acti
 }
 
 func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstaller, actions []dependencyAction) ([]dependencyAction, error) {
+	if err := checkEnterpriseActionPolicies(ctx, adapter.app, actions, adapter.removalOnly); err != nil {
+		return nil, err
+	}
 	state, err := adapter.app.StateStore.Load()
 	if err != nil {
 		return nil, err
@@ -77,15 +80,12 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 	populateDependencyBeforeFacts(state, actions)
 	claims := map[string]string{}
 	updates := map[string]*installer.PreparedOperation{}
-	defer func() {
-		for _, update := range updates {
-			_ = update.Close()
-		}
-	}()
+	removalOnly := policyRemovalOnly(actions, adapter.removalOnly)
+	defer closeDependencyPreviews(updates)
 	for i, action := range actions {
 		if action.Action == environment.ActionUnchanged {
-			if err := adapter.verifyUnchangedProjection(ctx, action); err != nil {
-				return nil, &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
+			if err := adapter.preflightUnchangedProjection(ctx, action, removalOnly); err != nil {
+				return nil, err
 			}
 			continue
 		}
@@ -119,6 +119,22 @@ func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstalle
 		claims[key] = action.Alias
 	}
 	return actions, nil
+}
+
+func closeDependencyPreviews(previews map[string]*installer.PreparedOperation) {
+	for _, preview := range previews {
+		_ = preview.Close()
+	}
+}
+
+func (adapter *dependencyInstaller) preflightUnchangedProjection(ctx context.Context, action dependencyAction, removalOnly bool) error {
+	if removalOnly {
+		return nil
+	}
+	if err := adapter.verifyUnchangedProjection(ctx, action); err != nil {
+		return &dependencyPreflightError{Alias: action.Alias, ClientID: action.ClientID, Cause: err}
+	}
+	return nil
 }
 
 func (adapter *dependencyInstaller) verifyUnchangedProjection(ctx context.Context, action dependencyAction) error {
@@ -190,6 +206,7 @@ func (adapter *dependencyInstaller) recordDependencyReview(action dependencyActi
 }
 
 type dependencyInstaller struct {
+	removalOnly                bool
 	previewExternalUninstalled map[string]bool
 	previewWarnings            *[]string
 	previewPaths               map[string]string
@@ -457,6 +474,8 @@ func (adapter *dependencyInstaller) recordedDependencyRelease(action environment
 }
 
 func (adapter *dependencyInstaller) prepareDependencyPackage(ctx context.Context, action environment.PreparedBinding, request installer.Request, recorded *domain.RecordedDirectoryRelease) (*installer.PreparedOperation, error) {
+	policy := lockedPolicyRequest(*action.Package, adapter.app.scope())
+	request.GitPinned, request.ArchivePinned = policy.GitPinned, policy.ArchivePinned
 	operation := domain.DirectoryRepair
 	if action.Action == environment.ActionInstall {
 		operation = domain.DirectoryNewTarget

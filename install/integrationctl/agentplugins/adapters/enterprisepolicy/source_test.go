@@ -121,3 +121,23 @@ func TestSourceOverrideCannotHideActualEnvelopeSource(t *testing.T) {
 	req.Envelope.Source = domain.SourceIdentity{Repository: "acme/safe"}
 	assertPolicyResult(t, snapshot, req, false)
 }
+
+func TestLegacyPolicyRetainsURLGrammar(t *testing.T) {
+	t.Parallel()
+	req := domain.InstallPolicyRequest{Source: domain.SourceIdentity{SourceKind: "git", SourceURL: "git@github.com:acme/safe.git"}}
+	assertPolicyResult(t, testSnapshot(t, "schema_version: 1\nsources:\n  allow_hosts: [github.com]\n"), req, true)
+	assertPolicyResult(t, testSnapshot(t, "schema_version: 2\nsources:\n  allow_hosts: [github.com]\n"), req, false)
+}
+
+func TestLocalArchivePreservesRequestedChecksumRule(t *testing.T) {
+	t.Parallel()
+	snapshot := testSnapshot(t, "schema_version: 2\nsources:\n  allowed_kinds: [local]\nintegrity:\n  require_archive_sha256: true\n")
+	req := domain.InstallPolicyRequest{Source: domain.SourceIdentity{SourceKind: "archive", SourceURL: "/workspace/plugin.zip", ArchiveSHA256: "downloaded-hash"}}
+	assertPolicyResult(t, snapshot, req, true)
+	yes := true
+	req.ArchivePinned = &yes
+	assertPolicyResult(t, snapshot, req, false)
+	req.Source = domain.SourceIdentity{SourceKind: "local", SourceURL: "/workspace/plugin"}
+	req.ArchivePinned = nil
+	assertPolicyResult(t, snapshot, req, false)
+}

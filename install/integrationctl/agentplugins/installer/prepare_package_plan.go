@@ -126,10 +126,13 @@ func clonePrepareRequest(req Request) Request {
 }
 
 func validatePrepareInput(ctx context.Context, req Request) error {
+	if req.AcquiredSnapshot != nil && len(req.Targets) > 1 {
+		return fmt.Errorf("%w: acquired provenance requires a single target", ErrInvalidRequest)
+	}
 	if len(req.ClientSurfaces) != 0 && len(req.Targets) > 0 {
 		return fmt.Errorf("%w: group surface observations must be per target", ErrInvalidRequest)
 	}
-	if req.ConfirmPluginEnable && (req.Operation != OpRepair || req.Scope != domain.ScopeProject || req.InstallationID == "" || len(req.Targets) > 1 || req.ClientID == "" && len(req.Targets) == 0) {
+	if req.ConfirmPluginEnable && !allowsPluginEnableConfirmation(req) {
 		return fmt.Errorf("%w: explicit plugin enablement requires one selected Project repair", ErrInvalidRequest)
 	}
 	if req.ClientNativeConfigRoot != "" && len(req.Targets) > 0 {
@@ -146,4 +149,9 @@ func validatePrepareInput(ctx context.Context, req Request) error {
 	}
 
 	return nil
+}
+
+func allowsPluginEnableConfirmation(req Request) bool {
+	return req.Operation == OpRepair && req.Scope == domain.ScopeProject && req.InstallationID != "" &&
+		len(req.Targets) <= 1 && (req.ClientID != "" || len(req.Targets) != 0)
 }

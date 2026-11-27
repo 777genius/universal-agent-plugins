@@ -98,6 +98,9 @@ func renderDependencyJSONResults(cmd *cobra.Command, opts *options, actions []de
 	if errors.As(applyErr, &foreign) || repairs != nil && applyErr != nil {
 		data["error"] = classifyAgentFailure(applyErr)
 	}
+	if failure, policy := enterprisePolicyAgentFailure(applyErr); policy {
+		data["error"] = failure
+	}
 	if opts.installResult != nil && len(opts.installResult.failedAgents()) > 0 {
 		// Per-binding detail is added only when something failed, so a
 		// successful result keeps its established shape.

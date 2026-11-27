@@ -107,9 +107,9 @@ func (session *switchSession) initOutput() {
 func (session *switchSession) runRetained() error {
 	service := session.app.Lifecycle
 	service.StateStore = session.app.StateStore
-	planned, err := service.SwitchRetained(session.ctx, usecase.BindingChangeInput{
+	planned, err := service.SwitchRetained(session.ctx, withEnterpriseBindingPins(usecase.BindingChangeInput{
 		Selector: session.installation.InstallationID, Envelope: session.loaded.envelope,
-	}, session.loaded.origin, session.loaded.directory)
+	}), session.loaded.origin, session.loaded.directory)
 	session.output.Retained = &planned
 	session.output.PluginData = planned.PluginData
 	if err != nil {
@@ -121,9 +121,9 @@ func (session *switchSession) runRetained() error {
 	if err := session.renderHumanPlan(); err != nil {
 		return err
 	}
-	applied, err := service.SwitchRetained(session.ctx, usecase.BindingChangeInput{
+	applied, err := service.SwitchRetained(session.ctx, withEnterpriseBindingPins(usecase.BindingChangeInput{
 		Selector: session.installation.InstallationID, Envelope: session.loaded.envelope, Confirmed: true,
-	}, session.loaded.origin, session.loaded.directory)
+	}), session.loaded.origin, session.loaded.directory)
 	session.output.DryRun, session.output.Retained = false, &applied
 	session.output.PluginData = applied.PluginData
 	status := "completed"
@@ -177,12 +177,12 @@ func (session *switchSession) groupInputs() ([]usecase.AddInput, error) {
 		if err := prepareLoadedPackageForClient(&clientPackage, targetID); err != nil {
 			return nil, err
 		}
-		inputs = append(inputs, usecase.AddInput{
+		inputs = append(inputs, withEnterprisePins(usecase.AddInput{
 			Envelope: clientPackage.envelope, Client: client, Scope: domain.ScopeUser, Hints: clientPackage.hints,
 			InstallationID: session.installation.InstallationID, BackendExecutable: backendExecutable(client, session.detected, session.app.scope()),
 			OriginMode: session.loaded.origin, DirectoryResolution: cloneDirectoryOrigin(session.loaded.directory),
 			DistributionSuspended: session.loaded.distributionSuspended, ReleaseRevoked: session.loaded.releaseRevoked,
-		})
+		}, clientPackage))
 	}
 	return inputs, nil
 }

@@ -22,11 +22,15 @@ type ConfigError struct {
 	Layer string `json:"layer,omitempty"`
 	Path  string `json:"path,omitempty"`
 	Code  string `json:"code"`
+	cause error
 }
 
 func (e *ConfigError) Error() string {
 	return "installation policy configuration " + domain.PolicySafeText(e.Code) + " at " + domain.PolicySafeText(e.Path) + "; validate and correct the policy file"
 }
+
+// Unwrap preserves operational classification without echoing raw I/O details.
+func (e *ConfigError) Unwrap() error { return e.cause }
 
 func configError(code string) error { return &ConfigError{Code: code} }
 

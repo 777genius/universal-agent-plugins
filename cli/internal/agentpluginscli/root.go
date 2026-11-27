@@ -33,26 +33,30 @@ func NewRoot(app App) *cobra.Command {
 	flags.BoolVar(&opts.acceptSecurityRisk, "accept-security-risk", false, "continue despite blocking automated security findings")
 	flags.BoolVar(&opts.securityDetails, "security-details", false, "show every automated security finding in human output")
 
-	root.AddCommand(newAddCommand(app, opts))
-	root.AddCommand(newSkillsCommand(app, opts))
-	root.AddCommand(newUpdateCommand(app, opts))
-	root.AddCommand(newRepairCommand(app, opts))
-	root.AddCommand(newRemoveCommand(app, opts))
-	root.AddCommand(newSwitchCommand(app, opts))
-	root.AddCommand(newMigrateFormatCommand(app, opts))
-	root.AddCommand(newMigrateStateCommand(app, opts))
-	root.AddCommand(newRebindCommand(app, opts))
-	root.AddCommand(newListCommand(app, opts))
-	root.AddCommand(newInfoCommand(app, opts))
-	root.AddCommand(newSearchCommand(app, opts))
-	root.AddCommand(newValidateCommand(app, opts))
-	root.AddCommand(newOutdatedCommand(app, opts))
-	root.AddCommand(newDepsCommand(app, opts))
-	root.AddCommand(newInstallCommand(app, opts))
-	root.AddCommand(newDoctorCommand(app, opts))
-	root.AddCommand(newRunClientCommand(app, opts))
-	root.AddCommand(newVersionCommand(app, opts))
-	root.AddCommand(newManagementCommand(app))
+	root.AddCommand(
+		newAddCommand(app, opts),
+		newSkillsCommand(app, opts),
+		newUpdateCommand(app, opts),
+		newRepairCommand(app, opts),
+		newRemoveCommand(app, opts),
+		newSwitchCommand(app, opts),
+		newMigrateFormatCommand(app, opts),
+		newMigrateStateCommand(app, opts),
+		newRebindCommand(app, opts),
+		newListCommand(app, opts),
+		newInfoCommand(app, opts),
+		newSearchCommand(app, opts),
+		newValidateCommand(app, opts),
+		newOutdatedCommand(app, opts),
+		newDepsCommand(app, opts),
+		newInstallCommand(app, opts),
+		newDoctorCommand(app, opts),
+		newRunClientCommand(app, opts),
+		newVersionCommand(app, opts),
+		newManagementCommand(app),
+		newPolicyCommand(app, opts),
+	)
+	configureEnterprisePolicyFailureOutput(root, opts)
 	return root
 }
 

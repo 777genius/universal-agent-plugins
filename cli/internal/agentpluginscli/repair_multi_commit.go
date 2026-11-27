@@ -64,7 +64,7 @@ func (session *repairManySession) targetInput(target domain.ClientID) (usecase.A
 		}
 	}
 	client := session.detected[target]
-	return usecase.AddInput{
+	return withEnterprisePins(usecase.AddInput{
 		Envelope: clientPackage.envelope, Client: client, Scope: session.app.scope(),
 		Interactive: false, Hints: clientPackage.hints,
 		InstallationID:    session.installation.InstallationID,
@@ -72,7 +72,7 @@ func (session *repairManySession) targetInput(target domain.ClientID) (usecase.A
 		OriginMode:        loaded.origin, DirectoryResolution: cloneDirectoryOrigin(loaded.directory),
 		DistributionSuspended: loaded.distributionSuspended, ReleaseRevoked: loaded.releaseRevoked,
 		EnvironmentAuthority: authority,
-	}, nil
+	}, clientPackage), nil
 }
 
 func (session *repairManySession) planAndApply() error {

@@ -116,3 +116,57 @@ func TestPolicyFilesRefuseUnsafeOrMalformedConfiguredInputs(t *testing.T) {
 		t.Fatalf("cancellation not preserved: %v", err)
 	}
 }
+
+type sourceSensitiveGate struct{ calls int }
+
+func (g *sourceSensitiveGate) Check(_ context.Context, req domain.InstallPolicyRequest) (string, error) {
+	g.calls++
+	if req.Source.Repository != "" {
+		return "custom", &domain.InstallPolicyError{Violations: []domain.InstallPolicyViolation{{Code: "custom", Subject: "source", Message: "custom source refusal"}}}
+	}
+	return "custom", nil
+}
+
+func TestUnrestrictedInspectionNeverSkipsACustomGate(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	custom := &sourceSensitiveGate{}
+	for _, gate := range []interface {
+		Check(context.Context, domain.InstallPolicyRequest) (string, error)
+	}{custom, NewSession(custom)} {
+		free, err := IsUnrestricted(ctx, gate)
+		if err != nil || free || custom.calls != 0 {
+			t.Fatalf("custom policy was probed or skipped: %v %v %d", free, err, custom.calls)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "managed.yaml")
+	gate := NewSession(Files{Paths: []Path{{Layer: "machine", Path: path}}})
+	free, err := IsUnrestricted(ctx, gate)
+	if err != nil || !free {
+		t.Fatalf("absent policy did not permit optimization: %v %v", free, err)
+	}
+	writePolicy(t, path, "schema_version: 2\nsources:\n  deny_hosts: [bad.test]\n")
+	if _, err := IsUnrestricted(ctx, gate); !errors.Is(err, domain.ErrInstallPolicyChanged) {
+		t.Fatalf("optimization failed to retain reviewed absence: %v", err)
+	}
+}
+
+func TestNewOperationUnwrapsPriorSessionWithoutChangingItsReview(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "policy.yaml")
+	writePolicy(t, path, "schema_version: 2\nsources:\n  deny_hosts: [bad.test]\n")
+	ctx := context.Background()
+	req := domain.InstallPolicyRequest{Source: domain.SourceIdentity{Repository: "acme/safe"}}
+	old := NewSession(Files{Paths: []Path{{Layer: "machine", Path: path}}})
+	if _, err := old.Check(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	writePolicy(t, path, "schema_version: 2\nsources:\n  allow_hosts: [github.com]\n")
+	fresh := NewSession(old)
+	if _, err := fresh.Check(ctx, req); err != nil {
+		t.Fatalf("new operation inherited stale retained review: %v", err)
+	}
+	if _, err := old.Check(ctx, req); !errors.Is(err, domain.ErrInstallPolicyChanged) {
+		t.Fatalf("fresh operation changed the old review authority: %v", err)
+	}
+}

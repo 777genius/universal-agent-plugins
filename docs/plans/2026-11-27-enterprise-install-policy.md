@@ -1,10 +1,9 @@
 # Enterprise installation policy
 
-Status: implementation checkpoint; Draft PR #1130 remains blocked and is not
-ready to merge. Plan revision 2 and the shared policy model/adapter/core gates
-are published. CLI integration and subsequent fixes were written in the working
-checkout, but the execution environment became unavailable before they could
-be committed, published and qualified. See the checkpoint below.
+Status: implementation resumed after environment recovery. The reviewed policy
+module and CLI integration are published for review. Saved-repair refinements,
+final source review and required verification remain in progress. No merge
+qualification is claimed yet. The interruption checkpoint below is historical.
 Owner request: research APM and ToolHive, synthesize a convenient modular design,
 review and refine it, implement in one Draft PR, publish each commit immediately,
 exercise important end-to-end paths, fix review findings, ordinary merge and verify.

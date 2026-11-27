@@ -35,7 +35,7 @@ func evaluatePolicySource(p InstallPolicy, req InstallPolicyRequest, source Inst
 	if p.Integrity.RequirePinnedGit && source.Kind == "git" && (req.GitPinned == nil || !*req.GitPinned) {
 		add("integrity.require_pinned_git", "source", "Git source must request an exact commit; a resolved commit is insufficient")
 	}
-	if p.Integrity.RequireArchiveSHA256 && source.Kind == "archive" && (req.ArchivePinned == nil || !*req.ArchivePinned) {
+	if p.Integrity.RequireArchiveSHA256 && (source.Kind == "archive" || source.Archive) && (req.ArchivePinned == nil || !*req.ArchivePinned) {
 		add("integrity.require_archive_sha256", "source", "archive source must request an exact SHA256; a downloaded checksum is insufficient")
 	}
 }

@@ -226,6 +226,19 @@ Check supported agents with `agentplugins deps status`.
 [Dependency guide](docs/UAP_DEPENDENCIES.md) ·
 [Import and recovery](https://universal-agent-plugins.com/docs/en/use/manage.html#restore-on-another-machine)
 
+## Team installation rules
+
+Installation policy can restrict package sources, repositories, target agents,
+installation scopes, components and MCP declarations. Machine, user and project
+rules apply together; a project cannot weaken a machine restriction.
+
+Use `agentplugins policy init` to create a commented template, `policy validate`
+to check it and `policy status` to see which rules apply. The
+[installation policy guide](docs/ENTERPRISE_POLICY.md) covers deployment,
+read-only checks, CI and compatibility with existing `--policy` files. These
+commands describe the current source; check `agentplugins policy --help` for
+availability in your installed release.
+
 <a id="any-agent-plugins-10-package"></a>
 
 ## Install from other sources

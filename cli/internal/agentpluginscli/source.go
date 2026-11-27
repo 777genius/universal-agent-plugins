@@ -212,7 +212,7 @@ func (app App) acquireDirectory(ctx context.Context, selector string, request pa
 	if err := validateDirectoryCompatibilityPolicy(*policy); err != nil {
 		return loadedPackage{}, err
 	}
-	snapshot, err := app.SourceAcquirer.AcquireGitHubVerified(ctx, selection.Source.Repository, selection.Source.Revision, selection.Source.Path, selection.TreeDigest)
+	snapshot, err := app.acquirePolicyDirectorySnapshot(ctx, selection)
 	if err != nil {
 		return loadedPackage{}, err
 	}

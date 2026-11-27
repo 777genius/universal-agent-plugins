@@ -71,6 +71,9 @@ type InstallPolicySource struct {
 	Kind       string
 	Host       string
 	Repository string
+	// Archive retains the acquisition format when a local archive has the
+	// local policy kind. Requested checksum rules still apply to its bytes.
+	Archive bool
 }
 
 type InstallPolicyViolation struct {

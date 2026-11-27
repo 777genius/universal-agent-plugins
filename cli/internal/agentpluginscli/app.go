@@ -10,6 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/cli/internal/terminaltheme"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/directoryv1"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/discoveryv1"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/enterprisepolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/statemigration"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/clients"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
@@ -39,6 +40,8 @@ type SourceAcquirer interface {
 }
 
 type App struct {
+	InstallationPolicy ports.InstallationPolicy
+	PolicyFiles        *enterprisepolicy.Files
 	// Explicit selected-client startup is distinct from install/activation.
 	SessionEnv         clients.Env
 	StartNativeSession func(context.Context, clients.SessionPlan, []string) error

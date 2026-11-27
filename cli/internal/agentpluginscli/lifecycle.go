@@ -71,10 +71,10 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	if err != nil {
 		return err
 	}
-	input := usecase.AddInput{Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope), DryRun: opts.dryRun,
+	input := withEnterprisePins(usecase.AddInput{Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope), DryRun: opts.dryRun,
 		ConfirmPluginEnable: opts.confirmPluginEnable,
 		InstallationID:      installation.InstallationID, Interactive: app.Terminal, Hints: loaded.hints,
-		BackendExecutable: backendExecutable(selected, detectedMap, app.scope()), EnvironmentAuthority: authority}
+		BackendExecutable: backendExecutable(selected, detectedMap, app.scope()), EnvironmentAuthority: authority}, loaded)
 	planned, err := service.Repair(ctx, input)
 	if err != nil {
 		if planned.Plan.Status == domain.PlanUnsupported {
@@ -159,13 +159,13 @@ func runUpdate(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	if err != nil {
 		return err
 	}
-	input := usecase.AddInput{
+	input := withEnterprisePins(usecase.AddInput{
 		Envelope: loaded.envelope, Client: selected, Scope: domain.InstallScope(opts.scope),
 		DryRun: opts.dryRun, Interactive: app.Terminal, Hints: loaded.hints,
 		BackendExecutable:                backendExecutable(selected, detectedMap, app.scope()),
 		PersistAuthoritativeObservations: true,
 		EnvironmentAuthority:             authority,
-	}
+	}, loaded)
 	planned, err := service.Update(ctx, input)
 	if err != nil {
 		if planned.Plan.Status == domain.PlanUnsupported {

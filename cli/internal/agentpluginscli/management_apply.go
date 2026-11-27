@@ -18,9 +18,10 @@ func applyPreparedDependencies(ctx context.Context, app App, request *dependency
 	// The service invokes this same guard before publication and before every
 	// binding Prepare/Apply. Retain custom guards such as the Skills context check
 	// while avoiding a second invocation inside the concrete installer adapter.
-	guard := adapter.beforeApply
+	original := adapter.beforeApply
+	guard := enterprisePolicyApplyGuard(ctx, app, request, original)
 	adapter.beforeApply = nil
-	defer func() { adapter.beforeApply = guard }()
+	defer func() { adapter.beforeApply = original }()
 	return (environmentapp.Service{
 		Readiness: dependencyMutationReadiness{app: app},
 		Lock:      dependencyEnvironmentLock{path: app.EnvironmentLockPath},

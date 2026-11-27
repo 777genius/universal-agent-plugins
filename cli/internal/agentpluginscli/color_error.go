@@ -13,6 +13,9 @@ import (
 // Malformed flags and unknown commands deliberately keep their diagnostic unstyled.
 func ErrorText(args []string, output io.Writer, err error) string {
 	text := safeDiagnosticText(err.Error())
+	if failure, policy := enterprisePolicyAgentFailure(err); policy {
+		text = enterprisePolicyFailureText(failure)
+	}
 	root := NewRoot(App{ErrorOutput: output})
 	cmd, remaining, findErr := root.Find(args)
 	if findErr != nil {

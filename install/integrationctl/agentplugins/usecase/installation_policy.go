@@ -30,11 +30,16 @@ func (service *Service) admitInstallationInputs(ctx context.Context, inputs []Ad
 	if service.InstallationPolicy == nil {
 		return out, nil
 	}
+	var groupFingerprint string
 	for i := range out {
 		fingerprint, err := service.InstallationPolicy.Check(ctx, installationPolicyRequest(out[i]))
 		if err != nil {
 			return nil, err
 		}
+		if i > 0 && fingerprint != groupFingerprint {
+			return nil, domain.ErrInstallPolicyChanged
+		}
+		groupFingerprint = fingerprint
 		if prior := out[i].installationPolicyReview; prior != nil && prior.fingerprint != fingerprint {
 			return nil, domain.ErrInstallPolicyChanged
 		}

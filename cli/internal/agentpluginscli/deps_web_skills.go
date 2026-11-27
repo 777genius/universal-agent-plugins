@@ -23,6 +23,9 @@ func (app App) webSkills() (webSkillAcquirer, error) {
 	return a, nil
 }
 func (resolver dependencyResolver) resolveWebSkill(ctx context.Context, req environment.Requirement, targets []string) (environment.LockedPackage, error) {
+	if err := resolver.app.checkEnterpriseRequirement(ctx, req, targets); err != nil {
+		return environment.LockedPackage{}, err
+	}
 	a, err := resolver.app.webSkills()
 	if err != nil {
 		return environment.LockedPackage{}, err

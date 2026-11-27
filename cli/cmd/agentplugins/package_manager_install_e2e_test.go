@@ -28,6 +28,9 @@ func TestPackageManagerInstallE2E(t *testing.T) {
 		"dependency-ownership-refusal":              pmInstallDependencyOwnershipRefusal,
 		"update-all-security-batch-preflight":       pmInstallUpdateAllSecurityBatchPreflight,
 		"update-all-security-mixed-saved-preflight": pmInstallUpdateAllSecurityMixedSavedPreflight,
+		"enterprise-source-before-http":             enterpriseInstallDeniedBeforeHTTP,
+		"enterprise-tightening-and-removal":         enterpriseInstallTighteningAndRemoval,
+		"enterprise-import-publication":             enterpriseInstallImportPublication,
 	}
 	var ids []string
 	if err := json.Unmarshal(pmInstallCaseInventory, &ids); err != nil {

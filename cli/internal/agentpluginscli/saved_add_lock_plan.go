@@ -39,6 +39,9 @@ func seedSavedAdd(snapshot environmentSnapshot, requirement environment.Requirem
 }
 
 func loadSavedAddPackage(ctx context.Context, app App, source string, targets []domain.ClientID, matches []string, requirement environment.Requirement) (loadedPackage, error) {
+	if err := app.checkEnterpriseRequirement(ctx, requirement, nil); err != nil {
+		return loadedPackage{}, err
+	}
 	var err error
 	var loaded loadedPackage
 	if matches != nil {

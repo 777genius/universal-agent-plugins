@@ -187,6 +187,28 @@ func TestInstallationPolicyChangesStopBeforeRecoveryOrStaging(t *testing.T) {
 	}
 }
 
+func TestInstallationPolicyRejectsMixedGroupSnapshotsBeforeHosts(t *testing.T) {
+	service, store, client := serviceFixture(t)
+	first := addInput(t, client, "https://example.com/policy-group-change")
+	second := first
+	second.Client = domain.DetectedClient{ClientID: domain.ClientKiro, Status: domain.DetectionDetected, ConfigRoot: filepath.Join(t.TempDir(), ".kiro")}
+	host := &policyHostPreparation{}
+	service.OpenCodeHosts = host
+	service.InstallationPolicy = installationPolicyFunc(func(_ context.Context, request domain.InstallPolicyRequest) (string, error) {
+		if request.Targets[0] == second.Client.ClientID {
+			return "changed-but-allowing", nil
+		}
+		return "reviewed", nil
+	})
+	result, err := service.AddGroup(t.Context(), GroupInput{Targets: []AddInput{first, second}, Confirmed: true, OperationGroupID: "policy-group-change"})
+	if !errors.Is(err, domain.ErrInstallPolicyChanged) || result.Mutated || host.calls != 0 {
+		t.Fatalf("mixed policy snapshots reached preparation: result=%+v err=%v host=%d", result, err, host.calls)
+	}
+	if _, err := os.Stat(store.Path); !os.IsNotExist(err) {
+		t.Fatalf("mixed policy snapshots published state: %v", err)
+	}
+}
+
 func TestInstallationPolicyChecksAllUpdateTargetsBeforeProjectionRefresh(t *testing.T) {
 	f := newGroupProjectionFixture(t, "opencode_v1")
 	f.inputs[1].Client.OpenCodeHost = groupProjectionHost{dialect: "opencode_v2"}

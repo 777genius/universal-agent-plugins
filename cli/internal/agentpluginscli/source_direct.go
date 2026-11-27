@@ -35,6 +35,9 @@ func (app App) acquireDirectPackage(ctx context.Context, spec sourcespec.Spec) (
 		return directPackage{}, err
 	}
 	if spec.Archive != nil {
+		if err := app.checkEnterpriseArchive(ctx, *spec.Archive); err != nil {
+			return directPackage{}, err
+		}
 		snapshot, archiveErr := direct.AcquireArchive(ctx, *spec.Archive, spec.Archive.SHA256, "")
 		if archiveErr == nil {
 			return app.loadDirectArchive(ctx, snapshot, *spec.Archive)
@@ -66,6 +69,9 @@ func (app App) loadDirectArchive(ctx context.Context, snapshot domain.PackageSna
 }
 
 func (app App) loadDirectGit(ctx context.Context, source sourcespec.Git) (directPackage, error) {
+	if err := app.checkEnterpriseGit(ctx, source); err != nil {
+		return directPackage{}, err
+	}
 	direct, err := app.directAcquirer()
 	if err != nil {
 		return directPackage{}, err

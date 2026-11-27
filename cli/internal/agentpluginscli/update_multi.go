@@ -221,11 +221,11 @@ func (prepared *preparedUpdateMany) clientInput(client domain.DetectedClient, de
 	if err != nil {
 		return usecase.AddInput{}, err
 	}
-	return usecase.AddInput{
+	return withEnterprisePins(usecase.AddInput{
 		Envelope: clientPackage.envelope, Client: client, Scope: scopeFromProjectRoot(prepared.service.ProjectRoot),
 		Interactive: false, Hints: clientPackage.hints, BackendExecutable: backendExecutable(client, detected, scopeFromProjectRoot(prepared.service.ProjectRoot)),
 		OriginMode: prepared.loaded.origin, DirectoryResolution: cloneDirectoryOrigin(prepared.loaded.directory),
 		DistributionSuspended: prepared.loaded.distributionSuspended, ReleaseRevoked: prepared.loaded.releaseRevoked,
 		EnvironmentAuthority: authority,
-	}, nil
+	}, clientPackage), nil
 }
