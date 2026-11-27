@@ -173,14 +173,13 @@ def _diagnostic_digest(value):
                                      allow_nan=False).encode()).hexdigest()
 
 
-def _diagnostic_image(fd, audit, body=None):
+def _diagnostic_image(fd, audit):
     """Bounded old-FD read uses pread, leaving the authority's offset untouched."""
     before = os.fstat(fd)
     require(stat.S_ISREG(before.st_mode) and before.st_nlink in (0, 1)
             and before.st_uid == os.geteuid() and stat.S_IMODE(before.st_mode) == 0o600
             and 0 < before.st_size <= 1 << 20)
-    if body is None:
-        body = os.pread(fd, (1 << 20) + 1, 0)
+    body = os.pread(fd, (1 << 20) + 1, 0)
     require(type(body) is bytes and len(body) == before.st_size
             and _CUSTODY["_FILES"]["identity"](before)
             == _CUSTODY["_FILES"]["identity"](os.fstat(fd)))
@@ -192,33 +191,51 @@ def _diagnostic_image(fd, audit, body=None):
             "sha256": hashlib.sha256(body).hexdigest(), "document": document}
 
 
+def _diagnostic_named_image(path, case, audit):
+    """Use the existing no-follow member walk and read its exact held file."""
+    before = path.lstat()
+    identity = _CUSTODY["_FILES"]["identity"]
+    case_fd = _CUSTODY["open_directory"](case)
+    try:
+        with audit["WINDSURF_GLOBAL_AUDIT"]["member"](case_fd, path.relative_to(case).as_posix()) as fd:
+            _CUSTODY["named_directory"](case, case_fd)
+            require(before.st_nlink == 1 and identity(before) == identity(os.fstat(fd))
+                    == identity(path.lstat()))
+            image = _diagnostic_image(fd, audit)
+            require(image["identity"] == identity(before) == identity(path.lstat()))
+            _CUSTODY["named_directory"](case, case_fd)
+        return image
+    finally:
+        os.close(case_fd)
+
+
 def _diagnostic_capture(subject):
+    result = {"status": "unavailable", "code": "bounded_config_observation_unavailable",
+              "named": None, "held": None, "expected_image_equal": None}
     try:
         require(not subject.finished and subject.retired_allowed is not None)
-        path = subject.profile / ".claude.json"
+    except Exception:
+        return result
+    path = subject.profile / ".claude.json"
+    try:
+        result["named"] = _diagnostic_named_image(path, subject.case, subject.audit)
+        result["status"] = "observed"
+    except Exception:
+        pass
+    try:
         rows = [row for row in subject.passive_usage if row["path"] == path]
         require(len(rows) == 1)
         row = rows[0]
         held = _diagnostic_image(row["fd"], subject.audit)
-        before = path.lstat()
-        fd = _CUSTODY["_FILES"]["open_member"](path)
-        try:
-            # Reuse the complete bounded/no-follow reader, never a pathname read.
-            body, error = subject.audit["copilot_settings_read"](path, subject.case)
-            require(error is None and type(body) is str)
-            named = _diagnostic_image(fd, subject.audit, body.encode())
-            require(named["identity"][3] == 1
-                    and named["identity"] == _CUSTODY["_FILES"]["identity"](before)
-                    == _CUSTODY["_FILES"]["identity"](path.lstat()))
-        finally:
-            os.close(fd)
         current = os.fstat(row["fd"])
         require(held["identity"] == _CUSTODY["_FILES"]["identity"](current)
                 and (held["uid"], held["gid"]) == (current.st_uid, current.st_gid))
-        return {"status": "observed", "named": named, "held": held,
-                "expected_image_equal": (held["identity"], held["uid"], held["gid"], held["sha256"]) == row["image"]}
+        result["held"] = held
+        result["expected_image_equal"] = (
+            held["identity"], held["uid"], held["gid"], held["sha256"]) == row["image"]
     except Exception:
-        return {"status": "unavailable", "code": "bounded_config_observation_unavailable"}
+        pass
+    return result
 
 
 def _diagnostic_foreign(document):
@@ -239,16 +256,16 @@ def _diagnostic_document(image, start_ms, end_ms, previous=None):
         present = key in usage if valid_usage else None
         row = usage[key] if present else None
         object_row = type(row) is dict
-        unchanged = (previous is not None and type(previous.get("pluginUsage")) is dict
-                     and key in previous["pluginUsage"] and present
-                     and _CUSTODY["same_json"](previous["pluginUsage"][key], row))
+        comparable = (previous is not None and type(previous.get("pluginUsage")) is dict
+                      and key in previous["pluginUsage"] and present)
+        unchanged = _CUSTODY["same_json"](previous["pluginUsage"][key], row) if comparable else None
         stamp = row.get("lastUsedAt") if object_row else None
         fixed[key] = {"present": present,
             "closed_row_shape": object_row and set(row) == {"usageCount", "lastUsedAt", "lastUsedNumStartups"},
             "usage_count_exact_zero": object_row and type(row.get("usageCount")) is int and row["usageCount"] == 0,
             "startups_exact_zero": object_row and type(row.get("lastUsedNumStartups")) is int and row["lastUsedNumStartups"] == 0,
-            "timestamp_in_window": type(stamp) is int and start_ms <= stamp <= end_ms,
-            "row_unchanged": bool(unchanged),
+            "timestamp_in_window": None if start_ms is None else type(stamp) is int and start_ms <= stamp <= end_ms,
+            "row_unchanged": unchanged,
             "row_sha256": _diagnostic_digest(row) if present else None}
     others = sorted(set(usage) - set(_DIAGNOSTIC_USER_KEYS)) if valid_usage else []
     return {"raw_sha256": image["sha256"], "json_sha256": _diagnostic_digest(document),
@@ -267,9 +284,11 @@ def observe_user_initialize_diagnostic(subject, action, sink):
     before = _diagnostic_capture(subject)
     start_ms = time.time_ns() // 1_000_000
     returned, checked = False, False
+    action_start_ms = None
     try:
         subject.checkpoint()
         checked = True
+        action_start_ms = time.time_ns() // 1_000_000
         result = action()
         returned = True  # capture itself still checks exit/error/stderr/binary.
         return result
@@ -279,25 +298,33 @@ def observe_user_initialize_diagnostic(subject, action, sink):
         observation = {"diagnostic_only": True, "ownership": "ownership_unqualified",
                        "native_capture_returned": returned, "pre_initialize_checkpoint_passed": checked,
                        "initialization_qualified": False, "clock_window_valid": start_ms <= end_ms,
+                       "old_fd_same_inode": None, "old_fd_bytes_equal": None,
                        "before": {"status": before["status"]}, "after": {"status": after["status"]}}
         try:
             for label, image in (("before", before), ("after", after)):
+                observation[label].update(retirement_fd_raw_sha256=None, retirement_fd_link_count=None,
+                                          named_joins_retirement_fd=None, retirement_image_equal=None)
                 if image["status"] == "observed":
                     previous = before["named"]["document"] if label == "after" and before["status"] == "observed" else None
-                    observation[label].update(_diagnostic_document(image["named"], start_ms, end_ms, previous))
-                    observation[label]["retirement_fd_raw_sha256"] = image["held"]["sha256"]
-                    observation[label]["retirement_fd_link_count"] = image["held"]["identity"][3]
-                    observation[label]["named_joins_retirement_fd"] = image["named"]["identity"] == image["held"]["identity"]
-                    observation[label]["retirement_image_equal"] = image["expected_image_equal"]
+                    observation[label].update(_diagnostic_document(
+                        image["named"], action_start_ms, end_ms, previous))
                 else:
                     observation[label]["code"] = image["code"]
+                if image["held"] is not None:
+                    observation[label]["retirement_fd_raw_sha256"] = image["held"]["sha256"]
+                    observation[label]["retirement_fd_link_count"] = image["held"]["identity"][3]
+                    observation[label]["named_joins_retirement_fd"] = (
+                        image["named"]["identity"] == image["held"]["identity"] if image["named"] is not None else None)
+                    observation[label]["retirement_image_equal"] = image["expected_image_equal"]
             if before["status"] == after["status"] == "observed":
                 a, b = before["named"], after["named"]
                 observation.update(
                     same_named_inode=a["identity"][:2] == b["identity"][:2],
                     same_named_metadata=(a["identity"], a["uid"], a["gid"]) == (b["identity"], b["uid"], b["gid"]),
                     full_json_equal=_CUSTODY["same_json"](a["document"], b["document"]),
-                    foreign_json_equal=_CUSTODY["same_json"](_diagnostic_foreign(a["document"]), _diagnostic_foreign(b["document"])),
+                    foreign_json_equal=_CUSTODY["same_json"](_diagnostic_foreign(a["document"]), _diagnostic_foreign(b["document"])))
+            if before["held"] is not None and after["held"] is not None:
+                observation.update(
                     old_fd_same_inode=before["held"]["identity"][:2] == after["held"]["identity"][:2],
                     old_fd_bytes_equal=before["held"]["sha256"] == after["held"]["sha256"])
         except Exception:
@@ -463,17 +490,11 @@ class SignedClosureRetirement:
                     stat.S_ISREG(before.st_mode) and stat.S_IMODE(before.st_mode) == 0o600
                     and before.st_uid == os.geteuid() and before.st_nlink == 1)
                 require(member["regular_0600_owner_single_link"])
-                fd = _CUSTODY["_FILES"]["open_member"](path)
-                try:
-                    body, error = self.audit["copilot_settings_read"](path, self.case)
-                    require(error is None and type(body) is str)
-                    image = _diagnostic_image(fd, self.audit, body.encode())
-                    joined = (image["identity"] == _CUSTODY["_FILES"]["identity"](before)
-                              == _CUSTODY["_FILES"]["identity"](path.lstat()))
-                    member["named_held_identity_equal"] = joined
-                    require(joined)
-                finally:
-                    os.close(fd)
+                image = _diagnostic_named_image(path, self.case, self.audit)
+                joined = (image["identity"] == _CUSTODY["_FILES"]["identity"](before)
+                          == _CUSTODY["_FILES"]["identity"](path.lstat()))
+                member["named_held_identity_equal"] = joined
+                require(joined)
                 member["raw_sha256"] = image["sha256"]
                 member["bytes"] = image["identity"][4]
                 member["same_original_owner"] = (image["uid"], image["gid"]) == self.passive_usage[0]["image"][1:3]
@@ -502,7 +523,9 @@ class SignedClosureRetirement:
             except Exception:
                 member["code"] = "bounded_temporary_observation_unavailable"
             detail["members"].append(member)
-        raise ValueError("passive usage temporary bound: " + json.dumps(detail, sort_keys=True))
+        error = ValueError("passive usage temporary bound: " + json.dumps(detail, sort_keys=True))
+        error.claude_temporary_bound_diagnostic = detail
+        raise error
 
     def validate_usage_deletion(self, document):
         """Only receipt-owned zero-count rows may disappear; all other JSON stays exact."""

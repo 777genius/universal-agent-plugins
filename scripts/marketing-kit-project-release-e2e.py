@@ -2796,6 +2796,8 @@ def main():
     except Exception as error:
         report["status"] = "failed"
         report["failure"] = str(error)[:2500]
+        if options.target == "claude" and hasattr(error, "claude_temporary_bound_diagnostic"):
+            report["claude_temporary_bound_diagnostic"] = error.claude_temporary_bound_diagnostic
         if options.target == "claude" and claude_checkpoint_diagnostics:
             report["claude_project_checkpoint_diagnostics"] = claude_checkpoint_diagnostics
         traceback.print_exc()

@@ -212,7 +212,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                         replacement.replace(path)
                     return result
                 sink = []
-                with patch.object(retirement.time, "time_ns", side_effect=[clock * 1_000_000, (clock + 5) * 1_000_000]):
+                with patch.object(retirement.time, "time_ns", side_effect=[clock * 1_000_000, (clock + 1) * 1_000_000, (clock + 5) * 1_000_000]):
                     self.assertIs(retirement.observe_user_initialize_diagnostic(subject, writer, sink), result)
                 self.assertEqual(tuple(subject.fds), descriptors)
                 self.assertEqual(subject.passive_usage, passive)
@@ -260,7 +260,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 elif mutation == "boolean": document["pluginUsage"][key]["lastUsedNumStartups"] = False
                 elif mutation == "bad-time": document["pluginUsage"][key]["lastUsedAt"] = True
                 sink = []
-                with patch.object(retirement.time, "time_ns", side_effect=[clock * 1_000_000, (clock + 5) * 1_000_000]):
+                with patch.object(retirement.time, "time_ns", side_effect=[clock * 1_000_000, (clock + 1) * 1_000_000, (clock + 5) * 1_000_000]):
                     retirement.observe_user_initialize_diagnostic(subject, lambda: path.write_text(json.dumps(document)), sink)
                 row = sink[0]
                 if mutation in ("foreign", "unknown-key"):
@@ -290,11 +290,11 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 if mutation == "precheck":
                     path.write_text(path.read_text() + " ")
                 if mutation == "reader":
-                    original = subject.audit["copilot_settings_read"]
+                    original = retirement._diagnostic_named_image
                     def unavailable(*args):
                         if calls: raise OSError("PRIVATE_NAME PRIVATE_VALUE")
                         return original(*args)
-                    context = patch.dict(subject.audit, {"copilot_settings_read": unavailable})
+                    context = patch.object(retirement, "_diagnostic_named_image", side_effect=unavailable)
                 elif mutation == "projection":
                     context = patch.object(retirement, "_diagnostic_digest", side_effect=ValueError("PRIVATE_NAME"))
                 else:
@@ -314,6 +314,242 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 if mutation == "projection": self.assertEqual(sink[0]["status"], "unavailable")
                 self.assertNotIn("PRIVATE_NAME", json.dumps(sink))
                 self.assertNotIn("PRIVATE_VALUE", json.dumps(sink))
+
+    def test_named_diagnostic_survives_missing_or_unreadable_old_descriptor(self):
+        for missing in (False, True):
+            with self.subTest(missing=missing), self.fixture() as f:
+                if not missing:
+                    path, _, _ = self.author_passive_usage(f, temporary=False)
+                else:
+                    path = f["profile"] / ".claude.json"
+                subject = self.capture(f)
+                self.retire(f)
+                subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f), keep_open=True)
+                old_fds = {row["fd"] for row in subject.passive_usage}
+                original = retirement._diagnostic_image
+                def read(fd, audit):
+                    if fd in old_fds:
+                        raise OSError("PRIVATE unavailable old descriptor")
+                    return original(fd, audit)
+                def writer():
+                    path.write_text('{"pluginUsage":{},"firstStartVersion":"2.1.263"}')
+                    path.chmod(0o600)
+                sink = []
+                with patch.object(retirement, "_diagnostic_image", side_effect=read):
+                    retirement.observe_user_initialize_diagnostic(subject, writer, sink)
+                row = sink[0]
+                self.assertEqual(row["after"]["status"], "observed")
+                self.assertTrue(row["after"]["first_start_version_matches"])
+                for key in ("retirement_fd_raw_sha256", "retirement_fd_link_count",
+                            "named_joins_retirement_fd", "retirement_image_equal"):
+                    self.assertIsNone(row["after"][key], key)
+                self.assertIsNone(row["old_fd_same_inode"])
+                self.assertIsNone(row["old_fd_bytes_equal"])
+                self.assertNotIn("PRIVATE", json.dumps(row))
+                if not missing:
+                    with self.assertRaises(ValueError):
+                        subject.checkpoint()
+                else:
+                    self.assertEqual(subject.passive_usage, [])
+
+    def test_named_diagnostic_uses_its_fd_and_refuses_foreign_body_input(self):
+        with self.fixture() as f:
+            path, _, _ = self.author_passive_usage(f, temporary=False)
+            expected = path.read_bytes()
+            forged = expected.replace(b'"2.1.263"', b'"9.9.999"')
+            self.assertEqual(len(expected), len(forged))
+            shadow, parked = f["home"] / "shadow-profile", f["home"] / "parked-profile"
+            shadow.mkdir()
+            (shadow / path.name).write_bytes(forged)
+            (shadow / path.name).chmod(0o600)
+            identity = retirement._CUSTODY["_FILES"]["identity"]
+            original_identity = identity(path.lstat())
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+            try:
+                f["profile"].rename(parked)
+                shadow.rename(f["profile"])
+                try:
+                    body, error = f["audit"]["copilot_settings_read"](path, f["root"])
+                finally:
+                    f["profile"].rename(shadow)
+                    parked.rename(f["profile"])
+                self.assertIsNone(error)
+                self.assertEqual(body.encode(), forged)
+                self.assertEqual(identity(os.fstat(fd)), original_identity)
+                self.assertEqual(identity(path.lstat()), original_identity)
+                image = retirement._diagnostic_named_image(path, f["root"], f["audit"])
+                self.assertEqual(image["sha256"], hashlib.sha256(expected).hexdigest())
+                self.assertNotEqual(image["sha256"], hashlib.sha256(forged).hexdigest())
+                with self.assertRaises(TypeError):
+                    retirement._diagnostic_image(fd, f["audit"], forged)
+            finally:
+                os.close(fd)
+
+    def test_named_and_temporary_diagnostics_refuse_real_ancestor_aba_without_foreign_reads(self):
+        for temporary in (False, True):
+            with self.subTest(temporary=temporary), self.fixture() as f:
+                main, pending, _ = self.author_passive_usage(f)
+                subject = self.capture(f)
+                path = pending if temporary else main
+                expected = path.read_bytes()
+                shadow, parked = f["home"] / "shadow-profile", f["home"] / "parked-profile"
+                shadow.mkdir()
+                foreign = expected.replace(b'"2.1.263"', b'"9.9.999"')
+                (shadow / path.name).write_bytes(foreign)
+                (shadow / path.name).chmod(0o600)
+                second = pending.with_name(".claude.json.tmp.139.710615a62269")
+                if temporary:
+                    second.write_bytes(expected); second.chmod(0o600)
+                original_open, original_pread = os.open, os.pread
+                opened, read_bodies, swaps = [], [], []
+                def open_aba(name, *args, **kwargs):
+                    if name == path.name and "dir_fd" in kwargs and not swaps:
+                        swaps.append(True)
+                        f["profile"].rename(parked)
+                        shadow.rename(f["profile"])
+                        try:
+                            fd = original_open(name, *args, **kwargs)
+                        finally:
+                            f["profile"].rename(shadow)
+                            parked.rename(f["profile"])
+                    else:
+                        fd = original_open(name, *args, **kwargs)
+                    opened.append(fd)
+                    return fd
+                def pread(fd, length, offset):
+                    body = original_pread(fd, length, offset)
+                    read_bodies.append(body)
+                    return body
+                with (
+                    patch.object(os, "open", side_effect=open_aba),
+                    patch.object(os, "pread", side_effect=pread),
+                ):
+                    if temporary:
+                        with self.assertRaisesRegex(ValueError, "passive usage temporary bound") as caught:
+                            subject.require_temporary_bound([pending, second], "finish")
+                        detail = caught.exception.claude_temporary_bound_diagnostic
+                        self.assertEqual(detail["members"][0]["status"], "unavailable")
+                        self.assertNotIn(hashlib.sha256(foreign).hexdigest(), json.dumps(detail))
+                    else:
+                        with self.assertRaises(ValueError):
+                            retirement._diagnostic_named_image(path, f["root"], f["audit"])
+                self.assertEqual(swaps, [True])
+                self.assertNotIn(foreign, read_bodies)
+                for fd in opened:
+                    with self.assertRaises(OSError):
+                        os.fstat(fd)
+
+    def test_user_diagnostic_unknown_baseline_is_null_and_checkpoint_time_is_excluded(self):
+        clock = 1795750000000
+        key = "marketing-kit@skills-dir"
+        for failed_before in (False, True):
+            with self.subTest(failed_before=failed_before), self.user_diagnostic_fixture() as (f, subject, path):
+                original_read = retirement._diagnostic_named_image
+                reads = []
+                def read(*args):
+                    reads.append(True)
+                    if failed_before and len(reads) == 1:
+                        raise ValueError("PRIVATE baseline failure")
+                    return original_read(*args)
+                checkpoint = subject.checkpoint
+                def checked():
+                    checkpoint()
+                    document = json.loads(path.read_text())
+                    document["pluginUsage"][key] = {"usageCount": 0, "lastUsedAt": clock + 1,
+                                                    "lastUsedNumStartups": 0}
+                    path.write_text(json.dumps(document))
+                sink = []
+                with (
+                    patch.object(retirement, "_diagnostic_named_image", side_effect=read),
+                    patch.object(subject, "checkpoint", side_effect=checked),
+                    patch.object(retirement.time, "time_ns", side_effect=[
+                        clock * 1_000_000, (clock + 3) * 1_000_000, (clock + 5) * 1_000_000]),
+                ):
+                    retirement.observe_user_initialize_diagnostic(subject, lambda: None, sink)
+                row = sink[0]["after"]["fixed_fixture_keys"][key]
+                self.assertTrue(row["present"])
+                self.assertIsNone(row["row_unchanged"])
+                self.assertFalse(row["timestamp_in_window"])
+                self.assertTrue(sink[0]["clock_window_valid"])
+                self.assertNotIn("PRIVATE", json.dumps(sink))
+
+    def test_user_diagnostic_has_no_initialize_window_when_checkpoint_refuses(self):
+        with self.user_diagnostic_fixture() as (f, subject, path):
+            marker, sink = ValueError("PRIVATE original checkpoint failure"), []
+            with (
+                patch.object(subject, "checkpoint", side_effect=marker),
+                patch.object(retirement.time, "time_ns", side_effect=[1000000, 2000000]),
+            ):
+                with self.assertRaises(ValueError) as caught:
+                    retirement.observe_user_initialize_diagnostic(
+                        subject, lambda: self.fail("action must not run"), sink)
+            self.assertIs(caught.exception, marker)
+            self.assertFalse(sink[0]["pre_initialize_checkpoint_passed"])
+            self.assertFalse(sink[0]["native_capture_returned"])
+            for phase in ("before", "after"):
+                self.assertEqual(sink[0][phase]["status"], "observed")
+                for row in sink[0][phase]["fixed_fixture_keys"].values():
+                    self.assertIsNone(row["timestamp_in_window"])
+            self.assertNotIn("PRIVATE", json.dumps(sink))
+
+    def test_user_row_comparison_distinguishes_equal_changed_and_missing(self):
+        with self.fixture() as f:
+            path, _, document = self.author_passive_usage(f, temporary=False)
+            key = "marketing-kit@skills-dir"
+            document["pluginUsage"][key] = {"usageCount": 0, "lastUsedAt": 1795750000000,
+                                            "lastUsedNumStartups": 0}
+            path.write_text(json.dumps(document))
+            image = retirement._diagnostic_named_image(path, f["root"], f["audit"])
+            for previous, expected in ((None, None), ({"pluginUsage": {}}, None), (document, True)):
+                row = retirement._diagnostic_document(image, 0, 10 ** 13, previous)["fixed_fixture_keys"][key]
+                self.assertIs(row["row_unchanged"], expected)
+            changed = copy.deepcopy(document)
+            changed["pluginUsage"][key]["usageCount"] = 1
+            row = retirement._diagnostic_document(image, 0, 10 ** 13, changed)["fixed_fixture_keys"][key]
+            self.assertIs(row["row_unchanged"], False)
+
+    def test_main_retains_complete_large_temporary_diagnostic_for_capture_and_finish(self):
+        from io import StringIO
+        runner = runpy.run_path(str(ROOT / "scripts/marketing-kit-project-release-e2e.py"))
+        main = runner["main"]
+        for phase in ("capture", "finish"):
+            with self.subTest(phase=phase), self.fixture() as f:
+                _, pending, _ = self.author_passive_usage(f)
+                subject = self.capture(f) if phase == "finish" else None
+                for index in range(10):
+                    extra = pending.with_name(f".claude.json.tmp.{200 + index}.710615a62269")
+                    extra.write_bytes(pending.read_bytes()); extra.chmod(0o600)
+                with self.assertRaisesRegex(ValueError, "passive usage temporary bound: ") as caught:
+                    if subject is None:
+                        self.capture(f)
+                    else:
+                        self.retire(f)
+                        subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
+                error = caught.exception
+                detail = error.claude_temporary_bound_diagnostic
+                self.assertGreater(len(str(error)), 2500)
+                self.assertEqual(json.loads(str(error).split(": ", 1)[1]), detail)
+                report_path = f["root"] / "diagnostic-report.json"
+                with (
+                    patch.dict(main.__globals__, {
+                        "RemovalDiscovery": lambda *_: None,
+                        "run_case": lambda *_: (_ for _ in ()).throw(error),
+                    }),
+                    patch.object(sys, "argv", ["runner", "--target", "claude",
+                        "--cli-version", "0.1.116", "--report", str(report_path)]),
+                    patch.object(sys, "stdout", StringIO()),
+                    patch.object(sys, "stderr", StringIO()),
+                ):
+                    self.assertEqual(main(), 1)
+                report = json.loads(report_path.read_text())
+                self.assertEqual(report["status"], "failed")
+                self.assertEqual(report["failure"], str(error)[:2500])
+                self.assertEqual(report["claude_temporary_bound_diagnostic"], detail)
+                self.assertEqual(detail["phase"], phase)
+                self.assertEqual((detail["temporary_count"], len(detail["members"]), detail["omitted_count"]),
+                                 (11, 8, 3))
+                for private in (str(f["root"]), pending.name, "PRIVATE"):
+                    self.assertNotIn(private, json.dumps(report))
 
     def author_passive_usage(self, f, temporary=True):
         usage = {owner["key"]: {"usageCount": 0, "lastUsedAt": 1795729883121,
@@ -511,7 +747,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             self.assertEqual(detail["temporary_count"], 2)
             self.assertTrue(all(row["status"] == "unavailable" for row in detail["members"]))
             image.assert_not_called(); stream.assert_not_called(); pread.assert_not_called()
-            self.assertEqual(len(opened), 2)
+            self.assertEqual(len(opened), 0)
             for fd in opened:
                 with self.assertRaises(OSError): os.fstat(fd)
             self.assertEqual(tuple(subject.fds), descriptors)
