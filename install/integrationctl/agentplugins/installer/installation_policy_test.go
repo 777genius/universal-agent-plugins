@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/clientdetect"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/enterprisepolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/ports"
 )
 
 type installerPolicyFunc func(context.Context, domain.InstallPolicyRequest) (string, error)
@@ -95,23 +97,74 @@ func TestInstallationPolicyChangesInvalidatePreparedSDKOperations(t *testing.T) 
 }
 
 func TestInstallationPolicySDKRechecksAfterProgressCallback(t *testing.T) {
-	f := newProjectFilesFixture(t, "cline", "default")
-	fingerprint, handoffs := "reviewed", 0
-	f.cfg.InstallationPolicy = installerPolicyFunc(func(context.Context, domain.InstallPolicyRequest) (string, error) { return fingerprint, nil })
-	f.cfg.Progress = func(event ProgressEvent) {
-		if event.Phase == ProgressStage {
-			fingerprint = "changed-after-preflight"
+	for _, shape := range []string{"single", "group"} {
+		for _, change := range []string{"rules", "denial", "unreadable", "embedded-host"} {
+			t.Run(shape+"/"+change, func(t *testing.T) {
+				f := newProjectFilesFixture(t, "cline", "default")
+				paths := []string{f.skill, f.config}
+				if shape == "group" {
+					codexUser := filepath.Join(f.base, "user", ".codex")
+					seedCodexProjectTrust(t, codexUser, f.project)
+					f.req.Targets = []ClientTarget{{ClientID: "cline", ClientConfigRoot: f.user}, {ClientID: "codex", ClientConfigRoot: codexUser}}
+					paths = append(paths, filepath.Join(f.project, ".agents", "skills", "docs", "SKILL.md"), filepath.Join(f.project, ".codex", "config.toml"))
+				}
+				gate, mutate, expected := sdkCallbackPolicy(t, change)
+				f.cfg.InstallationPolicy = gate
+				handoffs, callbacks := 0, 0
+				f.cfg.Progress = func(event ProgressEvent) {
+					if event.Phase == ProgressStage {
+						callbacks++
+						mutate()
+					}
+				}
+				f.cfg.OnCommittedBinding = func(context.Context, BindingFacts) error { handoffs++; return nil }
+				f.reopen(t)
+				result, err := f.execute(t, OpInstall)
+				reason := "policy_denied"
+				if change == "rules" {
+					reason = "policy_changed"
+				}
+				if !errors.Is(err, expected) || result.Outcome != OutcomeConflict || result.Reason != reason || result.Mutated || handoffs != 0 || callbacks != 1 || f.state(t) != "" {
+					t.Fatalf("late SDK policy failure lost its cause or crossed stage: result=%+v err=%v handoffs=%d callbacks=%d", result, err, handoffs, callbacks)
+				}
+				if change == "unreadable" {
+					var config *enterprisepolicy.ConfigError
+					if !errors.As(err, &config) || config.Code != "required_file_unavailable" {
+						t.Fatalf("late file-policy failure lost its typed adapter cause: %v", err)
+					}
+				}
+				for _, path := range paths {
+					if _, err := os.Stat(path); !os.IsNotExist(err) {
+						t.Fatalf("late policy failure installed client content at %s: %v", path, err)
+					}
+				}
+			})
 		}
 	}
-	f.cfg.OnCommittedBinding = func(context.Context, BindingFacts) error { handoffs++; return nil }
-	f.reopen(t)
-	result, err := f.execute(t, OpInstall)
-	if !errors.Is(err, domain.ErrInstallPolicyChanged) || result.Reason != "policy_changed" || result.Mutated || handoffs != 0 || f.state(t) != "" {
-		t.Fatalf("late SDK policy change crossed stage: result=%+v err=%v handoffs=%d", result, err, handoffs)
+}
+
+func sdkCallbackPolicy(t *testing.T, change string) (ports.InstallationPolicy, func(), error) {
+	t.Helper()
+	if change == "unreadable" {
+		path := filepath.Join(t.TempDir(), "policy.yaml")
+		deathWrite(t, path, "schema_version: 2\n")
+		gate := enterprisepolicy.Files{Paths: []enterprisepolicy.Path{{Layer: "deployment", Path: path, Required: true}}}
+		return gate, func() {
+			if err := os.Remove(path); err != nil {
+				t.Fatal(err)
+			}
+		}, os.ErrNotExist
 	}
-	if _, err := os.Stat(f.skill); !os.IsNotExist(err) {
-		t.Fatalf("late policy change installed a skill: %v", err)
+	fingerprint, gateErr := "reviewed", error(nil)
+	gate := installerPolicyFunc(func(context.Context, domain.InstallPolicyRequest) (string, error) { return fingerprint, gateErr })
+	if change == "rules" {
+		return gate, func() { fingerprint = "changed-after-preflight" }, domain.ErrInstallPolicyChanged
 	}
+	cause := errors.New("embedded host policy authority unavailable")
+	if change == "denial" {
+		cause = installerPolicyDenial()
+	}
+	return gate, func() { gateErr = cause }, cause
 }
 
 func TestInstallationPolicySDKPinsAreCopiedFromRequestedFacts(t *testing.T) {

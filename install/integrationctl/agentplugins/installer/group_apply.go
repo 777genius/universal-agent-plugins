@@ -39,7 +39,9 @@ func (e *Engine) applyGroup(ctx context.Context, prepared *PreparedOperation) (R
 	got, err := e.mutateGroup(ctx, prepared)
 	if err != nil && got == nil {
 		outcome, reason := OutcomeIncomplete, err.Error()
-		if errors.Is(err, ErrPlanChanged) {
+		if policyReason, policy := installationPolicyConflictReason(err); policy {
+			outcome, reason = OutcomeConflict, policyReason
+		} else if errors.Is(err, ErrPlanChanged) {
 			outcome, reason = OutcomeConflict, "plan_changed"
 		}
 		return Result{Operation: prepared.req.Operation, Outcome: outcome, Reason: reason}, err
@@ -98,6 +100,10 @@ func (e *Engine) finishGroup(prepared *PreparedOperation, result Result, pending
 }
 
 func failedGroupResult(result Result, err error) (Result, error) {
+	if reason, policy := installationPolicyConflictReason(err); policy {
+		result.Outcome, result.Reason = OutcomeConflict, reason
+		return result, err
+	}
 	result.Outcome = OutcomeIncomplete
 	result.Reason = err.Error()
 	if errors.Is(err, ErrPlanChanged) {

@@ -24,6 +24,9 @@ type Path struct {
 
 // Files has no global state and does not discover paths from environment.
 // The composition root supplies fixed candidate locations for one operation.
+// Deployment must protect policy files and every ancestor from changes by the
+// principals governed by them; file and ancestry checks do not isolate paths
+// from concurrent directory replacement.
 type Files struct {
 	Paths []Path
 }
@@ -135,7 +138,8 @@ func darwinPolicyPath(path string) string {
 
 // ReadFile reuses the bounded stable-file reader used for dependency authority
 // documents, checking every ancestor before and after the read. This refuses
-// linked paths; it is not a concurrent directory-isolation or sandbox API.
+// linked paths. The policy file and every ancestor must be protected from
+// changes by governed principals; this is not a directory-isolation API.
 func ReadFile(raw string) (domain.InstallPolicy, error) {
 	path, err := policyPath(raw)
 	if err != nil {

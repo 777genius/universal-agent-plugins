@@ -113,6 +113,41 @@ func TestPolicySessionRejectsIntroducedAncestorLink(t *testing.T) {
 	requireUnsafePolicyParent(t, err)
 }
 
+func TestPolicySessionRejectsPolicyHiddenByAncestorRedirect(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	parent, empty := filepath.Join(root, "trusted"), filepath.Join(root, "empty")
+	for _, path := range []string{parent, empty} {
+		if err := os.MkdirAll(filepath.Join(path, "config"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(parent, "config", "policy.yaml")
+	writePolicy(t, path, "schema_version: 2\ninstall:\n  allowed_scopes: [user]\n")
+	ctx, req := context.Background(), domain.InstallPolicyRequest{Scope: domain.ScopeUser}
+	files := Files{Paths: []Path{{Layer: "machine", Path: path}}}
+	session := NewSession(files)
+	if _, err := session.Check(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(parent, filepath.Join(root, "original")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(empty, parent); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, err := session.Check(ctx, req); !errors.Is(err, domain.ErrInstallPolicyChanged) {
+		t.Fatalf("ancestor redirect hid reviewed restrictions without invalidating review: %v", err)
+	}
+	_, err := (Files{Paths: []Path{{Layer: "deployment", Path: path, Required: true}}}).Load(ctx)
+	requireUnsafePolicyParent(t, err)
+	// A new operation discovers optional files afresh; requiring a deployment
+	// to remain present belongs to its protected required-file configuration.
+	if _, err := NewSession(files).Check(ctx, req); err != nil {
+		t.Fatalf("new operation changed optional-absent compatibility: %v", err)
+	}
+}
+
 func TestDarwinPolicyPathCanonicalizesOnlySystemAliases(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct{ path, want string }{

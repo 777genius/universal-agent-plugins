@@ -124,10 +124,22 @@ directory, while a dangling link at the policy filename is refused. Ancestry is
 checked before and after the bounded file read; these checks do not isolate the
 read from concurrent directory replacement.
 
-Administrators must protect the machine policy and its directory against writes
-by ordinary users. The policy governs this UAP binary; it does not prevent a
-machine administrator from replacing the binary or a user from manually editing
-client files.
+Enterprise enforcement requires trusted filesystem ancestry: administrators must
+protect the policy file and every containing directory against writes, deletion,
+rename and replacement by the users governed by that policy. Use operating-system
+ownership and ACLs to enforce this requirement. The checks above do not establish
+that protection for an attacker-controlled directory tree.
+
+Automatic machine, user and project discovery allows a location to be absent at
+the start of a new operation. A reviewed operation still rejects disappearance,
+including an ancestor redirect that makes its policy file appear missing. For a
+managed invocation that must refuse a missing deployment file, set
+`UAP_POLICY_FILE` to the protected file and protect the launch configuration that
+supplies the variable. An environment variable users can freely unset does not
+create mandatory organization authority.
+
+The policy governs this UAP binary; it does not prevent a machine administrator
+from replacing the binary or a user from manually editing client files.
 
 ### Deploy a machine policy
 

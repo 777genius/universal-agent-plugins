@@ -25,10 +25,22 @@ type reviewedInstallationPolicy struct {
 	fingerprint string
 }
 
+// Keep gate origin through confirmation and core lifecycle wrappers without
+// coupling the SDK to a concrete policy-file adapter or hiding its cause.
+type installationPolicyCheckError struct{ cause error }
+
+func (err *installationPolicyCheckError) Error() string {
+	return err.cause.Error()
+}
+
+func (err *installationPolicyCheckError) Unwrap() error {
+	return err.cause
+}
+
 func (reviewed reviewedInstallationPolicy) Check(ctx context.Context, request domain.InstallPolicyRequest) (string, error) {
 	fingerprint, err := reviewed.gate.Check(ctx, request)
 	if err != nil {
-		return "", err
+		return "", &installationPolicyCheckError{cause: err}
 	}
 	if fingerprint != reviewed.fingerprint {
 		return "", domain.ErrInstallPolicyChanged
@@ -114,9 +126,21 @@ func clonePolicyPin(value *bool) *bool {
 }
 
 func installationPolicyFailure(op Operation, err error) (Result, error) {
-	reason := "policy_denied"
-	if errors.Is(err, domain.ErrInstallPolicyChanged) {
-		reason = "policy_changed"
+	reason, known := installationPolicyConflictReason(err)
+	if !known {
+		reason = "policy_denied"
 	}
 	return Result{Operation: op, Outcome: OutcomeConflict, Reason: reason}, err
+}
+
+func installationPolicyConflictReason(err error) (string, bool) {
+	if errors.Is(err, domain.ErrInstallPolicyChanged) {
+		return "policy_changed", true
+	}
+	var denied *domain.InstallPolicyError
+	var gateFailure *installationPolicyCheckError
+	if errors.As(err, &denied) || errors.As(err, &gateFailure) {
+		return "policy_denied", true
+	}
+	return "", false
 }

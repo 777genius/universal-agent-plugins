@@ -46,12 +46,10 @@ type UnsupportedStateSchemaError = statev2.UnsupportedStateSchemaError
 // of an incomplete outcome. A saved dependency waiting for a pin change has
 // its own reason, which carries no update next action: an update cannot help.
 func lifecycleConflictReason(err error) (string, bool) {
-	var denied *domain.InstallPolicyError
+	if reason, policy := installationPolicyConflictReason(err); policy {
+		return reason, true
+	}
 	switch {
-	case errors.Is(err, domain.ErrInstallPolicyChanged):
-		return "policy_changed", true
-	case errors.As(err, &denied):
-		return "policy_denied", true
 	case errors.Is(err, ErrPlanChanged):
 		return "plan_changed", true
 	case errors.Is(err, ErrUpdateRequired):

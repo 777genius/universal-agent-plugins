@@ -128,6 +128,18 @@ explicit paths, permission errors, symlinks/nonregular files and malformed
 configured policy refuse installation. Error output avoids full source URLs,
 arguments, environment values and untrusted terminal control characters.
 
+Enterprise enforcement requires trusted filesystem ancestry: deployment must
+protect the policy file and every containing directory from writes, deletion,
+rename or replacement by governed users using OS ownership/ACLs. Bounded leaf
+reading and ancestry checks do not supply directory isolation against an actor
+who can replace those ancestors. Optional discovery intentionally permits an
+absent path at the start of a fresh operation, including absent files beneath
+linked home/project roots. A retained review rejects disappearance, including
+an ancestor redirect that hides its policy. Deployment that requires absence
+to fail uses a protected required path, such as UAP_POLICY_FILE supplied by a
+trusted managed launch configuration. An environment variable that governed
+users can unset does not establish mandatory organization authority.
+
 ## Architecture and integration
 
 Domain types and evaluation stay stdlib-only under the existing domain boundary;
@@ -343,6 +355,17 @@ before desired state/kernel effects. Independent reread approved these fixes;
 focused domain/adapter and core policy/SDK regressions passed. The SDK reason
 mapping comment was already addressed and its callback regression was rerun.
 
+R15 follow-up review: deployment requires trust in the policy file and every
+ancestor, enforced by OS ownership/ACLs; optional absence retains the accepted
+no-policy behavior. A new regression covers a retained restrictive policy hidden
+by an ancestor redirect, required-path refusal and fresh optional discovery.
+This does not claim protection from transient concurrent directory replacement.
+The SDK now preserves policy-error origin through a private wrapper, retaining
+errors.Is/errors.As while mapping late configuration/gate failures to
+policy_denied after single-target and group callbacks. An eight-case regression
+was added. These follow-up changes require their own qualification after the
+executor interruption; earlier passing results are explicitly tied to 5cbd057e.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test
@@ -356,16 +379,27 @@ mapping comment was already addressed and its callback regression was rerun.
   unavailable native process observation/Unix sockets and a killed environment
   store test process. It is not counted as a successful full-core run. The
   supported GitHub Core fast runner supplies full native/core qualification.
-- Three production-composition Enterprise archive E2E cases passed before the
-  final repair refinements; their final-source rerun is required.
-- All four modules passed the lint size/architecture pass before the final
-  operation-intent refinement. The first changed-lines pass was killed by host
-  resource pressure. A bounded-memory complete rerun is in progress.
+- Published commit 5cbd057e passed the full domain and enterprisepolicy adapter
+  packages and the focused usecase/SDK policy selections. Its three production
+  Enterprise archive E2E cases passed in 2.814s. These results do not qualify
+  later changes until those changes are verified separately.
+- Lint baseline verification at 5cbd057e passed with 137 unchanged existing
+  entries. Earlier all-module size/architecture checks passed; a first
+  changed-lines attempt was killed by host resource pressure.
+- The official archive suite exercised the 5cbd057e binary with the real
+  scanner: lifecycle checks passed, installation checks passed in 18.42s and
+  production composition passed in 8.995s. Portable catalog compilation was
+  killed by SIGKILL, so the overall official suite is not counted as PASS.
+- The GitHub Core fast test-core job
+  [140293623466](https://github.com/777genius/universal-agent-plugins/actions/runs/45934226946/job/140293623466)
+  completed successfully for 5cbd057e, including CLI internal/composition,
+  usecase, domain and policy adapter packages. This is job-level evidence;
+  it does not count the workflow's other queued jobs as passing.
 - The execution interruption was recovered without losing the working tree.
   The integrated code was published in dabd3f0d; subsequent completed commits are
   published immediately. No stale, skipped, cancelled or queued result counts
   as passing evidence.
 
-Remaining gates: final lint, final-source production/archive E2E, current-head
-supported-runner checks and review findings, ordinary expected-head merge, and
-verification of the actual merged main. No release or tag.
+Remaining gates: qualification of review follow-up changes, successful portable
+catalog and current-head supported-runner checks, ordinary expected-head merge,
+and verification of the actual merged main. No release or tag.
