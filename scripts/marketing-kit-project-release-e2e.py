@@ -2275,7 +2275,7 @@ def main():
                     if failures:
                         raise failures[0]
 
-            def claude_read(e, p, action, initializing=False):
+            def claude_read(e, p, action, initializing=False, pending_user_initialize=False):
                 # The pre-remove positive control initializes this profile
                 # after the real install/restore; never warm cold B/C first.
                 # Its runtime baseline has no path-name exceptions. Foreign,
@@ -2286,7 +2286,17 @@ def main():
                 runtime_before = complete if initializing else None
                 peers = [(pe, pp, profile_snapshot(pe, pp)) for pe, pp in claude_profiles if pe is not e]
                 def own_check():
-                    if initializing:
+                    if pending_user_initialize:
+                        current = claude_observation_snapshot(e, p, root)
+                        # Only the separately held, pending same-JSON main
+                        # replacement may differ; all other own native bytes
+                        # and metadata keep the original complete guard.
+                        permitted = {Path(e["HOME"]).name + "/.claude/.claude.json",
+                                     "metadata:0:.claude/.claude.json"}
+                        if ({key: value for key, value in current.items() if key not in permitted}
+                                != {key: value for key, value in complete.items() if key not in permitted}):
+                            raise AssertionError("Claude after-remove initialize changed unrelated profile bytes")
+                    elif initializing:
                         if scoped_snapshot((p, Path(e["AGENTPLUGINS_HOME"]))) != own:
                             raise AssertionError("Claude initialization changed Project/installer bytes")
                         runtime_after = profile_snapshot(e, p)
@@ -2309,20 +2319,47 @@ def main():
             def claude_before_remove(e, p, scope, label):
                 if claude_discovery is None:
                     return None
-                options = {}
+                probe_options = {}
+                authority = None
                 if scope == "user" and e is env and p == project_a and claude_a_retirement is not None:
-                    def initialize(action):
+                    authority = claude_a_retirement.user_initialize_authority(
+                        Path(e["AGENTPLUGINS_HOME"]), read_inventory(options.cli, e, p, "claude", "user"))
+                    def initialize(action, native_rows):
                         return claude_retirement["observe_user_initialize_diagnostic"](
-                            claude_a_retirement, action,
+                            claude_a_retirement,
+                            lambda: claude_a_retirement.stage_user_initialize(authority, action, native_rows),
                             report.setdefault("claude_user_initialize_diagnostics", []))
-                    options["initialize"] = initialize
-                return claude_read(e, p, lambda: claude_discovery.before_remove(
-                    e, p, scope, label, **options), initializing=True)
+                    probe_options["initialize"] = initialize
+                try:
+                    before = claude_read(e, p, lambda: claude_discovery.before_remove(
+                        e, p, scope, label, **probe_options), initializing=True)
+                    if authority is not None:
+                        claude_a_retirement.commit_user_initialize(authority, before)
+                    return before
+                except BaseException:
+                    if authority is not None:
+                        claude_a_retirement.close()
+                    raise
 
             def claude_after_remove(e, p, before, label):
                 if claude_discovery is not None:
-                    proof = claude_read(e, p, lambda: claude_discovery.after_remove(e, p, before, label))
-                    report.setdefault("claude_fresh_removal_discovery", []).append({"stage": label, **proof})
+                    authority = (claude_a_retirement.user_usage if e is env and p == project_a
+                        and before["scope"] == "user" and claude_a_retirement is not None else None)
+                    options = {}
+                    if authority is not None:
+                        options["initialize"] = lambda action, rows: claude_a_retirement.stage_user_initialize(
+                            authority, action, rows, removed=True)
+                    try:
+                        proof = claude_read(e, p, lambda: claude_discovery.after_remove(
+                            e, p, before, label, **options), pending_user_initialize=authority is not None)
+                        if authority is not None:
+                            claude_a_retirement.commit_user_initialize(authority, proof)
+                    except BaseException:
+                        if authority is not None:
+                            claude_a_retirement.close()
+                        raise
+                    report.setdefault("claude_fresh_removal_discovery", []).append({"stage": label, **{
+                        key: value for key, value in proof.items() if key not in ("home", "project", "native_rows")}})
 
             def remove_project(e, p, label, scoped_args, keep_retirement=False):
                 before = claude_before_remove(e, p, "project", label)
@@ -2706,7 +2743,9 @@ def main():
                 if copilot_a_shapes is not None else None)
             claude_user_before = claude_before_remove(env, project_a, "user", "User A remove")
             run(env, project_a, "User remove", "remove", "marketing-kit",
-                *user_scoped, *user_remove_attestation)
+                *user_scoped, *user_remove_attestation,
+                capture=(lambda receipt: claude_a_retirement.user_remove_receipt(
+                    claude_a_retirement.user_usage, receipt)) if claude_a_retirement is not None else None)
             claude_after_remove(env, project_a, claude_user_before, "User A remove")
             if user_inventory():
                 raise AssertionError("User removal retained Marketing Kit or mandatory children")

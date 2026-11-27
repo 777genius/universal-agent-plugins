@@ -284,7 +284,6 @@ def _diagnostic_document(image, start_ms, end_ms, previous=None):
 def observe_user_initialize_diagnostic(subject, action, sink):
     """Measure one native capture; never adopt bytes or change retirement state."""
     before = _diagnostic_capture(subject)
-    start_ms = time.time_ns() // 1_000_000
     returned, checked = False, False
     action_start_ms = None
     try:
@@ -299,7 +298,8 @@ def observe_user_initialize_diagnostic(subject, action, sink):
         after = _diagnostic_capture(subject)
         observation = {"diagnostic_only": True, "ownership": "ownership_unqualified",
                        "native_capture_returned": returned, "pre_initialize_checkpoint_passed": checked,
-                       "initialization_qualified": False, "clock_window_valid": start_ms <= end_ms,
+                       "initialization_qualified": False,
+                       "clock_window_valid": action_start_ms is not None and action_start_ms <= end_ms,
                        "old_fd_same_inode": None, "old_fd_bytes_equal": None,
                        "before": {"status": before["status"]}, "after": {"status": after["status"]}}
         try:
@@ -344,6 +344,8 @@ class SignedClosureRetirement:
         self.fds, self.owners, self.anchors = [], [], {}
         self.passive_usage = []
         self.usage_contract = None
+        self.detached_usage = []
+        self.user_usage = None
         self.finished = False
         self.retired_allowed = None
         if checkpoint_diagnostics is not None:
@@ -584,13 +586,168 @@ class SignedClosureRetirement:
         return {".claude/" + row["path"].relative_to(self.profile).as_posix() for row in self.passive_usage}
 
     def passive_usage_proof(self):
-        return {"native_version": "2.1.263", "receipt_bound_key_count": 4 if self.passive_usage else 0,
+        proof = {"native_version": "2.1.263", "receipt_bound_key_count": 4 if self.passive_usage else 0,
                 "preserved_foreign_document": True,
                 "foreign_document_equality": "strict-decoded-json",
                 "post_removal_bytes_and_identity_held": True,
                 "files": [{"name": row["path"].name, "sha256": row["image"][-1]} for row in self.passive_usage]}
+        if self.user_usage is not None:
+            proof["user_initialize_transition"] = {
+                "authority": "same signed public/recorded User binding and committed receipt checks",
+                "phase": self.user_usage["phase"], "receipt_bound_user_key_count": 4,
+                "original_project_usage_contract_preserved": True,
+                "main_image_authority": "explicit bounded User initialize, not original Project bytes",
+                "exact_four_user_remove_receipts_qualified": self.user_usage["phase"] in ("removed", "finished"),
+                "detached_original_images_held": len(self.detached_usage),
+                "user_owners": {alias: {"installation_id_sha256": _diagnostic_digest(owner["installation_id"]),
+                    "binding_id_sha256": _diagnostic_digest(owner["binding_id"])}
+                    for alias, owner in self.user_usage["owners"].items()},
+                "full_native_removal_qualified": False, "writer_closure_qualified": False}
+        return proof
 
-    def capture(self, alias, distribution, pin, public, record):
+    def user_initialize_authority(self, data, public_rows):
+        """Bind this one User cohort through the existing signed receipt checker."""
+        self.checkpoint()
+        require(self.user_usage is None and Path(data) == self.home.parent / "data"
+                and type(public_rows) is list and len(public_rows) == 4)
+        state_path = Path(data) / "state-v2.json"
+        state = self.document(state_path)
+        require(type(state.get("schema_version")) is int and state["schema_version"] == 5)
+        records = [row for row in state["installations"] if row.get("clients")]
+        require(len(records) == 4)
+        owners = {}
+        for alias, distribution in self.audit["MARKETING_KIT_DISTRIBUTIONS"].items():
+            selected = [row for row in public_rows if row.get("directory", {}).get("recorded_distribution") == distribution]
+            require(len(selected) == 1)
+            public = selected[0]
+            selected = [row for row in records if row.get("installation_id") == public.get("installation_id")]
+            require(len(selected) == 1)
+            pin = self.audit["MARKETING_KIT_SIGNED_CLOSURE"][distribution]
+            binding, _, active = self.selected_binding(alias, distribution, pin, public, selected[0], "user")
+            owners[alias] = {"id": alias + "@skills-dir", "version": pin["package_version"],
+                "scope": "user", "enabled": True, "installPath": str(active),
+                "installation_id": public["installation_id"], "binding_id": binding["client_binding_id"]}
+        for field in ("installation_id", "binding_id", "installPath"):
+            require(len({row[field] for row in owners.values()}) == 4)
+        return {"owners": owners, "state_path": state_path, "state": state,
+                "phase": "before", "pending": None}
+
+    def user_initialize_guards(self):
+        """Keep every original authority except the explicitly pending main name."""
+        self.recheck(check_usage=False)
+        temporary = {path for path in self.profile.iterdir()
+                     if re.fullmatch(r"\.claude\.json\.tmp\.[1-9][0-9]{0,9}\.[0-9a-f]{12}", path.name)}
+        require(temporary == {row["path"] for row in self.passive_usage[1:]})
+        for row in self.passive_usage[1:]:
+            require(self.passive_image(row["path"], row["fd"]) == row["image"])
+        for row in self.detached_usage:
+            image = _diagnostic_image(row["fd"], self.audit)
+            require((image["identity"], image["uid"], image["gid"], image["sha256"]) == row["image"])
+
+    def stage_user_initialize(self, authority, action, native_rows, *, removed=False):
+        """Hold a candidate; complete native and caller guards must precede commit."""
+        self.checkpoint()
+        self.user_initialize_guards()
+        require(type(removed) is bool and authority["pending"] is None
+                and authority["phase"] == ("removed" if removed else "before")
+                and type(native_rows) is list)
+        owners = authority["owners"]
+        selected = [row for row in native_rows if row["id"].split("@", 1)[0].casefold() in owners]
+        if removed:
+            require(not selected and self.user_usage is authority)
+        else:
+            require(len(selected) == 4 and {row["id"] for row in selected} == {row["id"] for row in owners.values()}
+                    and _CUSTODY["same_json"](self.document(authority["state_path"]), authority["state"]))
+            for row in selected:
+                owner = owners[row["id"].split("@", 1)[0]]
+                require(all(type(row.get(key)) is type(owner[key]) and row[key] == owner[key]
+                            for key in ("id", "version", "scope", "enabled", "installPath")))
+        old = self.passive_usage[0]
+        before = _diagnostic_image(old["fd"], self.audit)
+        require((before["identity"], before["uid"], before["gid"], before["sha256"]) == old["image"])
+        start = time.time_ns() // 1_000_000
+        result = action()
+        end = time.time_ns() // 1_000_000
+        require(start <= end and type(result) is tuple and len(result) == 2
+                and type(result[1]) is dict and result[1].get("exit") == 0
+                and result[1].get("error") is None and result[1].get("stderr_bytes") == 0)
+        document, following = self.held_passive_document(old["path"])
+        require(following["image"][1:3] == old["image"][1:3])
+        if removed:
+            require(_CUSTODY["same_json"](document, before["document"]))
+        else:
+            keys = {row["id"] for row in owners.values()}
+            usage = document.get("pluginUsage")
+            prior = before["document"].get("pluginUsage")
+            require(type(usage) is dict and type(prior) is dict and not keys.intersection(prior)
+                    and keys <= set(usage))
+            for key in keys:
+                row = usage[key]
+                require(type(row) is dict and set(row) == {"usageCount", "lastUsedAt", "lastUsedNumStartups"}
+                        and type(row["usageCount"]) is int and row["usageCount"] == 0
+                        and type(row["lastUsedNumStartups"]) is int and row["lastUsedNumStartups"] == 0
+                        and type(row["lastUsedAt"]) is int and start <= row["lastUsedAt"] <= end)
+            require(_CUSTODY["same_json"](dict(document, pluginUsage={
+                key: row for key, row in usage.items() if key not in keys}), before["document"]))
+        held = _diagnostic_image(old["fd"], self.audit)
+        same = following["image"][0][:2] == old["image"][0][:2]
+        require((removed or not same) and held["sha256"] == old["image"][-1]
+                and held["identity"][:3] == old["image"][0][:3]
+                and held["identity"][4:6] == old["image"][0][4:6]
+                and (held["uid"], held["gid"]) == old["image"][1:3]
+                and held["identity"][3] == (1 if same else 0)
+                and (not same or following["image"] == old["image"]))
+        authority["pending"] = {"old": old, "following": following,
+            "detached_image": (held["identity"], held["uid"], held["gid"], held["sha256"]),
+            "same_inode": same, "removed": removed, "native_rows": native_rows}
+        # Do not replace passive_usage here: before/after_remove still has to
+        # validate the complete native Skill response and all outer guards.
+        return result
+
+    def commit_user_initialize(self, authority, native_proof):
+        pending = authority["pending"]
+        require(type(pending) is dict and native_proof["scope"] == "user"
+                and native_proof["home"] == str(self.home) and native_proof["project"] == str(self.project)
+                and _CUSTODY["same_json"](native_proof["native_rows"], pending["native_rows"]))
+        self.user_initialize_guards()
+        old, following = pending["old"], pending["following"]
+        require(self.passive_usage[0] is old
+                and self.passive_image(following["path"], following["fd"]) == following["image"])
+        held = _diagnostic_image(old["fd"], self.audit)
+        require((held["identity"], held["uid"], held["gid"], held["sha256"]) == pending["detached_image"])
+        if not pending["same_inode"]:
+            self.detached_usage.append(dict(old, image=pending["detached_image"]))
+            self.passive_usage = [following, *self.passive_usage[1:]]
+        self.user_usage = authority
+        authority["phase"] = "finished" if pending["removed"] else "initialized"
+        authority["pending"] = None
+        self.checkpoint()
+
+    def user_remove_receipt(self, authority, cleanup):
+        """Only the complete four-member User receipt may authorize the next read."""
+        self.checkpoint()
+        require(self.user_usage is authority and authority["phase"] == "initialized"
+                and authority["pending"] is None and cleanup["result"] == "success"
+                and cleanup["outcome"] == "completed" and cleanup["scope"] == "user"
+                and type(cleanup["actions"]) is list and type(cleanup["results"]) is list
+                and len(cleanup["actions"]) == len(cleanup["results"]) == 4)
+        observed = set()
+        for action, result in zip(cleanup["actions"], cleanup["results"]):
+            alias = action["alias"]
+            require(alias in authority["owners"] and alias not in observed)
+            owner = authority["owners"][alias]
+            require(action["action"] == result["operation"] == "remove"
+                    and action["client_id"] == result["client_id"] == "claude"
+                    and action["installation_id"] == result["installation_id"] == owner["installation_id"]
+                    and action["binding_id"] == owner["binding_id"] and result["outcome"] == "completed")
+            observed.add(alias)
+        require(observed == set(authority["owners"]))
+        authority["phase"] = "removed"
+        self.checkpoint()
+
+    def selected_binding(self, alias, distribution, pin, public, record, scope):
+        """Share the same signed/public/recorded/path/receipt authority for both scopes."""
+        require(scope in ("project", "user"))
         require(record["declared_name"] == record["package"]["declared_name"] == public["name"] == alias
                 and record.get("origin_mode") == "directory"
                 and type(public.get("installation_id")) is str and bool(public["installation_id"]))
@@ -615,7 +772,7 @@ class SignedClosureRetirement:
         binding_id, binding = next(iter(record["clients"].items()))
         require(type(binding_id) is str and bool(binding_id) and binding["client_binding_id"] == binding_id)
         expected_authentication = expected_project_authentication(alias, binding)
-        checkpoint = {"client_id": ("claude",), "scope": ("project",),
+        checkpoint = {"client_id": ("claude",), "scope": (scope,),
                 # Installed but unready MCPs and untrusted/suppressed plugins
                 # can remain prepared in the published adapter. Exact cache,
                 # registry and receipt ownership below is still mandatory.
@@ -640,7 +797,8 @@ class SignedClosureRetirement:
         physical = binding["physical_artifact_id"]
         require(type(physical) is str and physical == physical.strip() and bool(physical)
                 and physical not in (".", "..") and Path(physical).name == physical)
-        active = self.project / ".claude/skills" / physical
+        active = ((self.project / ".claude/skills") if scope == "project"
+                  else self.profile / "skills") / physical
         require(binding["target_locator"] == str(active)
                 and self.audit["path_inside_case"](active, self.case))
         receipts = binding["receipts"]
@@ -649,6 +807,11 @@ class SignedClosureRetirement:
                         and row["active_path"] == str(active) and type(row["operation_id"]) is str
                         and bool(row["operation_id"]) for row in receipts)
                 and len({row["operation_id"] for row in receipts}) == len(receipts))
+        return binding, readiness, active
+
+    def capture(self, alias, distribution, pin, public, record):
+        binding, readiness, active = self.selected_binding(alias, distribution, pin, public, record, "project")
+        binding_id, physical = binding["client_binding_id"], binding["physical_artifact_id"]
         objects = [row for row in binding["native_objects"] if row["kind"] == "claude_project_plugin_cache"]
         require(len(objects) == 1)
         receipt = objects[0]
@@ -695,8 +858,16 @@ class SignedClosureRetirement:
             if "retired_parent_entries" in owner:
                 require(_CUSTODY["entries"](owner["parent_fd"]) == owner["retired_parent_entries"])
         if check_usage:
+            if self.user_usage is not None:
+                require({path for path in self.profile.iterdir() if re.fullmatch(
+                    r"\.claude\.json\.tmp\.[1-9][0-9]{0,9}\.[0-9a-f]{12}", path.name)}
+                    == {row["path"] for row in self.passive_usage[1:]})
             for row in self.passive_usage:
                 require(self.passive_image(row["path"], row["fd"]) == row["image"])
+            for row in self.detached_usage:
+                image = _diagnostic_image(row["fd"], self.audit)
+                require((image["identity"], image["uid"], image["gid"], image["sha256"]) == row["image"]
+                        and image["identity"][3] == 0)
 
     def close(self):
         while self.fds:
@@ -763,8 +934,9 @@ class SignedClosureRetirement:
                 allowed.add(relative + ": directory")
         return allowed
 
-    def recheck(self):
-        self.guard()
+    def recheck(self, *, check_usage=True):
+        require(type(check_usage) is bool)
+        self.guard(check_usage=check_usage)
         for owner in self.owners:
             _CUSTODY["named_directory"](owner["quarantine"], owner["quarantine_fd"])
             _CUSTODY["named_directory"](owner["moved"], owner["cache_fd"])
@@ -776,7 +948,7 @@ class SignedClosureRetirement:
                     and not owner["cache"].exists() and not owner["cache"].is_symlink()
                     and not owner["active"].exists() and not owner["active"].is_symlink())
         self.registries_removed()
-        self.guard()
+        self.guard(check_usage=check_usage)
 
     def checkpoint(self):
         """Recheck the same continuously held, successfully retired authority."""

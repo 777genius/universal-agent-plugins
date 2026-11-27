@@ -2535,7 +2535,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                                               temporary_root_alias=False, real_codex=False, codex_capture_failure=False,
                                               codex_initializer=None, copilot_refusal_mutation=None,
                                               copilot_add_failure=False, claude_native_mutation=None,
-                                              claude_runtime_fixture=None):
+                                              claude_runtime_fixture=None, claude_user_initialize_failure=None):
         from io import StringIO
         from runpy import run_path
         from types import SimpleNamespace
@@ -2720,6 +2720,7 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                 self.case, self.home, self.project = root, home, project
                 self.public, self.closed = dict(public), False
                 self.finished = False
+                self.user_usage = None
                 self.assertions = self_test
                 self.assertions.assertEqual(set(public), runner["EXPECTED"])
                 self.assertions.assertEqual(pins, runner["FIXED_SIGNED_CLOSURE"])
@@ -2744,6 +2745,36 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
             def checkpoint(self):
                 self.assertions.assertTrue(self.finished)
                 self.assertions.assertFalse(self.closed)
+
+            def user_initialize_authority(self, data, public):
+                self.checkpoint()
+                self.assertions.assertEqual(set(public), runner["EXPECTED"])
+                return {"phase": "before", "pending": False, "data": data}
+
+            def stage_user_initialize(self, authority, action, rows, *, removed=False):
+                self.checkpoint()
+                self.assertions.assertEqual(authority["phase"], "removed" if removed else "before")
+                self.assertions.assertFalse(authority["pending"])
+                result = action()
+                authority["pending"] = True
+                phases.append("claude-user-pending:" + ("after" if removed else "before"))
+                return result
+
+            def commit_user_initialize(self, authority, proof):
+                self.checkpoint()
+                self.assertions.assertTrue(authority["pending"])
+                phases.append("claude-user-commit:" + ("after" if authority["phase"] == "removed" else "before"))
+                authority["phase"] = "finished" if authority["phase"] == "removed" else "initialized"
+                authority["pending"] = False
+                self.user_usage = authority
+
+            def user_remove_receipt(self, authority, receipt):
+                self.checkpoint()
+                self.assertions.assertEqual(authority["phase"], "initialized")
+                self.assertions.assertEqual(receipt["scope"], "user")
+                self.assertions.assertEqual(len(receipt["actions"]), 4)
+                authority["phase"] = "removed"
+                phases.append("claude-user-remove-receipt")
 
             def verify_retained(self, home, case_root, residuals, rescan):
                 self.checkpoint()
@@ -2919,11 +2950,22 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
                     action()
                 else:
                     phases.append("claude-initialize-diagnostic:" + label)
-                    initialize(action)
+                    initialize(action, [])
+                    if claude_user_initialize_failure == "native-skill":
+                        raise ValueError("injected full native Skill refusal after pending initialize")
+                    if claude_user_initialize_failure == "peer":
+                        (project.parent.parent / "B/home/unknown-native-write").write_text("tampered")
                 return {"scope": scope}
-            def after_remove(self, env, project, before, label):
+            def after_remove(self, env, project, before, label, *, initialize=None):
                 phases.append("claude-after:" + label)
-                mutate_claude("after", project)
+                if initialize is None:
+                    mutate_claude("after", project)
+                else:
+                    initialize(lambda: mutate_claude("after", project), [])
+                    if claude_user_initialize_failure == "after-native-skill":
+                        raise ValueError("injected full native Skill refusal after pending initialize")
+                    if claude_user_initialize_failure == "after-own":
+                        (Path(env["HOME"]) / "unknown-native-write").write_text("tampered")
                 return {"inert_test_only": True, "scope": before["scope"]}
 
         self_case = self
@@ -3015,6 +3057,12 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertLess(phases.index("claude-before:User A remove"),
                         phases.index("claude-initialize-diagnostic:User A remove"))
         self.assertLess(phases.index("claude-initialize-diagnostic:User A remove"), phases.index("User remove"))
+        for left, right in (("claude-user-pending:before", "claude-user-commit:before"),
+                            ("claude-user-commit:before", "User remove"),
+                            ("User remove", "claude-user-remove-receipt"),
+                            ("claude-user-remove-receipt", "claude-user-pending:after"),
+                            ("claude-user-pending:after", "claude-user-commit:after")):
+            self.assertLess(phases.index(left), phases.index(right))
         self.assertEqual(len(report["claude_user_initialize_diagnostics"]), 1)
         diagnostic = report["claude_user_initialize_diagnostics"][0]
         self.assertTrue(diagnostic["diagnostic_only"])
@@ -3024,6 +3072,18 @@ class IsolatedClientEnvironmentTest(unittest.TestCase):
         self.assertFalse(diagnostic["initialization_qualified"])
         self.assertEqual(diagnostic["before"]["status"], "unavailable")
         self.assertEqual(diagnostic["after"]["status"], "unavailable")
+
+    def test_marketing_kit_claude_pending_initialize_never_commits_failed_native_or_outer_guards(self):
+        for failure in ("native-skill", "peer", "after-native-skill", "after-own"):
+            with self.subTest(failure=failure):
+                code, report, phases = self._exercise_marketing_kit_scope_report(
+                    "claude", claude_user_initialize_failure=failure)
+                self.assertEqual(code, 1)
+                self.assertFalse(report["two_scope_lifecycle_qualified"])
+                after = failure.startswith("after-")
+                self.assertIn("claude-user-pending:" + ("after" if after else "before"), phases)
+                self.assertNotIn("claude-user-commit:" + ("after" if after else "before"), phases)
+                self.assertIn("claude-close:A", phases)
 
     def test_marketing_kit_real_codex_main_captures_evidence_before_cleanup(self):
         for cleanup_failure in (False, True):

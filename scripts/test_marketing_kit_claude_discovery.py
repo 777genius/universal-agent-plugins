@@ -112,7 +112,9 @@ class ClaudeRemovalDiscoveryContracts(unittest.TestCase):
             with self.subTest(mutation=mutation), TemporaryDirectory() as temporary:
                 subject, env, project, state, run = self.fixture(Path(temporary).resolve())
                 boundaries = []
-                def initialize(action):
+                def initialize(action, native_rows):
+                    self.assertIsInstance(native_rows, list)
+                    self.assertEqual(len([row for row in native_rows if discovery.owned(row["id"])]), 4)
                     self.assertEqual(state["calls"], [["--version"], ["plugin", "list", "--json"]])
                     boundaries.append("before")
                     try:
