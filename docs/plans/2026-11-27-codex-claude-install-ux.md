@@ -1,6 +1,6 @@
 # Codex and Claude installation convenience
 
-Status: draft plan; implementation starts after the review rounds below.
+Status: revised draft plan; independent review rounds 1-2 complete.
 Base: `942716eff44e787d5627e9f0ffbd2c2b83e57839` (`main`, 2026-11-27).
 Delivery: one draft PR; push every commit immediately. No release or merge is
 part of this draft-only request.
@@ -70,10 +70,22 @@ later updates do not automatically enroll newly added siblings.
   the authorities for content, security, locks, publication and recovery.
 - Add `--all` to `skills add`, with one shared selection rule. Require a complete
   nonempty catalog with no invalid/unavailable or ambiguous entries. Refuse
-  incompatible explicit selection flags before acquisition. Do not reinterpret
+  `--skill`, `--path` (including empty), or `--ui` together with `--all` before
+  acquisition. An intrinsic Git URL scope stays within that scope; an exact
+  Skill source selects that Skill only. `--all` suppresses browser auto-open
+  and counts as an explicit selection, while target selection and confirmation
+  retain their normal rules. Do not reinterpret
   terminal picker's existing `all` navigation command.
 - Local listing reports a mutable local source without inventing a Git commit.
   Discovery is read-only and never executes scripts or initializes Git.
+- Presence of a root `SKILL.md`, including an invalid or symlinked one, selects
+  the existing single-directory route. Never fall back to descendants after a
+  root document fails validation. A collection scan otherwise includes nested
+  Skills, as Git does; local `--path` selects exactly one child directory.
+- Extract small data-oriented selection helpers from the current terminal
+  wrappers. Do not construct a fake Git session with missing fields. HTTPS
+  all-selection uses the existing `ListHTTPSkills` capability and carries its
+  index/tree expectations into prepared selections.
 - Preserve explicit target behavior and project/user scope defaults. Do not
   add preference storage, client-ID branches, schema changes or migrations.
 
@@ -87,14 +99,24 @@ No useful legacy implementation, tests or design material may be removed.
 
 - No source content is executed during discovery or installation.
 - Local traversal is bounded by entries, metadata/document/aggregate bytes,
-  depth, candidates, deadline and cancellation. No FIFO/device reads or symlink
-  traversal; root and selected-path ancestry must be checked.
+  depth, candidates, deadline and cancellation. Enumerate with bounded ReadDir
+  batches and count non-Skill entries before descent. Read at most limit + 1
+  bytes from regular documents; never open resources during discovery.
+- Pin the local directory for descriptor-relative discovery; reject observed
+  root/child/document symlinks and check selected-path ancestry. Reuse existing
+  atomicfile regular-read admission for nonblocking opens. Rooted reads prevent
+  escaping the opened tree. Do not claim arbitrary pre-open ancestor replacement
+  or every filesystem's concurrent-write semantics are solved by Lstat checks.
 - Name ambiguity, invalid metadata, incomplete all-selection or unsafe paths
   fail before persisted intent and native profile changes. A valid explicitly
   selected Skill can coexist with an unrelated invalid sibling.
 - Discovery bytes are not installation authority. Existing immutable acquisition
   revalidates selected content before review and publication; repeat install keeps
   saved pins, and `update` is required to accept changed local source bytes.
+  Selected directories removed, renamed or replaced with a different Skill name
+  must fail; same-name byte changes before preparation are visible in the final
+  immutable review and use existing security checks. No post-scan membership
+  expansion is allowed. Changes after preparation use existing stale-plan checks.
 - Existing foreign-file, native settings and project isolation protections stay
   intact. Failed preparation cannot leave a partial batch installed.
 - `--all` snapshots only the selected source scope. It never grants permission to
@@ -110,7 +132,7 @@ No useful legacy implementation, tests or design material may be removed.
 | CLI local collection/list integration | 100-180 | 200-350 | 4 | 9 | 8 |
 | Shared explicit all-selection | 80-140 | 120-220 | 3 | 9 | 8 |
 | Public CLI E2E and usage evidence | 0-40 | 150-250 | 4 | 9 | 8 |
-| Total | 360-640 | 650-1120 | 5 | 9 | 8 |
+| Total | 420-650 | 650-1120 | 5 | 9 | 8 |
 
 Estimates are not permission to grow the scope. Keep new functions/files within
 the existing limits and do not widen lint exemptions. If reuse requires a large
@@ -146,7 +168,10 @@ Codex/Claude profiles. Preserve other agents' checkouts and test caches.
 - Round 1, code/competitor audit: existing lifecycle is already substantial;
   focus on local collections and explicit complete selection. Discarded an
   unconfirmed alias/no-save concern after checking Cobra flag ownership.
-- Round 2, independent plan critique: pending.
+- Round 2, independent code and safety critics: clarified root-document
+  precedence, real enumeration bounds, rooted reads, selection/content timing,
+  exact flag conflicts, HTTPS expectations and data-oriented selector reuse.
+  Raised the production estimate floor to 420 LOC. No new installer/framework.
 - Round 3, revised plan/safety critique: pending.
 - Implementation review: pending; address material findings before final tests.
 
