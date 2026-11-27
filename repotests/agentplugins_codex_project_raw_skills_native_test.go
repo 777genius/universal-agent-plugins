@@ -47,6 +47,7 @@ func codexNativeProjectRawSkills(t *testing.T, f *codexProjectNativeFixture, sta
 	}
 	codexNativeProjectRawInventory(t, f, "project-raw-removed", false)
 	stages["project_raw_skills_remove"] = nativeStage{Status: "passed", Reason: "ordinary project removal removes both raw Skills from fresh native discovery without changing foreign skills or user/project-B configuration"}
+	codexNativeLocalCollection(t, f, stages)
 }
 
 func codexNativeProjectRawState(t *testing.T, path string) {
@@ -78,6 +79,11 @@ func codexNativeProjectRawState(t *testing.T, path string) {
 
 func codexNativeProjectRawInventory(t *testing.T, f *codexProjectNativeFixture, label string, present bool) {
 	t.Helper()
+	codexNativeProjectRawInventoryAt(t, f, f.base.Project, label, present)
+}
+
+func codexNativeProjectRawInventoryAt(t *testing.T, f *codexProjectNativeFixture, project, label string, present bool) {
+	t.Helper()
 	r := startNativeRPC(t, f.base, f.client, label)
 	defer r.close()
 	r.must(t, "initialize", map[string]any{"clientInfo": map[string]string{"name": "uap_raw_project_check", "version": "1"}, "capabilities": map[string]bool{"experimentalApi": true}})
@@ -94,10 +100,10 @@ func codexNativeProjectRawInventory(t *testing.T, f *codexProjectNativeFixture, 
 			}
 		}
 	}
-	if err := json.Unmarshal(r.must(t, "skills/list", map[string]any{"cwds": []string{f.base.Project}, "forceReload": true}), &result); err != nil {
+	if err := json.Unmarshal(r.must(t, "skills/list", map[string]any{"cwds": []string{project}, "forceReload": true}), &result); err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Data) != 1 || !openCodeSamePath(result.Data[0].CWD, f.base.Project) || len(result.Data[0].Errors) != 0 {
+	if len(result.Data) != 1 || !openCodeSamePath(result.Data[0].CWD, project) || len(result.Data[0].Errors) != 0 {
 		t.Fatal("raw project native inventory has wrong context or discovery errors")
 	}
 	found := map[string]bool{}
@@ -106,7 +112,7 @@ func codexNativeProjectRawInventory(t *testing.T, f *codexProjectNativeFixture, 
 		if !selected {
 			continue
 		}
-		path := filepath.Join(f.base.Project, ".agents", "skills", skill.Name, "SKILL.md")
+		path := filepath.Join(project, ".agents", "skills", skill.Name, "SKILL.md")
 		if !present || found[skill.Name] || !skill.Enabled || skill.PluginID != "" || skill.Scope != "repo" || !openCodeSamePath(skill.Path, path) || nativeSHA(t, path) != digest {
 			t.Fatalf("unexpected raw project Skill discovery: %+v", skill)
 		}
@@ -114,5 +120,105 @@ func codexNativeProjectRawInventory(t *testing.T, f *codexProjectNativeFixture, 
 	}
 	if present && len(found) != len(nativeRawProjectSkills) {
 		t.Fatal("native Codex did not discover both selected raw project Skills")
+	}
+}
+
+func nativeLocalCollection(t *testing.T, root string) string {
+	t.Helper()
+	collection := filepath.Join(root, "local-collection")
+	for name, want := range nativeRawProjectSkills {
+		source := filepath.Join(RepoRoot(t), "tests", "fixtures", "uap_apm", "skills", name, "SKILL.md")
+		if nativeSHA(t, source) != want {
+			t.Fatalf("local collection fixture hash changed: %s", name)
+		}
+		body, err := os.ReadFile(source)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nativeWrite(t, filepath.Join(collection, name, "SKILL.md"), body, 0600)
+	}
+	physical, err := filepath.EvalSymlinks(collection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return physical
+}
+
+func nativeLocalCollectionListing(t *testing.T, result map[string]any, err error) {
+	t.Helper()
+	report, ok := result["data"].(map[string]any)
+	if err != nil || !ok || result["result"] != "success" || report["complete"] != true {
+		t.Fatalf("local listing failed: %+v %v", result, err)
+	}
+	candidates, _ := report["candidates"].([]any)
+	if len(candidates) != 2 {
+		t.Fatalf("local listing candidates: %+v", candidates)
+	}
+	seen := map[string]bool{}
+	for _, raw := range candidates {
+		candidate, ok := raw.(map[string]any)
+		name, _ := candidate["name"].(string)
+		if !ok || nativeRawProjectSkills[name] == "" || seen[name] || candidate["path"] != name || candidate["status"] != "available" {
+			t.Fatalf("unexpected local candidate: %+v", raw)
+		}
+		seen[name] = true
+	}
+}
+
+func codexNativeLocalCollection(t *testing.T, f *codexProjectNativeFixture, stages map[string]nativeStage) {
+	t.Helper()
+	collection := nativeLocalCollection(t, f.base.Root)
+	state := filepath.Join(f.base.Project, ".uap", "state-v2.json")
+	before := nativeSHA(t, state)
+	snapshots := nativeLocalListingSnapshots(t, f.base.Project, f.otherProject, f.base.CodexHome, f.base.Home)
+	result, err := commandsRunInstaller(t, f.base.Root, f.base.Project, f.base.env(filepath.Dir(f.client)), f.installer, "local-collection-list", "skills", "list", collection, "--scope", "project", "--project-root", f.base.Project)
+	nativeLocalCollectionListing(t, result, err)
+	nativeLocalListingUnchanged(t, snapshots)
+	if nativeSHA(t, state) != before {
+		t.Fatal("local listing changed saved project state")
+	}
+	f.requireForeign(t)
+	for _, stage := range []string{"local_collection_all_install", "local_collection_all_repeat"} {
+		nativeAttempt(stages, stage, stage+"-installer.json")
+		before = nativeSHA(t, state)
+		result, err = commandsRunInstaller(t, f.base.Root, f.base.Project, f.base.env(filepath.Dir(f.client)), f.installer, stage, "skills", "add", collection, "--all", "--target", "codex", "--scope", "project", "--project-root", f.base.Project, "--yes", "--no-ui")
+		items, _ := result["items"].([]any)
+		if err != nil || result["status"] != "succeeded" || result["readiness"] != "ready" || len(items) != 2 {
+			t.Fatalf("local all install failed: %+v %v", result, err)
+		}
+		codexNativeProjectRawState(t, state)
+		codexNativeProjectRawInventory(t, f, stage, true)
+		codexNativeProjectRawInventoryAt(t, f, f.otherProject, stage+"-project-B", false)
+		if stage == "local_collection_all_repeat" && nativeSHA(t, state) != before {
+			t.Fatal("local all repeat changed state")
+		}
+		f.requireForeign(t)
+		stages[stage] = nativeStage{Status: "passed", Reason: "public local collection --all installed both exact Skills; fresh pinned native discovery and foreign bytes verified"}
+	}
+	nativeAttempt(stages, "local_collection_all_remove", "local-collection-all-remove-installer.json")
+	for name := range nativeRawProjectSkills {
+		f.run(t, "local-collection-remove-"+name, "remove", name)
+	}
+	codexNativeProjectRawInventory(t, f, "local-collection-removed", false)
+	codexNativeProjectRawInventoryAt(t, f, f.otherProject, "local-collection-removed-project-B", false)
+	f.requireForeign(t)
+	stages["local_collection_all_remove"] = nativeStage{Status: "passed", Reason: "ordinary removal withdraws both local collection Skills from fresh native discovery and preserves foreign profiles"}
+}
+
+func nativeLocalListingSnapshots(t *testing.T, roots ...string) map[string]string {
+	t.Helper()
+	snapshots := map[string]string{}
+	for _, root := range roots {
+		snapshots[root] = nativeTreeDigest(t, root)
+	}
+	return snapshots
+}
+
+func nativeLocalListingUnchanged(t *testing.T, snapshots map[string]string) {
+	t.Helper()
+	for root, before := range snapshots {
+		if nativeTreeDigest(t, root) != before {
+			t.Fatalf("read-only listing changed tree %s", root)
+		}
 	}
 }
