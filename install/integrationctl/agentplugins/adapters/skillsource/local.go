@@ -78,7 +78,7 @@ func ScanLocal(ctx context.Context, directory string, policy ScanPolicy) (Catalo
 	if err != nil {
 		return Catalog{}, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	policy = policy.bounded()
 	ctx, cancel := context.WithTimeout(ctx, policy.Deadline)
 	defer cancel()
@@ -110,7 +110,7 @@ func (s *localScanner) walk(ctx context.Context, directory string, depth int) er
 		s.catalog.incomplete("directory_unavailable")
 		return nil
 	}
-	defer handle.Close()
+	defer func() { _ = handle.Close() }()
 
 	for {
 		if err := ctx.Err(); err != nil {
@@ -207,7 +207,7 @@ func (s *localScanner) readDocument(ctx context.Context, name string) ([]byte, s
 	if err != nil {
 		return nil, "skill_document_unavailable"
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	opened, err := file.Stat()
 	if err != nil || !localSameObservation(before, opened) {
 		return nil, "skill_document_unavailable"
@@ -281,7 +281,7 @@ func (s *localScanner) openDirectory(directory string) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer pinned.Close()
+	defer func() { _ = pinned.Close() }()
 	handle, err := pinned.Open(".")
 	if err != nil {
 		return nil, err

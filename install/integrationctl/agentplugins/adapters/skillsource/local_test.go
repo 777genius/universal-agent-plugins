@@ -142,14 +142,14 @@ func physicalLocalTemp(t *testing.T) string {
 
 func TestLocalScanSharedEntryBudget(t *testing.T) {
 	root := physicalLocalTemp(t)
-	for i := 0; i < 140; i++ {
+	for i := range 140 {
 		writeLocalSkill(t, root, fmt.Sprintf("skill-%03d", i))
 	}
 	opened, err := os.OpenRoot(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer opened.Close()
+	defer func() { _ = opened.Close() }()
 	for _, limit := range []int{1, 3, 17, 128, 129} {
 		scanner := localScanner{root: opened, policy: ScanPolicy{MaxEntries: limit}.bounded(), catalog: Catalog{Complete: true}}
 		if err := scanner.walk(t.Context(), ".", 0); err != nil {
