@@ -13,7 +13,11 @@ type Service struct {
 	CheckNamespace       func() error `json:"-"`
 	ProjectRoot          string       `json:"-"`
 	environmentAuthority *domain.EnvironmentAuthority
-	ClientPreparation    ClientPreparation
+	// InstallationPolicy is an optional, operation-scoped installation gate.
+	// Removal and recovery do not obtain new installation permission.
+	InstallationPolicy       ports.InstallationPolicy
+	installationPolicyInputs []AddInput
+	ClientPreparation        ClientPreparation
 	// OpenCodeHosts retains the explicit legacy preparation seam for callers
 	// without ClientPreparation; production composition uses ClientPreparation.
 	OpenCodeHosts ports.OpenCodeHostPreparer
@@ -101,6 +105,10 @@ type AddInput struct {
 	Envelope                     domain.PackageEnvelope
 	Client                       domain.DetectedClient
 	Scope                        domain.InstallScope
+	// Requested pin facts are supplied by acquisition/lock authorities. Nil
+	// means unknown; a resolved commit never proves the original request pinned it.
+	GitPinned, ArchivePinned *bool `json:"-"`
+	installationPolicyReview *installationPolicyReview
 	// OnlinePreview permits host probing during a read-only normal-operation preview.
 	// It grants no mutation or confirmation permission.
 	OnlinePreview      bool

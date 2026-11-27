@@ -9,7 +9,10 @@ import (
 // Prepare at the service boundary, before any planner or process-inert reader.
 // Detected is the operation-local map retained across online preview/apply.
 func (service *Service) prepareHostInputs(ctx context.Context, inputs []AddInput, dryRun bool) ([]AddInput, error) {
-	out := append([]AddInput(nil), inputs...)
+	out, err := service.admitInstallationInputs(ctx, inputs)
+	if err != nil {
+		return nil, err
+	}
 	if service.Detected == nil {
 		service.Detected = map[domain.ClientID]domain.DetectedClient{}
 	}

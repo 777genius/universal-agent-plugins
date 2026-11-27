@@ -56,9 +56,10 @@ type BindingChangePlan struct {
 }
 
 type BindingChangeInput struct {
-	Selector  string
-	Envelope  domain.PackageEnvelope
-	Confirmed bool
+	Selector                 string
+	Envelope                 domain.PackageEnvelope
+	Confirmed                bool
+	GitPinned, ArchivePinned *bool `json:"-"`
 }
 
 type BindingChangeResult struct {
@@ -90,6 +91,9 @@ func (service Service) SwitchRetained(ctx context.Context, input BindingChangeIn
 	if err := validateOperationOrigin(origin, directory); err != nil {
 		return BindingChangeResult{}, err
 	}
+	if err := service.admitBindingPolicy(ctx, input, origin); err != nil {
+		return BindingChangeResult{}, err
+	}
 	release, err := service.beginMutation(ctx, false, input.Confirmed)
 	if err != nil {
 		return BindingChangeResult{}, err
@@ -108,11 +112,17 @@ func (service Service) SwitchRetained(ctx context.Context, input BindingChangeIn
 		result.RequiresConfirmation = true
 		return result, nil
 	}
+	if err := service.recheckInstallationPolicy(ctx); err != nil {
+		return result, err
+	}
 	return service.commitSwitchRetained(state, index, installation, input, origin, directory, result)
 }
 
 func (service Service) changeBinding(ctx context.Context, input BindingChangeInput, mode BindingChangeMode) (BindingChangeResult, error) {
 	if err := validateBindingChangeSetup(ctx, service, input); err != nil {
+		return BindingChangeResult{}, err
+	}
+	if err := service.admitBindingPolicy(ctx, input, domain.OriginModeDirect); err != nil {
 		return BindingChangeResult{}, err
 	}
 	release, err := service.beginMutation(ctx, false, input.Confirmed)
@@ -144,6 +154,9 @@ func (service Service) changeBinding(ctx context.Context, input BindingChangeInp
 		return result, err
 	}
 	if done, err := confirmBindingChange(plan, input.Confirmed, &result); done {
+		return result, err
+	}
+	if err := service.recheckInstallationPolicy(ctx); err != nil {
 		return result, err
 	}
 	return service.commitBindingChange(state, index, installation, input, newSourceID, result)

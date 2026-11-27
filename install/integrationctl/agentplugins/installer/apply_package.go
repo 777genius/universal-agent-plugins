@@ -36,6 +36,7 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 	}
 	added, err := call(svc, usecase.AddInput{
 		Envelope: prepared.envelope, Client: prepared.client, Scope: e.scope(), Confirmed: true,
+		GitPinned: prepared.req.GitPinned, ArchivePinned: prepared.req.ArchivePinned,
 		InstallIntent:  prepared.observationPlan.InstallIntent,
 		InstallationID: firstNonEmpty(prepared.req.InstallationID, prepared.plan.InstallationID), OperationID: prepared.req.OperationID,
 		BackendExecutable: prepared.req.ClientExecutable,

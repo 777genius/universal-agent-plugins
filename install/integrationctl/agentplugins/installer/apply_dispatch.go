@@ -40,6 +40,9 @@ func (e *Engine) Apply(ctx context.Context, prepared *PreparedOperation, decisio
 }
 
 func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation, op Operation) (Result, error) {
+	if err := e.recheckInstallationPolicy(ctx, prepared); err != nil {
+		return installationPolicyFailure(op, err)
+	}
 	var result Result
 	var err error
 	// Preserve the prepared root-identity refusal before the stored journal

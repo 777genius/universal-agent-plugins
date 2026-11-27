@@ -47,7 +47,7 @@ func (e *Engine) loadMutatingPackage(ctx context.Context, handle *PreparedOperat
 		return fmt.Errorf("%w: Skill acquisition requires its normalized portable Skill package", ErrInvalidRequest)
 	}
 	handle.envelope = envelope
-	return nil
+	return e.reviewInstallationPolicy(ctx, handle)
 }
 
 func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, preview usecase.AddResult) (*PreparedOperation, error) {
@@ -90,12 +90,15 @@ func (e *Engine) planMutatingPackage(handle *PreparedOperation, op Operation, pr
 
 func clonePrepareRequest(req Request) Request {
 	copied := req
+	copied.GitPinned, copied.ArchivePinned = clonePolicyPin(req.GitPinned), clonePolicyPin(req.ArchivePinned)
 	copied.RequiredComponents = append([]string(nil), req.RequiredComponents...)
 	copied.ExecutableFiles = slices.Clone(req.ExecutableFiles)
 	copied.ClientSurfaces = slices.Clone(req.ClientSurfaces)
 	copied.Targets = append([]ClientTarget(nil), req.Targets...)
 	for j := range copied.Targets {
 		copied.Targets[j].ClientSurfaces = slices.Clone(copied.Targets[j].ClientSurfaces)
+		copied.Targets[j].GitPinned = clonePolicyPin(copied.Targets[j].GitPinned)
+		copied.Targets[j].ArchivePinned = clonePolicyPin(copied.Targets[j].ArchivePinned)
 	}
 	copied.KnownTargets = append([]TargetFacts(nil), req.KnownTargets...)
 	for j := range copied.KnownTargets {

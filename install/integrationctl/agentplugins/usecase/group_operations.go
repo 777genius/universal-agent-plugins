@@ -127,7 +127,7 @@ func (service Service) applyGroup(ctx context.Context, input GroupInput, replace
 	if session.input.DryRun || !session.input.Confirmed {
 		return session.result, nil
 	}
-	if err := session.revalidateHosts(); err != nil {
+	if err := session.admitGroupMutation(); err != nil {
 		return session.result, err
 	}
 	if err := session.stageGroupDeliveries(); err != nil {
@@ -179,16 +179,9 @@ func (session *groupSession) prepareGroupInputs() error {
 	if err := session.validateGroupInput(); err != nil {
 		return err
 	}
-	targets, err := session.service.prepareHostInputs(session.ctx, session.input.Targets, session.input.DryRun)
-	if err != nil {
+	if err := session.prepareGroupHosts(); err != nil {
 		return err
 	}
-	session.input.Targets = targets
-	checks, err := session.service.prepareHostInputs(session.ctx, session.input.CompatibilityChecks, session.input.DryRun)
-	if err != nil {
-		return err
-	}
-	session.input.CompatibilityChecks = checks
 	if err := session.ensureGroupID(); err != nil {
 		return err
 	}

@@ -27,7 +27,7 @@ func (service Service) repair(ctx context.Context, input AddInput) (AddResult, e
 		return AddResult{}, err
 	}
 	session.input = prepared[0]
-	release, err := service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority)
+	release, err := session.service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority)
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -44,6 +44,9 @@ func (service Service) repair(ctx context.Context, input AddInput) (AddResult, e
 		if err := session.service.revalidateHost(ctx, session.input.Client); err != nil {
 			return session.result, err
 		}
+	}
+	if err := session.service.recheckInstallationPolicy(ctx); err != nil {
+		return session.result, err
 	}
 	if session.verifyErr == nil {
 		if rendersCommands(session.input.Envelope, session.input.Client.ClientID) {
@@ -104,7 +107,7 @@ func (service Service) RefreshProjection(ctx context.Context, input AddInput) (A
 		return AddResult{}, err
 	}
 	session.input = prepared[0]
-	release, err := service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority)
+	release, err := session.service.beginEnvironmentMutation(ctx, session.input.DryRun, session.input.Confirmed, session.input.EnvironmentAuthority)
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -121,6 +124,9 @@ func (service Service) RefreshProjection(ctx context.Context, input AddInput) (A
 		if err := session.service.revalidateHost(ctx, session.input.Client); err != nil {
 			return session.result, err
 		}
+	}
+	if err := session.service.recheckInstallationPolicy(ctx); err != nil {
+		return session.result, err
 	}
 	return session.refreshIntactProjection()
 }

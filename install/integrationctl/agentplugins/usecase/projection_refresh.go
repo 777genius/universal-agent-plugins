@@ -52,6 +52,11 @@ func (service Service) Update(ctx context.Context, input AddInput) (AddResult, e
 }
 
 func (service Service) update(ctx context.Context, input AddInput) (AddResult, error) {
+	admitted, err := service.admitInstallationInputs(ctx, []AddInput{input})
+	if err != nil {
+		return AddResult{}, err
+	}
+	input = admitted[0]
 	installationID, eligible, err := service.projectionRefreshTarget(input)
 	if err != nil {
 		return AddResult{}, err
@@ -91,6 +96,9 @@ func (service Service) UpdateGroup(ctx context.Context, input GroupInput) (Group
 }
 
 func (service Service) updateGroup(ctx context.Context, input GroupInput) (GroupResult, error) {
+	if err := service.admitGroupPolicy(ctx, &input); err != nil {
+		return GroupResult{}, err
+	}
 	eligible := map[int]string{}
 	for index, target := range input.Targets {
 		installationID, ok, err := service.projectionRefreshTarget(target)
