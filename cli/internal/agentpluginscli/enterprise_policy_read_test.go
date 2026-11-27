@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/enterprisepolicy"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 )
 
 func TestEnterprisePolicyDoesNotBlockPackageValidation(t *testing.T) {
@@ -16,6 +17,9 @@ func TestEnterprisePolicyDoesNotBlockPackageValidation(t *testing.T) {
 		t.Run(body, func(t *testing.T) {
 			fixture := newCLIFixture(t, nil)
 			fixture.app.Detector = dependencyCheckForbiddenEffects{}
+			// Validation acquires an ephemeral snapshot. Keep its temporary directory
+			// separate so the observation covers managed state, not scratch churn.
+			fixture.app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: t.TempDir()}
 			path := filepath.Join(fixture.root, "policy.yaml")
 			dependencyWrite(t, path, body)
 			setEnterpriseCommandFiles(&fixture, enterprisepolicy.Path{Layer: "machine", Path: path})

@@ -170,7 +170,7 @@ func (p *managementPrepared) prepareBindings(ctx context.Context, prior []depend
 	paths := skillBindingPaths(view, actions)
 	warnings := []string{}
 	externalUninstalls := map[string]bool{}
-	adapter := &dependencyInstaller{previewExternalUninstalled: externalUninstalls, app: p.preview, opts: &options{externalUninstalled: p.input.ExternalUninstalled}, detected: detected, previewPaths: paths, operationIDs: p.operationIDs, previewWarnings: &warnings, removalOnly: p.request.removalOnly}
+	adapter := &dependencyInstaller{previewExternalUninstalled: externalUninstalls, app: p.preview, opts: &options{externalUninstalled: p.input.ExternalUninstalled}, detected: detected, previewPaths: paths, operationIDs: p.operationIDs, previewWarnings: &warnings, removalOnly: p.request.removalOnly, repairOnly: p.request.repairOnly}
 	actions, err = preflightDependencyAdapter(ctx, adapter, actions)
 	if err != nil {
 		return nil, nil, nil, err

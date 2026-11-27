@@ -93,11 +93,11 @@ func inspectEnterprisePolicyPin(ctx context.Context, app App, pin environment.Lo
 	return inspectDependencySnapshot(ctx, app, pin, snapshot, visit)
 }
 
-func checkEnterpriseActionPolicies(ctx context.Context, app App, actions []dependencyAction, removalIntent bool) error {
+func checkEnterpriseActionPolicies(ctx context.Context, app App, actions []dependencyAction, removalIntent, repairOnly bool) error {
 	if app.InstallationPolicy == nil || policyRemovalOnly(actions, removalIntent) {
 		return nil
 	}
-	if err := checkEnterpriseRepairPolicies(ctx, app, actions); err != nil {
+	if err := checkEnterpriseRepairPolicies(ctx, app, actions, repairOnly); err != nil {
 		return err
 	}
 	packages := map[string]environment.LockedPackage{}
@@ -144,8 +144,11 @@ func checkEnterprisePreparedPolicy(ctx context.Context, app App, request *depend
 	if app.InstallationPolicy == nil || policyRemovalOnly(request.prepared, request.removalOnly) {
 		return nil
 	}
+	if err := checkEnterpriseRepairPolicies(ctx, app, request.prepared, request.repairOnly); err != nil {
+		return err
+	}
 	if request.repairOnly {
-		return checkEnterpriseRepairPolicies(ctx, app, request.prepared)
+		return nil
 	}
 	aliases := request.lock.ClosureAliases(request.aliases)
 	lock := environmentapp.SelectedLock(request.lock, aliases)

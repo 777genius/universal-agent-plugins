@@ -15,6 +15,9 @@ type dependencyApplicationResult = environmentapp.Result
 // applyPreparedDependencies maps CLI, picker and management preparation to the
 // transport-independent application service. The caller owns acceptance.
 func applyPreparedDependencies(ctx context.Context, app App, request *dependencySyncRequest, adapter *dependencyInstaller, check func(context.Context) error) (dependencyApplicationResult, error) {
+	if err := checkEnterprisePreparedPolicy(ctx, app, request); err != nil {
+		return dependencyApplicationResult{}, err
+	}
 	// The service invokes this same guard before publication and before every
 	// binding Prepare/Apply. Retain custom guards such as the Skills context check
 	// while avoiding a second invocation inside the concrete installer adapter.

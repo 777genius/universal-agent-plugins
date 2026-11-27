@@ -84,7 +84,7 @@ func TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration(t *t
 				} else {
 					backend := managementJourneyBackend(t, j)
 					managementApply(t, managementPrepare(t, backend, management.ChangeRequest{
-						Action: management.Remove, Aliases: []string{alias}, TargetIds: []string{"profile-codex"}, ExternalUninstalled: true,
+						Action: management.Remove, Aliases: []string{alias}, TargetIds: []string{"profile-codex"},
 					}))
 				}
 				requirements, lock := j.intent(t)

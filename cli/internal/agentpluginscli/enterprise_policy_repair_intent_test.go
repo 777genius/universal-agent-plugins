@@ -72,3 +72,24 @@ func TestEnterprisePolicyRepairIntentRequiresMatchingSavedAuthority(t *testing.T
 		}
 	}
 }
+
+func TestEnterprisePolicyRepairInspectsColdDirectoryWithoutInstallEligibility(t *testing.T) {
+	f, pin, acquirer := coldDependencyCleanupFixture(t, false)
+	pin = dependencyCleanupRegistryPin(pin)
+	pin.ExecutableFiles = []string{}
+	directory := &fixedDirectoryClient{err: domain.ErrDirectoryIneligible}
+	f.app.DirectoryClient = directory
+	f.app = f.app.withEnterprisePolicyGate(sourcePolicyApp(t, "schema_version: 2\nsources:\n  allowed_kinds: [directory]\n").InstallationPolicy)
+	app, cleanup, err := dependencyPreviewApp(f.app, &options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	action := dependencyAction{Alias: pin.Alias, ClientID: "codex", Action: "repair", Package: &pin}
+	if err := checkEnterpriseRepairClosure(t.Context(), app, environment.Lock{Packages: []environment.LockedPackage{pin}}, action); err != nil {
+		t.Fatalf("policy inspection required new-install Directory eligibility: %v", err)
+	}
+	if directory.calls != 0 || acquirer.calls != 1 {
+		t.Fatalf("policy changed exact recorded repair acquisition: directory=%d source=%d", directory.calls, acquirer.calls)
+	}
+}

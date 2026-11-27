@@ -48,7 +48,7 @@ func runRepair(ctx context.Context, cmd *cobra.Command, app App, opts *options, 
 	if installation.Source.SourceKind != "" {
 		loaded, err = app.loadRecordedDirect(ctx, installation, binding)
 	} else {
-		loaded, err = app.loadPackage(ctx, source)
+		loaded, err = app.loadLegacyRepairPackage(ctx, installation, source, packageResolutionRequest{Operation: domain.DirectoryInstall})
 	}
 	if err != nil {
 		return err

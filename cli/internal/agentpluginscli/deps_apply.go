@@ -49,7 +49,7 @@ func runDependencySync(cmd *cobra.Command, app App, opts *options, lockedOnly, y
 // dependencyConverge runs after the manifest and lock candidate is validated
 // but before any planned action is derived, so a fail-closed candidate refusal
 // can never race a converge-side repair write.
-type dependencyConverge func(app App) (bool, error)
+type dependencyConverge func(app App, recheck func() error) (bool, error)
 
 func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, lockedOnly, yes bool, converge dependencyConverge) error {
 	if err := requireDependencyMutationReady(app); err != nil {
@@ -81,7 +81,13 @@ func runDependencySyncConverge(cmd *cobra.Command, app App, opts *options, locke
 	}
 	request.policyFingerprint = policyFingerprint
 	if converge != nil {
-		proceed, convergeErr := converge(app)
+		recheck := func() error {
+			if err := request.checkInputs(); err != nil {
+				return err
+			}
+			return request.recheckDependencyPolicy(cmd.Context(), app, opts.dependencyPolicyFile)
+		}
+		proceed, convergeErr := converge(app, recheck)
 		if convergeErr != nil || !proceed {
 			return convergeErr
 		}

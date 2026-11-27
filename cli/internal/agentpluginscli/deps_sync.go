@@ -59,7 +59,7 @@ func loadStoredDependency(ctx context.Context, app App, pkg environmentstore.Pac
 }
 
 func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, actions []dependencyAction, detected map[domain.ClientID]domain.DetectedClient, consent ...map[string]bool) ([]dependencyAction, error) {
-	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, trustAliases: explicitAddAliases(cmd, dependencyActionAliases(actions)), removalOnly: cmd != nil && cmd.Name() == "remove"}
+	adapter := &dependencyInstaller{app: app, opts: opts, detected: detected, cmd: cmd, trustAliases: explicitAddAliases(cmd, dependencyActionAliases(actions)), removalOnly: cmd != nil && cmd.Name() == "remove", repairOnly: cmd != nil && cmd.Name() == "repair"}
 	if err := adapter.preflightProjectVersions(cmd.Context(), actions); err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func preflightDependencyActions(cmd *cobra.Command, app App, opts *options, acti
 }
 
 func preflightDependencyAdapter(ctx context.Context, adapter *dependencyInstaller, actions []dependencyAction) ([]dependencyAction, error) {
-	if err := checkEnterpriseActionPolicies(ctx, adapter.app, actions, adapter.removalOnly); err != nil {
+	if err := checkEnterpriseActionPolicies(ctx, adapter.app, actions, adapter.removalOnly, adapter.repairOnly); err != nil {
 		return nil, err
 	}
 	state, err := adapter.app.StateStore.Load()
@@ -207,6 +207,7 @@ func (adapter *dependencyInstaller) recordDependencyReview(action dependencyActi
 
 type dependencyInstaller struct {
 	removalOnly                bool
+	repairOnly                 bool
 	previewExternalUninstalled map[string]bool
 	previewWarnings            *[]string
 	previewPaths               map[string]string

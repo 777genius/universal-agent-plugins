@@ -10,6 +10,7 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environmentapp"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/installer"
 )
 
 // Recorded revisions remain repair authority even when desired intent advanced
@@ -55,7 +56,7 @@ func repairRequestedIntent(pin environment.LockedPackage, locked environment.Loc
 	return pin
 }
 
-func checkEnterpriseRepairPolicies(ctx context.Context, app App, actions []dependencyAction) error {
+func checkEnterpriseRepairPolicies(ctx context.Context, app App, actions []dependencyAction, repairOnly bool) error {
 	if app.InstallationPolicy == nil {
 		return nil
 	}
@@ -78,30 +79,50 @@ func checkEnterpriseRepairPolicies(ctx context.Context, app App, actions []depen
 	}
 	locked := repairPolicyLock(app)
 	for _, action := range repairs {
-		if err := checkEnterpriseRepairClosure(ctx, app, locked, action); err != nil {
+		if err := checkEnterpriseRepairAction(ctx, app, locked, action, repairOnly); err != nil {
 			return fmt.Errorf("installation policy for repair %s: %w", domain.PolicySafeText(action.Alias), err)
 		}
 	}
 	return nil
 }
 
+func checkEnterpriseRepairAction(ctx context.Context, app App, locked environment.Lock, action dependencyAction, repairOnly bool) error {
+	if repairOnly {
+		return checkEnterpriseRepairClosure(ctx, app, locked, action)
+	}
+	// Graph convergence separately admits its complete desired closure. Its
+	// preliminary repair must also admit the exact recorded root being restored.
+	pin := repairRequestedIntent(*action.Package, locked)
+	pin.Targets = []string{action.ClientID}
+	if _, err := app.checkEnterprisePolicy(ctx, lockedPolicyRequest(pin, app.scope())); err != nil {
+		return err
+	}
+	pin, err := hydrateRepairPolicyPin(ctx, app, pin)
+	if err != nil {
+		return err
+	}
+	*action.Package = pin
+	_, err = inspectRepairPolicyPackage(ctx, app, pin)
+	return err
+}
+
 func checkEnterpriseRepairClosure(ctx context.Context, app App, locked environment.Lock, action dependencyAction) error {
 	pin := repairRequestedIntent(*action.Package, locked)
 	closure := recordedRepairClosure(locked, pin, action.ClientID)
+	if err := verifyRepairPolicyDescendants(ctx, app, closure, pin.Alias, action.ClientID); err != nil {
+		return err
+	}
 	// Check the complete known source set before any missing snapshot is read.
 	for _, pkg := range closure.Packages {
 		if _, err := app.checkEnterprisePolicy(ctx, lockedPolicyRequest(pkg, app.scope())); err != nil {
 			return err
 		}
 	}
-	if pin.ExecutableFiles == nil {
-		var err error
-		pin, err = hydrateRecordedDependencyInventory(ctx, app, pin)
-		if err != nil {
-			return err
-		}
-		closure = recordedRepairClosure(locked, pin, action.ClientID)
+	pin, err := hydrateRepairPolicyPin(ctx, app, pin)
+	if err != nil {
+		return err
 	}
+	closure = recordedRepairClosure(locked, pin, action.ClientID)
 	*action.Package = pin
 	index, err := indexDependencyDeclarations(ctx, closure)
 	if err != nil {
@@ -117,6 +138,60 @@ func checkEnterpriseRepairClosure(ctx context.Context, app App, locked environme
 		}
 	}
 	return nil
+}
+
+func hydrateRepairPolicyPin(ctx context.Context, app App, pin environment.LockedPackage) (environment.LockedPackage, error) {
+	if pin.ExecutableFiles != nil && pin.Source.Registry == nil {
+		return pin, nil
+	}
+	inventory := pin.ExecutableFiles
+	pin, err := hydrateRecordedDependencyInventory(ctx, app, pin)
+	if inventory != nil {
+		pin.ExecutableFiles = inventory
+	}
+	return pin, err
+}
+
+// A desired child revision is not evidence of what the repaired root will use.
+// Refuse a divergent or missing live child instead of resolving historical graphs.
+func verifyRepairPolicyDescendants(ctx context.Context, app App, closure environment.Lock, root, target string) error {
+	if len(closure.Packages) < 2 {
+		return nil
+	}
+	if app.Installer == nil {
+		return errors.New("installer unavailable while verifying repair dependencies")
+	}
+	view, err := app.Installer.Inspect(ctx)
+	if err != nil {
+		return err
+	}
+	observed, err := environment.ObserveForEnvironment(view, app.environmentID())
+	if err != nil {
+		return err
+	}
+	for _, pin := range closure.Packages {
+		if pin.Alias == root {
+			continue
+		}
+		if !repairPolicyDependencyCurrent(pin, target, observed) {
+			return fmt.Errorf("repair dependency %s lacks a matching installed revision; run agentplugins install --locked with the same scope and project root to reconcile dependencies before retrying: %w", domain.PolicySafeText(pin.Alias), installer.ErrPlanChanged)
+		}
+	}
+	return nil
+}
+
+func repairPolicyDependencyCurrent(pin environment.LockedPackage, target string, observed []environment.BindingObservation) bool {
+	matched := 0
+	for _, current := range observed {
+		if current.Alias != pin.Alias || current.ClientID != target {
+			continue
+		}
+		if !current.Managed || current.Pending || current.SourceKey != pin.SourceKey || current.PackageDigest != pin.TreeDigest || current.Revision != pin.Revision() {
+			return false
+		}
+		matched++
+	}
+	return matched == 1
 }
 
 func recordedRepairClosure(locked environment.Lock, pin environment.LockedPackage, target string) environment.Lock {

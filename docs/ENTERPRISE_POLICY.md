@@ -172,6 +172,9 @@ repository names are matched case-insensitively; non-GitHub repository path
 case is preserved. Manifest `repository` metadata does not establish source
 identity.
 
+Source host rules inspect the canonical source origin; they do not form a network
+egress filter for acquisition redirects or subsequent connections.
+
 Archive, web and local sources cannot satisfy a Git repository allow-list by
 putting a repository-looking string in metadata. A local source has no remote
 host, so it cannot satisfy a host allow-list. A host deny-list alone does not

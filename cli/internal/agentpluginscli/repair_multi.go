@@ -214,7 +214,7 @@ func (session *repairManySession) resolveRevision(key string) (loadedPackage, er
 		if request.binding != nil {
 			return session.app.loadRecordedDirect(resolutionCtx, session.installation, *request.binding)
 		}
-		return session.app.loadPackageFor(resolutionCtx, request.source, packageResolutionRequest{
+		return session.app.loadLegacyRepairPackage(resolutionCtx, session.installation, request.source, packageResolutionRequest{
 			Targets: request.targets, Operation: domain.DirectoryRepair, Clients: session.detected,
 		})
 	})
