@@ -64,3 +64,26 @@ artifact to pass integrity checks. Damaged historical artifacts require verified
 exact repair or an explicitly verified recovery path; this proposal does not
 promise that upgrading the CLI and running update repairs them. See the
 [historical projection limits](AGENTPLUGINS_RELEASE_PREPARATION.md#updating-historical-projections).
+
+## Upstream status reviewed on 2026-11-26
+
+The [captured profile text](../install/integrationctl/agentplugins/conformance/profiles/README.md)
+is embedded in the conformance implementation and its complete bytes determine
+the public `author-document-bounds/v1` digest. Informational upstream status
+updates are recorded separately here to preserve that reviewed profile identity.
+
+Status reviewed again on 2026-11-26: [PR #82](https://github.com/agentplugins/agent-plugins-spec/pull/82)
+merged on 2026-11-06 at `f903079e82636e411a1de782cea4a126c58d88be` and
+[issue #77](https://github.com/agentplugins/agent-plugins-spec/issues/77) closed
+the same day. The merged proposal changes the 1.1 working draft: a malformed
+`extensions` container becomes fatal, while unknown top-level fields remain the
+loading exception. Its compatibility statement explicitly leaves published 1.0
+unchanged. This supersedes the open/closed status in the captured profile record,
+not the historical review or the pinned 1.0 loading contract.
+
+The distinction in the [profile's extension loading table](../install/integrationctl/agentplugins/conformance/profiles/README.md#extension-loading-policy-published-10)
+therefore still applies: a malformed 1.0 container is reported and ignored,
+unknown object-valued namespaces remain opaque, and malformed namespace members
+retain the documented rejection policy. The upstream draft does not itself
+authorize a 1.0 behavior change or establish client runtime readiness. Pinned
+schemas, corpus expectations and supported versions are unchanged.
