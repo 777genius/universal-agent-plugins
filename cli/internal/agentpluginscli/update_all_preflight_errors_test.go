@@ -273,3 +273,57 @@ func TestPublicUpdateAllPreflightSuccessfulPreviewOutputFailure(t *testing.T) {
 		})
 	}
 }
+
+// This controlled discovery port fails only after the Directory installation
+// exists; the public batch must retain its cause when projecting unknown status.
+type preflightFailingDetector struct {
+	calls int
+	cause error
+}
+
+func (detector *preflightFailingDetector) Detect(context.Context) ([]domain.DetectedClient, error) {
+	detector.calls++
+	return nil, detector.cause
+}
+
+func TestUpdateAllDirectoryPreflightRetainsDetectionCause(t *testing.T) {
+	fixture := newProjectionDirectoryFixture(t, true)
+	clients, err := fixture.cli.app.Detector.Detect(t.Context())
+	if err != nil || len(clients) != 1 {
+		t.Fatal("seeded native profile unavailable", clients, err)
+	}
+	profilesBefore := freshRestoreFiles(t, clients[0].ConfigRoot)
+	before := savedCheckFiles(t, fixture.cli.root)
+	cause := &os.PathError{Op: "detect", Path: "opaque-detection-path-438921", Err: fs.ErrPermission}
+	detector := &preflightFailingDetector{cause: cause}
+	app := fixture.cli.app
+	app.Detector = detector
+	var stdout, stderr bytes.Buffer
+	app.Output, app.ErrorOutput = &stdout, &stderr
+	command := NewRoot(app)
+	command.SetArgs([]string{"update", "--all", "--format", "json"})
+	err = command.ExecuteContext(t.Context())
+	if detector.calls != 1 {
+		t.Errorf("expected one witnessed batch discovery failure, got %d", detector.calls)
+	}
+	if !errors.Is(err, cause) || !errors.Is(err, fs.ErrPermission) {
+		t.Errorf("Directory batch discarded original typed discovery cause: %v", err)
+	}
+	const summary = "update --all preflight failed; no installation was changed"
+	if err == nil || err.Error() != summary {
+		t.Errorf("discovery refusal lost exact safe summary: %v", err)
+	}
+	if ShouldWriteAgentFailure(err) {
+		t.Error("reported Directory batch opted into entrypoint failure output")
+		_ = WriteAgentFailure(&stdout, err)
+	}
+	envelope := decodeOneDiagnosticEnvelope(t, stdout.String())
+	data, ok := envelope["data"].(map[string]any)
+	if !ok || data["status"] != "preflight_failed" || data["updated"] != float64(0) || data["failed"] != float64(1) {
+		t.Errorf("discovery refusal lost one truthful batch failure: %s", stdout.String())
+	}
+	if !reflect.DeepEqual(before, savedCheckFiles(t, fixture.cli.root)) ||
+		!reflect.DeepEqual(profilesBefore, freshRestoreFiles(t, clients[0].ConfigRoot)) {
+		t.Fatal("Directory discovery failure changed persistent or native files")
+	}
+}

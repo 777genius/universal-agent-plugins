@@ -224,8 +224,8 @@ executed RED/GREEN evidence separate from these planning approvals. No new scope
 
 | Item | Estimate |
 | --- | --- |
-| Production changes | 50–120 added/substantially changed lines, usually 2–4 existing files |
-| Regression tests | Initial 350–650-line estimate; actual 835 lines before final review, including real signed-reader and failure/output controls; reuse fixtures |
+| Production changes | Initial 50–120-line estimate; implementation stays in two existing files with a smaller diff |
+| Regression tests | Initial 350–650-line estimate; about 900 lines including the signed reader, failure/output matrix and review-added detection case; reuse fixtures |
 | Catalog and plan | Existing catalog registrations and this document only |
 | Complexity | 3/10; no new architecture or authority |
 | Reliability benefit | 7/10 for the bounded consistency/error/partial-result cases |
@@ -259,3 +259,16 @@ and an exact safe error-summary assertion. These are test corrections, not produ
 
 Preimplementation source refresh found main `864829036a932a8c22ab7074b94b79dc70ff8021`
 (#1128, two conformance documentation files) and the new #1130 plan; neither changes this scope.
+
+## Implementation review R1
+
+The first bounded patch made all eight original regression tests pass. Independent C/scope
+review found no blocking issue. Independent A/B review identified one remaining original
+cause: Directory client detection already stores a typed `detectionErr`, but the unknown-status
+row still reduced it to text. A new public regression reproduced that loss, with all no-effect,
+safe-summary and single-document controls passing. The correction retains this existing error
+only when an authenticated Directory's unknown result comes from detection; policy descriptions
+still do not manufacture error values. This ninth test is also registered in the existing PM catalog.
+
+No engine, port interface, flag, workflow or public JSON changes were introduced. Full local
+checks, another final-source review, Ready PR qualification and actual-merge qualification remain.

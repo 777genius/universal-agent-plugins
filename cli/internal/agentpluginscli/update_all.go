@@ -53,6 +53,7 @@ type updateAllSession struct {
 	result          updateAllResult
 	preparedItems   []preparedUpdateAllItem
 	preflightFailed bool
+	preflightCauses []error
 	bundle          directoryv1.VerifiedBundle
 	bundleOK        bool
 	detected        map[domain.ClientID]domain.DetectedClient
@@ -152,6 +153,7 @@ func (session *updateAllSession) cleanupPrepared() {
 func (session *updateAllSession) preflightAll() error {
 	if err := session.prepareSaved(); err != nil {
 		session.preflightFailed = true
+		session.preflightCauses = append(session.preflightCauses, err)
 		session.result.Failed++
 		session.result.Installations = append(session.result.Installations, updateAllInstallation{Name: "saved environment", Saved: true, Status: "preflight_failed", Reason: err.Error()})
 	}
@@ -161,14 +163,21 @@ func (session *updateAllSession) preflightAll() error {
 	if !session.preflightFailed {
 		if err := session.checkPrepared(); err != nil {
 			session.preflightFailed = true
+			session.preflightCauses = append(session.preflightCauses, err)
 			session.result.Failed++
 			session.result.Installations = append(session.result.Installations, updateAllInstallation{Name: "batch", Status: "preflight_failed", Reason: err.Error()})
 		}
 	}
 	if session.preflightFailed {
 		session.result.Status = "preflight_failed"
-		_ = renderUpdateAll(session.cmd, session.opts, session.result)
-		return fmt.Errorf("update --all preflight failed; no installation was changed")
+		renderErr := renderUpdateAll(session.cmd, session.opts, session.result)
+		return installFailureWithCause{
+			summary: "update --all preflight failed; no installation was changed",
+			// This batch owns the attempted result, including a partial write.
+			cause: &declaredInstallResultError{cause: errors.Join(
+				errors.Join(session.preflightCauses...), installOutputError(renderErr),
+			)},
+		}
 	}
 	return nil
 }
@@ -245,22 +254,21 @@ func (session *updateAllSession) skipDirectoryStatus(installation domain.Install
 		return false
 	}
 	status := inspectOutdatedInstallation(session.bundle, session.bundleOK, session.detected, session.detectionErr, session.app.Version, installation, session.opts.scope)
-	switch status.Status {
-	case "current":
-		item.Status, item.Reason = "skipped", status.Reason
-		session.result.Skipped++
-		return true
-	case "blocked", "unknown":
-		item.Status, item.Reason = "preflight_failed", status.Reason
-		session.result.Failed++
-		session.preflightFailed = true
-		return true
+	if status.Status != "blocked" && status.Status != "unknown" {
+		return false
 	}
-	return false
+	item.Status, item.Reason = "preflight_failed", status.Reason
+	session.result.Failed++
+	session.preflightFailed = true
+	if status.Status == "unknown" && session.bundleOK && session.detectionErr != nil {
+		session.preflightCauses = append(session.preflightCauses, session.detectionErr)
+	}
+	return true
 }
 
 func (session *updateAllSession) recordPreflightFailure(item *updateAllInstallation, prepared *preparedUpdateMany, prepareErr error) {
 	item.Status, item.Reason = "preflight_failed", prepareErr.Error()
+	session.preflightCauses = append(session.preflightCauses, prepareErr)
 	if prepared != nil {
 		plan := prepared.result
 		item.Plan = &plan

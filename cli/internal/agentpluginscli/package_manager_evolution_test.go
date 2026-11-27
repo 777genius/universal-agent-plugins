@@ -39,6 +39,7 @@ func packageManagerEvolutionCases() map[string]func(*testing.T) {
 		"update-current-noop":             TestCurrentDirectoryHealthyCommandUpdateIsNoChange,
 		"update-all-current-refusals":     TestUpdateAllCurrentDirectoryProjectionRetainsRefusals,
 		"update-all-preflight-causes":     TestPublicUpdateAllPreflightRetainsCausesAndSoleResult,
+		"update-all-detection-cause":      TestUpdateAllDirectoryPreflightRetainsDetectionCause,
 		"update-all-preview-output":       TestPublicUpdateAllPreflightSuccessfulPreviewOutputFailure,
 		"remove-partial-stage-retry":      TestGroupedRemovalReportsExternalStageBeforeManagedCleanup,
 		"remove-success-retained-data":    TestGroupedRemovalSuccessSeparatesRetainedPluginData,
