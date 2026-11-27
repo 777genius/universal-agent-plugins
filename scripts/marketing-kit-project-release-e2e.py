@@ -1039,7 +1039,7 @@ def copilot_consent_log_additions(data, previous, observed, consent_log):
         reason = "copilot has not remembered the selected project folder; rerun installation to restore folder trust"
         expected = [{"type": "binding", "alias": alias, "client": "copilot", "status": "incomplete",
                      "code": "FAILED", "summary": "The installation did not complete for this agent.",
-                     "detail": f"{alias}/copilot: incomplete: {reason}"} for alias, _ in receipts]
+                     "detail": reason} for alias, _ in receipts]
         if records[1:] != expected:
             raise ValueError("unrelated binding records")
     except (ValueError, TypeError, IndexError) as error:

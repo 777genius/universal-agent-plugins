@@ -396,6 +396,162 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 with self.assertRaises(ValueError): subject.finish(f["cleanup"], raw, lambda: self.scan(f))
                 self.assertEqual(subject.fds, [])
 
+    def test_multiple_temporary_diagnostic_preserves_capture_and_finish_refusals(self):
+        for phase in ("capture", "finish"):
+            with self.subTest(phase=phase), self.fixture() as f:
+                _, pending, _ = self.author_passive_usage(f)
+                subject = self.capture(f) if phase == "finish" else None
+                second = pending.with_name(".claude.json.tmp.139.710615a62269")
+                second.write_bytes(pending.read_bytes()); second.chmod(0o600)
+                with self.assertRaisesRegex(ValueError, "passive usage temporary bound: ") as raised:
+                    if subject is None:
+                        self.capture(f)
+                    else:
+                        self.retire(f)
+                        subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
+                detail = json.loads(str(raised.exception).split(": ", 1)[1])
+                self.assertEqual((detail["phase"], detail["temporary_count"], detail["limit"]), (phase, 2, 1))
+                self.assertEqual(detail["prebound_temporary_count"], 1 if phase == "finish" else 0)
+                self.assertEqual(detail["observed_prebound_temporary_count"], 1 if phase == "finish" else 0)
+                self.assertEqual(detail["new_temporary_count"], 1 if phase == "finish" else 2)
+                self.assertTrue(detail["diagnostic_only"])
+                self.assertEqual(detail["ownership"], "ownership_unqualified")
+                for row in detail["members"]:
+                    self.assertEqual(row["status"], "observed")
+                    for flag in ("regular_0600_owner_single_link", "named_held_identity_equal",
+                                 "same_original_owner", "original_rows_unchanged", "foreign_json_equal",
+                                 "nonempty_original_subset"):
+                        self.assertTrue(row[flag], flag)
+                    self.assertEqual(row["selected_original_row_count"], 3)
+                    self.assertEqual(row["bytes"], pending.stat().st_size)
+                if subject is not None:
+                    self.assertEqual(subject.fds, [])
+
+    def test_temporary_diagnostic_is_private_bounded_and_never_changes_authority(self):
+        for mutation in ("foreign", "symlink", "changed-old", "truncation", "reader"):
+            with self.subTest(mutation=mutation), self.fixture() as f:
+                _, pending, _ = self.author_passive_usage(f)
+                subject = self.capture(f)
+                second = pending.with_name(".claude.json.tmp.139.710615a62269")
+                second.write_bytes(pending.read_bytes()); second.chmod(0o600)
+                if mutation == "foreign":
+                    document = json.loads(second.read_text()); document["PRIVATE_NAME"] = "PRIVATE_VALUE"
+                    second.write_text(json.dumps(document))
+                elif mutation == "symlink":
+                    second.unlink(); second.symlink_to(pending.name)
+                elif mutation == "changed-old":
+                    pending.write_text(pending.read_text() + " ")
+                paths = [pending, second]
+                if mutation == "truncation":
+                    for index in range(9):
+                        extra = pending.with_name(f".claude.json.tmp.{200 + index}.710615a62269")
+                        extra.write_bytes(pending.read_bytes()); extra.chmod(0o600); paths.append(extra)
+                passive = copy.deepcopy(subject.passive_usage)
+                contract = copy.deepcopy(subject.usage_contract)
+                descriptors = tuple(subject.fds)
+                offsets = {fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in descriptors}
+                opened = []
+                original_open = retirement._CUSTODY["_FILES"]["open_member"]
+                def tracked_open(path):
+                    fd = original_open(path); opened.append(fd); return fd
+                image_context = (patch.object(retirement, "_diagnostic_image", side_effect=ValueError("PRIVATE_VALUE"))
+                                 if mutation == "reader" else patch.dict({}, {}))
+                with image_context, patch.dict(retirement._CUSTODY["_FILES"], {"open_member": tracked_open}):
+                    with self.assertRaisesRegex(ValueError, "passive usage temporary bound: ") as raised:
+                        subject.require_temporary_bound(paths, "finish")
+                detail = json.loads(str(raised.exception).split(": ", 1)[1])
+                self.assertEqual(detail["temporary_count"], len(paths))
+                self.assertEqual(len(detail["members"]), min(8, len(paths)))
+                self.assertEqual(detail["omitted_count"], max(0, len(paths) - 8))
+                by_hash = {row["name_sha256"]: row for row in detail["members"]}
+                if mutation == "foreign":
+                    self.assertFalse(by_hash[retirement._diagnostic_digest(second.name)]["foreign_json_equal"])
+                elif mutation == "symlink":
+                    self.assertFalse(by_hash[retirement._diagnostic_digest(second.name)]["regular_0600_owner_single_link"])
+                elif mutation == "changed-old":
+                    self.assertFalse(by_hash[retirement._diagnostic_digest(pending.name)]["old_temporary_image_unchanged"])
+                elif mutation == "reader":
+                    self.assertTrue(all(row["status"] == "unavailable" for row in detail["members"]))
+                self.assertEqual(tuple(subject.fds), descriptors)
+                self.assertEqual(subject.passive_usage, passive)
+                self.assertEqual(subject.usage_contract, contract)
+                self.assertIsNone(subject.retired_allowed)
+                self.assertFalse(subject.finished)
+                self.assertEqual({fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in descriptors}, offsets)
+                for fd in opened:
+                    with self.assertRaises(OSError): os.fstat(fd)
+                for private in ("PRIVATE_NAME", "PRIVATE_VALUE", str(f["root"]), pending.name, second.name):
+                    self.assertNotIn(private, str(raised.exception))
+
+    def test_temporary_diagnostic_never_reads_an_ancestor_redirect(self):
+        with self.fixture() as f, TemporaryDirectory() as outside:
+            _, pending, document = self.author_passive_usage(f)
+            subject = self.capture(f)
+            descriptors = tuple(subject.fds)
+            passive = copy.deepcopy(subject.passive_usage)
+            offsets = {fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in descriptors}
+            second = pending.with_name(".claude.json.tmp.139.710615a62269")
+            document["PRIVATE_NAME"] = "PRIVATE_VALUE"
+            for name in (pending.name, second.name):
+                candidate = Path(outside) / name
+                candidate.write_text(json.dumps(document)); candidate.chmod(0o600)
+            f["profile"].rename(f["home"] / "original-profile")
+            f["profile"].symlink_to(outside, target_is_directory=True)
+            opened = []
+            original_open = retirement._CUSTODY["_FILES"]["open_member"]
+            def tracked_open(path):
+                fd = original_open(path); opened.append(fd); return fd
+            with patch.dict(retirement._CUSTODY["_FILES"], {"open_member": tracked_open}), \
+                    patch.object(retirement, "_diagnostic_image", wraps=retirement._diagnostic_image) as image, \
+                    patch.object(os, "fdopen", wraps=os.fdopen) as stream, \
+                    patch.object(os, "pread", wraps=os.pread) as pread:
+                with self.assertRaisesRegex(ValueError, "passive usage temporary bound: ") as raised:
+                    subject.require_temporary_bound([pending, second], "finish")
+            detail = json.loads(str(raised.exception).split(": ", 1)[1])
+            self.assertEqual(detail["temporary_count"], 2)
+            self.assertTrue(all(row["status"] == "unavailable" for row in detail["members"]))
+            image.assert_not_called(); stream.assert_not_called(); pread.assert_not_called()
+            self.assertEqual(len(opened), 2)
+            for fd in opened:
+                with self.assertRaises(OSError): os.fstat(fd)
+            self.assertEqual(tuple(subject.fds), descriptors)
+            self.assertEqual(subject.passive_usage, passive)
+            self.assertEqual({fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in descriptors}, offsets)
+            for private in ("PRIVATE_NAME", "PRIVATE_VALUE", outside, str(f["root"])):
+                self.assertNotIn(private, str(raised.exception))
+
+    def test_finish_never_refreshes_old_temporary_custody_during_reopen(self):
+        for window in ("before-reopen", "after-reopened-read"):
+            with self.subTest(window=window), self.fixture() as f:
+                _, old, _ = self.author_passive_usage(f)
+                subject = self.capture(f)
+                passive = copy.deepcopy(subject.passive_usage)
+                descriptors = tuple(subject.fds)
+                body = old.read_bytes()
+                self.retire(f)
+                original = subject.held_passive_document
+                opened, raced = [], []
+                def replace_old():
+                    replacement = old.with_name("replacement")
+                    replacement.write_bytes(body); replacement.chmod(0o600); replacement.replace(old)
+                    raced.append(True)
+                def interleave(path):
+                    if path == old and window == "before-reopen": replace_old()
+                    document, held = original(path)
+                    opened.append(held["fd"])
+                    if path == old and window == "after-reopened-read": replace_old()
+                    return document, held
+                with patch.object(subject, "held_passive_document", side_effect=interleave):
+                    with self.assertRaises(ValueError):
+                        subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
+                self.assertEqual(raced, [True])
+                self.assertEqual(old.read_bytes(), body)
+                self.assertEqual(subject.passive_usage, passive)
+                self.assertIsNone(subject.retired_allowed)
+                self.assertEqual(subject.fds, [])
+                for fd in (*descriptors, *opened):
+                    with self.assertRaises(OSError): os.fstat(fd)
+
     def test_only_valid_remove_admits_usage_deletion_and_one_native_temporary_once(self):
         for transition in ("in_place", "atomic", "new_temporary", "wrong_receipt"):
             with self.subTest(transition=transition), self.fixture() as f:

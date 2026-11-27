@@ -234,7 +234,11 @@ class HeldTree:
                     raise ValueError("retention members changed during capture")
             else:
                 if self.total + before.st_size > TOTAL_LIMIT:
-                    raise ValueError("retention total bytes exceed bound")
+                    error = ValueError("retention total bytes exceed bound")
+                    # Partial observations only; the caller can diagnose the
+                    # existing refusal without another filesystem traversal.
+                    error.retention_byte_checkpoint = (self, relative, before.st_size, TOTAL_LIMIT)
+                    raise error
                 digest = _read_regular(fd, before, budget)
                 self.total += digest["bytes"]
                 self.nodes[relative] = ("file", _identity(before), digest)

@@ -430,7 +430,7 @@ class SignedClosureRetirement:
         # complete foreign projection and subset of the same four usage rows.
         temporary = [path for path in self.profile.iterdir()
                      if re.fullmatch(r"\.claude\.json\.tmp\.[1-9][0-9]{0,9}\.[0-9a-f]{12}", path.name)]
-        require(len(temporary) <= 1)
+        self.require_temporary_bound(temporary, "capture")
         for path in temporary:
             pending, held = self.held_passive_document(path)
             require(type(pending) is dict and type(pending.get("pluginUsage")) is dict)
@@ -441,6 +441,68 @@ class SignedClosureRetirement:
                     and _CUSTODY["same_json"](dict(pending, pluginUsage={
                         key: row for key, row in pending_usage.items() if key not in keys}), foreign))
             self.passive_usage.append(held)
+
+    def require_temporary_bound(self, temporary, phase):
+        """Diagnose the unchanged refusal; observations grant no custody authority."""
+        if len(temporary) <= 1:
+            return
+        prebound = {row["path"] for row in self.passive_usage[1:]} if phase == "finish" else set()
+        observed = set(temporary)
+        detail = {"diagnostic_only": True, "ownership": "ownership_unqualified",
+                  "phase": phase, "temporary_count": len(temporary),
+                  "prebound_temporary_count": len(prebound),
+                  "observed_prebound_temporary_count": len(observed & prebound),
+                  "new_temporary_count": len(observed - prebound),
+                  "limit": 1, "members": [], "omitted_count": max(0, len(temporary) - 8)}
+        for path in sorted(temporary[:8], key=lambda p: p.name):
+            member = {"status": "unavailable"}
+            try:
+                member["name_sha256"] = _diagnostic_digest(path.name)
+                before = path.lstat()
+                member["regular_0600_owner_single_link"] = (
+                    stat.S_ISREG(before.st_mode) and stat.S_IMODE(before.st_mode) == 0o600
+                    and before.st_uid == os.geteuid() and before.st_nlink == 1)
+                require(member["regular_0600_owner_single_link"])
+                fd = _CUSTODY["_FILES"]["open_member"](path)
+                try:
+                    body, error = self.audit["copilot_settings_read"](path, self.case)
+                    require(error is None and type(body) is str)
+                    image = _diagnostic_image(fd, self.audit, body.encode())
+                    joined = (image["identity"] == _CUSTODY["_FILES"]["identity"](before)
+                              == _CUSTODY["_FILES"]["identity"](path.lstat()))
+                    member["named_held_identity_equal"] = joined
+                    require(joined)
+                finally:
+                    os.close(fd)
+                member["raw_sha256"] = image["sha256"]
+                member["bytes"] = image["identity"][4]
+                member["same_original_owner"] = (image["uid"], image["gid"]) == self.passive_usage[0]["image"][1:3]
+                document, contract = image["document"], self.usage_contract
+                usage = document.get("pluginUsage")
+                member["usage_object"] = type(usage) is dict
+                require(member["usage_object"])
+                keys = set(contract["rows"])
+                selected = keys.intersection(usage)
+                member["selected_original_row_count"] = len(selected)
+                member["original_rows_unchanged"] = all(
+                    _CUSTODY["same_json"](usage[key], contract["rows"][key]) for key in selected)
+                member["foreign_json_equal"] = _CUSTODY["same_json"](
+                    dict(document, pluginUsage={key: value for key, value in usage.items() if key not in keys}),
+                    contract["foreign"])
+                old = next((row for row in self.passive_usage[1:] if row["path"] == path), None)
+                member["previously_held"] = old is not None
+                member["nonempty_original_subset"] = bool(selected)
+                member["new_temporary_strict_subset"] = None if old else 0 < len(selected) < len(keys)
+                if old:
+                    held = _diagnostic_image(old["fd"], self.audit)
+                    member["old_temporary_image_unchanged"] = (
+                        (image["identity"], image["uid"], image["gid"], image["sha256"])
+                        == (held["identity"], held["uid"], held["gid"], held["sha256"]) == old["image"])
+                member["status"] = "observed"
+            except Exception:
+                member["code"] = "bounded_temporary_observation_unavailable"
+            detail["members"].append(member)
+        raise ValueError("passive usage temporary bound: " + json.dumps(detail, sort_keys=True))
 
     def validate_usage_deletion(self, document):
         """Only receipt-owned zero-count rows may disappear; all other JSON stays exact."""
@@ -479,17 +541,24 @@ class SignedClosureRetirement:
                 and main["image"][1:3] == old_main["image"][1:3])
         temporary = [path for path in self.profile.iterdir()
                      if re.fullmatch(r"\.claude\.json\.tmp\.[1-9][0-9]{0,9}\.[0-9a-f]{12}", path.name)]
-        require(len(temporary) <= 1)
+        self.require_temporary_bound(temporary, "finish")
+        original_temporary = {row["path"]: row for row in old_temporary}
         for row in old_temporary:
             require(row["path"] in temporary and self.passive_image(row["path"], row["fd"]) == row["image"])
         following = [main]
         for path in temporary:
             pending, held = self.held_passive_document(path)
+            original = original_temporary.get(path)
+            require(original is None or held["image"] == original["image"])
             self.validate_usage_deletion(pending)
             selected = set(pending["pluginUsage"]).intersection(self.usage_contract["rows"])
-            require(bool(selected) and (path in {row["path"] for row in old_temporary} or len(selected) < 4)
+            require(bool(selected) and (original is not None or len(selected) < 4)
                     and held["image"][1:3] == main["image"][1:3])
             following.append(held)
+        # Reopening cannot refresh old custody, including a replacement after
+        # the reopened read. Close this window through the original held FDs.
+        for row in old_temporary:
+            require(self.passive_image(row["path"], row["fd"]) == row["image"])
         # After the one receipt-authorized transition, every future checkpoint
         # again requires exact post-removal inode, metadata and byte equality.
         self.passive_usage = following

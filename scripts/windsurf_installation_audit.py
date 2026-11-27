@@ -73,6 +73,39 @@ def nearest_node_modules(relative):
     return next((parent.as_posix() for parent in Path(relative).parents if parent.name == "node_modules"), None)
 
 
+def capture_byte_diagnostic(checkpoint, roots):
+    """Partial numeric observations; no complete-tree or ownership proof."""
+    tree, refused, next_bytes, limit = checkpoint
+    runtime_paths = tuple(Path(root).parent.as_posix() for root in roots)
+    cache_paths = tuple((Path(root).parent.parent.parent / "npm-cache").as_posix() for root in roots)
+
+    def inside(name, prefixes):
+        return any(name == prefix or name.startswith(prefix + "/") for prefix in prefixes)
+
+    def category(name):
+        if inside(name, roots):
+            return "npm-node-modules"
+        if inside(name, runtime_paths):
+            return "npm-runtime-inputs"
+        if inside(name, cache_paths):
+            return "npm-cache"
+        if name in ("directory-v1-cache.json", "discovery-v1-cache.json"):
+            return "feed-cache"
+        top = name.split("/", 1)[0]
+        return top if top in ("managed", "store", "security", "logs", "plugin-data") else "other"
+
+    groups = {}
+    for name, (kind, _, value) in tree.nodes.items():
+        group = groups.setdefault(category(name), {"members": 0, "fully_read_bytes": 0})
+        group["members"] += 1
+        if kind == "file":
+            group["fully_read_bytes"] += value["bytes"]
+    return {"diagnostic_only": True, "status": "partial-unqualified", "limit_bytes": limit,
+            "fully_read_bytes": tree.total, "captured_members": len(tree.nodes),
+            "next_file_bytes_unread": next_bytes, "next_file_namespace": category(refused),
+            "namespaces": groups}
+
+
 CLIENT_VERSION = "devin 3000.12.57 (96542e930752)"
 CLI_VERSION = "agentplugins 0.1.115"
 ROOT = Path(__file__).resolve().parents[1]
@@ -537,7 +570,17 @@ class WindsurfInstallationAudit:
         require(set(runtime_prefixes) <= roots)
         if not roots:
             return frame(data_fd)
-        tree = HeldTree(self.data, bin_links=True, runtime_prefixes=runtime_prefixes)
+        try:
+            tree = HeldTree(self.data, bin_links=True, runtime_prefixes=runtime_prefixes)
+        except ValueError as error:
+            checkpoint = getattr(error, "retention_byte_checkpoint", None)
+            if checkpoint is not None:
+                try:
+                    diagnostic = capture_byte_diagnostic(checkpoint, roots)
+                    error.add_note("Devin Global capture byte observations: " + encoded(diagnostic, 4096).decode())
+                except Exception:
+                    error.add_note("Devin Global capture byte observations unavailable")
+            raise
         try:
             require(self.directory_identity(os.fstat(tree.fds["."]))
                     == self.directory_identity(os.fstat(data_fd)))
