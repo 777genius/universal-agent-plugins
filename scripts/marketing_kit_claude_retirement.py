@@ -191,7 +191,7 @@ def _diagnostic_image(fd, audit):
             "sha256": hashlib.sha256(body).hexdigest(), "document": document}
 
 
-def _diagnostic_named_image(path, case, audit):
+def _diagnostic_named_image(path, case, audit, *, held_fd=None):
     """Use the existing no-follow member walk and read its exact held file."""
     before = path.lstat()
     identity = _CUSTODY["_FILES"]["identity"]
@@ -201,7 +201,9 @@ def _diagnostic_named_image(path, case, audit):
             _CUSTODY["named_directory"](case, case_fd)
             require(before.st_nlink == 1 and identity(before) == identity(os.fstat(fd))
                     == identity(path.lstat()))
-            image = _diagnostic_image(fd, audit)
+            if held_fd is not None:
+                require(identity(before) == identity(os.fstat(held_fd)))
+            image = _diagnostic_image(fd if held_fd is None else held_fd, audit)
             require(image["identity"] == identity(before) == identity(path.lstat()))
             _CUSTODY["named_directory"](case, case_fd)
         return image
@@ -405,23 +407,16 @@ class SignedClosureRetirement:
         return _checkpoint_document(self.audit, self.case, path)
 
     def passive_image(self, path, fd):
-        """Read through the shared bounded reader while retaining the same inode."""
-        identity = _CUSTODY["_FILES"]["identity"]
-        before = path.lstat()
-        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1
-                and stat.S_IMODE(before.st_mode) == 0o600 and before.st_uid == os.geteuid()
-                and 0 < before.st_size <= 1 << 20
-                and identity(before) == identity(os.fstat(fd)))
-        body, error = self.audit["copilot_settings_read"](path, self.case)
-        require(error is None and type(body) is str
-                and identity(before) == identity(path.lstat()) == identity(os.fstat(fd)))
-        return (identity(before), before.st_uid, before.st_gid, hashlib.sha256(body.encode()).hexdigest())
+        """Join the original FD to the no-follow walk and hash that exact FD."""
+        image = _diagnostic_named_image(path, self.case, self.audit, held_fd=fd)
+        return (image["identity"], image["uid"], image["gid"], image["sha256"])
 
     def held_passive_document(self, path):
         require(stat.S_ISREG(path.lstat().st_mode))
         fd = _CUSTODY["_FILES"]["open_member"](path); self.fds.append(fd)
-        image = self.passive_image(path, fd)
-        document = self.document(path)
+        observed = _diagnostic_named_image(path, self.case, self.audit, held_fd=fd)
+        image = (observed["identity"], observed["uid"], observed["gid"], observed["sha256"])
+        document = observed["document"]
         require(self.passive_image(path, fd) == image)
         return document, {"path": path, "fd": fd, "image": image}
 
@@ -470,8 +465,10 @@ class SignedClosureRetirement:
             self.passive_usage.append(held)
 
     def require_temporary_bound(self, temporary, phase):
-        """Diagnose the unchanged refusal; observations grant no custody authority."""
-        if len(temporary) <= 1:
+        """Bound the phase before strict member validation; diagnostics grant no authority."""
+        require(phase in ("capture", "finish"))
+        limit = 1 if phase == "capture" else 2
+        if len(temporary) <= limit:
             return
         prebound = {row["path"] for row in self.passive_usage[1:]} if phase == "finish" else set()
         observed = set(temporary)
@@ -480,7 +477,7 @@ class SignedClosureRetirement:
                   "prebound_temporary_count": len(prebound),
                   "observed_prebound_temporary_count": len(observed & prebound),
                   "new_temporary_count": len(observed - prebound),
-                  "limit": 1, "members": [], "omitted_count": max(0, len(temporary) - 8)}
+                  "limit": limit, "members": [], "omitted_count": max(0, len(temporary) - 8)}
         for path in sorted(temporary[:8], key=lambda p: p.name):
             member = {"status": "unavailable"}
             try:
@@ -549,12 +546,9 @@ class SignedClosureRetirement:
         require((before.st_dev, before.st_ino, before.st_mode) == old_main["image"][0][:3]
                 and before.st_nlink in (0, 1) and before.st_uid == old_main["image"][1]
                 and before.st_gid == old_main["image"][2] and before.st_size <= 1 << 20)
-        with os.fdopen(os.dup(old_main["fd"]), "rb") as stream:
-            stream.seek(0); body = stream.read((1 << 20) + 1)
-        require(len(body) <= 1 << 20 and _CUSTODY["_FILES"]["identity"](before)
-                == _CUSTODY["_FILES"]["identity"](os.fstat(old_main["fd"])))
-        self.validate_usage_deletion(json.loads(body, object_pairs_hook=self.audit["_unique_json_object"],
-                                               parse_constant=lambda _: require(False)))
+        held_main = _diagnostic_image(old_main["fd"], self.audit)
+        require(held_main["identity"] == _CUSTODY["_FILES"]["identity"](before))
+        self.validate_usage_deletion(held_main["document"])
         document, main = self.held_passive_document(old_main["path"])
         self.validate_usage_deletion(document)
         same_main = main["image"][0][:2] == old_main["image"][0][:2]

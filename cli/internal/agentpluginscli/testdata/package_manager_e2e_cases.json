@@ -50,7 +50,15 @@
     "update-add-process-contention",
     "update-attention-classification",
     "update-mixed-peer-attention",
-    "update-apply-output-causes"
+    "update-apply-output-causes",
+    "update-all-current-projection",
+    "update-current-noop",
+    "update-all-current-refusals",
+    "update-all-preflight-causes",
+    "update-all-detection-cause",
+    "update-all-preview-output",
+    "remove-partial-stage-retry",
+    "remove-success-retained-data"
   ],
   "adversarial": [
     "foreign-native-settings",

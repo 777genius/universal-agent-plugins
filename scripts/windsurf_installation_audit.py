@@ -75,7 +75,7 @@ def nearest_node_modules(relative):
 
 def capture_byte_diagnostic(checkpoint, roots):
     """Partial numeric observations; no complete-tree or ownership proof."""
-    tree, refused, next_bytes, limit = checkpoint
+    tree, refused, next_bytes, limit, refused_pool = checkpoint
     runtime_paths = tuple(Path(root).parent.as_posix() for root in roots)
     cache_paths = tuple((Path(root).parent.parent.parent / "npm-cache").as_posix() for root in roots)
 
@@ -101,6 +101,11 @@ def capture_byte_diagnostic(checkpoint, roots):
         if kind == "file":
             group["fully_read_bytes"] += value["bytes"]
     return {"diagnostic_only": True, "status": "partial-unqualified", "limit_bytes": limit,
+            "refused_pool": refused_pool,
+            "byte_pools": {
+                "ordinary": {"fully_read_bytes": tree.ordinary_total, "limit_bytes": tree.ordinary_limit},
+                "qualified-runtime": {"fully_read_bytes": tree.runtime_total,
+                    "limit_bytes": tree.runtime_limit}},
             "fully_read_bytes": tree.total, "captured_members": len(tree.nodes),
             "next_file_bytes_unread": next_bytes, "next_file_namespace": category(refused),
             "namespaces": groups}

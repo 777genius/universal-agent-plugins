@@ -291,9 +291,10 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     path.write_text(path.read_text() + " ")
                 if mutation == "reader":
                     original = retirement._diagnostic_named_image
-                    def unavailable(*args):
-                        if calls: raise OSError("PRIVATE_NAME PRIVATE_VALUE")
-                        return original(*args)
+                    def unavailable(*args, **kwargs):
+                        if calls and "held_fd" not in kwargs:
+                            raise OSError("PRIVATE_NAME PRIVATE_VALUE")
+                        return original(*args, **kwargs)
                     context = patch.object(retirement, "_diagnostic_named_image", side_effect=unavailable)
                 elif mutation == "projection":
                     context = patch.object(retirement, "_diagnostic_digest", side_effect=ValueError("PRIVATE_NAME"))
@@ -335,7 +336,13 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     path.write_text('{"pluginUsage":{},"firstStartVersion":"2.1.263"}')
                     path.chmod(0o600)
                 sink = []
-                with patch.object(retirement, "_diagnostic_image", side_effect=read):
+                capture = retirement._diagnostic_capture
+                def unavailable_old_fd(subject):
+                    # Only diagnostic reads fail; the preceding authority
+                    # checkpoint still exercises the real shared same-FD reader.
+                    with patch.object(retirement, "_diagnostic_image", side_effect=read):
+                        return capture(subject)
+                with patch.object(retirement, "_diagnostic_capture", side_effect=unavailable_old_fd):
                     retirement.observe_user_initialize_diagnostic(subject, writer, sink)
                 row = sink[0]
                 self.assertEqual(row["after"]["status"], "observed")
@@ -426,7 +433,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 ):
                     if temporary:
                         with self.assertRaisesRegex(ValueError, "passive usage temporary bound") as caught:
-                            subject.require_temporary_bound([pending, second], "finish")
+                            subject.require_temporary_bound([pending, second], "capture")
                         detail = caught.exception.claude_temporary_bound_diagnostic
                         self.assertEqual(detail["members"][0]["status"], "unavailable")
                         self.assertNotIn(hashlib.sha256(foreign).hexdigest(), json.dumps(detail))
@@ -446,11 +453,13 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             with self.subTest(failed_before=failed_before), self.user_diagnostic_fixture() as (f, subject, path):
                 original_read = retirement._diagnostic_named_image
                 reads = []
-                def read(*args):
+                def read(*args, **kwargs):
+                    if "held_fd" in kwargs:
+                        return original_read(*args, **kwargs)
                     reads.append(True)
                     if failed_before and len(reads) == 1:
                         raise ValueError("PRIVATE baseline failure")
-                    return original_read(*args)
+                    return original_read(*args, **kwargs)
                 checkpoint = subject.checkpoint
                 def checked():
                     checkpoint()
@@ -639,6 +648,9 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 subject = self.capture(f) if phase == "finish" else None
                 second = pending.with_name(".claude.json.tmp.139.710615a62269")
                 second.write_bytes(pending.read_bytes()); second.chmod(0o600)
+                if phase == "finish":
+                    third = pending.with_name(".claude.json.tmp.140.710615a62270")
+                    third.write_bytes(pending.read_bytes()); third.chmod(0o600)
                 with self.assertRaisesRegex(ValueError, "passive usage temporary bound: ") as raised:
                     if subject is None:
                         self.capture(f)
@@ -646,10 +658,10 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                         self.retire(f)
                         subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
                 detail = json.loads(str(raised.exception).split(": ", 1)[1])
-                self.assertEqual((detail["phase"], detail["temporary_count"], detail["limit"]), (phase, 2, 1))
+                self.assertEqual((detail["phase"], detail["temporary_count"], detail["limit"]), (phase, 3 if phase == "finish" else 2, 2 if phase == "finish" else 1))
                 self.assertEqual(detail["prebound_temporary_count"], 1 if phase == "finish" else 0)
                 self.assertEqual(detail["observed_prebound_temporary_count"], 1 if phase == "finish" else 0)
-                self.assertEqual(detail["new_temporary_count"], 1 if phase == "finish" else 2)
+                self.assertEqual(detail["new_temporary_count"], 2)
                 self.assertTrue(detail["diagnostic_only"])
                 self.assertEqual(detail["ownership"], "ownership_unqualified")
                 for row in detail["members"]:
@@ -677,7 +689,9 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     second.unlink(); second.symlink_to(pending.name)
                 elif mutation == "changed-old":
                     pending.write_text(pending.read_text() + " ")
-                paths = [pending, second]
+                third = pending.with_name(".claude.json.tmp.140.710615a62270")
+                third.write_bytes(second.read_bytes()); third.chmod(0o600)
+                paths = [pending, second, third]
                 if mutation == "truncation":
                     for index in range(9):
                         extra = pending.with_name(f".claude.json.tmp.{200 + index}.710615a62269")
@@ -742,7 +756,7 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                     patch.object(os, "fdopen", wraps=os.fdopen) as stream, \
                     patch.object(os, "pread", wraps=os.pread) as pread:
                 with self.assertRaisesRegex(ValueError, "passive usage temporary bound: ") as raised:
-                    subject.require_temporary_bound([pending, second], "finish")
+                    subject.require_temporary_bound([pending, second], "capture")
             detail = json.loads(str(raised.exception).split(": ", 1)[1])
             self.assertEqual(detail["temporary_count"], 2)
             self.assertTrue(all(row["status"] == "unavailable" for row in detail["members"]))
@@ -816,6 +830,158 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     subject.verify_retained(f["home"], f["root"], self.scan(f), lambda: self.scan(f))
                 self.assertEqual(subject.fds, [])
+
+    def test_finish_admits_two_strict_temporaries_with_original_custody(self):
+        for old_count, selected_count in ((0, 3), (0, 1), (1, 2)):
+            with self.subTest(old_count=old_count, selected_count=selected_count), self.fixture() as f:
+                _, pending, document = self.author_passive_usage(f, temporary=bool(old_count))
+                subject = self.capture(f)
+                self.retire(f)
+                for owner in f["owners"][:4 - selected_count]:
+                    del document["pluginUsage"][owner["key"]]
+                names = [pending, pending.with_name(".claude.json.tmp.139.710615a62269")]
+                for path in names[old_count:]:
+                    path.write_text(json.dumps(document)); path.chmod(0o600)
+                before = {path: (path.read_bytes(), path.stat()) for path in names}
+                original = tuple(subject.passive_usage)
+                offsets = {row["fd"]: os.lseek(row["fd"], 0, os.SEEK_CUR) for row in original}
+                raw = self.scan(f)
+                proof = subject.finish(f["cleanup"], raw, lambda: self.scan(f), keep_open=True)
+                self.assertEqual(len(proof["passive_plugin_usage"]["files"]), 3)
+                self.assertEqual({fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in offsets}, offsets)
+                self.assertFalse(proof["full_native_removal_qualified"])
+                subject.verify_retained(f["home"], f["root"], raw, lambda: self.scan(f))
+                self.assertEqual(raw, self.scan(f))
+                for path, (body, info) in before.items():
+                    self.assertEqual(path.read_bytes(), body)
+                    self.assertTrue(os.path.samestat(path.stat(), info))
+                names[-1].write_text(json.dumps(dict(document, changed_after_finish=True)))
+                with self.assertRaises(ValueError): subject.checkpoint()
+                self.assertEqual(subject.fds, [])
+
+    def test_two_new_temporaries_never_bypass_member_or_remove_authority(self):
+        for mutation in ("third", "foreign", "changed-row", "boolean-row", "empty", "all-four",
+                         "mode", "hardlink", "symlink", "owner", "receipt", "registry", "cache"):
+            with self.subTest(mutation=mutation), self.fixture() as f:
+                main, pending, document = self.author_passive_usage(f, temporary=False)
+                subject = self.capture(f)
+                original = copy.deepcopy(subject.passive_usage)
+                descriptors = tuple(subject.fds)
+                self.retire(f)
+                del document["pluginUsage"][f["owners"][0]["key"]]
+                second = pending.with_name(".claude.json.tmp.139.710615a62269")
+                for path in (pending, second):
+                    path.write_text(json.dumps(document)); path.chmod(0o600)
+                changed = copy.deepcopy(document)
+                key = next(iter(changed["pluginUsage"]))
+                if mutation == "third":
+                    third = pending.with_name(".claude.json.tmp.140.710615a62270")
+                    third.write_bytes(pending.read_bytes()); third.chmod(0o600)
+                elif mutation == "foreign": changed["foreign"]["preserve"] = False
+                elif mutation == "changed-row": changed["pluginUsage"][key]["usageCount"] = 1
+                elif mutation == "boolean-row": changed["pluginUsage"][key]["usageCount"] = False
+                elif mutation == "empty": changed["pluginUsage"] = {}
+                elif mutation == "all-four": changed = json.loads(main.read_text())
+                elif mutation == "mode": second.chmod(0o644)
+                elif mutation == "hardlink": os.link(second, second.with_name("foreign-hardlink"))
+                elif mutation == "symlink": second.unlink(); second.symlink_to(pending.name)
+                elif mutation == "receipt": f["cleanup"]["results"][0]["installation_id"] = "foreign"
+                elif mutation == "registry":
+                    registry = f["profile"] / "plugins/installed_plugins.json"
+                    value = json.loads(registry.read_text()); value["foreign"] = True
+                    registry.write_text(json.dumps(value))
+                elif mutation == "cache":
+                    retired = next(f["owners"][0]["cache"].parent.glob(".agentplugins-cache-retire-*/retired"))
+                    (retired / "unowned").write_text("foreign")
+                if mutation in ("foreign", "changed-row", "boolean-row", "empty", "all-four"):
+                    second.write_text(json.dumps(changed))
+                named_image = retirement._diagnostic_named_image
+                def foreign_group(path, *args, **kwargs):
+                    image = named_image(path, *args, **kwargs)
+                    if mutation == "owner" and path == second:
+                        image = dict(image, gid=image["gid"] + 1)
+                    return image
+                with patch.object(retirement, "_diagnostic_named_image", side_effect=foreign_group):
+                    with self.assertRaises(ValueError):
+                        subject.finish(f["cleanup"], self.scan(f), lambda: self.scan(f))
+                self.assertEqual(subject.passive_usage, original)
+                self.assertIsNone(subject.retired_allowed)
+                self.assertEqual(subject.fds, [])
+                for fd in descriptors:
+                    with self.assertRaises(OSError): os.fstat(fd)
+
+    def test_passive_authority_uses_original_fd_despite_path_reader_aba(self):
+        for operation in ("image", "document"):
+            with self.subTest(operation=operation), self.fixture() as f:
+                path, _, document = self.author_passive_usage(f, temporary=False)
+                subject = self.capture(f)
+                fd = subject.passive_usage[0]["fd"]
+                expected = path.read_bytes()
+                foreign = expected.replace(b'"2.1.263"', b'"9.9.999"')
+                shadow, parked = f["home"] / "shadow-profile", f["home"] / "parked-profile"
+                shadow.mkdir(); (shadow / path.name).write_bytes(foreign)
+                (shadow / path.name).chmod(0o600)
+                reader = f["audit"]["copilot_settings_read"]
+                def pathname_aba(candidate, case):
+                    f["profile"].rename(parked); shadow.rename(f["profile"])
+                    try: return reader(candidate, case)
+                    finally:
+                        f["profile"].rename(shadow); parked.rename(f["profile"])
+                # Actual reader returns foreign bytes while the original FD and
+                # restored pathname retain their original complete identity.
+                identity = retirement._CUSTODY["_FILES"]["identity"]
+                before = identity(os.fstat(fd))
+                body, error = pathname_aba(path, f["root"])
+                self.assertIsNone(error); self.assertEqual(body.encode(), foreign)
+                self.assertEqual(identity(os.fstat(fd)), before)
+                self.assertEqual(identity(path.lstat()), before)
+                offset = os.lseek(fd, 7, os.SEEK_SET)
+                with patch.dict(f["audit"], {"copilot_settings_read": pathname_aba}):
+                    if operation == "image": image = subject.passive_image(path, fd)
+                    else:
+                        observed, held = subject.held_passive_document(path)
+                        self.assertEqual(observed, document)
+                        image = held["image"]
+                self.assertEqual(image[-1], hashlib.sha256(expected).hexdigest())
+                self.assertNotEqual(image[-1], hashlib.sha256(foreign).hexdigest())
+                self.assertEqual(os.lseek(fd, 0, os.SEEK_CUR), offset)
+
+    def test_passive_authority_refuses_member_walk_aba_without_foreign_reads(self):
+        for operation in ("image", "document"):
+            with self.subTest(operation=operation), self.fixture() as f:
+                path, _, _ = self.author_passive_usage(f, temporary=False)
+                subject = self.capture(f)
+                held = subject.passive_usage[0]
+                expected = path.read_bytes()
+                foreign = expected.replace(b'"2.1.263"', b'"9.9.999"')
+                shadow, parked = f["home"] / "shadow-profile", f["home"] / "parked-profile"
+                shadow.mkdir(); (shadow / path.name).write_bytes(foreign)
+                (shadow / path.name).chmod(0o600)
+                original_open, original_pread = os.open, os.pread
+                opened, reads, swaps = [], [], []
+                original_descriptors = tuple(subject.fds)
+                def open_aba(name, *args, **kwargs):
+                    if name == path.name and "dir_fd" in kwargs and not swaps:
+                        swaps.append(True)
+                        f["profile"].rename(parked); shadow.rename(f["profile"])
+                        try: fd = original_open(name, *args, **kwargs)
+                        finally:
+                            f["profile"].rename(shadow); parked.rename(f["profile"])
+                    else: fd = original_open(name, *args, **kwargs)
+                    opened.append(fd)
+                    return fd
+                def pread(fd, length, offset):
+                    body = original_pread(fd, length, offset); reads.append(body)
+                    return body
+                with patch.object(os, "open", side_effect=open_aba), patch.object(os, "pread", side_effect=pread):
+                    with self.assertRaises(ValueError):
+                        if operation == "image": subject.passive_image(path, held["fd"])
+                        else: subject.held_passive_document(path)
+                self.assertEqual(swaps, [True])
+                self.assertNotIn(foreign, reads)
+                subject.close()
+                for fd in set((*opened, *original_descriptors)):
+                    with self.assertRaises(OSError): os.fstat(fd)
 
     def test_passive_usage_rejects_same_inode_rewrites_without_owned_deletion(self):
         for mutation in ("same_bytes", "whitespace_only"):
