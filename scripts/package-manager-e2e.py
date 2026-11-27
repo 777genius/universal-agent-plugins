@@ -44,10 +44,13 @@ COLLECTION_TESTS = [
     "TestLocalCollectionCodexClaudeLifecycle",
     "TestLocalCollectionRefusalsAndExactSelection",
     "TestLocalSingleSkillRepeatKeepsSavedPinWithoutSource",
-    "TestSkillsAllGitSourceScope",
-    "TestSkillsAllRejectsAmbiguousGitCollectionBeforeEffects",
     "TestSkillsAllWebsiteComposedLifecycle",
     "TestSkillsAllWebsiteChangedIndexRefusesBeforeEffects",
+]
+
+GIT_COLLECTION_TESTS = [
+    "TestSkillsAllGitSourceScope",
+    "TestSkillsAllRejectsAmbiguousGitCollectionBeforeEffects",
 ]
 
 
@@ -206,6 +209,8 @@ class Run:
         self.install_required = [INSTALL_ROOT_TEST] + [f"{INSTALL_ROOT_TEST}/{case}" for case in installations]
         self.composed_required = [name + "/zip" for name in COMPOSED_TESTS] + COMPOSED_TESTS
         self.collection_required = list(COLLECTION_TESTS)
+        if suite == "full":
+            self.collection_required += GIT_COLLECTION_TESTS
         self.required = self.catalog_required + self.install_required + self.composed_required + self.collection_required
         self.report = {
             "schema_version": 2, "suite": suite, "status": "running",
@@ -216,7 +221,8 @@ class Run:
             "required_tests": self.required,
             "catalog_sha256": sha256(CATALOG), "installation_catalog_sha256": sha256(INSTALL_CATALOG),
             "excluded_tests": [f"{ROOT_TEST}/{group}/{case}" for group in CATALOG_GROUPS if group not in self.groups
-                               for case in catalog[group]],
+                               for case in catalog[group]]
+                              + [name for name in GIT_COLLECTION_TESTS if name not in self.collection_required],
             "boundaries": ["Security assessment and verified Directory inputs are fixtures in composed cases.",
                            "Native agent sessions, authentication, MCP execution and model calls are not qualified.",
                            "The unchanged executable separately installs a local synthetic plugin and a local Skill collection using the real pinned production scanner.",
@@ -385,7 +391,7 @@ class Run:
                                 "production_composed", required=self.composed_required, package=MAIN_PACKAGE)
         collections = self.command("collections", ["go", "test", "-count=1", "-timeout=12m", "-json",
                                                     "./cli/internal/agentpluginscli", "-run",
-                                                    "^(" + "|".join(COLLECTION_TESTS) + ")$"],
+                                                    "^(" + "|".join(self.collection_required) + ")$"],
                                    "composed_cli", required=self.collection_required, package=CLI_PACKAGE)
         stable = self.report["source"] == source_identity(self.env)
         self.report["source_unchanged_during_run"] = stable

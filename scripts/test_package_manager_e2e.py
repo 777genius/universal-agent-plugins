@@ -157,7 +157,7 @@ class EvidenceAcceptanceTests(unittest.TestCase):
             run.catalog_required = ["catalog-case"]
             run.install_required = ["installation-case"]
             run.composed_required = ["composition-case"]
-            run.collection_required = list(RUNNER.COLLECTION_TESTS)
+            run.collection_required = RUNNER.COLLECTION_TESTS + RUNNER.GIT_COLLECTION_TESTS
             run.report = {"suite": "full", "source": {"commit": "unchanged"}, "phases": []}
             (root / ("agentplugins.exe" if os.name == "nt" else "agentplugins")).write_bytes(b"fixture")
             with patch.object(run, "command", return_value=True) as commands, \
@@ -169,9 +169,36 @@ class EvidenceAcceptanceTests(unittest.TestCase):
             self.assertEqual(run.report["status"], "fail")
             self.assertFalse(run.report["full_qualification"])
             phase = next(call for call in commands.call_args_list if call.args[0] == "collections")
-            self.assertEqual(phase.kwargs["required"], RUNNER.COLLECTION_TESTS)
+            self.assertEqual(phase.kwargs["required"], RUNNER.COLLECTION_TESTS + RUNNER.GIT_COLLECTION_TESTS)
             self.assertEqual(phase.kwargs["package"], RUNNER.CLI_PACKAGE)
             self.assertNotIn("-tags=uappm_e2e", phase.args[1])
+
+    def test_archive_and_full_collection_selection_matches_required_evidence(self):
+        for suite in ("archive", "full"):
+            with self.subTest(suite=suite), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                env = {"GOPATH": str(root / "gopath"), "GOCACHE": str(root / "gocache")}
+                catalog = {group: ["fixture"] for group in RUNNER.CATALOG_GROUPS}
+                expected = RUNNER.COLLECTION_TESTS + (RUNNER.GIT_COLLECTION_TESTS if suite == "full" else [])
+                with patch.object(RUNNER, "source_identity", return_value={"commit": "unchanged"}), \
+                        patch.object(RUNNER, "output", return_value="fixture tool"), \
+                        patch.object(RUNNER, "sha256", return_value="fixture digest"):
+                    run = RUNNER.Run(root, env, suite, catalog, ["fixture"])
+                    with patch.object(run, "command", return_value=True) as commands, \
+                            patch.object(run, "smoke", return_value=True), \
+                            patch.object(RUNNER, "run_installations", return_value=True), \
+                            patch.object(RUNNER, "run_collections", return_value=True):
+                        self.assertTrue(run.execute(root))
+                phase = next(call for call in commands.call_args_list if call.args[0] == "collections")
+                self.assertEqual(phase.args[1][-1], "^(" + "|".join(expected) + ")$")
+                self.assertEqual(phase.kwargs["required"], expected)
+                self.assertEqual(phase.kwargs["package"], RUNNER.CLI_PACKAGE)
+                self.assertTrue(set(expected).issubset(run.report["required_tests"]))
+                excluded = [] if suite == "full" else [RUNNER.ROOT_TEST + "/registry/fixture"] + RUNNER.GIT_COLLECTION_TESTS
+                self.assertEqual(run.report["excluded_tests"], excluded)
+                self.assertTrue(set(run.report["required_tests"]).isdisjoint(excluded))
+                self.assertEqual(run.report["full_qualification"], suite == "full")
+                self.assertTrue(run.report["source_unchanged_during_run"])
 
     def test_nested_binary_installation_error_is_reported(self):
         import package_manager_binary
