@@ -86,8 +86,8 @@ func windowsRenameError(err error, to *os.File, new string) error {
 	return errors.Join(err, fmt.Errorf("destination already exists: %w", fs.ErrExist))
 }
 
-// Retry belongs to package publication only. A nil policy is the original
-// single-attempt primitive used by ApplySkill and its source CAS.
+// A checked publication retries only failed commit syscalls against the same
+// held source. A nil policy remains the single-attempt exclusive primitive.
 type renameRetry struct {
 	ctx      context.Context
 	check    func() error
