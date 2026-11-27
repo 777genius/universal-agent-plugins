@@ -106,7 +106,7 @@ func TestEnterprisePolicyFailureOutputPreservesHumanWriter(t *testing.T) {
 	command.SetOut(&out)
 	command.SetArgs([]string{})
 	configureEnterprisePolicyFailureOutput(command, &options{format: "human"})
-	if err := command.ExecuteContext(t.Context()); err != cause || command.OutOrStdout() != &out {
+	if err := command.ExecuteContext(t.Context()); !errors.Is(err, cause) || err.Error() != cause.Error() || command.OutOrStdout() != &out {
 		t.Fatalf("human policy error or writer identity changed: %v", err)
 	}
 }
@@ -154,7 +154,7 @@ func TestEnterprisePolicyManagementGuidancePreservesTypedCause(t *testing.T) {
 		t.Fatalf("management outcome leaked private diagnostics: %v %s", err, body)
 	}
 	other := errors.New("unrelated failure")
-	if managementEnterprisePolicyError(other) != other {
+	if got := managementEnterprisePolicyError(other); !errors.Is(got, other) || got.Error() != other.Error() {
 		t.Fatal("policy presentation rewrote an unrelated error")
 	}
 }

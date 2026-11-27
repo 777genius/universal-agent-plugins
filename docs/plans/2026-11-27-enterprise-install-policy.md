@@ -1,9 +1,9 @@
 # Enterprise installation policy
 
 Status: implementation and repeated independent source review complete. The
-combined policy/legacy CLI regression selection passes. Final lint, portable
-E2E and current-head supported-runner qualification remain in progress; merge
-and actual-main verification follow those gates.
+qualification record below captures execution checkpoints. Final qualification,
+merge and actual-main verification are tracked in
+[PR #1130](https://github.com/777genius/universal-agent-plugins/pull/1130).
 Owner request: research APM and ToolHive, synthesize a convenient modular design,
 review and refine it, implement in one Draft PR, publish each commit immediately,
 exercise important end-to-end paths, fix review findings, ordinary merge and verify.
@@ -366,6 +366,17 @@ policy_denied after single-target and group callbacks. An eight-case regression
 was added. These follow-up changes require their own qualification after the
 executor interruption; earlier passing results are explicitly tied to 5cbd057e.
 
+R16 source-admission review: a full commit in the first browser-URL selector
+segment is original pin intent at both the early source and final envelope
+gates. The helper follows the existing resolver and preserves explicit
+commit/ref precedence; moving refs never inherit pin status from resolved bytes.
+Ambiguous HTTPS keeps archive-first discovery when archive policy allows it.
+A pure typed archive denial can select independently admitted Git without an
+archive request; configuration, changed-policy and mixed operational errors
+cannot select another transport. Explicit source kinds retain their behavior.
+Focused regressions compare browser admission with the offline resolver and
+observe actual HTTPS requests and injected Git acquisition separately.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test
@@ -395,11 +406,21 @@ executor interruption; earlier passing results are explicitly tied to 5cbd057e.
   completed successfully for 5cbd057e, including CLI internal/composition,
   usecase, domain and policy adapter packages. This is job-level evidence;
   it does not count the workflow's other queued jobs as passing.
+- After the executor recovered, the published b993da43 domain and file-adapter
+  packages passed locally, as did the focused SDK/usecase policy regressions
+  (0.826s and 0.052s), including all eight SDK callback cases. That published
+  commit also passed the complete GitHub test-core and macOS Intel package-manager
+  jobs; the other queued jobs are not counted as passing evidence.
+- The subsequent source-admission and diagnostic refinements passed the combined
+  EnterprisePolicy/LegacyRepair/local-policy CLI selection (6.249s internal,
+  0.011s composer). Full make lint passed all four modules, both gate passes,
+  and the legacy no-growth baseline with 137 unchanged exclusions. No lint
+  suppression or safety check was weakened.
 - The execution interruption was recovered without losing the working tree.
   The integrated code was published in dabd3f0d; subsequent completed commits are
   published immediately. No stale, skipped, cancelled or queued result counts
   as passing evidence.
 
-Remaining gates: qualification of review follow-up changes, successful portable
-catalog and current-head supported-runner checks, ordinary expected-head merge,
-and verification of the actual merged main. No release or tag.
+Remaining at this checkpoint: final-source portable catalog and supported-runner
+checks, ordinary expected-head merge, and verification of the actual merged main.
+No release or tag.

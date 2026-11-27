@@ -15,9 +15,9 @@ func (e *Engine) WithInstallationPolicy(gate ports.InstallationPolicy) *Engine {
 	if e == nil {
 		return nil
 	}
-	copy := *e
-	copy.cfg.InstallationPolicy = gate
-	return &copy
+	view := *e
+	view.cfg.InstallationPolicy = gate
+	return &view
 }
 
 type reviewedInstallationPolicy struct {
@@ -121,8 +121,8 @@ func clonePolicyPin(value *bool) *bool {
 	if value == nil {
 		return nil
 	}
-	copy := *value
-	return &copy
+	cloned := *value
+	return &cloned
 }
 
 func installationPolicyFailure(op Operation, err error) (Result, error) {

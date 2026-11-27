@@ -48,14 +48,31 @@ func (app App) checkEnterpriseLocal(ctx context.Context, requested string) error
 
 func (app App) checkEnterpriseGit(ctx context.Context, source sourcespec.Git) error {
 	selector := environment.Selector{Kind: environment.SelectorDefault}
-	if source.Commit != "" {
-		selector = environment.Selector{Kind: environment.SelectorCommit, Value: source.Commit}
+	if commit := requestedPolicyGitCommit(source); commit != "" {
+		selector = environment.Selector{Kind: environment.SelectorCommit, Value: commit}
 	} else if source.Ref != "" {
 		selector = environment.Selector{Kind: environment.SelectorRef, Value: source.Ref}
 	}
 	return app.checkEnterpriseRequirement(ctx, environment.Requirement{Git: &environment.GitSource{
 		URL: source.URL, Repository: source.Repository, Path: source.Path, Selector: selector,
 	}}, nil)
+}
+
+// Browser selectors remain unresolved in sourcespec, but a full commit in their
+// first segment is already exact intent. Match the resolver without consulting
+// a resolved revision or guessing a branch/path split.
+func requestedPolicyGitCommit(source sourcespec.Git) string {
+	if source.Commit != "" {
+		return source.Commit
+	}
+	if source.Ref != "" || source.Browser == nil {
+		return ""
+	}
+	commit, _, _ := strings.Cut(source.Browser.Suffix, "/")
+	if sourcespec.ValidCommit(commit) {
+		return commit
+	}
+	return ""
 }
 
 func (app App) checkEnterpriseArchive(ctx context.Context, source sourcespec.Archive) error {

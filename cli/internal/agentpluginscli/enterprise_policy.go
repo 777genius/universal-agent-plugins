@@ -48,7 +48,7 @@ func requestedPolicyPins(source domain.SourceIdentity) (git, archive *bool) {
 		return nil, nil
 	}
 	if spec.Git != nil {
-		pinned := sourcespec.ValidCommit(spec.Git.Commit)
+		pinned := sourcespec.ValidCommit(requestedPolicyGitCommit(*spec.Git))
 		git = &pinned
 	}
 	if spec.Archive != nil {

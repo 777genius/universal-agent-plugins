@@ -51,7 +51,8 @@ func safeEnterprisePolicyCode(value string) string {
 		return "policy_rule"
 	}
 	for _, ch := range value {
-		if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '.' || ch == '_' || ch == '-') {
+		allowed := ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '.' || ch == '_' || ch == '-'
+		if !allowed {
 			return "policy_rule"
 		}
 	}

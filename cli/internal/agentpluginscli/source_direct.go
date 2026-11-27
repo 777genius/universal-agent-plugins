@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest"
-	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/sourceacquisition"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
@@ -34,22 +33,18 @@ func (app App) acquireDirectPackage(ctx context.Context, spec sourcespec.Spec) (
 	if err != nil {
 		return directPackage{}, err
 	}
+	if spec.Kind == sourcespec.KindHTTPSAuto && spec.Archive != nil {
+		return app.acquireHTTPSAutoPackage(ctx, direct, *spec.Archive)
+	}
 	if spec.Archive != nil {
 		if err := app.checkEnterpriseArchive(ctx, *spec.Archive); err != nil {
 			return directPackage{}, err
 		}
 		snapshot, archiveErr := direct.AcquireArchive(ctx, *spec.Archive, spec.Archive.SHA256, "")
-		if archiveErr == nil {
-			return app.loadDirectArchive(ctx, snapshot, *spec.Archive)
-		}
-		if spec.Kind != sourcespec.KindHTTPSAuto || !errors.Is(archiveErr, sourceacquisition.ErrNotArchive) {
+		if archiveErr != nil {
 			return directPackage{}, archiveErr
 		}
-		endpoint, repository, normalizeErr := sourcespec.NormalizeGitURL(spec.Archive.URL)
-		if normalizeErr != nil {
-			return directPackage{}, normalizeErr
-		}
-		spec.Git = &sourcespec.Git{URL: endpoint, Repository: repository}
+		return app.loadDirectArchive(ctx, snapshot, *spec.Archive)
 	}
 	if spec.Git == nil {
 		return directPackage{}, errors.New("direct source has no acquisition coordinates")
