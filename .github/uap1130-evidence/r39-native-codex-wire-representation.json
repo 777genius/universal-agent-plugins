@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "state": "reviewed source-equivalent correction; actual six-archive execution pending",
+  "source": {
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+  },
+  "failed_attempts": [
+    {
+      "run_id": 46150473835,
+      "job_id": 140995789352,
+      "log": {
+        "sha256": "bf57461ceda2484eeb312c42193a04619a482f379975d326a8c0b1e703e26b6a",
+        "bytes": 34772
+      },
+      "reason": "opaque generic failure"
+    },
+    {
+      "run_id": 46151002948,
+      "job_id": 140997414174,
+      "log": {
+        "sha256": "f55a585c3578b76fbf835d574f72b65a01d5ae710c8a78e13e75dab8150083de",
+        "bytes": 35089
+      },
+      "frames": [
+        {
+          "function": "<module>",
+          "line": 310
+        },
+        {
+          "function": "main",
+          "line": 284
+        },
+        {
+          "function": "audit_native",
+          "line": 520
+        },
+        {
+          "function": "codex_collection",
+          "line": 480
+        },
+        {
+          "function": "require",
+          "line": 33
+        }
+      ],
+      "reason": "Codex selected Skill combined predicate, core line480"
+    }
+  ],
+  "authority": {
+    "path": "repotests/agentplugins_codex_project_raw_skills_native_test.go",
+    "blob": "13a33c65e40bf032cc5fbaefe51b0bda675f5f16",
+    "producer": "Go json.Unmarshal into zero-valued string; PluginID must remain empty",
+    "head_file_verified": true
+  },
+  "change": {
+    "old_predicate": "skill.get(\"pluginId\") == \"\"",
+    "new_allowed_wire_forms": [
+      "absent",
+      "null",
+      "empty_string"
+    ],
+    "rejected": "all nonempty strings and all other types, including false/zero/empty collections",
+    "unchanged": [
+      "present/absent lifecycle expectation",
+      "unique Skill name",
+      "enabled true",
+      "scope repo",
+      "exact canonical path",
+      "errors array check",
+      "original protocol requests/replies",
+      "source/run/attempt/artifact size/hash/CRC guards"
+    ],
+    "actual_wire_form_counts": "will be retained in each successful Codex receipt; not assumed"
+  },
+  "auditor": {
+    "previous_core": "95e43720d4a8a2344a2242cc62adb8ae69b72c89",
+    "core": "34e14eabc62e82b1dd371f3aeefda43ffe1354bd",
+    "wrapper": "9d3372e62659852f4ee36d15b77e7ec0f3a0ad4c",
+    "manifest_sha256": "f2d4cb1c6361236855ae2b40a83ace403ef120f7eae9f9f9cf32d6c92d44c5aa"
+  },
+  "product_source_modified": false
+}

@@ -9,7 +9,7 @@ permissions:
   contents: read
   actions: read
 jobs:
-  native-linux-windows-four:
+  native-all-six:
     if: github.repository == '777genius/universal-agent-plugins' && github.ref == 'refs/heads/codex/uap1130-r35-artifact-audit'
     runs-on: ${{ vars.CI_CORE_TEST_RUNNER || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
     timeout-minutes: 20
@@ -31,12 +31,12 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.12'
-      - name: Verify four original Linux and Windows native archives
+      - name: Verify six original Claude and Codex native archives
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/r39-selected-byte-audit/native_closed_cohort_runner.py \
-            --manifest .github/r39-selected-byte-audit/native-linux-windows.json \
-            --manifest-sha256 3646722d2133c73ca7a2f032491b86a75a2db4060b17b5c904187bbaaf475588 \
+            --manifest .github/r39-selected-byte-audit/native-all-six.json \
+            --manifest-sha256 f2d4cb1c6361236855ae2b40a83ace403ef120f7eae9f9f9cf32d6c92d44c5aa \
             --source source \
-            --core .github/r39-native-audit/native_audit.py
+            --core .github/r39-selected-byte-audit/native_audit.py

@@ -102,5 +102,5 @@
     "zip_sha256": "6cab600c8122fad535006692f99c2fa320120661ea97900a082a8679436cd0bb",
     "zip_size": 60962
   },
-  "independent_readback_confirmed": false
+  "independent_readback_confirmed": true
 }

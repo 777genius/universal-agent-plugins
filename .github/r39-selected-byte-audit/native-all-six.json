@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "repo": "777genius/universal-agent-plugins",
+  "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "core_blob": "34e14eabc62e82b1dd371f3aeefda43ffe1354bd",
+  "workflow_path": ".github/workflows/agentplugins-native-clients.yml",
+  "event": "pull_request",
+  "run_id": 46139633140,
+  "run_attempt": 1,
+  "lanes": [
+    {
+      "client": "claude",
+      "target": "darwin-arm64",
+      "job_id": 140968485149,
+      "artifact_id": 15265776442,
+      "archive_size": 776386,
+      "archive_sha256": "2826b31afb1081cc581b4a3355de16623149860621eb27195a7c6d37b25d9623"
+    },
+    {
+      "client": "claude",
+      "target": "windows-amd64",
+      "job_id": 140968485170,
+      "artifact_id": 15264588487,
+      "archive_size": 788978,
+      "archive_sha256": "666979ba6d9a1d3aa64d4416414ef4d8a62029b2b3b8dc671caacb0ec234161a"
+    },
+    {
+      "client": "claude",
+      "target": "linux-amd64",
+      "job_id": 140968485141,
+      "artifact_id": 15264512126,
+      "archive_size": 776337,
+      "archive_sha256": "a33ebc0aba091edc3dbcc6da5ad0a10227e17b5fea32e6447788c44332681c96"
+    },
+    {
+      "client": "codex",
+      "target": "darwin-arm64",
+      "job_id": 140968485254,
+      "artifact_id": 15265064793,
+      "archive_size": 346243,
+      "archive_sha256": "cb50f8e29a1003f13db7dcb3ed3caa263c707c292d98f3a3821b9e540e8a7f15"
+    },
+    {
+      "client": "codex",
+      "target": "windows-amd64",
+      "job_id": 140968485237,
+      "artifact_id": 15264712969,
+      "archive_size": 344102,
+      "archive_sha256": "87af5426fd24bd050847359a099ec3ace5e70238bee7f582839c422ac742336e"
+    },
+    {
+      "client": "codex",
+      "target": "linux-amd64",
+      "job_id": 140968485176,
+      "artifact_id": 15265005465,
+      "archive_size": 605850,
+      "archive_sha256": "ff2c66166dc4a593bc8ac70374f2dabdb719cbdfdc39117d222a4dd370b48446"
+    }
+  ],
+  "cohort": "all-six"
+}

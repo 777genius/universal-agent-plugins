@@ -16,11 +16,13 @@ REPO = "777genius/universal-agent-plugins"
 API = "https://api.github.com"
 HEAD = "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7"
 TREE = "41d82c5eb527f34d16ec2e458194496012bc1c22"
-CORE = "95e43720d4a8a2344a2242cc62adb8ae69b72c89"
+CORE = "34e14eabc62e82b1dd371f3aeefda43ffe1354bd"
 WORKFLOW_PATH = ".github/workflows/agentplugins-native-clients.yml"
 SOURCE_FILES = {
     "scripts/run-native-client-matrix.py": "6036bbdfd219e15a9819995fa1f57ff0608530ab",
     WORKFLOW_PATH: "37112c3561d51f298c10368dd4530e0db0b7dca3",
+    "repotests/agentplugins_codex_project_raw_skills_native_test.go":
+        "13a33c65e40bf032cc5fbaefe51b0bda675f5f16",
 }
 LANES = {(client, target) for client in ("claude", "codex")
          for target in ("darwin-arm64", "windows-amd64", "linux-amd64")}
