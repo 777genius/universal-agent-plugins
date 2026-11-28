@@ -1,0 +1,545 @@
+{
+  "schema_version": 1,
+  "source": {
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "synthetic": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "main": "ff6c507ddcefd23d41d2f26a6fd0b545ab7b6022"
+  },
+  "review": {
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "synthetic": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "native_run": 46139633140,
+    "remaining_run": 46139632929,
+    "live_run": 46139633123,
+    "root": "GO: exact line diffs only identity constants; logic matches fully reviewed R38 code",
+    "independent": "pm_pi_artifact_r31 GO: fresh 12-blob read and reversible byte-for-byte normalization for all six files",
+    "code_changes": 0,
+    "files": {
+      "native_core": "95e43720d4a8a2344a2242cc62adb8ae69b72c89",
+      "native_wrapper": "341dc9a6dbec03659aafd95a78efb4e6e7a72300",
+      "native_template": "a359f6ed6ecf50fd123b5f2e18ad22d7ad960f6b",
+      "full30_core": "c91af38ed9d1950d1026577c6868248f8b2b8425",
+      "full30_wrapper": "fb6d21c8378d33f85ac1eec057b67e14cb59a419",
+      "full30_template": "a9a800dfc69a306769e7a647c4ab2f25955638f3"
+    },
+    "runtime_validation": false,
+    "publication": false
+  },
+  "qualification": {
+    "prefetch_stress": {
+      "schema_version": 1,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "audit_commit": "61388fcbc08add52ff8ae90fb9b975d7e78fa1b3",
+      "run_id": 46139910373,
+      "job_id": 140963332729,
+      "conclusion": "PASS on exact current PR head",
+      "raw_log": {
+        "sha256": "5f2bc76445d254bb2654a625f6eead038610eb8575c0d130220962f686239e3c",
+        "bytes": 209569
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Checkout exact corrected source",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Verify immutable source and clean tree",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Provision pinned Go",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Verify Go workspace and fixture formatting",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run exact failure and cancellation regression under race detector",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Post Provision pinned Go",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Post Checkout exact corrected source",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        }
+      ],
+      "go_version": "go1.26.11 linux/amd64",
+      "cgo": "1",
+      "race": true,
+      "repetitions": 20,
+      "roots": 5,
+      "subtests": 3,
+      "run": 160,
+      "pass": 160,
+      "fail": 0,
+      "skip": 0,
+      "race_warnings": 0,
+      "counts": [
+        {
+          "Test": "TestGitRootPrefetchFailingSourceReturnsTheSerialError",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestGitRootPrefetchFailingSourceReturnsTheSerialError/ref_acme/pb//plugins/pb",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestGitRootPrefetchFailingSourceReturnsTheSerialError/skill_acme/skills//skills/beta",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestGitRootPrefetchFailingSourceReturnsTheSerialError/tree_other/pc//plugins/pc",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestGitRootPrefetchCanceledRootStopsAfterItsRef",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestGitRootPrefetchCancellationLeavesNoAcquisitions",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestOrderedPrefetchServesFailureOnceAndStopsStartingNewWork",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestOrderedPrefetchFailureCancelsOnlyLaterKeys",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "package_result": {
+        "Time": "2026-11-28T11:31:37.067761337Z",
+        "Action": "pass",
+        "Package": "github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli",
+        "Elapsed": 12.679
+      },
+      "scope": "Repository-configured Linux unit stress; no native/cross-platform substitution"
+    },
+    "staged": {
+      "schema_version": 1,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "run_id": 46139633008,
+      "job_id": 140962468717,
+      "conclusion": "PASS",
+      "raw_log": {
+        "sha256": "acaa415f8fabc5641fa96058ed3af88bfe16c3bcea626c776069d90631bf22b3",
+        "bytes": 17829
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run hermetic staged-package test",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        }
+      ],
+      "node": "22.21.1",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skip": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "duration_ms": 256908.748769
+    },
+    "cli": {
+      "schema_version": 1,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "run_id": 46139633102,
+      "job_id": 140962468891,
+      "conclusion": "PASS with four conditional supplement skips",
+      "raw_log": {
+        "sha256": "185e1302220b9615dd63bc027131b8014c88f2ed91aaa5a3a2cbf6f7da178df4",
+        "bytes": 86854
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Fetch lint base",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Lint changed lines",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Size and architecture gate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Windows changed lines for process containment",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 7
+        },
+        {
+          "name": "Windows full-file size and architecture for process containment",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 8
+        },
+        {
+          "name": "Legacy baseline is shrink-only",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 9
+        },
+        {
+          "name": "Legacy baseline negative E2E",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 10
+        },
+        {
+          "name": "Post Size and architecture gate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        },
+        {
+          "name": "Post Lint changed lines",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        }
+      ],
+      "success_steps": 11,
+      "conditional_skips": [
+        "Windows changed lines for process containment",
+        "Windows full-file size and architecture for process containment",
+        "Legacy baseline is shrink-only",
+        "Legacy baseline negative E2E"
+      ],
+      "lint_version": "2.13.2",
+      "changed_line_issues": 0,
+      "architecture_size_issues": 0,
+      "lint_base": "ff6c507ddcefd23d41d2f26a6fd0b545ab7b6022"
+    },
+    "linux_contracts": {
+      "schema_version": 1,
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "run_id": 46139633102,
+      "job_id": 140962468819,
+      "raw_log": {
+        "sha256": "e2dbc33f079e702dcb523b9bacf33f8088478f51db8146b5a485a8b7bcf60e4b",
+        "bytes": 66247
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Verify scoped ownership, project lifecycle and legacy lock safety",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Verify Cursor scoped tool approval and public CLI on each OS",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Verify Devin User installation and original profile authority",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        }
+      ],
+      "metrics": {
+        "scope": {
+          "ok": 33,
+          "no_test_files": 0,
+          "cached": 0,
+          "fail": [],
+          "no_tests_to_run": 8,
+          "run_count": 0,
+          "pass_count": 0,
+          "unmatched_run": [],
+          "unmatched_pass": [],
+          "skip": [],
+          "roots": []
+        },
+        "cursor": {
+          "ok": 2,
+          "no_test_files": 0,
+          "cached": 0,
+          "fail": [],
+          "no_tests_to_run": 0,
+          "run_count": 64,
+          "pass_count": 64,
+          "unmatched_run": [],
+          "unmatched_pass": [],
+          "skip": [],
+          "roots": [
+            "TestCursorScopedToolApprovalSchemaAndNameControls",
+            "TestCursorPublisherApprovalsRequireSelectedNativeMCPAndProject",
+            "TestCursorAdmittedMaximumApprovalProjectionRoundTrip",
+            "TestCursorToolPermissionsRefuseOverflowWithoutChangingPolicy",
+            "TestCursorToolPermissionsMergePreservesForeignAndRefusals",
+            "TestCursorToolPermissionsExplicitAddAndIdempotentE2E",
+            "TestCursorToolTrustRefusesSymlinkAndDifferentProject",
+            "TestCursorToolTrustRefusesChangedOwnedServerOrDisabledPolicy",
+            "TestCursorToolTrustRefusesPostReviewApprovalFileTamper",
+            "TestCursorScopedApprovalDoesNotDisableAutomaticProjectLifecycle",
+            "TestCursorServerApprovalVersionRetainsOnlyNativeQualifiedPins",
+            "TestCursorNativeMCPOnlyReadinessIgnoresReviewedApprovalExtension",
+            "TestCursorToolPermissionRollbackPreservesEarlierNativeEffect",
+            "TestCursorApprovalFingerprintMatchesNativeJSONStringify",
+            "TestCursorApprovalCASNeverRemovesConcurrentDisable",
+            "TestCursorCompletionPropagatesUnclosedProbeMetadata",
+            "TestCursorApprovalRefusesPolicyDirectoryAlias",
+            "TestCursorNativeApprovalPreservesDisablementAndMalformedPolicy",
+            "TestCursorNativeApprovalPinsProjectProfileAndExactServer",
+            "TestCursorPreparedSetupCompletesOnlyPendingApproval",
+            "TestCursorReadOnlyObservationReportsPendingApprovalOnly",
+            "TestCursorNativeProfileRefusesDifferentExplicitPolicyRoot",
+            "TestCursorCompletionRetainsFailedApprovalRollbackEffect",
+            "TestCursorReviewDisclosesOnlySelectedProjectApproval",
+            "TestCursorPublisherToolApprovalFullCLI",
+            "TestCursorAgentOnlyUserTargetSuggestsProjectScope"
+          ]
+        },
+        "devin": {
+          "ok": 3,
+          "no_test_files": 0,
+          "cached": 0,
+          "fail": [],
+          "no_tests_to_run": 0,
+          "run_count": 78,
+          "pass_count": 78,
+          "unmatched_run": [],
+          "unmatched_pass": [],
+          "skip": [],
+          "roots": [
+            "TestDevinGlobalOfflineNativeLifecycleRelocatedStateAndLegacyParity",
+            "TestDevinGlobalOfflineRejectsForeignSkillAndWrongReceipts",
+            "TestDevinGlobalSelectedUserProfileIsNotLegacyOrProject",
+            "TestDevinGlobalPreflightAllowsUnstagedButActivationRequiresExactDelivery",
+            "TestDevinGlobalNewVersionPreservesProjectAndNonprimaryBoundaries",
+            "TestDevinGlobalSkillsObserveOriginalProfileAndRejectScopeSubstitution",
+            "TestDevinGlobalSkillCompletionPreservesExplicitAuthenticationAndOtherActions",
+            "TestDevinGlobalSkillObservationRefusesInheritedContextBeforeAndAfter",
+            "TestDevinGlobalSkillsKeepObservedForeignImportsWithoutLendingOwnership",
+            "TestDevinGlobalMissingVersionRefusesBeforeConfigOrProcessEffects",
+            "TestWindsurfRemoveDeletesExactlyManagedObjects",
+            "TestRecordedCascadeMCPReplaysThroughSelectedDevinWithoutMigration",
+            "TestRecordedPackageOnlyCascadeDoesNotAdoptSelectedDevinGlobal",
+            "TestRecordedMixedOrRetargetedUserReceiptFailsClosed",
+            "TestFacadeDevinGlobalOriginalRootAdmission",
+            "TestFacadeDevinGlobalCLIOnlyUserRoot",
+            "TestFacadeDevinGlobalCLIOnlyUserRootRefusals",
+            "TestFacadeDevinGlobalOriginalRootIsFrozenAndPrivate",
+            "TestFacadeDevinGlobalWithoutLegacyCascadeRoot",
+            "TestUserDevinVersionProbeIsExactAndTargeted",
+            "TestUserDevinVersionProbeRefusesIdentityDrift",
+            "TestUserDevinSavedDependencyMutationProbesExactSelectedVersion"
+          ]
+        }
+      },
+      "conclusion": "PASS; exact Linux contract selector groups with all recorded RUN/PASS paired",
+      "limits": [
+        "Scope group is non-verbose; eight package selectors have no matching tests",
+        "Native runtime behavior is not established by these Go contract tests"
+      ]
+    }
+  },
+  "body": {
+    "path": ".github/uap1130-evidence/pr-description-fccd-progress.md",
+    "sha256": "aa40e866a833c0df84c1919fb0af88ade5786991749c177618e4beb65ab4010e",
+    "bytes": 20944
+  },
+  "auditor_boundaries": {
+    "static_review_only": true,
+    "current_native_or_full30_artifacts_audited": false,
+    "workflow_or_manifest_added": false,
+    "product_source_modified": false
+  }
+}
