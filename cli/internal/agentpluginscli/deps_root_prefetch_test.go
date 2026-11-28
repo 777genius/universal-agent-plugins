@@ -386,3 +386,22 @@ func TestGitRootPrefetchCancellationLeavesNoAcquisitions(t *testing.T) {
 	}
 	assertEmptyDir(t, source.tempRoot)
 }
+
+
+// A denied direct dependency must never have its Git ref or tree read by the
+// concurrent prefetch ahead of the solver's typed policy refusal.
+func TestGitRootPrefetchHonorsSelectedPolicyTargetsBeforeRemoteReads(t *testing.T) {
+	app, requirements, source := mixedRootsJourney(t)
+	policy := sourcePolicyApp(t, "schema_version: 2\ninstall:\n  allowed_targets: [claude]\n")
+	app = app.withEnterprisePolicyGate(policy.InstallationPolicy)
+	resolver := dependencyResolver{app: app, requirements: requirements}
+	_, err := resolver.resolveLock(t.Context(), environment.Lock{}, "")
+	var denied *domain.InstallPolicyError
+	if !errors.As(err, &denied) {
+		t.Fatalf("expected selected codex target to be refused: %v", err)
+	}
+	if got := source.sortedReads(); len(got) != 0 {
+		t.Fatalf("denied direct roots were prefetched before refusal: %v", got)
+	}
+	assertEmptyDir(t, source.tempRoot)
+}
