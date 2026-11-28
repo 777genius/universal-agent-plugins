@@ -47,6 +47,10 @@ func (app App) checkEnterpriseLocal(ctx context.Context, requested string) error
 }
 
 func (app App) checkEnterpriseGit(ctx context.Context, source sourcespec.Git) error {
+	return app.checkEnterpriseGitTargets(ctx, source, nil)
+}
+
+func (app App) checkEnterpriseGitTargets(ctx context.Context, source sourcespec.Git, targets []string) error {
 	selector := environment.Selector{Kind: environment.SelectorDefault}
 	if commit := requestedPolicyGitCommit(source); commit != "" {
 		selector = environment.Selector{Kind: environment.SelectorCommit, Value: commit}
@@ -55,7 +59,7 @@ func (app App) checkEnterpriseGit(ctx context.Context, source sourcespec.Git) er
 	}
 	return app.checkEnterpriseRequirement(ctx, environment.Requirement{Git: &environment.GitSource{
 		URL: source.URL, Repository: source.Repository, Path: source.Path, Selector: selector,
-	}}, nil)
+	}}, targets)
 }
 
 // Browser selectors remain unresolved in sourcespec, but a full commit in their

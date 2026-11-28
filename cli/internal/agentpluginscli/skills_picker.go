@@ -18,6 +18,9 @@ import (
 type SkillsPickerRequest struct {
 	Input, Ref, Path string
 	PathSet          bool
+	// Explicit CLI targets are known before remote catalog discovery.
+	// A public picker without selected targets still checks source authority.
+	TargetIDs []string
 }
 
 type skillsCatalogSession struct {
@@ -81,7 +84,7 @@ func (app App) openSkillsCatalogWithAdmission(ctx context.Context, input SkillsP
 		if err != nil {
 			return nil, err
 		}
-		if err := app.checkEnterpriseGit(ctx, requested); err != nil {
+		if err := app.checkEnterpriseGitTargets(ctx, requested, input.TargetIDs); err != nil {
 			return nil, err
 		}
 	}

@@ -119,3 +119,32 @@ func TestEnterprisePolicyCollectionEnvelopeRefusesWholeBatch(t *testing.T) {
 		t.Fatalf("denied collection changed durable/native/source state: %v", err)
 	}
 }
+
+// Explicit client restrictions are known before the Git/Local Skills catalog is
+// fetched. No native/source operation may occur when policy denies the target.
+func TestEnterprisePolicySkillsExplicitTargetRefusesBeforeDiscovery(t *testing.T) {
+	for _, sourceKind := range []string{"git", "local"} {
+		t.Run(sourceKind, func(t *testing.T) {
+			j := newSavedJourney(t, t.TempDir())
+			gate := sourcePolicyApp(t, "schema_version: 2\ninstall:\n  allowed_targets: [claude]\n").InstallationPolicy
+			j.cli.app = j.cli.app.withEnterprisePolicyGate(gate)
+			input := "acme/skills"
+			var gitRunner *policyPinGitRunner
+			if sourceKind == "git" {
+				gitRunner = &policyPinGitRunner{}
+				j.cli.app.SourceAcquirer = sourceacquisition.Acquirer{Runner: gitRunner}
+			} else {
+				input = filepath.Join(t.TempDir(), "source-not-present")
+			}
+			before := savedJourneyTree(t, j.cli.root)
+			_, _, err := j.cli.execute(false, "skills", "add", input, "--all", "--target", "codex", "--yes", "--format", "json")
+			var denied *domain.InstallPolicyError
+			if !errors.As(err, &denied) || j.runner.calls != 0 || !reflect.DeepEqual(before, savedJourneyTree(t, j.cli.root)) {
+				t.Fatalf("source discovery preceded denied target or mutated state: %v", err)
+			}
+			if gitRunner != nil && gitRunner.calls != 0 {
+				t.Fatalf("Git ref lookup started for disallowed target: %d", gitRunner.calls)
+			}
+		})
+	}
+}

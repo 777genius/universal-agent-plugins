@@ -102,18 +102,18 @@ func (selection *skillsAddOptions) run(cmd *cobra.Command, app App, opts *option
 		return promptErr
 	}
 	if explicitLocalPath(input) {
-		return selection.runLocal(cmd, app, opts, input, interactive)
+		return selection.runLocal(cmd, app, opts, input, interactive, targets)
 	}
 	if isWebsiteSkillInput(input) {
 		return selection.runWebsite(cmd, app, opts, input, interactive)
 	}
-	return selection.runGit(cmd, app, opts, input, interactive, promptErr)
+	return selection.runGit(cmd, app, opts, input, interactive, promptErr, targets)
 }
 
 // Git source lifetime encloses both browser ownership and any safe terminal
 // handoff. Common flags, scope and interaction-host resolution stay in run.
-func (selection *skillsAddOptions) runGit(cmd *cobra.Command, app App, opts *options, input string, interactive bool, promptErr error) error {
-	request := SkillsPickerRequest{Input: input, Ref: selection.ref, Path: selection.folder, PathSet: cmd.Flags().Changed("path")}
+func (selection *skillsAddOptions) runGit(cmd *cobra.Command, app App, opts *options, input string, interactive bool, promptErr error, targets []string) error {
+	request := SkillsPickerRequest{Input: input, Ref: selection.ref, Path: selection.folder, PathSet: cmd.Flags().Changed("path"), TargetIDs: targets}
 	if request.PathSet {
 		if err := sourceacquisition.ValidateSkillPath(request.Path); err != nil {
 			return skillsMissingSelection(cmd, opts, "INVALID_PATH", "--path must be an exact repository-relative Skill folder", []skillspicker.Candidate{})
