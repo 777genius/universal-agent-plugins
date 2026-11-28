@@ -31,12 +31,8 @@ func RequestedGitIntent(input, explicitRef string) (sourcespec.Git, error) {
 		if (git.Commit != "" && git.Commit != explicitRef) || (git.Ref != "" && git.Ref != explicitRef) {
 			return sourcespec.Git{}, fmt.Errorf("source selector conflicts with --ref")
 		}
-		git.Commit, git.Ref = "", ""
-		if sourcespec.ValidCommit(explicitRef) {
-			git.Commit = explicitRef
-		} else {
-			git.Ref = explicitRef
-		}
+		// --ref selects an exact ref even when its spelling resembles a commit.
+		git.Commit, git.Ref = "", explicitRef
 	}
 	return git, nil
 }

@@ -14,7 +14,11 @@ func TestRequestedGitIntentPreservesOriginalPinBeforeResolution(t *testing.T) {
 		{"shorthand commit", "acme/demo@" + sha, "", true},
 		{"native Git commit", "git+https://git.example/team/repo.git#" + sha + "//skills/review", "", true},
 		{"GitHub browser commit", "https://github.com/acme/demo/tree/" + sha + "/skills/review", "", true},
-		{"explicit commit", "acme/demo", sha, true},
+		{"commit-shaped explicit ref", "acme/demo", sha, false},
+		{"native commit-shaped explicit ref", "git+https://git.example/team/repo.git", sha, false},
+		{"browser commit with explicit ref", "https://github.com/acme/demo/tree/" + sha + "/skills/review", sha, false},
+		{"browser commit with explicit branch", "https://github.com/acme/demo/tree/" + sha + "/skills/review", "refs/heads/" + sha, false},
+		{"raw commit", "https://raw.githubusercontent.com/acme/demo/" + sha + "/skills/review/SKILL.md", "", true},
 		{"default branch", "acme/demo", "", false},
 		{"branch selector", "acme/demo@main", "", false},
 	} {

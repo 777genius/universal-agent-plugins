@@ -684,6 +684,64 @@ Core, full PM/Pi and applicable genuine native E2E remain mandatory before the
 ordinary expected-head squash merge, followed by actual-main verification.
 Earlier-source successful checks remain historical. No release or tag.
 
+### R26 - Preserve explicit ref intent and complete collection refusals
+
+Adopt `8f56f768` and all earlier accepted concurrent changes. Keep its selected-
+target admission before raw Git Skill prefetch and its richer real-TLS refusal/
+read-only matrix. Keep the separate read-only Git catalog wrapper and existing
+Git/local/HTTPS source guards unchanged. The only remaining production correction
+is in RequestedGitIntent.
+
+An explicit `--ref` is an exact ref request, even with a forty-hexadecimal
+spelling. The actual resolver sends explicitRef to ResolveGitHubRef or
+ResolveGit with exact-ref selection; only a Commit request uses the non-ref
+immutable-commit path. After the existing conflict check, clear Commit and
+preserve explicitRef as Ref. Do not promote a commit-shaped ref to requested
+pin authority. Keep the actual resolver, source grammar, URL/ref boundary
+validation and optional acquirer interfaces unchanged.
+
+Independent review verified these distinctions in the immutable resolver
+sources and approved this minimal correction. Expand the existing pin table for
+native, browser and raw source forms. Add composed regressions for local denial
+before a missing root can be scanned, five denied Git spellings with no source
+commands, public picker admission, original pin intent and successful read-only
+Git/local listing with unchanged durable state. The batch regression admits the
+first actual Skill, denies the second Skill's component envelope in a two-target
+selection, and requires zero native, durable and source effects. Reuse the
+already accepted richer HTTPS matrix instead of adding duplicate website cases.
+
+An earlier, larger unpublished correction was discarded in favor of the valid
+concurrent architecture. The executor became unavailable before the final
+correction was published. Recover the retained tests from their exact recorded
+patch inputs, adapt their pin check to RequestedGitIntent plus the existing
+policy helper, and compare immutable Git object identities before publication.
+Preserve the incoming plan sections and all unrelated source changes.
+
+Additional local Go evidence applies only to that pre-recovery candidate:
+targeted parser/local-scanner, usecase-policy and installer-policy selections
+produced 20, 21 and 18 PASS test/subtest events, with no failures or skips. The
+full enterprisepolicy package produced 57 PASS events and one Darwin-only skip.
+The full skillsource package produced 24 PASS events but failed ten top-level
+Git-backed tests (15 failure events with subtests). An OSRunner probe refused
+the environment's missing live procfs task-children interface; those failed
+results are retained and no containment requirement was relaxed.
+
+Overlaying the incoming unguarded discovery routes demonstrated the intended
+red failures: local discovery returned lstat, five Git spellings each launched
+one source command, and the public picker launched one source command. That
+auxiliary CLI build disabled inlining for the package after ordinary compilation
+was killed. Fixed-source green compilation was also killed before tests ran.
+No green CLI result is claimed, no compiler option changes in the repository,
+and the interrupted production-only attempt produced no binary or journey result.
+
+Publish the reviewed final correction with an expected-head lease. Standard
+current-source Required/Core/package-manager, Pi and applicable native execution
+remain mandatory. Superseded revisions, source reviews, skips and queued or
+cancelled jobs do not qualify the final source. Follow an ordinary expected-head
+squash merge with actual-main verification, including all six package-manager
+hosts. Preserve pins, runners, timeouts, custody, lane selection, installation
+authority and acceptance. No release or tag is authorized.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test
