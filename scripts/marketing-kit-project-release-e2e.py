@@ -1647,12 +1647,39 @@ def check_copilot_cold_project_unchanged(project, before, receipts):
         physical = alias + "-" + hashlib.sha256(installation_id.encode()).hexdigest()[:12]
         packages.update((".uap/managed/clients/copilot/" + physical, ".uap/plugin-data/" + physical))
     after = scoped_snapshot([project])
+    def refuse(message, reason):
+        error = AssertionError(message)
+        try:
+            value = after[key] if key in after else before[key]
+            value_class = next((label for kind, label in ((str, "string"), (tuple, "tuple"),
+                (bool, "boolean"), (int, "integer"), (dict, "object"), (list, "array"))
+                if type(value) is kind), "other")
+            key_prefix = next((prefix for prefix in ("metadata:0:", "directory:0:", "link:0:",
+                "root-link:", "root-kind:") if key.startswith(prefix)),
+                "file" if key.startswith(project.name + "/") else "other")
+            value_prefix = next((prefix for prefix in ("unreadable", "non-regular", "symlink") if type(value) is str
+                and (value == prefix or value.startswith(prefix + ":"))), None)
+            if type(value) is tuple and value and type(value[0]) is int:
+                value_prefix = next((label for predicate, label in ((stat.S_ISDIR, "directory"),
+                    (stat.S_ISREG, "file"), (stat.S_ISLNK, "symlink"), (stat.S_ISFIFO, "fifo"),
+                    (stat.S_ISSOCK, "socket"), (stat.S_ISCHR, "character"), (stat.S_ISBLK, "block"))
+                    if predicate(value[0])), "other")
+            detail = {"reason": reason, "key_prefix": key_prefix,
+                      "value_class": value_class, "value_prefix": value_prefix,
+                      "delta": audit["copilot_snapshot_delta"](
+                          {key: before[key]} if key in before else {},
+                          {key: after[key]} if key in after else {})}
+            error.args = (message + ": " + json.dumps(detail, sort_keys=True),)
+        except Exception:
+            # Diagnostics cannot replace the original custody refusal.
+            pass
+        raise error
     for key in before.keys() | after.keys():
         if key in before and key in after and before[key] == after[key]:
             continue
         # Even existing private files/empty directories remain protected.
         if key in before or key not in after:
-            raise AssertionError("cold Copilot locked install modified existing Project state")
+            refuse("cold Copilot locked install modified existing Project state", "existing-project-state")
         if key.startswith("metadata:0:"):
             relative, value = key.removeprefix("metadata:0:"), after[key]
             kind = ("directory" if isinstance(value, tuple) and stat.S_ISDIR(value[0]) else
@@ -1662,11 +1689,11 @@ def check_copilot_cold_project_unchanged(project, before, receipts):
         elif key.startswith(project.name + "/") and re.fullmatch(r"[0-9a-f]{64}", str(after[key])):
             relative, kind = key.removeprefix(project.name + "/").replace("\\", "/"), "file"
         else:
-            raise AssertionError("cold Copilot locked install created unsafe Project state")
+            refuse("cold Copilot locked install created unsafe Project state", "unsafe-project-state")
         owned_package = any(relative == root or relative.startswith(root + "/") for root in packages)
         if (kind is None or not (owned_package or kind == "directory" and relative in directories
                                  or kind == "file" and relative in files)):
-            raise AssertionError("cold Copilot locked install modified native or unowned Project state")
+            refuse("cold Copilot locked install modified native or unowned Project state", "unowned-project-state")
 
 
 def copilot_cold_data_snapshot(data):
