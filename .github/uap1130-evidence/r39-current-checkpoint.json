@@ -1,0 +1,2669 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-28T13:04:05Z",
+  "source": {
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "main": "ff6c507ddcefd23d41d2f26a6fd0b545ab7b6022",
+    "synthetic": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "synthetic_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "synthetic_parents": [
+      "ff6c507ddcefd23d41d2f26a6fd0b545ab7b6022",
+      "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7"
+    ]
+  },
+  "pr": {
+    "number": 1130,
+    "state": "open",
+    "merged": false,
+    "source_branch": "feat/enterprise-policy-20261127",
+    "body_length": 32879
+  },
+  "scope": "Finish agreed current-source E2E, ordinary expected-head squash, then actual merged-main applicable push qualification; no release/tag/npm/extra PR.",
+  "executor": {
+    "available": false,
+    "probe": "Do not call unavailable executor; established environment notification controls recovery."
+  },
+  "current_evidence": {
+    "prefetch_stress": {
+      "schema_version": 1,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "audit_commit": "61388fcbc08add52ff8ae90fb9b975d7e78fa1b3",
+      "run_id": 46139910373,
+      "job_id": 140963332729,
+      "conclusion": "PASS on exact current PR head",
+      "raw_log": {
+        "sha256": "5f2bc76445d254bb2654a625f6eead038610eb8575c0d130220962f686239e3c",
+        "bytes": 209569
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Checkout exact corrected source",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Verify immutable source and clean tree",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Provision pinned Go",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Verify Go workspace and fixture formatting",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Run exact failure and cancellation regression under race detector",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Post Provision pinned Go",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Post Checkout exact corrected source",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        }
+      ],
+      "go_version": "go1.26.11 linux/amd64",
+      "cgo": "1",
+      "race": true,
+      "repetitions": 20,
+      "roots": 5,
+      "subtests": 3,
+      "run": 160,
+      "pass": 160,
+      "fail": 0,
+      "skip": 0,
+      "race_warnings": 0,
+      "counts": [
+        {
+          "Test": "TestGitRootPrefetchFailingSourceReturnsTheSerialError",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestGitRootPrefetchFailingSourceReturnsTheSerialError/ref_acme/pb//plugins/pb",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestGitRootPrefetchFailingSourceReturnsTheSerialError/skill_acme/skills//skills/beta",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestGitRootPrefetchFailingSourceReturnsTheSerialError/tree_other/pc//plugins/pc",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestGitRootPrefetchCanceledRootStopsAfterItsRef",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestGitRootPrefetchCancellationLeavesNoAcquisitions",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestOrderedPrefetchServesFailureOnceAndStopsStartingNewWork",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        },
+        {
+          "Test": "TestOrderedPrefetchFailureCancelsOnlyLaterKeys",
+          "run": 20,
+          "pass": 20,
+          "fail": 0,
+          "skip": 0
+        }
+      ],
+      "package_result": {
+        "Time": "2026-11-28T11:31:37.067761337Z",
+        "Action": "pass",
+        "Package": "github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli",
+        "Elapsed": 12.679
+      },
+      "scope": "Repository-configured Linux unit stress; no native/cross-platform substitution"
+    },
+    "staged": {
+      "schema_version": 1,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "run_id": 46139633008,
+      "job_id": 140962468717,
+      "conclusion": "PASS",
+      "raw_log": {
+        "sha256": "acaa415f8fabc5641fa96058ed3af88bfe16c3bcea626c776069d90631bf22b3",
+        "bytes": 17829
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run hermetic staged-package test",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        }
+      ],
+      "node": "22.21.1",
+      "tests": 1,
+      "pass": 1,
+      "fail": 0,
+      "skip": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "duration_ms": 256908.748769
+    },
+    "cli": {
+      "schema_version": 1,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "run_id": 46139633102,
+      "job_id": 140962468891,
+      "conclusion": "PASS with four conditional supplement skips",
+      "raw_log": {
+        "sha256": "185e1302220b9615dd63bc027131b8014c88f2ed91aaa5a3a2cbf6f7da178df4",
+        "bytes": 86854
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Fetch lint base",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Lint changed lines",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Size and architecture gate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Windows changed lines for process containment",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 7
+        },
+        {
+          "name": "Windows full-file size and architecture for process containment",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 8
+        },
+        {
+          "name": "Legacy baseline is shrink-only",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 9
+        },
+        {
+          "name": "Legacy baseline negative E2E",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 10
+        },
+        {
+          "name": "Post Size and architecture gate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        },
+        {
+          "name": "Post Lint changed lines",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        }
+      ],
+      "success_steps": 11,
+      "conditional_skips": [
+        "Windows changed lines for process containment",
+        "Windows full-file size and architecture for process containment",
+        "Legacy baseline is shrink-only",
+        "Legacy baseline negative E2E"
+      ],
+      "lint_version": "2.13.2",
+      "changed_line_issues": 0,
+      "architecture_size_issues": 0,
+      "lint_base": "ff6c507ddcefd23d41d2f26a6fd0b545ab7b6022"
+    },
+    "linux_contracts": {
+      "schema_version": 1,
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "run_id": 46139633102,
+      "job_id": 140962468819,
+      "raw_log": {
+        "sha256": "e2dbc33f079e702dcb523b9bacf33f8088478f51db8146b5a485a8b7bcf60e4b",
+        "bytes": 66247
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Verify scoped ownership, project lifecycle and legacy lock safety",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Verify Cursor scoped tool approval and public CLI on each OS",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Verify Devin User installation and original profile authority",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        }
+      ],
+      "metrics": {
+        "scope": {
+          "ok": 33,
+          "no_test_files": 0,
+          "cached": 0,
+          "fail": [],
+          "no_tests_to_run": 8,
+          "run_count": 0,
+          "pass_count": 0,
+          "unmatched_run": [],
+          "unmatched_pass": [],
+          "skip": [],
+          "roots": []
+        },
+        "cursor": {
+          "ok": 2,
+          "no_test_files": 0,
+          "cached": 0,
+          "fail": [],
+          "no_tests_to_run": 0,
+          "run_count": 64,
+          "pass_count": 64,
+          "unmatched_run": [],
+          "unmatched_pass": [],
+          "skip": [],
+          "roots": [
+            "TestCursorScopedToolApprovalSchemaAndNameControls",
+            "TestCursorPublisherApprovalsRequireSelectedNativeMCPAndProject",
+            "TestCursorAdmittedMaximumApprovalProjectionRoundTrip",
+            "TestCursorToolPermissionsRefuseOverflowWithoutChangingPolicy",
+            "TestCursorToolPermissionsMergePreservesForeignAndRefusals",
+            "TestCursorToolPermissionsExplicitAddAndIdempotentE2E",
+            "TestCursorToolTrustRefusesSymlinkAndDifferentProject",
+            "TestCursorToolTrustRefusesChangedOwnedServerOrDisabledPolicy",
+            "TestCursorToolTrustRefusesPostReviewApprovalFileTamper",
+            "TestCursorScopedApprovalDoesNotDisableAutomaticProjectLifecycle",
+            "TestCursorServerApprovalVersionRetainsOnlyNativeQualifiedPins",
+            "TestCursorNativeMCPOnlyReadinessIgnoresReviewedApprovalExtension",
+            "TestCursorToolPermissionRollbackPreservesEarlierNativeEffect",
+            "TestCursorApprovalFingerprintMatchesNativeJSONStringify",
+            "TestCursorApprovalCASNeverRemovesConcurrentDisable",
+            "TestCursorCompletionPropagatesUnclosedProbeMetadata",
+            "TestCursorApprovalRefusesPolicyDirectoryAlias",
+            "TestCursorNativeApprovalPreservesDisablementAndMalformedPolicy",
+            "TestCursorNativeApprovalPinsProjectProfileAndExactServer",
+            "TestCursorPreparedSetupCompletesOnlyPendingApproval",
+            "TestCursorReadOnlyObservationReportsPendingApprovalOnly",
+            "TestCursorNativeProfileRefusesDifferentExplicitPolicyRoot",
+            "TestCursorCompletionRetainsFailedApprovalRollbackEffect",
+            "TestCursorReviewDisclosesOnlySelectedProjectApproval",
+            "TestCursorPublisherToolApprovalFullCLI",
+            "TestCursorAgentOnlyUserTargetSuggestsProjectScope"
+          ]
+        },
+        "devin": {
+          "ok": 3,
+          "no_test_files": 0,
+          "cached": 0,
+          "fail": [],
+          "no_tests_to_run": 0,
+          "run_count": 78,
+          "pass_count": 78,
+          "unmatched_run": [],
+          "unmatched_pass": [],
+          "skip": [],
+          "roots": [
+            "TestDevinGlobalOfflineNativeLifecycleRelocatedStateAndLegacyParity",
+            "TestDevinGlobalOfflineRejectsForeignSkillAndWrongReceipts",
+            "TestDevinGlobalSelectedUserProfileIsNotLegacyOrProject",
+            "TestDevinGlobalPreflightAllowsUnstagedButActivationRequiresExactDelivery",
+            "TestDevinGlobalNewVersionPreservesProjectAndNonprimaryBoundaries",
+            "TestDevinGlobalSkillsObserveOriginalProfileAndRejectScopeSubstitution",
+            "TestDevinGlobalSkillCompletionPreservesExplicitAuthenticationAndOtherActions",
+            "TestDevinGlobalSkillObservationRefusesInheritedContextBeforeAndAfter",
+            "TestDevinGlobalSkillsKeepObservedForeignImportsWithoutLendingOwnership",
+            "TestDevinGlobalMissingVersionRefusesBeforeConfigOrProcessEffects",
+            "TestWindsurfRemoveDeletesExactlyManagedObjects",
+            "TestRecordedCascadeMCPReplaysThroughSelectedDevinWithoutMigration",
+            "TestRecordedPackageOnlyCascadeDoesNotAdoptSelectedDevinGlobal",
+            "TestRecordedMixedOrRetargetedUserReceiptFailsClosed",
+            "TestFacadeDevinGlobalOriginalRootAdmission",
+            "TestFacadeDevinGlobalCLIOnlyUserRoot",
+            "TestFacadeDevinGlobalCLIOnlyUserRootRefusals",
+            "TestFacadeDevinGlobalOriginalRootIsFrozenAndPrivate",
+            "TestFacadeDevinGlobalWithoutLegacyCascadeRoot",
+            "TestUserDevinVersionProbeIsExactAndTargeted",
+            "TestUserDevinVersionProbeRefusesIdentityDrift",
+            "TestUserDevinSavedDependencyMutationProbesExactSelectedVersion"
+          ]
+        }
+      },
+      "conclusion": "PASS; exact Linux contract selector groups with all recorded RUN/PASS paired",
+      "limits": [
+        "Scope group is non-verbose; eight package selectors have no matching tests",
+        "Native runtime behavior is not established by these Go contract tests"
+      ]
+    },
+    "core": {
+      "schema_version": 1,
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "run_id": 46139633102,
+      "job_id": 140962468880,
+      "raw_log": {
+        "sha256": "90097924640b8b01b6e562b18ff1f08fda5d8ee6a86b2a49ac8a34e032e5f567",
+        "bytes": 50590
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run install core tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Report core coverage",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        }
+      ],
+      "primary": {
+        "ok": 78,
+        "no_test_files": 7,
+        "cached": 0,
+        "fail": []
+      },
+      "coverage": {
+        "ok": 76,
+        "no_test_files": 0,
+        "cached": 0,
+        "fail": []
+      },
+      "coverage_informational": true,
+      "conclusion": "PASS; actual successful package results include informational coverage commands despite workflow fallback",
+      "limits": [
+        "Non-verbose package summaries do not enumerate individual test outcomes",
+        "Repeated race regression is independently qualified on exact current head in run46139910373"
+      ]
+    },
+    "authoring_arm": {
+      "windows": {
+        "schema_version": 1,
+        "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "run_id": 46139633020,
+        "job_id": 140966450186,
+        "raw_log": {
+          "sha256": "80f910cbc145bcc6d6c809545667361523907f28a3b70b7f9e76b88b64692c66",
+          "bytes": 83521
+        },
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3
+          },
+          {
+            "name": "Prepare disposable second NTFS filesystem on Windows ARM64",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 4
+          },
+          {
+            "name": "Native offline tests and actual entrypoint builds",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5
+          },
+          {
+            "name": "Detach and remove only the owned Windows ARM64 VHDX",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 6
+          },
+          {
+            "name": "Preserve disposable volume setup and cleanup evidence",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 7
+          },
+          {
+            "name": "Require structured native evidence (including skips and offline E2E)",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8
+          },
+          {
+            "name": "Preserve each host's evidence, including failures",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9
+          },
+          {
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 17
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 18
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 19
+          }
+        ],
+        "verifier_status": "proven",
+        "errors": [],
+        "skips": [],
+        "packages_pass": 15,
+        "e2e": [
+          {
+            "package": "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands",
+            "test": "TestNativeBinaryVerticalSlice",
+            "entrypoint": "plugin-kit-ai",
+            "sha256": "3b4828288dce70f26a88e242811611068c5637d01df30c795e4e81e8aaddd43c",
+            "revision": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+            "read_profile": "packageview-local-windows-v1",
+            "templates": [
+              "skill",
+              "mcp-remote",
+              "mcp-stdio",
+              "hybrid",
+              "hybrid-remote"
+            ],
+            "sdk": {
+              "@modelcontextprotocol/sdk": "1.32.1",
+              "package-lock-sha256": "7cfbc4d82daa35befda0f5a3f4a43a5411923b66a7f2966ef1ada2185b887564"
+            }
+          },
+          {
+            "package": "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands",
+            "test": "TestNativeBinaryVerticalSlice",
+            "entrypoint": "agentplugins",
+            "sha256": "aaed7c3eb8b39fc12aa424a0e382b0f35e4963bf63269603fbdb82131ba90a05",
+            "revision": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+            "read_profile": "packageview-local-windows-v1",
+            "templates": [
+              "skill",
+              "mcp-remote",
+              "mcp-stdio",
+              "hybrid",
+              "hybrid-remote"
+            ],
+            "sdk": {
+              "@modelcontextprotocol/sdk": "1.32.1",
+              "package-lock-sha256": "7cfbc4d82daa35befda0f5a3f4a43a5411923b66a7f2966ef1ada2185b887564"
+            }
+          }
+        ],
+        "go": {
+          "GOARCH": "arm64",
+          "GOHOSTARCH": "arm64",
+          "GOHOSTOS": "windows",
+          "GOOS": "windows",
+          "GOROOT": "C:\\hostedtoolcache\\windows\\go\\1.26.10\\arm64",
+          "GOVERSION": "go1.26.10"
+        },
+        "host": {
+          "os": "windows",
+          "arch": "arm64",
+          "release": "11",
+          "runner_arch": "ARM64"
+        },
+        "filesystem": {
+          "type": "NTFS",
+          "profile": "local-fixed-drive-NTFS"
+        },
+        "builds_clean": true,
+        "scope": "linux-windows-offline-authoring-checkpoint",
+        "release_gates": {
+          "macos_writable": "unproven"
+        },
+        "zip_independently_read": false,
+        "limits": [
+          "Original decoded job log and printed structured verifier inspected; ZIP go-test.json and executable bytes not independently read",
+          "Linux optional socket case remains unproven; macOS writable release scope is not covered"
+        ],
+        "optional_skip_authority": {
+          "path": "scripts/check-authoring-native-results.py",
+          "blob": "3952f7016f6b91a374598ad9ffbc59998c7c26dc"
+        }
+      },
+      "linux": {
+        "schema_version": 1,
+        "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "run_id": 46139633020,
+        "job_id": 140966450252,
+        "raw_log": {
+          "sha256": "a28635b83d91d34d921613a9da7da32e48ccc8bb7bc9512471e207a8c71e841e",
+          "bytes": 70261
+        },
+        "steps": [
+          {
+            "name": "Set up job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 1
+          },
+          {
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 2
+          },
+          {
+            "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 3
+          },
+          {
+            "name": "Prepare disposable second NTFS filesystem on Windows ARM64",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 4
+          },
+          {
+            "name": "Native offline tests and actual entrypoint builds",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 5
+          },
+          {
+            "name": "Detach and remove only the owned Windows ARM64 VHDX",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 6
+          },
+          {
+            "name": "Preserve disposable volume setup and cleanup evidence",
+            "status": "completed",
+            "conclusion": "skipped",
+            "number": 7
+          },
+          {
+            "name": "Require structured native evidence (including skips and offline E2E)",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 8
+          },
+          {
+            "name": "Preserve each host's evidence, including failures",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 9
+          },
+          {
+            "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 17
+          },
+          {
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 18
+          },
+          {
+            "name": "Complete job",
+            "status": "completed",
+            "conclusion": "success",
+            "number": 19
+          }
+        ],
+        "verifier_status": "proven",
+        "errors": [],
+        "skips": [
+          {
+            "package": "github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/packagedigest",
+            "test": "TestSnapshotRejectsPortablePathAndContentHazards/special_file",
+            "output": "=== RUN   TestSnapshotRejectsPortablePathAndContentHazards/special_file\n    snapshot_test.go:89: Unix sockets unavailable: listen unix /home/runner/work/_temp/authoring-native-46139633020-1/tmp/TestSnapshotRejectsPortablePathAndContentHazardsspecial_file4037752414/001/socket: bind: invalid argument\n--- SKIP: TestSnapshotRejectsPortablePathAndContentHazards/special_file (0.00s)\n",
+            "classification": "optional-unproven"
+          }
+        ],
+        "packages_pass": 15,
+        "e2e": [
+          {
+            "package": "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands",
+            "test": "TestNativeBinaryVerticalSlice",
+            "entrypoint": "plugin-kit-ai",
+            "sha256": "bd3e675f38e11881758cce2bdfde817a1fcfab340e28845b7936901686f64e8d",
+            "revision": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+            "read_profile": "packageview-local-linux-v1",
+            "templates": [
+              "skill",
+              "mcp-remote",
+              "mcp-stdio",
+              "hybrid",
+              "hybrid-remote"
+            ],
+            "sdk": {
+              "@modelcontextprotocol/sdk": "1.32.1",
+              "package-lock-sha256": "7cfbc4d82daa35befda0f5a3f4a43a5411923b66a7f2966ef1ada2185b887564"
+            }
+          },
+          {
+            "package": "github.com/777genius/plugin-kit-ai/cli/internal/authoring/commands",
+            "test": "TestNativeBinaryVerticalSlice",
+            "entrypoint": "agentplugins",
+            "sha256": "b78bab7c6e9aa649421ecdbaf3299fa3f449f96d71f2cae0c79e29f401b0e69b",
+            "revision": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+            "read_profile": "packageview-local-linux-v1",
+            "templates": [
+              "skill",
+              "mcp-remote",
+              "mcp-stdio",
+              "hybrid",
+              "hybrid-remote"
+            ],
+            "sdk": {
+              "@modelcontextprotocol/sdk": "1.32.1",
+              "package-lock-sha256": "7cfbc4d82daa35befda0f5a3f4a43a5411923b66a7f2966ef1ada2185b887564"
+            }
+          }
+        ],
+        "go": {
+          "GOARCH": "arm64",
+          "GOHOSTARCH": "arm64",
+          "GOHOSTOS": "linux",
+          "GOOS": "linux",
+          "GOROOT": "/opt/hostedtoolcache/go/1.26.10/arm64",
+          "GOVERSION": "go1.26.10"
+        },
+        "host": {
+          "os": "linux",
+          "arch": "arm64",
+          "release": "7.0.0-1020-azure",
+          "runner_arch": "ARM64"
+        },
+        "filesystem": {
+          "type": "ext4",
+          "mount_options": "rw,relatime",
+          "profile": "packageview-local-linux-v1"
+        },
+        "builds_clean": true,
+        "scope": "linux-windows-offline-authoring-checkpoint",
+        "release_gates": {
+          "macos_writable": "unproven"
+        },
+        "zip_independently_read": false,
+        "limits": [
+          "Original decoded job log and printed structured verifier inspected; ZIP go-test.json and executable bytes not independently read",
+          "Linux optional socket case remains unproven; macOS writable release scope is not covered"
+        ],
+        "optional_skip_authority": {
+          "path": "scripts/check-authoring-native-results.py",
+          "blob": "3952f7016f6b91a374598ad9ffbc59998c7c26dc"
+        }
+      }
+    },
+    "gemini_observer_windows": {
+      "schema_version": 1,
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "run_id": 46139633102,
+      "job_id": 140962468928,
+      "raw_log": {
+        "sha256": "d726b6ee61f1cb9c6876b9c1c5c6e8f1383fb27f5581f8eadba44771fd656565",
+        "bytes": 81699
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Qualify PowerShell 7 and Windows PowerShell 5.1 observer contracts",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Qualify native Windows Gemini journal custody",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Post Run actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        }
+      ],
+      "go": {
+        "packages_pass": 2,
+        "run": 191,
+        "pass": 189,
+        "skips": [
+          "TestBashNativeExpansionThenArgv",
+          "TestObserverBashSelfSignals"
+        ],
+        "top_run": 23,
+        "top_pass": 21
+      },
+      "python": {
+        "attempted": 20,
+        "pass": 15,
+        "skip": 5,
+        "seconds": 22.755,
+        "skip_reason": "POSIX registry lease FD custody"
+      },
+      "scope": "Windows Gemini observer and journal custody contracts; no genuine Gemini CLI invocation",
+      "conclusion": "PASS with explicit source-authorized Unix/POSIX skips",
+      "skip_authorities": [
+        "dfe4ea8716e3bd5215d3e272d370fdd825e5fc62",
+        "2d3947ded36b3675a49b340f5a556eecfd1bcea1",
+        "454aa64bfc8c902ccc1cec7613272b9afa88447e"
+      ],
+      "native_runtime": false,
+      "archive_uploaded": false
+    },
+    "pi_job_intake": {
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "run_id": 46139633114,
+      "run_attempt": 1,
+      "event": "pull_request",
+      "runtime_jobs": "3/3 success; 39 successful actual steps",
+      "selected_lanes": 3,
+      "records": [
+        {
+          "target": "darwin-arm64",
+          "job_id": 140962468899,
+          "raw_log": {
+            "sha256": "d108ed7f0148f63e12c01e5b9b4657f330b6845ce1409626436179a5abb5e006",
+            "bytes": 36269
+          },
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Verify scoped Pi adapter and real UAP facade before native runtime",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Verify enterprise policy composition under isolated process environments",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Verify Python runner syntax without writing into source checkout",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Run genuine pinned native Pi project trust and A/B lifecycle",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Upload native Pi evidence including failure",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Run real Pi global/project Skills and stdio/HTTP MCP initialize, list and call",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Upload Pi Skills/MCP evidence including failure",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 20
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 21
+            }
+          ],
+          "artifact_upload_ids_digests_sizes_verified": true,
+          "manifest_hash": {
+            "sha256": "a1a1938a3a9e3d05d93d2916326d29b3614c429db47a892d98024708fdcf5b56",
+            "bytes": 865
+          },
+          "artifacts": {
+            "trust": {
+              "artifact_id": 15262747793,
+              "artifact_name": "pi-project-darwin-arm64",
+              "size": 2982,
+              "sha256": "72cbc8d2550eeb13ce239a3954bde577e6639ebd269067fcf8ddf8e37c018a12"
+            },
+            "components": {
+              "artifact_id": 15263122070,
+              "artifact_name": "pi-project-components-darwin-arm64",
+              "size": 81249,
+              "sha256": "94227cf76304a09680190010f464f40a0d452910082364c94eeaf77144065482"
+            }
+          },
+          "archive_byte_qualified": false
+        },
+        {
+          "target": "windows-amd64",
+          "job_id": 140962468614,
+          "raw_log": {
+            "sha256": "1d1069519830ad61f54bc8d67187b8c77b511b949ce06130d96fae941e583bf9",
+            "bytes": 45811
+          },
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Verify scoped Pi adapter and real UAP facade before native runtime",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Verify enterprise policy composition under isolated process environments",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Verify Python runner syntax without writing into source checkout",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Run genuine pinned native Pi project trust and A/B lifecycle",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Upload native Pi evidence including failure",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Run real Pi global/project Skills and stdio/HTTP MCP initialize, list and call",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Upload Pi Skills/MCP evidence including failure",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 20
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 21
+            }
+          ],
+          "artifact_upload_ids_digests_sizes_verified": true,
+          "manifest_hash": {
+            "sha256": "3811ce2c8d6f46683172dbe79a6ec875d7c6c0ec57b0f9bfd824424b02103744",
+            "bytes": 869
+          },
+          "artifacts": {
+            "trust": {
+              "artifact_id": 15262964237,
+              "artifact_name": "pi-project-windows-amd64",
+              "size": 2959,
+              "sha256": "2839ad8861c56058eca6cf89c0ab5a03d772040e74c3ef391f101f0347c81d3d"
+            },
+            "components": {
+              "artifact_id": 15262924745,
+              "artifact_name": "pi-project-components-windows-amd64",
+              "size": 82914,
+              "sha256": "7072e705da062189c6cefa3b5ee70d6f7d4e1a6bb65ed5c5d75767e64100463a"
+            }
+          },
+          "archive_byte_qualified": false
+        },
+        {
+          "target": "linux-amd64",
+          "job_id": 140962468848,
+          "raw_log": {
+            "sha256": "cb148cbfa95339e80f25c596bf1710a2656553381bef9958527ce9794482f62c",
+            "bytes": 38168
+          },
+          "steps": [
+            {
+              "name": "Set up job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 1
+            },
+            {
+              "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 2
+            },
+            {
+              "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 3
+            },
+            {
+              "name": "Verify scoped Pi adapter and real UAP facade before native runtime",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 4
+            },
+            {
+              "name": "Verify enterprise policy composition under isolated process environments",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 5
+            },
+            {
+              "name": "Verify Python runner syntax without writing into source checkout",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 6
+            },
+            {
+              "name": "Run genuine pinned native Pi project trust and A/B lifecycle",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 7
+            },
+            {
+              "name": "Upload native Pi evidence including failure",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 8
+            },
+            {
+              "name": "Run real Pi global/project Skills and stdio/HTTP MCP initialize, list and call",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 9
+            },
+            {
+              "name": "Upload Pi Skills/MCP evidence including failure",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 10
+            },
+            {
+              "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 19
+            },
+            {
+              "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 20
+            },
+            {
+              "name": "Complete job",
+              "status": "completed",
+              "conclusion": "success",
+              "number": 21
+            }
+          ],
+          "artifact_upload_ids_digests_sizes_verified": true,
+          "manifest_hash": {
+            "sha256": "43f9ccc6a932e7c012e53bc1cc14c49c43cf077a3e1955963e2d6ce8f7e1b25b",
+            "bytes": 861
+          },
+          "artifacts": {
+            "trust": {
+              "artifact_id": 15263093562,
+              "artifact_name": "pi-project-linux-amd64",
+              "size": 2976,
+              "sha256": "687b73012ddac60a59b66636b5f9787b190e978fb2d2acae5db72930aa39d2c0"
+            },
+            "components": {
+              "artifact_id": 15262979653,
+              "artifact_name": "pi-project-components-linux-amd64",
+              "size": 82211,
+              "sha256": "5b4463918723ed9b99da807f34d68f3766e6f9ae2e45372ec694836cd7111a79"
+            }
+          },
+          "archive_byte_qualified": false
+        }
+      ],
+      "scope": "Only completed Pi three-platform paired-archive audits; four PM hosts remain separate and outstanding",
+      "archive_byte_qualification": false,
+      "auditor_core": "8d146d211fdc20c6f0be3e610a16d1fb2d89e528",
+      "auditor_wrapper": "4ee9beeb23ebf37c0e8b0d89535f1bcd728d922e"
+    },
+    "pi_byte_audit": {
+      "status": "pass",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "audit_commit": "071330fe092277f861bbfc60e519a537e4cb3de0",
+      "run": 46145415142,
+      "job": 140980275132,
+      "all_steps_success": 11,
+      "original_decoded_log": {
+        "sha256": "3e929a84673caf28e5b41c347a3146d0df63d607d8f8ef9915afa66f48c45497",
+        "bytes": 46420
+      },
+      "hosts": [
+        {
+          "target": "darwin-arm64",
+          "runtime_job": 140962468899,
+          "archives": {
+            "components": {
+              "artifact_id": 15263122070,
+              "bytes": 81249,
+              "crc": "pass",
+              "sha256": "94227cf76304a09680190010f464f40a0d452910082364c94eeaf77144065482"
+            },
+            "trust": {
+              "artifact_id": 15262747793,
+              "bytes": 2982,
+              "crc": "pass",
+              "sha256": "72cbc8d2550eeb13ce239a3954bde577e6639ebd269067fcf8ddf8e37c018a12"
+            }
+          },
+          "trust_stages": 14,
+          "component_stages": 9,
+          "original_streams_verified": 31,
+          "member_counts": {
+            "trust": 10,
+            "components": 27
+          },
+          "raw_public_scopes": {
+            "project": {
+              "commands": 4,
+              "native_inventories": 12,
+              "removal": "pass",
+              "repeat_identity": "pass"
+            },
+            "user": {
+              "commands": 3,
+              "native_inventories": 12,
+              "removal": "pass",
+              "repeat_identity": "pass"
+            }
+          }
+        },
+        {
+          "target": "windows-amd64",
+          "runtime_job": 140962468614,
+          "archives": {
+            "components": {
+              "artifact_id": 15262924745,
+              "bytes": 82914,
+              "crc": "pass",
+              "sha256": "7072e705da062189c6cefa3b5ee70d6f7d4e1a6bb65ed5c5d75767e64100463a"
+            },
+            "trust": {
+              "artifact_id": 15262964237,
+              "bytes": 2959,
+              "crc": "pass",
+              "sha256": "2839ad8861c56058eca6cf89c0ab5a03d772040e74c3ef391f101f0347c81d3d"
+            }
+          },
+          "trust_stages": 14,
+          "component_stages": 9,
+          "original_streams_verified": 31,
+          "member_counts": {
+            "trust": 10,
+            "components": 27
+          },
+          "raw_public_scopes": {
+            "project": {
+              "commands": 4,
+              "native_inventories": 12,
+              "removal": "pass",
+              "repeat_identity": "pass"
+            },
+            "user": {
+              "commands": 3,
+              "native_inventories": 12,
+              "removal": "pass",
+              "repeat_identity": "pass"
+            }
+          }
+        },
+        {
+          "target": "linux-amd64",
+          "runtime_job": 140962468848,
+          "archives": {
+            "components": {
+              "artifact_id": 15262979653,
+              "bytes": 82211,
+              "crc": "pass",
+              "sha256": "5b4463918723ed9b99da807f34d68f3766e6f9ae2e45372ec694836cd7111a79"
+            },
+            "trust": {
+              "artifact_id": 15263093562,
+              "bytes": 2976,
+              "crc": "pass",
+              "sha256": "687b73012ddac60a59b66636b5f9787b190e978fb2d2acae5db72930aa39d2c0"
+            }
+          },
+          "trust_stages": 14,
+          "component_stages": 9,
+          "original_streams_verified": 31,
+          "member_counts": {
+            "trust": 10,
+            "components": 27
+          },
+          "raw_public_scopes": {
+            "project": {
+              "commands": 4,
+              "native_inventories": 12,
+              "removal": "pass",
+              "repeat_identity": "pass"
+            },
+            "user": {
+              "commands": 3,
+              "native_inventories": 12,
+              "removal": "pass",
+              "repeat_identity": "pass"
+            }
+          }
+        }
+      ],
+      "mcp_tools_call_qualified": true,
+      "real_model_qualified": false,
+      "vendor_auth_qualified": false,
+      "boundaries": [
+        "Real pinned Pi MCP calls use a scripted local model provider.",
+        "Non-raw trust/MCP/preservation/cleanup results follow executed pinned assertions and stages; original MCP/provider transcripts and complete filesystem snapshots are not uploaded.",
+        "24 raw native inventory and seven public DTO response byte streams are independently decoded and hashed; repeat proof objects retain identical IID/state/binding/native tree/locks.",
+        "Raw original serialized state bytes are not uploaded; state_sha256 cannot be recomputed from parsed JSON without assuming serialization.",
+        "Tree identity is verified by the wrapper's pinned source checkout, not a native Pi report tree field.",
+        "Native release archive and executable bytes are not uploaded; reported binary hashes are only cross-matched across retained release/inventory receipts."
+      ],
+      "independent_readback_confirmed": true
+    },
+    "pm_byte_audits": {
+      "intel": {
+        "status": "pass",
+        "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "audit_commit": "d9cc90f48d6fe9fe0c266eb881a24748b93b8c1a",
+        "run": 46145529527,
+        "job": 140980633113,
+        "all_steps_success": 10,
+        "original_decoded_log": {
+          "sha256": "63c6bedf8835e094cef4e8b00c6b3ee83c311a6184145d86d11dbd5ebd75dc80",
+          "bytes": 38010
+        },
+        "receipt": {
+          "agreement_roots": 17,
+          "artifact_id": 15263261908,
+          "audit_kind": "independent artifact check only",
+          "boundaries": [
+            "Filesystem preservation follows executed pinned assertions; full original filesystem snapshots are not retained.",
+            "Plugin scanner receipt does not independently qualify collection scanner receipt.",
+            "No authentication or model-call qualification."
+          ],
+          "canonical_required": 140,
+          "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+          "collection_commands": 6,
+          "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+          "job_id": 140962469299,
+          "manifest_sha256": "8c600ecf506f1e016545bc47b4fd664945275001df552b85891b645da4b34e1e",
+          "native_runtime_qualified": false,
+          "phases": 23,
+          "platform": {
+            "architecture": "x86_64",
+            "os": "Darwin"
+          },
+          "raw_pass": 463,
+          "raw_run": 463,
+          "run_id": 46139633158,
+          "status": "pass",
+          "stream_hashes": 46,
+          "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+          "windows_held_readers": {
+            "job_name": "package-manager (macos-15-intel)",
+            "qualified_roots": [],
+            "raw_pass": 0,
+            "raw_run": 0,
+            "raw_run_pass_verified": false,
+            "required_roots": 0,
+            "source_condition": "matrix.os == 'windows-2025'",
+            "status": "not_applicable",
+            "stream_bytes": 0,
+            "stream_sha256": null
+          },
+          "zip_crc": "pass",
+          "zip_member_names": [
+            "agreement-boundary.stderr",
+            "agreement-boundary.stdout",
+            "binary-collection-add.stderr",
+            "binary-collection-add.stdout",
+            "binary-collection-list.stderr",
+            "binary-collection-list.stdout",
+            "binary-collection-remove-collection-review.stderr",
+            "binary-collection-remove-collection-review.stdout",
+            "binary-collection-remove-collection-testing.stderr",
+            "binary-collection-remove-collection-testing.stdout",
+            "binary-collection-repeat.stderr",
+            "binary-collection-repeat.stdout",
+            "binary-collection-update.stderr",
+            "binary-collection-update.stdout",
+            "binary-empty-lock.stderr",
+            "binary-empty-lock.stdout",
+            "binary-empty-status.stderr",
+            "binary-empty-status.stdout",
+            "binary-empty-sync.stderr",
+            "binary-empty-sync.stdout",
+            "binary-help.stderr",
+            "binary-help.stdout",
+            "binary-init.stderr",
+            "binary-init.stdout",
+            "binary-install-first.stderr",
+            "binary-install-first.stdout",
+            "binary-install-info.stderr",
+            "binary-install-info.stdout",
+            "binary-install-remove.stderr",
+            "binary-install-remove.stdout",
+            "binary-install-repair.stderr",
+            "binary-install-repair.stdout",
+            "binary-install-repeat.stderr",
+            "binary-install-repeat.stdout",
+            "binary-malformed-package.stderr",
+            "binary-malformed-package.stdout",
+            "binary-missing-lock.stderr",
+            "binary-missing-lock.stdout",
+            "build.stderr",
+            "build.stdout",
+            "catalog.stderr",
+            "catalog.stdout",
+            "collections.stderr",
+            "collections.stdout",
+            "composition.stderr",
+            "composition.stdout",
+            "installations.stderr",
+            "installations.stdout",
+            "report.json"
+          ],
+          "zip_sha256": "28f117e58d495bc8e6823614d690ccfefacc0473a15717ffccb830f6b2d14dca",
+          "zip_size": 61594
+        }
+      },
+      "linux": {
+        "status": "pass",
+        "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "audit_commit": "1fb793c95257ab211644e4b8bba0f56454471834",
+        "run": 46145900569,
+        "job": 140981787196,
+        "all_steps_success": 10,
+        "original_decoded_log": {
+          "sha256": "e0dc7f91657d4d97827e624036ab6ef2e71b1a3c2bca2c4ed58a4e98437b252d",
+          "bytes": 38047
+        },
+        "receipt": {
+          "agreement_roots": 17,
+          "artifact_id": 15263726281,
+          "audit_kind": "independent artifact check only",
+          "boundaries": [
+            "Filesystem preservation follows executed pinned assertions; full original filesystem snapshots are not retained.",
+            "Plugin scanner receipt does not independently qualify collection scanner receipt.",
+            "No authentication or model-call qualification."
+          ],
+          "canonical_required": 140,
+          "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+          "collection_commands": 6,
+          "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+          "job_id": 140962469268,
+          "manifest_sha256": "e7e41e68f77b9533b61fc9831e4aadc76a24e96f8b2ebf1f40eb539398b9d5f7",
+          "native_runtime_qualified": false,
+          "phases": 23,
+          "platform": {
+            "architecture": "x86_64",
+            "os": "Linux"
+          },
+          "raw_pass": 463,
+          "raw_run": 463,
+          "run_id": 46139633158,
+          "status": "pass",
+          "stream_hashes": 46,
+          "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+          "windows_held_readers": {
+            "job_name": "package-manager (ubuntu-24.04)",
+            "qualified_roots": [],
+            "raw_pass": 0,
+            "raw_run": 0,
+            "raw_run_pass_verified": false,
+            "required_roots": 0,
+            "source_condition": "matrix.os == 'windows-2025'",
+            "status": "not_applicable",
+            "stream_bytes": 0,
+            "stream_sha256": null
+          },
+          "zip_crc": "pass",
+          "zip_member_names": [
+            "agreement-boundary.stderr",
+            "agreement-boundary.stdout",
+            "binary-collection-add.stderr",
+            "binary-collection-add.stdout",
+            "binary-collection-list.stderr",
+            "binary-collection-list.stdout",
+            "binary-collection-remove-collection-review.stderr",
+            "binary-collection-remove-collection-review.stdout",
+            "binary-collection-remove-collection-testing.stderr",
+            "binary-collection-remove-collection-testing.stdout",
+            "binary-collection-repeat.stderr",
+            "binary-collection-repeat.stdout",
+            "binary-collection-update.stderr",
+            "binary-collection-update.stdout",
+            "binary-empty-lock.stderr",
+            "binary-empty-lock.stdout",
+            "binary-empty-status.stderr",
+            "binary-empty-status.stdout",
+            "binary-empty-sync.stderr",
+            "binary-empty-sync.stdout",
+            "binary-help.stderr",
+            "binary-help.stdout",
+            "binary-init.stderr",
+            "binary-init.stdout",
+            "binary-install-first.stderr",
+            "binary-install-first.stdout",
+            "binary-install-info.stderr",
+            "binary-install-info.stdout",
+            "binary-install-remove.stderr",
+            "binary-install-remove.stdout",
+            "binary-install-repair.stderr",
+            "binary-install-repair.stdout",
+            "binary-install-repeat.stderr",
+            "binary-install-repeat.stdout",
+            "binary-malformed-package.stderr",
+            "binary-malformed-package.stdout",
+            "binary-missing-lock.stderr",
+            "binary-missing-lock.stdout",
+            "build.stderr",
+            "build.stdout",
+            "catalog.stderr",
+            "catalog.stdout",
+            "collections.stderr",
+            "collections.stdout",
+            "composition.stderr",
+            "composition.stdout",
+            "installations.stderr",
+            "installations.stdout",
+            "report.json"
+          ],
+          "zip_sha256": "1abdb1a5e6bf80dbcebc4c7ca136fe04b66dafd8c70af286e7770c0407eb6240",
+          "zip_size": 63332
+        }
+      },
+      "windows": {
+        "status": "pass",
+        "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "audit_commit": "45654293e767a73af5a9429394967c22c0e40bbb",
+        "run": 46146280064,
+        "job": 140982937282,
+        "all_steps_success": 10,
+        "original_decoded_log": {
+          "sha256": "13f2cb132eb03d5fbbd749894197864a48d745edba9915272945538c3ebe67da",
+          "bytes": 38424
+        },
+        "receipt": {
+          "agreement_roots": 17,
+          "artifact_id": 15263468205,
+          "audit_kind": "independent artifact check only",
+          "boundaries": [
+            "Filesystem preservation follows executed pinned assertions; full original filesystem snapshots are not retained.",
+            "Plugin scanner receipt does not independently qualify collection scanner receipt.",
+            "No authentication or model-call qualification."
+          ],
+          "canonical_required": 140,
+          "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+          "collection_commands": 6,
+          "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+          "job_id": 140962468977,
+          "manifest_sha256": "2193a90ab11c50652efba4dd861cca8ccf02c79d1e95d3ec3f00672ee166315a",
+          "native_runtime_qualified": false,
+          "phases": 23,
+          "platform": {
+            "architecture": "AMD64",
+            "os": "Windows"
+          },
+          "raw_pass": 463,
+          "raw_run": 463,
+          "run_id": 46139633158,
+          "status": "pass",
+          "stream_hashes": 46,
+          "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+          "windows_held_readers": {
+            "job_name": "package-manager (windows-2025)",
+            "qualified_roots": [
+              "TestAdmittedWindowsReaderPreservesDeleteSharing",
+              "TestAdmittedWindowsReaderUnicodeLongPath",
+              "TestDependencyAgreementWindowsHeldReaderAllowsAtomicPublication",
+              "TestWindowsRegularReadAvailabilityBeforeTypeAdmission",
+              "TestWindowsRegularReadDedupAndUnsafeAttributes",
+              "TestWindowsRegularReadPathPreservesNamespaces"
+            ],
+            "raw_pass": 24,
+            "raw_run": 24,
+            "raw_run_pass_verified": true,
+            "required_roots": 6,
+            "source_condition": "matrix.os == 'windows-2025'",
+            "status": "qualified",
+            "stream_bytes": 26515,
+            "stream_sha256": "9e7d875060107f022c0652a3e095380f1138017c13f9832aec9104582b3ba7ed"
+          },
+          "zip_crc": "pass",
+          "zip_member_names": [
+            "agreement-boundary.stderr",
+            "agreement-boundary.stdout",
+            "binary-collection-add.stderr",
+            "binary-collection-add.stdout",
+            "binary-collection-list.stderr",
+            "binary-collection-list.stdout",
+            "binary-collection-remove-collection-review.stderr",
+            "binary-collection-remove-collection-review.stdout",
+            "binary-collection-remove-collection-testing.stderr",
+            "binary-collection-remove-collection-testing.stdout",
+            "binary-collection-repeat.stderr",
+            "binary-collection-repeat.stdout",
+            "binary-collection-update.stderr",
+            "binary-collection-update.stdout",
+            "binary-empty-lock.stderr",
+            "binary-empty-lock.stdout",
+            "binary-empty-status.stderr",
+            "binary-empty-status.stdout",
+            "binary-empty-sync.stderr",
+            "binary-empty-sync.stdout",
+            "binary-help.stderr",
+            "binary-help.stdout",
+            "binary-init.stderr",
+            "binary-init.stdout",
+            "binary-install-first.stderr",
+            "binary-install-first.stdout",
+            "binary-install-info.stderr",
+            "binary-install-info.stdout",
+            "binary-install-remove.stderr",
+            "binary-install-remove.stdout",
+            "binary-install-repair.stderr",
+            "binary-install-repair.stdout",
+            "binary-install-repeat.stderr",
+            "binary-install-repeat.stdout",
+            "binary-malformed-package.stderr",
+            "binary-malformed-package.stdout",
+            "binary-missing-lock.stderr",
+            "binary-missing-lock.stdout",
+            "build.stderr",
+            "build.stdout",
+            "catalog.stderr",
+            "catalog.stdout",
+            "collections.stderr",
+            "collections.stdout",
+            "composition.stderr",
+            "composition.stdout",
+            "installations.stderr",
+            "installations.stdout",
+            "report.json",
+            "windows-readers.stdout"
+          ],
+          "zip_sha256": "1370202562f54f3708a046738ad45e73e5373055fc426b5899fa7f72612731c2",
+          "zip_size": 60933
+        },
+        "independent_readback_confirmed": true
+      }
+    },
+    "terminal": {
+      "scope": "Linux and macOS original job logs; Windows pending",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "workflow_blob": "23fadf72c7fa8353bd28e337c319bf8ee0e6919a",
+      "hosts": {
+        "linux": {
+          "status": "pass",
+          "run": 46139632959,
+          "job": 140962468094,
+          "successful_steps": 16,
+          "platform_only_step_skips": 6,
+          "original_decoded_log": {
+            "sha256": "2e19f3a40c3e869a4210c24352351b8d2943836b7b45ce85455a38693f8125c7",
+            "bytes": 835450
+          },
+          "go_packages_pass": 7,
+          "no_test_packages": 1,
+          "verbose_go": {
+            "run": 3322,
+            "pass": 3313,
+            "skip": 9,
+            "fail": 0,
+            "top_level_run": 1343,
+            "top_level_pass": 1334
+          },
+          "python_discovery": {
+            "attempted": 280,
+            "pass": 277,
+            "skip": 3
+          },
+          "broad_cli_package_seconds": 275.418,
+          "broad_command_package_seconds": 259.433,
+          "requested_policy_cases": [
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/archive/cli",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/archive/management",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/local-skill/cli",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/local-skill/management",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicySelectedSkillKeepsUnrelatedDeniedArchive",
+              "run": 1,
+              "pass": 1
+            }
+          ],
+          "local_skill_roots": [
+            {
+              "name": "TestLocalSkillCLISavedSnapshotLifecycle",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestLocalSkillColdReplayVerifiesRawAndNormalizedBytes",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestLocalSkillWarmStoreReplaysForeignOSCoordinates",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestLocalSkillSelectionRefusalsDoNotWrite",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestLocalSkillRelativeDirectoryUsesCanonicalSnapshotIdentity",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestLocalSkillPathHazardsRefuseBeforePublication",
+              "run": 1,
+              "pass": 1
+            }
+          ],
+          "go_skip_names": [
+            "TestDependencySBOMAgainstOfficialSchemas",
+            "TestPiRealMarketplaceSignedTestCohortSavedClosure",
+            "TestSkillsBrowserFixture",
+            "TestPiAllSignedTestOnlySavedMarketplace",
+            "TestPiFullModernSignedTestOnlyMarketplace",
+            "TestPiUpstreamSignedTestOnlyPositiveSaved",
+            "TestClineCurrentSourceNativeProjectConfigLifecycle",
+            "TestProjectHermesBundleColdRestoreAndRepair",
+            "TestHermesSourceSkillsConfirmedAddsNative"
+          ],
+          "json_case_status_counts": {
+            "pass": 30,
+            "passed": 51,
+            "passed_boolean": 6
+          },
+          "archive_bytes_qualified": false,
+          "boundaries": [
+            "Verbose Go counts cover broad CLI packages; focused packages only retain package PASS summaries.",
+            "Platform-only steps are source-gated; skipped Go/Python tests are not PASS.",
+            "Selection and 19-case plugin matrices use synthetic client/scanner protocols, no genuine vendor/model/auth qualification.",
+            "Original retained ZIP contents, executable bytes, detailed redirected reports and complete filesystem images not independently read."
+          ]
+        },
+        "mac": {
+          "status": "pass",
+          "run": 46139632959,
+          "job": 140962468196,
+          "successful_steps": 16,
+          "platform_only_step_skips": 6,
+          "original_decoded_log": {
+            "sha256": "6b9b39a511d08d35282f30a2c3567df535e2e3e447191ca6c67b0aa5d0634e64",
+            "bytes": 813097
+          },
+          "go_packages_pass": 7,
+          "no_test_packages": 1,
+          "verbose_go": {
+            "run": 3226,
+            "pass": 3218,
+            "skip": 8,
+            "fail": 0,
+            "top_level_run": 1310,
+            "top_level_pass": 1302
+          },
+          "python_discovery": {
+            "attempted": 280,
+            "pass": 270,
+            "skip": 10
+          },
+          "broad_cli_package_seconds": 333.286,
+          "broad_command_package_seconds": 254.991,
+          "requested_policy_cases": [
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/archive/cli",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/archive/management",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/local-skill/cli",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/local-skill/management",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicySelectedSkillKeepsUnrelatedDeniedArchive",
+              "run": 1,
+              "pass": 1
+            }
+          ],
+          "local_skill_roots": [
+            {
+              "name": "TestLocalSkillCLISavedSnapshotLifecycle",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestLocalSkillColdReplayVerifiesRawAndNormalizedBytes",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestLocalSkillWarmStoreReplaysForeignOSCoordinates",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestLocalSkillSelectionRefusalsDoNotWrite",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestLocalSkillRelativeDirectoryUsesCanonicalSnapshotIdentity",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestLocalSkillPathHazardsRefuseBeforePublication",
+              "run": 1,
+              "pass": 1
+            }
+          ],
+          "go_skip_names": [
+            "TestDependencySBOMAgainstOfficialSchemas",
+            "TestPiRealMarketplaceSignedTestCohortSavedClosure",
+            "TestSkillsBrowserFixture",
+            "TestPiAllSignedTestOnlySavedMarketplace",
+            "TestPiFullModernSignedTestOnlyMarketplace",
+            "TestPiUpstreamSignedTestOnlyPositiveSaved",
+            "TestProjectHermesBundleColdRestoreAndRepair",
+            "TestHermesSourceSkillsConfirmedAddsNative"
+          ],
+          "json_case_status_counts": {
+            "pass": 30,
+            "passed": 51,
+            "passed_boolean": 6
+          },
+          "archive_bytes_qualified": false,
+          "boundaries": [
+            "Verbose Go counts cover broad CLI packages; focused packages only retain package PASS summaries.",
+            "Platform-only steps are source-gated; skipped Go/Python tests are not PASS.",
+            "Selection and 19-case plugin matrices use synthetic client/scanner protocols, no genuine vendor/model/auth qualification.",
+            "Original retained ZIP contents, executable bytes, detailed redirected reports and complete filesystem images not independently read."
+          ]
+        }
+      }
+    },
+    "marketing_job_intake": {
+      "codex": {
+        "runtime_job": 140962469188,
+        "run": 46139632998,
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "actual_successful_steps": 12,
+        "original_decoded_log": {
+          "sha256": "f56d529e9a86f7292fd0c381ffed9561ce986fa0ed6b6fd115bff0250b323139",
+          "bytes": 3058636
+        },
+        "artifact": {
+          "id": 15263397292,
+          "name": "marketing-kit-0.1.116-codex",
+          "size": 55252,
+          "sha256": "bc97846c65f3e42bfb46c5efcd4620aff55df40eea5652c411e38ef9cdada866"
+        },
+        "archive_bytes_qualified": false,
+        "independent_intake_matched": true,
+        "logged_report": {
+          "status": "passed",
+          "published_cli": "0.1.116",
+          "native_package": "@openai/codex@0.153.4",
+          "ordered_stages": 18,
+          "scope_results": {
+            "project": "passed",
+            "user": "passed"
+          },
+          "final_e_policy": "passed",
+          "preflight": {
+            "attempted": 296,
+            "skip": 1,
+            "skip_boundary": "genuine Claude fixture unavailable in non-Claude lane"
+          },
+          "archive_bytes_qualified": false
+        }
+      },
+      "cursor": {
+        "runtime_job": 140962469592,
+        "run": 46139632998,
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "original_decoded_log": {
+          "sha256": "7ae6d50e6e00735b7954cc86ec45baaa14045a51017669519e3dfed1433c2112",
+          "bytes": 72163
+        },
+        "artifact": {
+          "id": 15263667090,
+          "name": "marketing-kit-0.1.116-cursor",
+          "size": 4548,
+          "sha256": "044ee341f0bd4ca8ccd677f66698ba279f17c3703653b42db7bbd5a715830a87"
+        },
+        "archive_bytes_qualified": false,
+        "actual_successful_steps": 9,
+        "codex_only_step_skips": 3,
+        "independent_intake_matched": true,
+        "logged_report": {
+          "status": "passed",
+          "published_cli": "0.1.116",
+          "ordered_stages": 16,
+          "scope_results": {
+            "project": "passed",
+            "user": "passed"
+          },
+          "final_e_policy": "passed",
+          "cursor_agent_editor_digest_checks": "both passed",
+          "preflight": {
+            "attempted": 296,
+            "skip": 1,
+            "skip_boundary": "genuine Claude fixture unavailable in non-Claude lane"
+          },
+          "archive_bytes_qualified": false
+        }
+      }
+    },
+    "core_workflow": {
+      "status": "success",
+      "run": 46139633102,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "run_attempt": 1,
+      "event": "pull_request",
+      "jobs": [
+        {
+          "id": 140962468672,
+          "name": "vet-all",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468740,
+          "name": "cross-build (linux)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468819,
+          "name": "project-contracts (ubuntu-24.04)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468875,
+          "name": "opencode-transition-windows",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468880,
+          "name": "test-core",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468891,
+          "name": "lint / cli",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468894,
+          "name": "project-contracts (macos-15)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468916,
+          "name": "cross-build (darwin)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468928,
+          "name": "gemini-observer-windows",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468930,
+          "name": "managed-stdio-windows",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468975,
+          "name": "lint / install/integrationctl/agentplugins",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962469009,
+          "name": "lint / install/integrationctl",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962469020,
+          "name": "cross-build (windows)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962469086,
+          "name": "project-contracts (windows-2025)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962469115,
+          "name": "lint / root",
+          "conclusion": "success"
+        }
+      ],
+      "source": "Complete REST run/job metadata; original-log qualifications remain in per-gate records"
+    },
+    "required_workflow": {
+      "status": "success",
+      "run": 46139633008,
+      "run_attempt": 1,
+      "event": "pull_request",
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "jobs": [
+        {
+          "id": 140962468445,
+          "name": "test",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468688,
+          "name": "changes / classify",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468717,
+          "name": "staged-hermetic",
+          "conclusion": "success"
+        },
+        {
+          "id": 140966356362,
+          "name": "lint / root",
+          "conclusion": "success"
+        },
+        {
+          "id": 140966356366,
+          "name": "management-sdk / qualify (macos-15)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140966356380,
+          "name": "lint / cli",
+          "conclusion": "success"
+        },
+        {
+          "id": 140966356381,
+          "name": "lint / install/integrationctl/agentplugins",
+          "conclusion": "success"
+        },
+        {
+          "id": 140966356384,
+          "name": "lint / install/integrationctl",
+          "conclusion": "success"
+        },
+        {
+          "id": 140966356397,
+          "name": "management-sdk / qualify (ubuntu-24.04)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140966356412,
+          "name": "management-sdk / qualify (windows-2025)",
+          "conclusion": "success"
+        }
+      ],
+      "scope": "Complete current workflow/job metadata; main raw results recorded separately"
+    },
+    "required_main": {
+      "status": "pass",
+      "run": 46139633008,
+      "job": 140962468445,
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "all_steps_success": 17,
+      "original_decoded_log": {
+        "sha256": "2b4ca80521454769c67f351ec087524cf4a6f80a33a32409cf3982f29e497764",
+        "bytes": 602617
+      },
+      "toolchains": {
+        "go": "go1.26.11 linux/amd64",
+        "node": "22.21.1",
+        "npm": "10.9.4",
+        "cgo_enabled": true,
+        "gotoolchain": "local"
+      },
+      "go": {
+        "package_pass_invocations": 178,
+        "unique_packages": 177,
+        "workspace_package_passes": 177,
+        "manifest_workflow_extra_invocation": 1,
+        "no_test_file_packages": 34,
+        "cached_results": 0,
+        "failed_package_lines": 0,
+        "command": "go test -count=1 -timeout=20m",
+        "modules": [
+          "root",
+          "cli",
+          "install/integrationctl",
+          "install/integrationctl/agentplugins",
+          "plugininstall",
+          "sdk"
+        ],
+        "individual_verbose_events": 0
+      },
+      "javascript": {
+        "attempted": 1237,
+        "pass": 1231,
+        "fail": 0,
+        "cancelled": 0,
+        "skip": 6,
+        "todo": 0,
+        "duration_ms": 480094.733401,
+        "skip_records": [
+          "ok 523 - detached package execution sentinel # SKIP only asserted by the detached staged-package subprocess",
+          "ok 543 - actual controlled Linux pair: offline verification, engine reports, frozen journeys and negative proof # SKIP",
+          "ok 654 - C1 packPackage real offline packs: both forms/products, same receipts, rejection before completion # SKIP",
+          "ok 885 - NATIVE opt-in: exact two Linux tarballs, five accepted template lanes and complete release journeys # SKIP",
+          "ok 939 - PUBLIC NATIVE: exact integrated packs, both actual bins, static parity and lifecycle # SKIP coordinator-gated: set UAP_PUBLIC_AUTHORING_NATIVE_CONFIG to run",
+          "ok 1031 - staged package tests are hermetic to repository layout and caller cwd # SKIP"
+        ]
+      },
+      "conformance": {
+        "repository": "Booyaka101/agent-plugins-conformance-kit",
+        "commit": "4d163c6281a9b4929f482f387efe340b4dc175a1",
+        "fixtures": 133,
+        "rules": 89,
+        "pass": 133,
+        "fail": 0,
+        "error": 0,
+        "skip": 0,
+        "warnings": 0,
+        "core": 125,
+        "disputed": 4,
+        "regressions": 4,
+        "mode": "strict-reporting"
+      },
+      "additional_steps": [
+        "Plugin Manifest Workflow",
+        "Check generated artifacts",
+        "Run vet (all workspace modules)"
+      ],
+      "boundaries": [
+        "Go nonverbose summaries prove package invocations, not individual test outcomes or individual skips.",
+        "Prefetch exact repeated-case evidence is supplied by the separate current-source160RUN/PASS race audit.",
+        "Six JavaScript skips are not PASS; detached staged package separately passed in current staged-hermetic job.",
+        "Conformance JSON and executable bytes are not independently read; original full job output and all actual step results are audited."
+      ],
+      "independent_readback_confirmed": true
+    },
+    "windows_contracts": {
+      "status": "pass",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "run": 46139633102,
+      "job": 140962469086,
+      "all_steps_success": 11,
+      "original_decoded_log": {
+        "sha256": "517b505a2d7945ae0311fb77714a28944e53ff488c3203cd76ec76843981cb06",
+        "bytes": 70857
+      },
+      "go_version": "go1.26.11 windows/amd64",
+      "package_pass_invocations": 38,
+      "unique_packages": 33,
+      "selectors_no_tests": 8,
+      "cached_packages": 0,
+      "verbose": {
+        "run": 142,
+        "pass": 142,
+        "top_level": 48,
+        "skip": 0,
+        "fail": 0
+      },
+      "workflow_blob": "da9a5a7fbb159b22e49d78d182aca291c9121023",
+      "boundaries": [
+        "Scoped platform contract tests and explicit native-command fixtures, not genuine installed vendor versions, native sessions, auth or model use.",
+        "Initial scoped command is nonverbose; its individual tests are not enumerated.",
+        "Original job logs/steps only; no ZIP member-byte or CRC qualification."
+      ]
+    }
+  },
+  "whole_job_skips": [
+    {
+      "run": 46139632928,
+      "job": 140962466858,
+      "file": "qoder-scoped-native.yml",
+      "scope": "Qoder scoped native",
+      "condition": "PR requires ci:github-hosted label",
+      "reason": "Ready pull_request has no labels; required hosted opt-in absent.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "8985b624e4a3a901c2252eea5d3a75acb4a8a6f4",
+      "path": ".github/workflows/qoder-scoped-native.yml",
+      "actual_name": "qoder-native",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139633158,
+      "job": 140962470221,
+      "file": "package-manager-e2e.yml",
+      "scope": "PM draft preflight",
+      "condition": "github.event_name == 'pull_request' && github.event.pull_request.draft",
+      "reason": "Current PR is ready, draft=false; four platform jobs apply.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "75ce24fe9adfe4026f2253ab5e055f9989864950",
+      "path": ".github/workflows/package-manager-e2e.yml",
+      "actual_name": "draft evidence preflight",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139633140,
+      "job": 140962470722,
+      "file": "agentplugins-native-clients.yml",
+      "scope": "Native SDK-only dispatch",
+      "condition": "github.event_name == 'workflow_dispatch' && inputs.sdk_linux_only",
+      "reason": "Current event is pull_request, not SDK-only dispatch.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "37112c3561d51f298c10368dd4530e0db0b7dca3",
+      "path": ".github/workflows/agentplugins-native-clients.yml",
+      "actual_name": "${{ matrix.client }} SDK lifecycle (${{ inputs.sdk_target }})",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139633175,
+      "job": 140962470045,
+      "file": "released-source-audit.yml",
+      "scope": "Published .116 source lifecycle",
+      "condition": "github.event_name == 'workflow_dispatch'",
+      "reason": "Published-release qualification is manual-only; source harness unit gate still applies.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "096a284e7ff906e151b85190d139a0880aa71d86",
+      "path": ".github/workflows/released-source-audit.yml",
+      "actual_name": "Public .116 / ${{ matrix.client }} / ${{ matrix.target }}",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139632912,
+      "job": 140978069133,
+      "file": "hermes-native-e2e.yml",
+      "scope": "Hermes release-native aggregate",
+      "condition": "always() && inputs.release_tag != ''",
+      "reason": "Current pull_request has no release_tag; three source native jobs are separate.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "d109cdee89d0e8b0174d7cebf734644a2bd9e1c4",
+      "path": ".github/workflows/hermes-native-e2e.yml",
+      "actual_name": "Aggregate hermes release-native proofs",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139632913,
+      "job": 140962469364,
+      "file": "skills-install-live-api.yml",
+      "scope": "Native real GitHub/HTTPS Skills install",
+      "condition": "pull_request && ci:live-skills label",
+      "reason": "Current pull_request has no ci:live-skills label; real API contract remains applicable.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "250569fe1d5a2446103800a6574bfa16c5309372",
+      "path": ".github/workflows/skills-install-live-api.yml",
+      "actual_name": "Native real GitHub and HTTPS install",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139632913,
+      "job": 140962496153,
+      "file": "skills-install-live-api.yml",
+      "scope": "Published npm Skills install",
+      "condition": "workflow_dispatch || (pull_request && ci:live-skills label)",
+      "reason": "Current event is pull_request without ci:live-skills.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "250569fe1d5a2446103800a6574bfa16c5309372",
+      "path": ".github/workflows/skills-install-live-api.yml",
+      "actual_name": "Published npm Skills install",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139633101,
+      "job": 140986377016,
+      "file": "antigravity-native-e2e.yml",
+      "scope": "Antigravity release-native aggregate",
+      "condition": "always() && inputs.release_tag != ''",
+      "reason": "Current pull_request has no release_tag; source native jobs are separately successful.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "8bb191bc756015d36afe54fcc2013f8dc999d749",
+      "path": ".github/workflows/antigravity-native-e2e.yml",
+      "actual_name": "Aggregate antigravity release-native proofs",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    }
+  ],
+  "reviews": {
+    "observed_at": "2026-11-28T12:17:50Z",
+    "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "reviews": 16,
+    "states": {
+      "COMMENTED": 16
+    },
+    "latest_review": "2026-11-28T00:47:11Z",
+    "threads": 6,
+    "resolved": 6,
+    "unresolved": [],
+    "review_comments": 18,
+    "comments_mapped_to_threads": 18,
+    "complete": true,
+    "new_since_1020": 0,
+    "formal_approval": false,
+    "qualification": "review state only; final premerge refresh still required"
+  },
+  "runs": {
+    "core": 46139633102,
+    "required": 46139633008,
+    "terminal": 46139632959,
+    "pm": 46139633158,
+    "pi": 46139633114,
+    "marketing": 46139632998,
+    "native": 46139633140,
+    "remaining": 46139632929,
+    "live": 46139633123
+  },
+  "critical_jobs": {
+    "core_test": 140962468880,
+    "cli_lint": 140962468891,
+    "required_main": 140962468445,
+    "staged": 140962468717,
+    "terminal_mac": 140962468196,
+    "pm_windows": 140962468977,
+    "pm_linux": 140962469268,
+    "pm_intel": 140962469299,
+    "pm_macos_arm": 140962469332,
+    "pi_windows": 140962468614,
+    "pi_linux": 140962468848,
+    "pi_macos_arm": 140962468899,
+    "linux_contracts": 140962468819
+  },
+  "latest_counts": {
+    "at": "2026-11-28T13:00:50Z",
+    "success": 102,
+    "skipped": 8,
+    "queued": 35,
+    "running": 7,
+    "failure": 0,
+    "run_count": 41,
+    "source": "CI owner complete per-head scan"
+  },
+  "main_marketing_rebind_plan": {
+    "state": "reviewed_design_only_not_published",
+    "source_core": "b273b92fc290c09ba81de92516302ad7fc04250d",
+    "source_wrapper": "e251bf776935cd8df07644caa75d9f5a4bfdc955",
+    "expected_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "expected_squash_parent": "ff6c507ddcefd23d41d2f26a6fd0b545ab7b6022",
+    "actual_main_head": null,
+    "actual_push_run": null,
+    "changes": [
+      "Bind HEAD and CHECKOUT to actual merged main SHA, RUN to actual push run, TREE only after actual equality; fresh core blob pin in wrapper.",
+      "Core docstring scope becomes exact merged-main push; runtime/report source dictionary remains strict.",
+      "Manifest requires event push; six fresh actual lane job/artifact/size/digest identities.",
+      "Replace synthetic parent guard [MAIN, HEAD] with CHECKOUT == HEAD and actual commit tree==TREE and parents==[MAIN].",
+      "Preserve repo/head_repo/workflow/head/attempt identity guards; add run head_branch == main.",
+      "Keep all18sourcepins, 6client lanes, original job checkout logs, source provisioning pins, ZIP/raw evidence checks and all qualification boundaries."
+    ],
+    "blockers": [
+      "Actual merged tree delta requires substantive delta/source-pin review.",
+      "Changed main parent must be independently reviewed and pinned.",
+      "No transfer of historical PR run/artifact identities to main."
+    ],
+    "scope_boundary": "Published UAP 0.1.116 control remains published CLI, not source-built product."
+  },
+  "pending": [
+    "Terminal Windows original completion/log audit",
+    "PM macOS ARM64 actual job and original archive audit",
+    "Native Claude/Codex six current collection lanes and retained archive audit",
+    "Full 30 Windsurf plugin and dependent full Codex plugin+skill cohorts and archive audit",
+    "Remaining four Marketing runtime lanes then all six original archive audit",
+    "All other applicable current-head workflow jobs",
+    "Fresh complete merge gates/reviews/head/base then expected-head squash",
+    "Actual merged-main push runs, PM six hosts, Pi three, Marketing six and Required/all applicable push gates"
+  ]
+}
