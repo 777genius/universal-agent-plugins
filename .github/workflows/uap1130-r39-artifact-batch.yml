@@ -34,12 +34,12 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.12'
-      - name: Verify PM macOS Intel original archive and canonical evidence
+      - name: Verify PM Linux original archive and canonical evidence
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/r39-pm-audit/pm_readonly_runner.py \
-            --manifest .github/r39-artifact-manifests/pm-macos-intel.json \
-            --manifest-sha256 8c600ecf506f1e016545bc47b4fd664945275001df552b85891b645da4b34e1e \
+            --manifest .github/r39-artifact-manifests/pm-linux.json \
+            --manifest-sha256 e7e41e68f77b9533b61fc9831e4aadc76a24e96f8b2ebf1f40eb539398b9d5f7 \
             --source source \
             --core .github/r39-pm-audit/pm_audit.py

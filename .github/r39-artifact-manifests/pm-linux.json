@@ -1,0 +1,19 @@
+{
+  "repo": "777genius/universal-agent-plugins",
+  "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "run_id": 46139633158,
+  "job_id": 140962469268,
+  "job_name": "package-manager (ubuntu-24.04)",
+  "run_attempt": 1,
+  "event": "pull_request",
+  "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+  "artifact_id": 15263726281,
+  "artifact_name": "package-manager-e2e-ubuntu-24.04-8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+  "size": 63332,
+  "sha256": "1abdb1a5e6bf80dbcebc4c7ca136fe04b66dafd8c70af286e7770c0407eb6240",
+  "expected_platform": {
+    "os": "Linux",
+    "architecture": "x86_64"
+  }
+}

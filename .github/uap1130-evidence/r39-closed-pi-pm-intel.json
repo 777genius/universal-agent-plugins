@@ -1,0 +1,547 @@
+{
+  "schema_version": 1,
+  "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "pi": {
+    "status": "pass",
+    "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "audit_commit": "071330fe092277f861bbfc60e519a537e4cb3de0",
+    "run": 46145415142,
+    "job": 140980275132,
+    "all_steps_success": 11,
+    "original_decoded_log": {
+      "sha256": "3e929a84673caf28e5b41c347a3146d0df63d607d8f8ef9915afa66f48c45497",
+      "bytes": 46420
+    },
+    "hosts": [
+      {
+        "target": "darwin-arm64",
+        "runtime_job": 140962468899,
+        "archives": {
+          "components": {
+            "artifact_id": 15263122070,
+            "bytes": 81249,
+            "crc": "pass",
+            "sha256": "94227cf76304a09680190010f464f40a0d452910082364c94eeaf77144065482"
+          },
+          "trust": {
+            "artifact_id": 15262747793,
+            "bytes": 2982,
+            "crc": "pass",
+            "sha256": "72cbc8d2550eeb13ce239a3954bde577e6639ebd269067fcf8ddf8e37c018a12"
+          }
+        },
+        "trust_stages": 14,
+        "component_stages": 9,
+        "original_streams_verified": 31,
+        "member_counts": {
+          "trust": 10,
+          "components": 27
+        },
+        "raw_public_scopes": {
+          "project": {
+            "commands": 4,
+            "native_inventories": 12,
+            "removal": "pass",
+            "repeat_identity": "pass"
+          },
+          "user": {
+            "commands": 3,
+            "native_inventories": 12,
+            "removal": "pass",
+            "repeat_identity": "pass"
+          }
+        }
+      },
+      {
+        "target": "windows-amd64",
+        "runtime_job": 140962468614,
+        "archives": {
+          "components": {
+            "artifact_id": 15262924745,
+            "bytes": 82914,
+            "crc": "pass",
+            "sha256": "7072e705da062189c6cefa3b5ee70d6f7d4e1a6bb65ed5c5d75767e64100463a"
+          },
+          "trust": {
+            "artifact_id": 15262964237,
+            "bytes": 2959,
+            "crc": "pass",
+            "sha256": "2839ad8861c56058eca6cf89c0ab5a03d772040e74c3ef391f101f0347c81d3d"
+          }
+        },
+        "trust_stages": 14,
+        "component_stages": 9,
+        "original_streams_verified": 31,
+        "member_counts": {
+          "trust": 10,
+          "components": 27
+        },
+        "raw_public_scopes": {
+          "project": {
+            "commands": 4,
+            "native_inventories": 12,
+            "removal": "pass",
+            "repeat_identity": "pass"
+          },
+          "user": {
+            "commands": 3,
+            "native_inventories": 12,
+            "removal": "pass",
+            "repeat_identity": "pass"
+          }
+        }
+      },
+      {
+        "target": "linux-amd64",
+        "runtime_job": 140962468848,
+        "archives": {
+          "components": {
+            "artifact_id": 15262979653,
+            "bytes": 82211,
+            "crc": "pass",
+            "sha256": "5b4463918723ed9b99da807f34d68f3766e6f9ae2e45372ec694836cd7111a79"
+          },
+          "trust": {
+            "artifact_id": 15263093562,
+            "bytes": 2976,
+            "crc": "pass",
+            "sha256": "687b73012ddac60a59b66636b5f9787b190e978fb2d2acae5db72930aa39d2c0"
+          }
+        },
+        "trust_stages": 14,
+        "component_stages": 9,
+        "original_streams_verified": 31,
+        "member_counts": {
+          "trust": 10,
+          "components": 27
+        },
+        "raw_public_scopes": {
+          "project": {
+            "commands": 4,
+            "native_inventories": 12,
+            "removal": "pass",
+            "repeat_identity": "pass"
+          },
+          "user": {
+            "commands": 3,
+            "native_inventories": 12,
+            "removal": "pass",
+            "repeat_identity": "pass"
+          }
+        }
+      }
+    ],
+    "mcp_tools_call_qualified": true,
+    "real_model_qualified": false,
+    "vendor_auth_qualified": false,
+    "boundaries": [
+      "Real pinned Pi MCP calls use a scripted local model provider.",
+      "Non-raw trust/MCP/preservation/cleanup results follow executed pinned assertions and stages; original MCP/provider transcripts and complete filesystem snapshots are not uploaded.",
+      "24 raw native inventory and seven public DTO response byte streams are independently decoded and hashed; repeat proof objects retain identical IID/state/binding/native tree/locks.",
+      "Raw original serialized state bytes are not uploaded; state_sha256 cannot be recomputed from parsed JSON without assuming serialization.",
+      "Tree identity is verified by the wrapper's pinned source checkout, not a native Pi report tree field.",
+      "Native release archive and executable bytes are not uploaded; reported binary hashes are only cross-matched across retained release/inventory receipts."
+    ]
+  },
+  "pi_receipts": [
+    {
+      "actual_steps_success": 13,
+      "archives": {
+        "components": {
+          "artifact_id": 15263122070,
+          "bytes": 81249,
+          "crc": "pass",
+          "sha256": "94227cf76304a09680190010f464f40a0d452910082364c94eeaf77144065482"
+        },
+        "trust": {
+          "artifact_id": 15262747793,
+          "bytes": 2982,
+          "crc": "pass",
+          "sha256": "72cbc8d2550eeb13ce239a3954bde577e6639ebd269067fcf8ddf8e37c018a12"
+        }
+      },
+      "audit_kind": "independent paired-artifact check only",
+      "boundaries": [
+        "Real pinned Pi MCP calls use a scripted local model provider.",
+        "Non-raw trust/MCP/preservation/cleanup results follow executed pinned assertions and stages; original MCP/provider transcripts and complete filesystem snapshots are not uploaded.",
+        "24 raw native inventory and seven public DTO response byte streams are independently decoded and hashed; repeat proof objects retain identical IID/state/binding/native tree/locks.",
+        "Raw original serialized state bytes are not uploaded; state_sha256 cannot be recomputed from parsed JSON without assuming serialization.",
+        "Tree identity is verified by the wrapper's pinned source checkout, not a native Pi report tree field.",
+        "Native release archive and executable bytes are not uploaded; reported binary hashes are only cross-matched across retained release/inventory receipts."
+      ],
+      "component_stages": 9,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "job_id": 140962468899,
+      "manifest_sha256": "a1a1938a3a9e3d05d93d2916326d29b3614c429db47a892d98024708fdcf5b56",
+      "mcp_tools_call_qualified": true,
+      "original_streams_verified": 31,
+      "raw_public_scopes": {
+        "project": {
+          "commands": 4,
+          "native_inventories": 12,
+          "removal": "pass",
+          "repeat_identity": "pass"
+        },
+        "user": {
+          "commands": 3,
+          "native_inventories": 12,
+          "removal": "pass",
+          "repeat_identity": "pass"
+        }
+      },
+      "real_model_qualified": false,
+      "run_id": 46139633114,
+      "status": "pass",
+      "target": "darwin-arm64",
+      "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "trust_stages": 14,
+      "vendor_auth_qualified": false,
+      "zip_member_names": {
+        "components": [
+          "pi-project-components-evidence.json",
+          "pi-public-raw-project.json",
+          "pi-public-raw-user.json",
+          "raw-project-add-a.json",
+          "raw-project-add-b.json",
+          "raw-project-add-outside.json",
+          "raw-project-baseline-a.json",
+          "raw-project-baseline-b.json",
+          "raw-project-baseline-outside.json",
+          "raw-project-remove-a.json",
+          "raw-project-remove-b.json",
+          "raw-project-remove-outside.json",
+          "raw-project-repeat-a.json",
+          "raw-project-repeat-b.json",
+          "raw-project-repeat-outside.json",
+          "raw-user-add-a.json",
+          "raw-user-add-b.json",
+          "raw-user-add-outside.json",
+          "raw-user-baseline-a.json",
+          "raw-user-baseline-b.json",
+          "raw-user-baseline-outside.json",
+          "raw-user-remove-a.json",
+          "raw-user-remove-b.json",
+          "raw-user-remove-outside.json",
+          "raw-user-repeat-a.json",
+          "raw-user-repeat-b.json",
+          "raw-user-repeat-outside.json"
+        ],
+        "trust": [
+          "a-remove.json",
+          "a-update.json",
+          "a.json",
+          "b-remove.json",
+          "b.json",
+          "c-remove.json",
+          "c-repeat.json",
+          "c-update.json",
+          "c.json",
+          "native-pi-project-evidence.json"
+        ]
+      }
+    },
+    {
+      "actual_steps_success": 13,
+      "archives": {
+        "components": {
+          "artifact_id": 15262924745,
+          "bytes": 82914,
+          "crc": "pass",
+          "sha256": "7072e705da062189c6cefa3b5ee70d6f7d4e1a6bb65ed5c5d75767e64100463a"
+        },
+        "trust": {
+          "artifact_id": 15262964237,
+          "bytes": 2959,
+          "crc": "pass",
+          "sha256": "2839ad8861c56058eca6cf89c0ab5a03d772040e74c3ef391f101f0347c81d3d"
+        }
+      },
+      "audit_kind": "independent paired-artifact check only",
+      "boundaries": [
+        "Real pinned Pi MCP calls use a scripted local model provider.",
+        "Non-raw trust/MCP/preservation/cleanup results follow executed pinned assertions and stages; original MCP/provider transcripts and complete filesystem snapshots are not uploaded.",
+        "24 raw native inventory and seven public DTO response byte streams are independently decoded and hashed; repeat proof objects retain identical IID/state/binding/native tree/locks.",
+        "Raw original serialized state bytes are not uploaded; state_sha256 cannot be recomputed from parsed JSON without assuming serialization.",
+        "Tree identity is verified by the wrapper's pinned source checkout, not a native Pi report tree field.",
+        "Native release archive and executable bytes are not uploaded; reported binary hashes are only cross-matched across retained release/inventory receipts."
+      ],
+      "component_stages": 9,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "job_id": 140962468614,
+      "manifest_sha256": "3811ce2c8d6f46683172dbe79a6ec875d7c6c0ec57b0f9bfd824424b02103744",
+      "mcp_tools_call_qualified": true,
+      "original_streams_verified": 31,
+      "raw_public_scopes": {
+        "project": {
+          "commands": 4,
+          "native_inventories": 12,
+          "removal": "pass",
+          "repeat_identity": "pass"
+        },
+        "user": {
+          "commands": 3,
+          "native_inventories": 12,
+          "removal": "pass",
+          "repeat_identity": "pass"
+        }
+      },
+      "real_model_qualified": false,
+      "run_id": 46139633114,
+      "status": "pass",
+      "target": "windows-amd64",
+      "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "trust_stages": 14,
+      "vendor_auth_qualified": false,
+      "zip_member_names": {
+        "components": [
+          "pi-project-components-evidence.json",
+          "pi-public-raw-project.json",
+          "pi-public-raw-user.json",
+          "raw-project-add-a.json",
+          "raw-project-add-b.json",
+          "raw-project-add-outside.json",
+          "raw-project-baseline-a.json",
+          "raw-project-baseline-b.json",
+          "raw-project-baseline-outside.json",
+          "raw-project-remove-a.json",
+          "raw-project-remove-b.json",
+          "raw-project-remove-outside.json",
+          "raw-project-repeat-a.json",
+          "raw-project-repeat-b.json",
+          "raw-project-repeat-outside.json",
+          "raw-user-add-a.json",
+          "raw-user-add-b.json",
+          "raw-user-add-outside.json",
+          "raw-user-baseline-a.json",
+          "raw-user-baseline-b.json",
+          "raw-user-baseline-outside.json",
+          "raw-user-remove-a.json",
+          "raw-user-remove-b.json",
+          "raw-user-remove-outside.json",
+          "raw-user-repeat-a.json",
+          "raw-user-repeat-b.json",
+          "raw-user-repeat-outside.json"
+        ],
+        "trust": [
+          "a-remove.json",
+          "a-update.json",
+          "a.json",
+          "b-remove.json",
+          "b.json",
+          "c-remove.json",
+          "c-repeat.json",
+          "c-update.json",
+          "c.json",
+          "native-pi-project-evidence.json"
+        ]
+      }
+    },
+    {
+      "actual_steps_success": 13,
+      "archives": {
+        "components": {
+          "artifact_id": 15262979653,
+          "bytes": 82211,
+          "crc": "pass",
+          "sha256": "5b4463918723ed9b99da807f34d68f3766e6f9ae2e45372ec694836cd7111a79"
+        },
+        "trust": {
+          "artifact_id": 15263093562,
+          "bytes": 2976,
+          "crc": "pass",
+          "sha256": "687b73012ddac60a59b66636b5f9787b190e978fb2d2acae5db72930aa39d2c0"
+        }
+      },
+      "audit_kind": "independent paired-artifact check only",
+      "boundaries": [
+        "Real pinned Pi MCP calls use a scripted local model provider.",
+        "Non-raw trust/MCP/preservation/cleanup results follow executed pinned assertions and stages; original MCP/provider transcripts and complete filesystem snapshots are not uploaded.",
+        "24 raw native inventory and seven public DTO response byte streams are independently decoded and hashed; repeat proof objects retain identical IID/state/binding/native tree/locks.",
+        "Raw original serialized state bytes are not uploaded; state_sha256 cannot be recomputed from parsed JSON without assuming serialization.",
+        "Tree identity is verified by the wrapper's pinned source checkout, not a native Pi report tree field.",
+        "Native release archive and executable bytes are not uploaded; reported binary hashes are only cross-matched across retained release/inventory receipts."
+      ],
+      "component_stages": 9,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "job_id": 140962468848,
+      "manifest_sha256": "43f9ccc6a932e7c012e53bc1cc14c49c43cf077a3e1955963e2d6ce8f7e1b25b",
+      "mcp_tools_call_qualified": true,
+      "original_streams_verified": 31,
+      "raw_public_scopes": {
+        "project": {
+          "commands": 4,
+          "native_inventories": 12,
+          "removal": "pass",
+          "repeat_identity": "pass"
+        },
+        "user": {
+          "commands": 3,
+          "native_inventories": 12,
+          "removal": "pass",
+          "repeat_identity": "pass"
+        }
+      },
+      "real_model_qualified": false,
+      "run_id": 46139633114,
+      "status": "pass",
+      "target": "linux-amd64",
+      "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "trust_stages": 14,
+      "vendor_auth_qualified": false,
+      "zip_member_names": {
+        "components": [
+          "pi-project-components-evidence.json",
+          "pi-public-raw-project.json",
+          "pi-public-raw-user.json",
+          "raw-project-add-a.json",
+          "raw-project-add-b.json",
+          "raw-project-add-outside.json",
+          "raw-project-baseline-a.json",
+          "raw-project-baseline-b.json",
+          "raw-project-baseline-outside.json",
+          "raw-project-remove-a.json",
+          "raw-project-remove-b.json",
+          "raw-project-remove-outside.json",
+          "raw-project-repeat-a.json",
+          "raw-project-repeat-b.json",
+          "raw-project-repeat-outside.json",
+          "raw-user-add-a.json",
+          "raw-user-add-b.json",
+          "raw-user-add-outside.json",
+          "raw-user-baseline-a.json",
+          "raw-user-baseline-b.json",
+          "raw-user-baseline-outside.json",
+          "raw-user-remove-a.json",
+          "raw-user-remove-b.json",
+          "raw-user-remove-outside.json",
+          "raw-user-repeat-a.json",
+          "raw-user-repeat-b.json",
+          "raw-user-repeat-outside.json"
+        ],
+        "trust": [
+          "a-remove.json",
+          "a-update.json",
+          "a.json",
+          "b-remove.json",
+          "b.json",
+          "c-remove.json",
+          "c-repeat.json",
+          "c-update.json",
+          "c.json",
+          "native-pi-project-evidence.json"
+        ]
+      }
+    }
+  ],
+  "pm_intel": {
+    "status": "pass",
+    "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "audit_commit": "d9cc90f48d6fe9fe0c266eb881a24748b93b8c1a",
+    "run": 46145529527,
+    "job": 140980633113,
+    "all_steps_success": 10,
+    "original_decoded_log": {
+      "sha256": "63c6bedf8835e094cef4e8b00c6b3ee83c311a6184145d86d11dbd5ebd75dc80",
+      "bytes": 38010
+    },
+    "receipt": {
+      "agreement_roots": 17,
+      "artifact_id": 15263261908,
+      "audit_kind": "independent artifact check only",
+      "boundaries": [
+        "Filesystem preservation follows executed pinned assertions; full original filesystem snapshots are not retained.",
+        "Plugin scanner receipt does not independently qualify collection scanner receipt.",
+        "No authentication or model-call qualification."
+      ],
+      "canonical_required": 140,
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "collection_commands": 6,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "job_id": 140962469299,
+      "manifest_sha256": "8c600ecf506f1e016545bc47b4fd664945275001df552b85891b645da4b34e1e",
+      "native_runtime_qualified": false,
+      "phases": 23,
+      "platform": {
+        "architecture": "x86_64",
+        "os": "Darwin"
+      },
+      "raw_pass": 463,
+      "raw_run": 463,
+      "run_id": 46139633158,
+      "status": "pass",
+      "stream_hashes": 46,
+      "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "windows_held_readers": {
+        "job_name": "package-manager (macos-15-intel)",
+        "qualified_roots": [],
+        "raw_pass": 0,
+        "raw_run": 0,
+        "raw_run_pass_verified": false,
+        "required_roots": 0,
+        "source_condition": "matrix.os == 'windows-2025'",
+        "status": "not_applicable",
+        "stream_bytes": 0,
+        "stream_sha256": null
+      },
+      "zip_crc": "pass",
+      "zip_member_names": [
+        "agreement-boundary.stderr",
+        "agreement-boundary.stdout",
+        "binary-collection-add.stderr",
+        "binary-collection-add.stdout",
+        "binary-collection-list.stderr",
+        "binary-collection-list.stdout",
+        "binary-collection-remove-collection-review.stderr",
+        "binary-collection-remove-collection-review.stdout",
+        "binary-collection-remove-collection-testing.stderr",
+        "binary-collection-remove-collection-testing.stdout",
+        "binary-collection-repeat.stderr",
+        "binary-collection-repeat.stdout",
+        "binary-collection-update.stderr",
+        "binary-collection-update.stdout",
+        "binary-empty-lock.stderr",
+        "binary-empty-lock.stdout",
+        "binary-empty-status.stderr",
+        "binary-empty-status.stdout",
+        "binary-empty-sync.stderr",
+        "binary-empty-sync.stdout",
+        "binary-help.stderr",
+        "binary-help.stdout",
+        "binary-init.stderr",
+        "binary-init.stdout",
+        "binary-install-first.stderr",
+        "binary-install-first.stdout",
+        "binary-install-info.stderr",
+        "binary-install-info.stdout",
+        "binary-install-remove.stderr",
+        "binary-install-remove.stdout",
+        "binary-install-repair.stderr",
+        "binary-install-repair.stdout",
+        "binary-install-repeat.stderr",
+        "binary-install-repeat.stdout",
+        "binary-malformed-package.stderr",
+        "binary-malformed-package.stdout",
+        "binary-missing-lock.stderr",
+        "binary-missing-lock.stdout",
+        "build.stderr",
+        "build.stdout",
+        "catalog.stderr",
+        "catalog.stdout",
+        "collections.stderr",
+        "collections.stdout",
+        "composition.stderr",
+        "composition.stdout",
+        "installations.stderr",
+        "installations.stdout",
+        "report.json"
+      ],
+      "zip_sha256": "28f117e58d495bc8e6823614d690ccfefacc0473a15717ffccb830f6b2d14dca",
+      "zip_size": 61594
+    }
+  },
+  "remaining_scope": "Other PM hosts, Terminal Windows, Required and remaining platform/native/Marketing/full cohorts, then expected-head squash and actual main remain pending"
+}

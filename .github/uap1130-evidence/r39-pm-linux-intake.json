@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "scope": "R39 PM Linux original retained ZIP",
+  "state": "ready_intake_byte_audit_pending",
+  "source": {
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221"
+  },
+  "run_id": 46139633158,
+  "job_id": 140962469268,
+  "run_attempt": 1,
+  "job_steps": {
+    "success": 19,
+    "source_authorized_windows_only_skip": 1
+  },
+  "original_decoded_log": {
+    "sha256": "a0cd801ecf0ed1e1b74fda847f3d10f0bf6a41d6e63462150f0539dbcde2f14d",
+    "bytes": 68624
+  },
+  "manifest_hash": {
+    "sha256": "e7e41e68f77b9533b61fc9831e4aadc76a24e96f8b2ebf1f40eb539398b9d5f7",
+    "bytes": 663
+  },
+  "manifest": {
+    "repo": "777genius/universal-agent-plugins",
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "run_id": 46139633158,
+    "job_id": 140962469268,
+    "job_name": "package-manager (ubuntu-24.04)",
+    "run_attempt": 1,
+    "event": "pull_request",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "artifact_id": 15263726281,
+    "artifact_name": "package-manager-e2e-ubuntu-24.04-8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "size": 63332,
+    "sha256": "1abdb1a5e6bf80dbcebc4c7ca136fe04b66dafd8c70af286e7770c0407eb6240",
+    "expected_platform": {
+      "os": "Linux",
+      "architecture": "x86_64"
+    }
+  },
+  "auditor": {
+    "core_blob": "91a5ea4e09df50879dea4fcb948970674a410f29",
+    "wrapper_blob": "608ef50842bce97b3305e3d7ced680f82ef869af",
+    "core_path": ".github/r39-pm-audit/pm_audit.py",
+    "wrapper_path": ".github/r39-pm-audit/pm_readonly_runner.py"
+  },
+  "qualifies_archive_bytes": false,
+  "independent_intake": "Root and PM owner independently matched original job steps, full decoded-log SHA-256, source checkout and artifact upload metadata"
+}
