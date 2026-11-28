@@ -1367,6 +1367,162 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 for fd in (*descriptors, *opened):
                     with self.assertRaises(OSError): os.fstat(fd)
 
+    def test_post_remove_temporary_custody_refusal_has_only_bounded_metadata(self):
+        for mutation in ("mode", "empty", "identity"):
+            with self.subTest(mutation=mutation), self.fixture() as f:
+                _, pending, document = self.author_passive_usage(f, temporary=False)
+                subject = self.capture(f)
+                self.retire(f)
+                del document["pluginUsage"][f["owners"][0]["key"]]
+                pending.write_text(json.dumps(document)); pending.chmod(0o600)
+                if mutation == "mode": pending.chmod(0o644)
+                elif mutation == "empty": pending.write_bytes(b"")
+                named_image = retirement._diagnostic_named_image
+                descriptor_image = retirement._diagnostic_image
+                metadata_observations = []
+                def image(fd, audit):
+                    # Count only the actual initial descriptor-metadata guard,
+                    # rather than imposing the retired pathname reader's counts.
+                    original_fstat, original_euid = os.fstat, os.geteuid
+                    stats, owners = [], []
+                    def fstat(opened):
+                        stats.append(opened)
+                        return original_fstat(opened)
+                    def euid():
+                        owners.append(True)
+                        return original_euid()
+                    with patch.object(os, "fstat", side_effect=fstat), patch.object(
+                            os, "geteuid", side_effect=euid):
+                        try:
+                            return descriptor_image(fd, audit)
+                        finally:
+                            metadata_observations.append((stats, owners))
+                            self.assertEqual(stats, [fd])
+                            self.assertEqual(owners, [True])
+                def named(path, case, audit, *, held_fd=None):
+                    if path != pending:
+                        return named_image(path, case, audit, held_fd=held_fd)
+                    self.assertIsNotNone(held_fd)
+                    if mutation == "identity":
+                        replacement = pending.with_name("private-replacement")
+                        replacement.write_bytes(pending.read_bytes()); replacement.chmod(0o600)
+                        replacement.replace(pending)
+                    original_fstat = os.fstat
+                    held_observations = []
+                    def fstat(opened):
+                        if opened == held_fd:
+                            held_observations.append(opened)
+                        return original_fstat(opened)
+                    # Neither an admission refusal nor its annotation may read
+                    # file content. Failed I/O is never retried by diagnostics.
+                    with patch.object(os, "pread", side_effect=AssertionError("unexpected content read")):
+                        if mutation == "identity":
+                            with patch.object(os, "fstat", side_effect=fstat):
+                                try:
+                                    return named_image(path, case, audit, held_fd=held_fd)
+                                finally:
+                                    self.assertEqual(held_observations, [held_fd])
+                        with patch.object(retirement, "_diagnostic_image", side_effect=image):
+                            return named_image(path, case, audit, held_fd=held_fd)
+                raw = self.scan(f)
+                with patch.object(retirement, "_diagnostic_named_image", side_effect=named), self.assertRaisesRegex(
+                        ValueError, "Claude cache retirement authority is unresolved") as raised:
+                    subject.finish(f["cleanup"], raw, lambda: self.scan(f))
+                diagnostic = raised.exception.passive_file_custody_diagnostics
+                reason = {"mode": "mode", "empty": "size", "identity": "identity"}[mutation]
+                self.assertTrue(diagnostic["reasons"][reason])
+                self.assertEqual(sum(value is True for value in diagnostic["reasons"].values()), 1)
+                self.assertEqual(diagnostic["phase"],
+                                 "held-descriptor" if mutation == "identity" else "descriptor-metadata")
+                self.assertEqual(len(metadata_observations), int(mutation != "identity"))
+                for facts in diagnostic["observations"].values():
+                    self.assertEqual(set(facts), {"type", "mode", "nlink", "uid", "gid", "size"})
+                serialized = str(raised.exception)
+                self.assertLess(len(serialized), 1200)
+                for private in (str(f["root"]), pending.name, "pluginUsage", "lastUsedAt", "foreign"):
+                    self.assertNotIn(private, serialized)
+                self.assertEqual(subject.fds, [])
+
+    def test_passive_named_metadata_refusal_preserves_lazy_observations(self):
+        for mutation in ("hardlink", "member_identity", "named_identity"):
+            with self.subTest(mutation=mutation), self.fixture() as f:
+                path, _, _ = self.author_passive_usage(f, temporary=False)
+                subject = self.capture(f)
+                held_fd = subject.passive_usage[0]["fd"]
+                replacement = path.with_name("private-replacement")
+                replacement.write_bytes(path.read_bytes()); replacement.chmod(0o600)
+                if mutation == "hardlink":
+                    os.link(path, path.with_name("private-hardlink"))
+                original_member = f["audit"]["WINDSURF_GLOBAL_AUDIT"]["member"]
+                @contextmanager
+                def member(root_fd, relative):
+                    if mutation == "member_identity":
+                        replacement.replace(path)
+                    with original_member(root_fd, relative) as fd:
+                        if mutation == "named_identity":
+                            original_fstat = os.fstat
+                            def replace_after_observation(opened):
+                                info = original_fstat(opened)
+                                if opened == fd:
+                                    replacement.replace(path)
+                                return info
+                            with patch.object(os, "fstat", side_effect=replace_after_observation):
+                                yield fd
+                        else:
+                            yield fd
+                original_lstat = Path.lstat
+                named_stats = []
+                def lstat(candidate, *args, **kwargs):
+                    if candidate == path:
+                        named_stats.append(candidate)
+                    return original_lstat(candidate, *args, **kwargs)
+                try:
+                    with patch.dict(f["audit"]["WINDSURF_GLOBAL_AUDIT"], {"member": member}), patch.object(
+                            Path, "lstat", lstat), patch.object(
+                            os, "pread", side_effect=AssertionError("unexpected content read")):
+                        with self.assertRaises(ValueError) as raised:
+                            subject.passive_image(path, held_fd)
+                    diagnostic = raised.exception.passive_file_custody_diagnostics
+                    self.assertEqual(diagnostic["phase"], "named-member")
+                    captured = diagnostic["observations"]
+                    self.assertEqual(captured["member_fstat"] is None, mutation == "hardlink")
+                    self.assertEqual(captured["named_lstat"] is None, mutation != "named_identity")
+                    self.assertEqual(len(named_stats), 2 if mutation == "named_identity" else 1)
+                    self.assertEqual(diagnostic["reasons"]["link_count"], mutation == "hardlink")
+                    self.assertEqual(diagnostic["reasons"]["identity"], mutation != "hardlink")
+                finally:
+                    subject.close()
+
+    def test_passive_metadata_io_failures_keep_original_exception(self):
+        for phase in ("pathname", "descriptor", "held-descriptor"):
+            with self.subTest(phase=phase), self.fixture() as f:
+                path, _, _ = self.author_passive_usage(f, temporary=False)
+                subject = self.capture(f)
+                held_fd = subject.passive_usage[0]["fd"]
+                failure = OSError("private fixture I/O failure")
+                original_fstat = os.fstat
+                def fstat(fd):
+                    if fd == held_fd:
+                        raise failure
+                    return original_fstat(fd)
+                try:
+                    with patch.object(os, "pread", side_effect=AssertionError("unexpected content read")):
+                        with self.assertRaises(OSError) as raised:
+                            if phase == "pathname":
+                                with patch.object(Path, "lstat", side_effect=failure):
+                                    subject.passive_image(path, held_fd)
+                            elif phase == "descriptor":
+                                with patch.object(os, "fstat", side_effect=fstat):
+                                    retirement._diagnostic_image(held_fd, f["audit"])
+                            else:
+                                with patch.object(os, "fstat", side_effect=fstat):
+                                    subject.passive_image(path, held_fd)
+                    self.assertIs(raised.exception, failure)
+                    self.assertEqual(failure.args, ("private fixture I/O failure",))
+                    self.assertFalse(hasattr(failure, "passive_file_custody_diagnostics"))
+                finally:
+                    subject.close()
+
     def test_only_valid_remove_admits_usage_deletion_and_one_native_temporary_once(self):
         for transition in ("in_place", "atomic", "new_temporary", "wrong_receipt"):
             with self.subTest(transition=transition), self.fixture() as f:

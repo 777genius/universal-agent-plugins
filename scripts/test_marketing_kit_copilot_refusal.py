@@ -1,6 +1,7 @@
 """Strict admission of the released CLI's expected Copilot refusal diagnostic."""
 import copy
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -344,6 +345,131 @@ class CopilotConsentDiagnosticContracts(unittest.TestCase):
             self.assertEqual(delta["changed_key_count"], 40)
             self.assertEqual(len(delta["items"]), 20)
             self.assertEqual(delta["omitted_key_count"], 20)
+
+    def test_cold_project_refusals_preserve_real_filesystem_and_snapshot_inputs(self):
+        check = RUNNER["check_copilot_cold_project_unchanged"]
+        snapshot = RUNNER["scoped_snapshot"]
+        for mutation in ("existing", "unowned", "link"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as directory:
+                _, project, _, _, receipts = self.fixture(Path(directory))
+                protected = project / "protected.txt"
+                protected.write_text("original", encoding="utf-8")
+                before = snapshot([project])
+                retained = copy.deepcopy(before)
+                if mutation == "existing": protected.write_text("changed", encoding="utf-8")
+                elif mutation == "unowned": (project / "unowned.txt").write_text("PRIVATE_CONTENT")
+                else: (project / "private-link").symlink_to(project.parent / "PRIVATE_LINK_TARGET")
+                after = snapshot([project])
+                with patch.dict(check.__globals__, {"scoped_snapshot": lambda roots: after}):
+                    with self.assertRaises(AssertionError) as raised:
+                        check(project, before, receipts)
+                detail = json.loads(str(raised.exception).split(": ", 1)[1])
+                allowed = {"existing": {"existing-project-state"}, "unowned": {"unowned-project-state"},
+                           "link": {"unsafe-project-state", "unowned-project-state"}}
+                self.assertIn(detail["reason"], allowed[mutation])
+                self.assertEqual(detail["delta"]["changed_key_count"], 1)
+                self.assertEqual(len(detail["delta"]["items"]), 1)
+                self.assertEqual(detail["delta"]["omitted_key_count"], 0)
+                self.assertEqual(before, retained)
+                self.assertEqual(snapshot([project]), after)
+                for private in (str(project.parent), "PRIVATE_LINK_TARGET", "PRIVATE_CONTENT"):
+                    self.assertNotIn(private, str(raised.exception))
+
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "FIFO fixture requires POSIX")
+    def test_cold_project_special_file_reports_captured_class_without_opening_it(self):
+        check = RUNNER["check_copilot_cold_project_unchanged"]
+        with TemporaryDirectory() as directory:
+            _, project, _, _, receipts = self.fixture(Path(directory))
+            before = RUNNER["scoped_snapshot"]([project])
+            alias, uid = receipts[0]
+            physical = alias + "-" + hashlib.sha256(uid.encode()).hexdigest()[:12]
+            package = project / ".uap/managed/clients/copilot" / physical
+            package.mkdir(parents=True)
+            payload = package / "special"
+            os.mkfifo(payload, 0o600)
+            after = RUNNER["scoped_snapshot"]([project])
+            attempts = []
+            original_open = os.open
+            parent = package.stat()
+            def guarded_open(candidate, *args, **kwargs):
+                named = Path(os.fsdecode(candidate))
+                directory = kwargs.get("dir_fd")
+                selected = named == payload
+                if named.name == payload.name and directory is not None:
+                    held = os.fstat(directory)
+                    selected = selected or (held.st_dev, held.st_ino) == (parent.st_dev, parent.st_ino)
+                if selected:
+                    attempts.append(candidate)
+                    raise AssertionError("FIFO must not be opened")
+                return original_open(candidate, *args, **kwargs)
+            with patch.object(os, "open", side_effect=guarded_open):
+                with self.assertRaises(AssertionError) as raised:
+                    check(project, before, receipts)
+            self.assertEqual(attempts, [])
+            detail = json.loads(str(raised.exception).split(": ", 1)[1])
+            self.assertIn(detail["reason"], ("unsafe-project-state", "unowned-project-state"))
+            self.assertIn(detail["key_prefix"], ("metadata:0:", "file"))
+            self.assertIn((detail["value_class"], detail["value_prefix"]),
+                          (("string", "non-regular"), ("tuple", "fifo")))
+            self.assertEqual(detail["delta"]["changed_key_count"], 1)
+            self.assertEqual(detail["delta"]["omitted_key_count"], 0)
+            self.assertNotIn(str(project.parent), str(raised.exception))
+            self.assertEqual(RUNNER["scoped_snapshot"]([project]), after)
+
+    def test_cold_project_singleton_cannot_omit_failure_among_many_valid_additions(self):
+        check = RUNNER["check_copilot_cold_project_unchanged"]
+        with TemporaryDirectory() as directory:
+            _, project, _, _, receipts = self.fixture(Path(directory))
+            before = RUNNER["scoped_snapshot"]([project])
+            alias, uid = receipts[0]
+            physical = alias + "-" + hashlib.sha256(uid.encode()).hexdigest()[:12]
+            package = project / ".uap/managed/clients/copilot" / physical
+            package.mkdir(parents=True)
+            for number in range(80):
+                (package / (str(number) + ".json")).write_text('{"valid":true}')
+            link = package / "unsafe\nprivate-link"
+            link.symlink_to(project.parent / "PRIVATE_TARGET")
+            after = RUNNER["scoped_snapshot"]([project])
+            delta = RUNNER["audit"]["copilot_snapshot_delta"]
+            calls = []
+            def singleton(left, right):
+                calls.append((copy.deepcopy(left), copy.deepcopy(right)))
+                return delta(left, right)
+            with patch.dict(RUNNER["audit"], {"copilot_snapshot_delta": singleton}):
+                with self.assertRaises(AssertionError) as raised:
+                    check(project, before, receipts)
+            self.assertGreater(len(after.keys() - before.keys()), 80)
+            self.assertEqual(len(calls), 1)
+            left, right = calls[0]
+            self.assertEqual(left, {})
+            self.assertEqual(len(right), 1)
+            self.assertTrue(next(iter(right)).endswith(link.name))
+            detail = json.loads(str(raised.exception).split(": ", 1)[1])
+            self.assertIn(detail["key_prefix"], ("metadata:0:", "link:0:"))
+            self.assertEqual(detail["delta"]["changed_key_count"], 1)
+            self.assertEqual(detail["delta"]["omitted_key_count"], 0)
+            self.assertLess(len(str(raised.exception)), 1400)
+            self.assertNotIn("PRIVATE_TARGET", str(raised.exception))
+            self.assertNotIn(str(project.parent), str(raised.exception))
+            self.assertEqual(RUNNER["scoped_snapshot"]([project]), after)
+
+    def test_cold_project_diagnostic_failures_keep_original_assertion(self):
+        check = RUNNER["check_copilot_cold_project_unchanged"]
+        message = "cold Copilot locked install modified native or unowned Project state"
+        for failure in ("delta", "serialization"):
+            with self.subTest(failure=failure), TemporaryDirectory() as directory:
+                _, project, _, _, receipts = self.fixture(Path(directory))
+                before = RUNNER["scoped_snapshot"]([project])
+                (project / "unowned").write_text("PRIVATE_CONTENT")
+                after = RUNNER["scoped_snapshot"]([project])
+                def diagnostic(*args):
+                    if failure == "delta": raise RuntimeError("PRIVATE_DIAGNOSTIC_FAILURE")
+                    return {"unserializable": {object()}}
+                with patch.dict(RUNNER["audit"], {"copilot_snapshot_delta": diagnostic}):
+                    with self.assertRaises(AssertionError) as raised:
+                        check(project, before, receipts)
+                self.assertEqual(raised.exception.args, (message,))
+                self.assertEqual(RUNNER["scoped_snapshot"]([project]), after)
 
 
 if __name__ == "__main__":
