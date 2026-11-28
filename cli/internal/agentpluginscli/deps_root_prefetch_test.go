@@ -387,7 +387,6 @@ func TestGitRootPrefetchCancellationLeavesNoAcquisitions(t *testing.T) {
 	assertEmptyDir(t, source.tempRoot)
 }
 
-
 // A denied direct dependency must never have its Git ref or tree read by the
 // concurrent prefetch ahead of the solver's typed policy refusal.
 func TestGitRootPrefetchHonorsSelectedPolicyTargetsBeforeRemoteReads(t *testing.T) {
