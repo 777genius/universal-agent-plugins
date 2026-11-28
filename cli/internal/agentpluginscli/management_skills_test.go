@@ -149,13 +149,12 @@ func TestManagementSelectedSkillTargetPreservesUnselectedDrift(t *testing.T) {
 	}
 }
 
-
 // Catalog discovery is a read-only management operation. An installation
 // policy may deny Git delivery but must not prevent source inspection.
 func TestManagementGitCatalogReadOnlyUnderEnterpriseDenial(t *testing.T) {
 	j, _, sha := skillJourney(t)
 	j.cli.app = j.cli.app.withEnterprisePolicyGate(sourcePolicyApp(t,
-		"schema_version: 2\\nsources:\\n  allowed_kinds: [local]\\n").InstallationPolicy)
+		"schema_version: 2\nsources:\n  allowed_kinds: [local]\n").InstallationPolicy)
 	backend := managementJourneyBackend(t, j)
 	before := savedJourneyTree(t, j.cli.root)
 	catalog, err := backend.SkillsCatalog(t.Context(), management.SourceRequest{
