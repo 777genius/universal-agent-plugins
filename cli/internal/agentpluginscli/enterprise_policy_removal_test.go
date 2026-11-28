@@ -67,7 +67,11 @@ func TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration(t *t
 				if sourceKind == "archive" {
 					j.run(t, "add", source+"/demo.zip", "--alias", alias, "--target", "codex", "--format", "json")
 				} else {
-					root := filepath.Join(t.TempDir(), "review")
+					sourceParent, err := filepath.EvalSymlinks(t.TempDir())
+					if err != nil {
+						t.Fatal(err)
+					}
+					root := filepath.Join(sourceParent, "review")
 					if err := os.MkdirAll(root, 0700); err != nil {
 						t.Fatal(err)
 					}

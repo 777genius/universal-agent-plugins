@@ -19,7 +19,11 @@ func TestEnterprisePolicySelectedSkillKeepsUnrelatedDeniedArchive(t *testing.T) 
 	files := &enterprisepolicy.Files{Paths: []enterprisepolicy.Path{{Layer: "deployment", Path: policy, Required: true}}}
 	j.cli.app.PolicyFiles = files
 	j.cli.app = j.cli.app.withEnterprisePolicyGate(files)
-	root := filepath.Join(t.TempDir(), "review")
+	sourceParent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(sourceParent, "review")
 	if err := os.MkdirAll(root, 0700); err != nil {
 		t.Fatal(err)
 	}
