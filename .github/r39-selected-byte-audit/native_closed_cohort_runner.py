@@ -308,8 +308,23 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception:
-        # No tokens, URLs, response bodies, paths or protocol contents in failures.
-        print('{"status":"failed","audit_kind":"selected native collection retained-byte audits only"}',
-              flush=True)
+    except Exception as error:
+        # Expose only a constant-shaped reason and locations in reviewed audit code.
+        # Never print exception text containing paths, URLs or protocol contents.
+        candidate = error.args[0] if error.args else ""
+        reason = (candidate if isinstance(error, (ValueError, KeyError))
+                  and isinstance(candidate, str)
+                  and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,95}", candidate)
+                  else "nonconstant_reason_redacted")
+        frames = []
+        current = error.__traceback__
+        while current is not None:
+            code = current.tb_frame.f_code
+            if Path(code.co_filename).name in {Path(__file__).name, "native_audit.py"}:
+                frames.append({"function": code.co_name, "line": current.tb_lineno})
+            current = current.tb_next
+        print(json.dumps({"status": "failed",
+                          "audit_kind": "selected native collection retained-byte audits only",
+                          "error_type": type(error).__name__, "reason": reason,
+                          "audit_frames": frames}, sort_keys=True), flush=True)
         raise SystemExit(1)

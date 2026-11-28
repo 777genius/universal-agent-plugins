@@ -1,0 +1,424 @@
+{
+  "run_id": 46150473835,
+  "job_id": 140995789584,
+  "audit_commit": "c51824975a677a829806eece219428e002df3bb4",
+  "status": "passed",
+  "steps_success": 9,
+  "original_decoded_log": {
+    "sha256": "519fe4b3a1bfd381073dbf2f44873697e262f07dfe54432d017f853b0ad931f3",
+    "bytes": 52834
+  },
+  "receipt": {
+    "audit_kind": "selected published Marketing retained-evidence audit batch",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "core_blob": "b273b92fc290c09ba81de92516302ad7fc04250d",
+    "coverage": "selected lanes only; final six-client union checked separately",
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "lane_count": 3,
+    "manifest_sha256": "7788f9eb01cc48782a70aa2c216ce5b386443cc34df7480935b2853b2af587e8",
+    "receipts": [
+      {
+        "MCP_observation": "one original observational capture; absence unqualified",
+        "archive_bytes": 72351,
+        "archive_sha256": "a8f0a59c96b603079c74781059023b38e808aa0b447635d64c338bed8dde273c",
+        "artifact_id": 15265651351,
+        "audit_kind": "Marketing_six_retained_evidence",
+        "boundaries": [
+          "Archive CRC/size/SHA, all retained file hashes, original preflight logs and report audited.",
+          "Report has no source-commit field: authenticated job/checkout/source binding is wrapper duty.",
+          "Published UAP0.1.116 acquisition/version and signed policy authentication are source-executed assertions; release binaries, catalog signature bytes and complete CLI outputs are not uploaded.",
+          "Only Claude embeds original native streams. Other stages/checkpoint hashes are not complete CLI/RPC/FS reconstruction. Source/private0600/foreign/state/peer custody remains assertions.",
+          "Claude initialization uses strict empty MCP; one effective MCP listing is observational only.",
+          "Copilot coldDrefusal is compact result evidence; full refusal JSON and permitted runtime-link FS custody are source-pinned assertions, B positive restore has preauthorized native trust.",
+          "Workflow provisioning pins do not independently prove native binary bytes for every client. Cursor Agent+Editor hashes are checked by workflow; GUI/IDE execution remains unqualified.",
+          "No vendor-authentication, real-model, tools/call, physical Claude absence or writer-closure qualification is added by this audit."
+        ],
+        "client": "claude",
+        "cursor_provisioning_pins": null,
+        "decoded_job_log_bytes": 345976,
+        "decoded_job_log_sha256": "845fa480c312a646cd0d486e63b0ff49e0a1364707450347d435980218f02a92",
+        "directory_entries": 0,
+        "expanded_bytes": 264261,
+        "four_fresh_removal_checkpoints": true,
+        "installer_authority": {
+          "historical_0_1_115_launcher_cleanup": "not_applicable",
+          "kind": "published npm UAP control",
+          "source_CLI_build_used": false,
+          "version": "0.1.116"
+        },
+        "job_id": 140962469589,
+        "job_steps": [
+          {
+            "conclusion": "success",
+            "name": "Set up job"
+          },
+          {
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+          },
+          {
+            "conclusion": "success",
+            "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+          },
+          {
+            "conclusion": "skipped",
+            "name": "Install native Codex sandbox prerequisite"
+          },
+          {
+            "conclusion": "success",
+            "name": "Install real released UAP and native client"
+          },
+          {
+            "conclusion": "skipped",
+            "name": "Verify historical npm 0.1.115 launcher abort cleanup"
+          },
+          {
+            "conclusion": "skipped",
+            "name": "Verify published ChatGPT target safety fences"
+          },
+          {
+            "conclusion": "success",
+            "name": "Exercise actual signed Marketing Kit and three mandatory dependencies"
+          },
+          {
+            "conclusion": "success",
+            "name": "Preserve factual outcomes including failures"
+          },
+          {
+            "conclusion": "success",
+            "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+          },
+          {
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+          },
+          {
+            "conclusion": "success",
+            "name": "Complete job"
+          }
+        ],
+        "lifecycle_stages": 16,
+        "native_executable_sha256": "26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba",
+        "native_provisioning_pin": "2.1.263",
+        "original_native_captures": 25,
+        "original_native_stream_hashes_sha256": "7226ab5c3300de58a07beeac5434daaf7c7eb6ff7fcc7ea72280cc8d7ca8d990",
+        "original_native_streams": 50,
+        "policy_snapshot_digest": "sha256:f54f905f55d05477ee01ae6028a8d32e10b8b8db58784f81f624642ae71f2452",
+        "policy_snapshot_sequence": 49,
+        "preflight": {
+          "genuine_Claude_fixture": "passed",
+          "regression_log_sha256": "48f70b2e68aeaf9b9feb5de09263db143effe0d22b66bddd880751beac005999",
+          "retirement_log_sha256": "9fca6bc1a67b569f512c7494ceb73ad918483d957bce5fde664ae3f486e9e2ca",
+          "tests_attempted": 385,
+          "tests_skipped": 0
+        },
+        "private_0600_custody": "source-pinned executed assertions; descriptor images not uploaded",
+        "published_UAP": "0.1.116",
+        "report_sha256": "1bd3060bade17d33d91e73f51c203648a3b8096f74aa2782cc967fe9fd70ee21",
+        "retained_files": 3,
+        "run_id": 46139632998,
+        "signed_closure_sha256": "2d369ddaadcbec13a4a765d4cf7321bab720b26378f24c0cd8d80b9e85bba1e3",
+        "source": {
+          "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+          "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+          "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+        },
+        "source_blob_pins": {
+          ".github/workflows/marketing-kit-project-release-e2e.yml": "7d1c957e25d528fddd36734db2b95ee55ccfc994",
+          "scripts/claude_cache_retirement_audit.py": "ecb56574b3e892be42cb6c79c3df346268c522c6",
+          "scripts/codex_runtime_audit.py": "759b35886a434a7f17e2c36d8fd93d6a12bbe45d",
+          "scripts/live-install-audit.py": "ceab34554b6851be09fae9dbc5345fdd753bd0f8",
+          "scripts/marketing-kit-project-release-e2e.py": "af2ac520fbd9adee43b411864df73b0ea3b936de",
+          "scripts/marketing_kit_claude_discovery.py": "7f1e14c453d7e9f8bcabcfed7bb4343343bf5743",
+          "scripts/marketing_kit_claude_retirement.py": "c96774600899745327892d6e24e9a47c68c0ee2a",
+          "scripts/marketing_kit_codex_profile.py": "7214510d013d7077fa0cc8adf949ec82778c9574",
+          "scripts/native_client_project_artifacts.py": "bfcb69f1393b9b5671062da6e40dce54b3ea7951",
+          "scripts/native_client_research.py": "c28e5f88dc26fa58efd45492b41ad899e6335605",
+          "scripts/test_live_install_audit_env.py": "1d4c36f2b7e6b64233a037634a644f52013ccf7c",
+          "scripts/test_marketing_kit_claude_discovery.py": "1c1d1fa5cde86130ff24dfaf102bcfb8ad8eab58",
+          "scripts/test_marketing_kit_claude_retirement.py": "0ad598ed18ba88f3e0589b191b380461c866c7b2",
+          "scripts/test_marketing_kit_codex_profile.py": "37159810eb32778cee838d1ec540012c3b2da04a",
+          "scripts/test_marketing_kit_codex_sqlite.py": "0f01d6fab0a0fdda7205d418797bafc6a605e947",
+          "scripts/test_marketing_kit_copilot_refusal.py": "6f7516aa1e8ec435b572d93190a61ffc57743d55",
+          "scripts/test_marketing_kit_peer_initialization.py": "7faacd179627922f0bc48d4a4ea317bafac9d356",
+          "scripts/test_marketing_kit_policy_boundary.py": "c17da88d634165cc7de087ae275933ac997f8002"
+        },
+        "status": "passed",
+        "whole_member_hash_inventory_sha256": "4e454f7decebb54e0ce9272cb672d498135f8ecdeae59b47a792e0299a8a1d2c"
+      },
+      {
+        "archive_bytes": 55252,
+        "archive_sha256": "bc97846c65f3e42bfb46c5efcd4620aff55df40eea5652c411e38ef9cdada866",
+        "artifact_id": 15263397292,
+        "audit_kind": "Marketing_six_retained_evidence",
+        "boundaries": [
+          "Archive CRC/size/SHA, all retained file hashes, original preflight logs and report audited.",
+          "Report has no source-commit field: authenticated job/checkout/source binding is wrapper duty.",
+          "Published UAP0.1.116 acquisition/version and signed policy authentication are source-executed assertions; release binaries, catalog signature bytes and complete CLI outputs are not uploaded.",
+          "Only Claude embeds original native streams. Other stages/checkpoint hashes are not complete CLI/RPC/FS reconstruction. Source/private0600/foreign/state/peer custody remains assertions.",
+          "Claude initialization uses strict empty MCP; one effective MCP listing is observational only.",
+          "Copilot coldDrefusal is compact result evidence; full refusal JSON and permitted runtime-link FS custody are source-pinned assertions, B positive restore has preauthorized native trust.",
+          "Workflow provisioning pins do not independently prove native binary bytes for every client. Cursor Agent+Editor hashes are checked by workflow; GUI/IDE execution remains unqualified.",
+          "No vendor-authentication, real-model, tools/call, physical Claude absence or writer-closure qualification is added by this audit."
+        ],
+        "client": "codex",
+        "cursor_provisioning_pins": null,
+        "decoded_job_log_bytes": 3058636,
+        "decoded_job_log_sha256": "f56d529e9a86f7292fd0c381ffed9561ce986fa0ed6b6fd115bff0250b323139",
+        "directory_entries": 0,
+        "expanded_bytes": 1779266,
+        "installer_authority": {
+          "historical_0_1_115_launcher_cleanup": "separate mock-transport test",
+          "kind": "published npm UAP control",
+          "source_CLI_build_used": false,
+          "version": "0.1.116"
+        },
+        "job_id": 140962469188,
+        "job_steps": [
+          {
+            "conclusion": "success",
+            "name": "Set up job"
+          },
+          {
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+          },
+          {
+            "conclusion": "success",
+            "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+          },
+          {
+            "conclusion": "success",
+            "name": "Install native Codex sandbox prerequisite"
+          },
+          {
+            "conclusion": "success",
+            "name": "Install real released UAP and native client"
+          },
+          {
+            "conclusion": "success",
+            "name": "Verify historical npm 0.1.115 launcher abort cleanup"
+          },
+          {
+            "conclusion": "success",
+            "name": "Verify published ChatGPT target safety fences"
+          },
+          {
+            "conclusion": "success",
+            "name": "Exercise actual signed Marketing Kit and three mandatory dependencies"
+          },
+          {
+            "conclusion": "success",
+            "name": "Preserve factual outcomes including failures"
+          },
+          {
+            "conclusion": "success",
+            "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+          },
+          {
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+          },
+          {
+            "conclusion": "success",
+            "name": "Complete job"
+          }
+        ],
+        "lifecycle_stages": 18,
+        "native_provisioning_pin": "0.153.4",
+        "native_runtime_version_assertion": "0.153.4",
+        "original_RPC_uploaded": false,
+        "policy_snapshot_digest": "sha256:f54f905f55d05477ee01ae6028a8d32e10b8b8db58784f81f624642ae71f2452",
+        "policy_snapshot_sequence": 49,
+        "preflight": {
+          "genuine_Claude_fixture": "expected_non_Claude_lane_skip",
+          "regression_log_sha256": "5ca7815441008d15898fdf7ff684d84636c5cd092fc7263702ae70d7155e41f6",
+          "retirement_log_sha256": "135f5a61f598439b2759a3622b59a29cd618c5c356c6e88579acad37123cca02",
+          "tests_attempted": 296,
+          "tests_skipped": 1
+        },
+        "profile_families": [
+          "codex_runtime_profiles",
+          "codex_sqlite_profiles"
+        ],
+        "profiles_each": [
+          "A",
+          "B",
+          "C"
+        ],
+        "published_UAP": "0.1.116",
+        "report_sha256": "d8d79564fd578d5191a8001ced58f029edb01df2440f46b5447aad6bf7992bd6",
+        "retained_files": 3,
+        "run_id": 46139632998,
+        "signed_closure_sha256": "2d369ddaadcbec13a4a765d4cf7321bab720b26378f24c0cd8d80b9e85bba1e3",
+        "source": {
+          "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+          "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+          "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+        },
+        "source_blob_pins": {
+          ".github/workflows/marketing-kit-project-release-e2e.yml": "7d1c957e25d528fddd36734db2b95ee55ccfc994",
+          "scripts/claude_cache_retirement_audit.py": "ecb56574b3e892be42cb6c79c3df346268c522c6",
+          "scripts/codex_runtime_audit.py": "759b35886a434a7f17e2c36d8fd93d6a12bbe45d",
+          "scripts/live-install-audit.py": "ceab34554b6851be09fae9dbc5345fdd753bd0f8",
+          "scripts/marketing-kit-project-release-e2e.py": "af2ac520fbd9adee43b411864df73b0ea3b936de",
+          "scripts/marketing_kit_claude_discovery.py": "7f1e14c453d7e9f8bcabcfed7bb4343343bf5743",
+          "scripts/marketing_kit_claude_retirement.py": "c96774600899745327892d6e24e9a47c68c0ee2a",
+          "scripts/marketing_kit_codex_profile.py": "7214510d013d7077fa0cc8adf949ec82778c9574",
+          "scripts/native_client_project_artifacts.py": "bfcb69f1393b9b5671062da6e40dce54b3ea7951",
+          "scripts/native_client_research.py": "c28e5f88dc26fa58efd45492b41ad899e6335605",
+          "scripts/test_live_install_audit_env.py": "1d4c36f2b7e6b64233a037634a644f52013ccf7c",
+          "scripts/test_marketing_kit_claude_discovery.py": "1c1d1fa5cde86130ff24dfaf102bcfb8ad8eab58",
+          "scripts/test_marketing_kit_claude_retirement.py": "0ad598ed18ba88f3e0589b191b380461c866c7b2",
+          "scripts/test_marketing_kit_codex_profile.py": "37159810eb32778cee838d1ec540012c3b2da04a",
+          "scripts/test_marketing_kit_codex_sqlite.py": "0f01d6fab0a0fdda7205d418797bafc6a605e947",
+          "scripts/test_marketing_kit_copilot_refusal.py": "6f7516aa1e8ec435b572d93190a61ffc57743d55",
+          "scripts/test_marketing_kit_peer_initialization.py": "7faacd179627922f0bc48d4a4ea317bafac9d356",
+          "scripts/test_marketing_kit_policy_boundary.py": "c17da88d634165cc7de087ae275933ac997f8002"
+        },
+        "status": "passed",
+        "whole_member_hash_inventory_sha256": "e81de20a3083a04dbd7a3037e344fb5788fe9dd06890d5e36df582d2ff6953c2"
+      },
+      {
+        "archive_bytes": 4548,
+        "archive_sha256": "044ee341f0bd4ca8ccd677f66698ba279f17c3703653b42db7bbd5a715830a87",
+        "artifact_id": 15263667090,
+        "audit_kind": "Marketing_six_retained_evidence",
+        "boundaries": [
+          "Archive CRC/size/SHA, all retained file hashes, original preflight logs and report audited.",
+          "Report has no source-commit field: authenticated job/checkout/source binding is wrapper duty.",
+          "Published UAP0.1.116 acquisition/version and signed policy authentication are source-executed assertions; release binaries, catalog signature bytes and complete CLI outputs are not uploaded.",
+          "Only Claude embeds original native streams. Other stages/checkpoint hashes are not complete CLI/RPC/FS reconstruction. Source/private0600/foreign/state/peer custody remains assertions.",
+          "Claude initialization uses strict empty MCP; one effective MCP listing is observational only.",
+          "Copilot coldDrefusal is compact result evidence; full refusal JSON and permitted runtime-link FS custody are source-pinned assertions, B positive restore has preauthorized native trust.",
+          "Workflow provisioning pins do not independently prove native binary bytes for every client. Cursor Agent+Editor hashes are checked by workflow; GUI/IDE execution remains unqualified.",
+          "No vendor-authentication, real-model, tools/call, physical Claude absence or writer-closure qualification is added by this audit."
+        ],
+        "client": "cursor",
+        "cursor_provisioning_pins": {
+          "agent_archive_sha256": "85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294",
+          "editor_archive_sha256": "8b9198f7dde79f7e27cc83dabf3c66a93ca5303b6919719100c82f29d9498a65",
+          "editor_version": "3.22.12"
+        },
+        "decoded_job_log_bytes": 72163,
+        "decoded_job_log_sha256": "7ae6d50e6e00735b7954cc86ec45baaa14045a51017669519e3dfed1433c2112",
+        "directory_entries": 0,
+        "expanded_bytes": 27430,
+        "installer_authority": {
+          "historical_0_1_115_launcher_cleanup": "not_applicable",
+          "kind": "published npm UAP control",
+          "source_CLI_build_used": false,
+          "version": "0.1.116"
+        },
+        "job_id": 140962469592,
+        "job_steps": [
+          {
+            "conclusion": "success",
+            "name": "Set up job"
+          },
+          {
+            "conclusion": "success",
+            "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+          },
+          {
+            "conclusion": "success",
+            "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+          },
+          {
+            "conclusion": "skipped",
+            "name": "Install native Codex sandbox prerequisite"
+          },
+          {
+            "conclusion": "success",
+            "name": "Install real released UAP and native client"
+          },
+          {
+            "conclusion": "skipped",
+            "name": "Verify historical npm 0.1.115 launcher abort cleanup"
+          },
+          {
+            "conclusion": "skipped",
+            "name": "Verify published ChatGPT target safety fences"
+          },
+          {
+            "conclusion": "success",
+            "name": "Exercise actual signed Marketing Kit and three mandatory dependencies"
+          },
+          {
+            "conclusion": "success",
+            "name": "Preserve factual outcomes including failures"
+          },
+          {
+            "conclusion": "success",
+            "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+          },
+          {
+            "conclusion": "success",
+            "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+          },
+          {
+            "conclusion": "success",
+            "name": "Complete job"
+          }
+        ],
+        "lifecycle_stages": 16,
+        "native_provisioning_pin": null,
+        "policy_snapshot_digest": "sha256:f54f905f55d05477ee01ae6028a8d32e10b8b8db58784f81f624642ae71f2452",
+        "policy_snapshot_sequence": 49,
+        "preflight": {
+          "genuine_Claude_fixture": "expected_non_Claude_lane_skip",
+          "regression_log_sha256": "0622c6a704a604145cf1f421214403de1696c7450bb282478cb3430d4fad07e6",
+          "retirement_log_sha256": "174648f22845c59d7336b54324b105ad6671ea7914a5059d409d2567afff9e10",
+          "tests_attempted": 296,
+          "tests_skipped": 1
+        },
+        "published_UAP": "0.1.116",
+        "report_sha256": "099964db5b5a515272339e250c3d639f27fa387a98520ec27cfb0340526b04d0",
+        "retained_files": 3,
+        "run_id": 46139632998,
+        "signed_closure_sha256": "2d369ddaadcbec13a4a765d4cf7321bab720b26378f24c0cd8d80b9e85bba1e3",
+        "source": {
+          "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+          "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+          "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+        },
+        "source_blob_pins": {
+          ".github/workflows/marketing-kit-project-release-e2e.yml": "7d1c957e25d528fddd36734db2b95ee55ccfc994",
+          "scripts/claude_cache_retirement_audit.py": "ecb56574b3e892be42cb6c79c3df346268c522c6",
+          "scripts/codex_runtime_audit.py": "759b35886a434a7f17e2c36d8fd93d6a12bbe45d",
+          "scripts/live-install-audit.py": "ceab34554b6851be09fae9dbc5345fdd753bd0f8",
+          "scripts/marketing-kit-project-release-e2e.py": "af2ac520fbd9adee43b411864df73b0ea3b936de",
+          "scripts/marketing_kit_claude_discovery.py": "7f1e14c453d7e9f8bcabcfed7bb4343343bf5743",
+          "scripts/marketing_kit_claude_retirement.py": "c96774600899745327892d6e24e9a47c68c0ee2a",
+          "scripts/marketing_kit_codex_profile.py": "7214510d013d7077fa0cc8adf949ec82778c9574",
+          "scripts/native_client_project_artifacts.py": "bfcb69f1393b9b5671062da6e40dce54b3ea7951",
+          "scripts/native_client_research.py": "c28e5f88dc26fa58efd45492b41ad899e6335605",
+          "scripts/test_live_install_audit_env.py": "1d4c36f2b7e6b64233a037634a644f52013ccf7c",
+          "scripts/test_marketing_kit_claude_discovery.py": "1c1d1fa5cde86130ff24dfaf102bcfb8ad8eab58",
+          "scripts/test_marketing_kit_claude_retirement.py": "0ad598ed18ba88f3e0589b191b380461c866c7b2",
+          "scripts/test_marketing_kit_codex_profile.py": "37159810eb32778cee838d1ec540012c3b2da04a",
+          "scripts/test_marketing_kit_codex_sqlite.py": "0f01d6fab0a0fdda7205d418797bafc6a605e947",
+          "scripts/test_marketing_kit_copilot_refusal.py": "6f7516aa1e8ec435b572d93190a61ffc57743d55",
+          "scripts/test_marketing_kit_peer_initialization.py": "7faacd179627922f0bc48d4a4ea317bafac9d356",
+          "scripts/test_marketing_kit_policy_boundary.py": "c17da88d634165cc7de087ae275933ac997f8002"
+        },
+        "status": "passed",
+        "whole_member_hash_inventory_sha256": "d110feb26c71adb814c235b51144860b1e47ea030db61f4272c7e7cf7123f0a9"
+      }
+    ],
+    "remaining_clients": [
+      "copilot",
+      "gemini",
+      "opencode"
+    ],
+    "selected_clients": [
+      "claude",
+      "codex",
+      "cursor"
+    ],
+    "six_client_matrix_qualified": false,
+    "status": "passed",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+  },
+  "independent_readback_confirmed": true
+}

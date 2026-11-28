@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "state": "native four-lane byte auditor failed with opaque result; diagnostic-only retry prepared",
+  "source": {
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+  },
+  "run_id": 46150473835,
+  "job_id": 140995789352,
+  "original_log": {
+    "sha256": "bf57461ceda2484eeb312c42193a04619a482f379975d326a8c0b1e703e26b6a",
+    "bytes": 34772
+  },
+  "core_blob": "95e43720d4a8a2344a2242cc62adb8ae69b72c89",
+  "old_wrapper_blob": "a9bf4c54a4f98c3080df422a2ddb43c373ccd29c",
+  "diagnostic_wrapper_blob": "59759461f76277882d6a3cb7554a35a77c7461bf",
+  "scope": "No acceptance check changed; only safe constant-shaped failure reason and audit-code line numbers. No tokens/URLs/body/path output."
+}
