@@ -1,0 +1,40 @@
+name: UAP1130 R35 Pi artifact verification
+
+on:
+  push:
+    branches: [codex/uap1130-r35-artifact-audit]
+    paths:
+      - .github/pi-artifact-audit/**
+      - .github/workflows/uap1130-r35-pi-artifact-audit.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-pi-macos:
+    if: github.repository == '777genius/universal-agent-plugins' && github.ref == 'refs/heads/codex/uap1130-r35-artifact-audit'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out immutable auditor revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check out fixed Pi test source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: da317646047e60d13929a16e67f38cf71710ec5d
+          path: source
+          persist-credentials: false
+      - name: Verify original Pi archives and canonical evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 .github/pi-artifact-audit/pi_readonly_runner.py \
+            --manifest .github/pi-artifact-audit/r35-pi-macos-manifest.json \
+            --manifest-sha256 f192c49c59a17474fd3bd79b54bb31b4e04a9cf98ef073296d0ba8e59ba02162 \
+            --source source \
+            --core .github/pi-artifact-audit/pi_audit.py

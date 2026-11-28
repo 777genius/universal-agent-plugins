@@ -1,0 +1,26 @@
+{
+  "repo": "777genius/universal-agent-plugins",
+  "run_id": 46121547481,
+  "job_id": 140906978755,
+  "run_attempt": 1,
+  "event": "pull_request",
+  "job_name": "pi v1.4.0 global/project lifecycle (darwin-arm64)",
+  "head": "da317646047e60d13929a16e67f38cf71710ec5d",
+  "checkout": "da317646047e60d13929a16e67f38cf71710ec5d",
+  "tree": "a675ef8809d78de576a1e8f164eb0c8d09f51540",
+  "target": "darwin-arm64",
+  "artifacts": {
+    "trust": {
+      "artifact_id": 15256182427,
+      "artifact_name": "pi-project-darwin-arm64",
+      "size": 2993,
+      "sha256": "ce7d00e3780cde5c5bd15c1193c7ec0ee1694f3fbfa9764a32db7f4ca669d5b1"
+    },
+    "components": {
+      "artifact_id": 15255898897,
+      "artifact_name": "pi-project-components-darwin-arm64",
+      "size": 81267,
+      "sha256": "54775d2ebec41b15de57ee1e92260c239d3aac7308c8455fb4816c0cfd2c8100"
+    }
+  }
+}
