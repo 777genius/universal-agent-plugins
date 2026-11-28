@@ -173,12 +173,39 @@ def _diagnostic_digest(value):
                                      allow_nan=False).encode()).hexdigest()
 
 
+def _annotate_passive_custody(error, phase, observations, reasons):
+    """Annotate only captured metadata; never read or rediscover authority."""
+    def facts(info):
+        if info is None:
+            return None
+        return {"type": "regular" if stat.S_ISREG(info.st_mode) else "other",
+                "mode": format(stat.S_IMODE(info.st_mode), "04o"),
+                "nlink": info.st_nlink, "uid": info.st_uid,
+                "gid": info.st_gid, "size": info.st_size}
+    diagnostic = {"phase": phase,
+                  "observations": {name: facts(info) for name, info in observations.items()},
+                  "reasons": reasons}
+    error.passive_file_custody_diagnostics = diagnostic
+    error.args = (str(error) + "; passive_file_custody=" + json.dumps(diagnostic, sort_keys=True),)
+
+
 def _diagnostic_image(fd, audit):
     """Bounded old-FD read uses pread, leaving the authority's offset untouched."""
     before = os.fstat(fd)
-    require(stat.S_ISREG(before.st_mode) and before.st_nlink in (0, 1)
-            and before.st_uid == os.geteuid() and stat.S_IMODE(before.st_mode) == 0o600
-            and 0 < before.st_size <= 1 << 20)
+    owner_matches = None
+    try:
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink in (0, 1)
+                and (owner_matches := before.st_uid == os.geteuid())
+                and stat.S_IMODE(before.st_mode) == 0o600
+                and 0 < before.st_size <= 1 << 20)
+    except ValueError as error:
+        _annotate_passive_custody(error, "descriptor-metadata", {"fstat": before},
+            {"not_regular": not stat.S_ISREG(before.st_mode),
+             "link_count": before.st_nlink not in (0, 1),
+             "mode": stat.S_IMODE(before.st_mode) != 0o600,
+             "owner": None if owner_matches is None else not owner_matches,
+             "size": not 0 < before.st_size <= 1 << 20})
+        raise
     body = os.pread(fd, (1 << 20) + 1, 0)
     require(type(body) is bytes and len(body) == before.st_size
             and _CUSTODY["_FILES"]["identity"](before)
@@ -199,10 +226,25 @@ def _diagnostic_named_image(path, case, audit, *, held_fd=None):
     try:
         with audit["WINDSURF_GLOBAL_AUDIT"]["member"](case_fd, path.relative_to(case).as_posix()) as fd:
             _CUSTODY["named_directory"](case, case_fd)
-            require(before.st_nlink == 1 and identity(before) == identity(os.fstat(fd))
-                    == identity(path.lstat()))
+            opened = named = None
+            try:
+                require(before.st_nlink == 1 and identity(before) == identity(opened := os.fstat(fd))
+                        == identity(named := path.lstat()))
+            except ValueError as error:
+                _annotate_passive_custody(error, "named-member",
+                    {"lstat": before, "member_fstat": opened, "named_lstat": named},
+                    {"link_count": before.st_nlink != 1,
+                     "identity": ((opened is not None and identity(before) != identity(opened))
+                                  or (named is not None and identity(opened) != identity(named)))})
+                raise
             if held_fd is not None:
-                require(identity(before) == identity(os.fstat(held_fd)))
+                held = None
+                try:
+                    require(identity(before) == identity(held := os.fstat(held_fd)))
+                except ValueError as error:
+                    _annotate_passive_custody(error, "held-descriptor",
+                        {"lstat": before, "held_fstat": held}, {"identity": True})
+                    raise
             image = _diagnostic_image(fd if held_fd is None else held_fd, audit)
             require(image["identity"] == identity(before) == identity(path.lstat()))
             _CUSTODY["named_directory"](case, case_fd)
