@@ -1,0 +1,19 @@
+{
+  "repo": "777genius/universal-agent-plugins",
+  "run_id": 46121547738,
+  "job_id": 140906979443,
+  "run_attempt": 1,
+  "event": "pull_request",
+  "job_name": "package-manager (macos-15-intel)",
+  "artifact_id": 15253934680,
+  "artifact_name": "package-manager-e2e-macos-15-intel-2b466ae5408b39f9370fd7691864235900a05c7c",
+  "size": 61140,
+  "sha256": "f936b784fd375e7a0655f2ba6e0ee3625e4b84899abf66e399479b3fe54bfcaf",
+  "head": "da317646047e60d13929a16e67f38cf71710ec5d",
+  "checkout": "2b466ae5408b39f9370fd7691864235900a05c7c",
+  "tree": "a675ef8809d78de576a1e8f164eb0c8d09f51540",
+  "expected_platform": {
+    "os": "Darwin",
+    "architecture": "x86_64"
+  }
+}

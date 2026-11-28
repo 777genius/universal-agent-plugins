@@ -1,0 +1,42 @@
+name: UAP1130 R35 artifact verification
+
+on:
+  push:
+    branches: [codex/uap1130-r35-artifact-audit]
+    paths:
+      - .github/artifact-audit/**
+      - .github/workflows/uap1130-r35-artifact-audit.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify-pm-intel:
+    if: github.repository == '777genius/universal-agent-plugins' && github.ref == 'refs/heads/codex/uap1130-r35-artifact-audit'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out immutable auditor revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check out fixed PM test source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: da317646047e60d13929a16e67f38cf71710ec5d
+          path: source
+          persist-credentials: false
+      - name: Fetch exact synthetic checkout object
+        run: git -C source fetch --no-tags --depth=1 origin 2b466ae5408b39f9370fd7691864235900a05c7c
+      - name: Verify original PM archive and canonical evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          python3 .github/artifact-audit/pm_readonly_runner.py \
+            --manifest .github/artifact-audit/r35-pm-intel-manifest.json \
+            --manifest-sha256 eff95e258cf32fb224efb8c02666623faabd4e4f80cd068d8f44b56b25076efc \
+            --source source \
+            --core .github/artifact-audit/pm_audit.py
