@@ -1,0 +1,26 @@
+{
+  "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "workflow_blob": "75ce24fe9adfe4026f2253ab5e055f9989864950",
+  "old_core": "2ab0e00bccdae200bd98275fa121053cc5fdcc9b",
+  "core_blob": "91a5ea4e09df50879dea4fcb948970674a410f29",
+  "wrapper_blob": "608ef50842bce97b3305e3d7ced680f82ef869af",
+  "root": "GO after direct original/new diff and canonical workflow review; +41/-1 core, wrapper exact one pin replacement",
+  "author": "pm_pi_artifact_r31",
+  "reason": [
+    "Workflow actual Windows reader supplement applies only to windows-2025; Windows ARM correctly skipped without qualification",
+    "Original core only required successful step; new core verifies retained windows-readers.stdout exact six canonical roots, paired events and passing packages with zero failure/skip"
+  ],
+  "preserved": [
+    "23 phases",
+    "46 stream hashes",
+    "140 canonical tests",
+    "17 agreement roots",
+    "6 collection commands",
+    "host-specific actual catalog inventories",
+    "no source product code execution"
+  ],
+  "future_main": "push and checkout==head supported by existing wrappers; six PM hosts and three Pi hosts source-authorized",
+  "runtime": false,
+  "published": false
+}

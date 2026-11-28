@@ -1,0 +1,32 @@
+{
+  "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+  "run_id": 46139632998,
+  "core_blob": "b273b92fc290c09ba81de92516302ad7fc04250d",
+  "wrapper_blob": "e251bf776935cd8df07644caa75d9f5a4bfdc955",
+  "template_blob": "e2f6ea16e62acce5592938a0038c973dd504e058",
+  "root_core": "GO: full 611-line core, six direct pinned producer reads and retained-contract joins reviewed",
+  "root_wrapper": "GO: full 348-line wrapper read; canonical steps, exact source/synthetic/API/run/artifact identity, safe bounded tokenless redirects, no product execution",
+  "independent": "pm_pi_artifact_r31 full core plus all 18 authorities and full wrapper/template static GO",
+  "runtime_validation": false,
+  "source_executed": false,
+  "archive_validation": false,
+  "published": false,
+  "expected": {
+    "lanes": 6,
+    "published_cli": "0.1.116",
+    "preflight_non_claude": 296,
+    "preflight_claude": 385,
+    "claude_original_captures": 25,
+    "claude_original_streams": 50,
+    "claude_fresh_removal_checkpoints": 4
+  },
+  "boundaries": [
+    "Published UAP0.1.116 control, not a source-built installer",
+    "Claude private descriptor/mode/FS custody and Copilot full refusal/runtime-link FS facts are executed-source assertions; original images/ordinary full CLI outputs not uploaded",
+    "Only original Claude native streams allow independent retained protocol parsing; other native provenance follows successful source-pinned provisioning",
+    "No effective MCP absence, full physical Claude removal, writer closure, IDE runtime, vendor authentication or real-model claim"
+  ],
+  "future_main": "Fresh exact SHA/checkout/tree/run/event and metadata required; replace PR synthetic parent rule with reviewed actual squash provenance"
+}
