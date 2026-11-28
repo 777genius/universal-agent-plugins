@@ -32,11 +32,16 @@ type rootFetchSource struct {
 	active   atomic.Int32
 	maxSeen  atomic.Int32
 	tempRoot string
-	// failed is set once the failing read returned; roots whose first read
-	// starts after it are recorded in startedAfterFailure.
+	// failed is set immediately before returning the injected error. Roots
+	// whose first read starts after it are recorded in startedAfterFailure.
 	failed              atomic.Bool
 	roots               map[string]bool
 	startedAfterFailure []string
+	// failureRoots gates only the injected error until the maximal reachable
+	// prefetch window has entered read, independent of goroutine scheduling.
+	failureRoots []string
+	failureReady chan struct{}
+	failureOnce  sync.Once
 	// holdRefs makes every other ref read finish only after the failure, and
 	// after its own cancellation when that follows; such roots are recorded
 	// in canceledRefs and their later reads in readsAfterCancel.
@@ -58,6 +63,7 @@ func (source *rootFetchSource) read(ctx context.Context, kind, root string) erro
 		source.readsAfterCancel = append(source.readsAfterCancel, read)
 	}
 	source.roots[root] = true
+	source.signalFailureReadyLocked()
 	source.reads = append(source.reads, read)
 	n := len(source.reads)
 	source.mu.Unlock()
@@ -75,6 +81,9 @@ func (source *rootFetchSource) read(ctx context.Context, kind, root string) erro
 		}
 	}
 	if read == source.fail {
+		if err := source.waitFailureReady(ctx); err != nil {
+			return err
+		}
 		source.failed.Store(true)
 		return errors.New("remote read failed for " + root)
 	}
@@ -97,6 +106,61 @@ func (source *rootFetchSource) read(ctx context.Context, kind, root string) erro
 		}
 	}
 	return ctx.Err()
+}
+
+// gateFailureWindow is enabled only after measuring the serial failure prefix.
+func (source *rootFetchSource) gateFailureWindow(t *testing.T, requirements environment.Requirements) {
+	t.Helper()
+	source.mu.Lock()
+	serialRoots := len(source.roots)
+	source.mu.Unlock()
+	roots := map[string]string{}
+	for _, requirement := range requirements.Dependencies {
+		key, err := requirement.SourceKey()
+		if err != nil {
+			t.Fatal(err)
+		}
+		roots[key] = requirement.Git.Repository + "//" + requirement.Git.Path
+	}
+	keys := make([]string, 0, len(roots))
+	for key := range roots {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	// Consuming the serial prefix can admit this many roots before the
+	// failing entry returns. No later window can start until it completes.
+	for _, key := range keys[:min(len(keys), serialRoots+prefetchWindow-1)] {
+		source.failureRoots = append(source.failureRoots, roots[key])
+	}
+	source.failureReady = make(chan struct{})
+}
+
+func (source *rootFetchSource) signalFailureReadyLocked() {
+	if source.failureReady == nil {
+		return
+	}
+	for _, root := range source.failureRoots {
+		if !source.roots[root] {
+			return
+		}
+	}
+	source.failureOnce.Do(func() { close(source.failureReady) })
+}
+
+func (source *rootFetchSource) waitFailureReady(ctx context.Context) error {
+	if source.failureReady == nil {
+		return nil
+	}
+	timer := time.NewTimer(10 * time.Second)
+	defer timer.Stop()
+	select {
+	case <-source.failureReady:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return errors.New("timed out waiting for the root failure prefetch window")
+	}
 }
 
 func (source *rootFetchSource) ResolveGit(ctx context.Context, spec sourcespec.Git, selector string, exact bool) (sourceacquisition.RefResolution, error) {
@@ -325,11 +389,17 @@ func TestGitRootPrefetchFailingSourceReturnsTheSerialError(t *testing.T) {
 				t.Fatal("expected the failing source to fail serial resolution")
 			}
 			serialReads, serialFailing := source.sortedReads(), source.readsOf(failing)
+			source.gateFailureWindow(t, requirements)
 			source.reset()
 			source.overlap = true
 			_, parallelErr := resolveMixedRoots(t.Context(), t, app, requirements, nil, false)
 			if parallelErr == nil || parallelErr.Error() != serialErr.Error() {
 				t.Fatalf("prefetched error = %v, want the serial error %v", parallelErr, serialErr)
+			}
+			select {
+			case <-source.failureReady:
+			default:
+				t.Fatal("the failing read did not wait for the reachable prefetch window")
 			}
 			// The failure is served, not repeated: the failing read happens once.
 			if got := source.readsOf(failing); got != serialFailing || got != 1 {
