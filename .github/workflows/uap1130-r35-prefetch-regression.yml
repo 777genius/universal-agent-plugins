@@ -26,14 +26,14 @@ jobs:
       - name: Checkout exact corrected source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 6b6a59142742f7f38455e6b9b33da04742e3c89d
+          ref: c93d3b9803a3dd036ac6f05b3787a3b6b51200a0
           persist-credentials: false
 
       - name: Verify immutable source and clean tree
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = 6b6a59142742f7f38455e6b9b33da04742e3c89d
-          test "$(git rev-parse 'HEAD^{tree}')" = 9fabab41bb86cc682ece89c498d9f189811524d8
+          test "$(git rev-parse HEAD)" = c93d3b9803a3dd036ac6f05b3787a3b6b51200a0
+          test "$(git rev-parse 'HEAD^{tree}')" = d2b10c5ef27715cf5fe8bcea02ee0b7ab33492e6
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           git rev-parse HEAD 'HEAD^{tree}'
           git ls-tree HEAD cli/internal/agentpluginscli/deps_root_prefetch_test.go
