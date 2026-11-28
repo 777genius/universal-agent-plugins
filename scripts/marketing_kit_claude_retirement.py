@@ -346,6 +346,8 @@ class SignedClosureRetirement:
         self.usage_contract = None
         self.detached_usage = []
         self.user_usage = None
+        self.backup_namespace = None
+        self.retained_backups = []
         self.finished = False
         self.retired_allowed = None
         if checkpoint_diagnostics is not None:
@@ -603,6 +605,14 @@ class SignedClosureRetirement:
                     "binding_id_sha256": _diagnostic_digest(owner["binding_id"])}
                     for alias, owner in self.user_usage["owners"].items()},
                 "full_native_removal_qualified": False, "writer_closure_qualified": False}
+        if self.retained_backups:
+            proof["user_initialize_backups"] = {
+                "authority": "one bounded initialize copy of a continuously held authorized main image",
+                "full_bytes_equal_to_authorized_image": True,
+                "post_action_namespace_and_original_descriptor_held": True,
+                "files": [{"name": row["path"].name, "sha256": row["image"][-1]}
+                          for row in self.retained_backups],
+                "writer_closure_qualified": False, "physical_absence_qualified": False}
         return proof
 
     def user_initialize_authority(self, data, public_rows):
@@ -631,6 +641,76 @@ class SignedClosureRetirement:
             require(len({row[field] for row in owners.values()}) == 4)
         return {"owners": owners, "state_path": state_path, "state": state,
                 "phase": "before", "pending": None}
+
+    def backup_inventory(self, original=None):
+        """Reuse the rooted member walk and bounded tree for this one namespace."""
+        path = self.profile / "backups"
+        try:
+            before = path.lstat()
+        except FileNotFoundError:
+            before = None
+        entered = False
+        case_fd = _CUSTODY["open_directory"](self.case)
+        try:
+            try:
+                with self.audit["WINDSURF_GLOBAL_AUDIT"]["member"](
+                        case_fd, path.relative_to(self.case).as_posix()) as fd:
+                    _CUSTODY["named_directory"](self.case, case_fd)
+                    entered = True
+                    info = os.fstat(fd)
+                    require(before is not None and os.path.samestat(before, info)
+                            and stat.S_ISDIR(info.st_mode) and not info.st_mode & 0o022
+                            and info.st_uid == os.geteuid()
+                            and info.st_gid == self.passive_usage[0]["image"][2])
+                    held_fd = original["fd"] if original is not None else None
+                    if held_fd is None:
+                        held_fd = os.dup(fd)
+                        self.fds.append(held_fd)
+                    require(os.path.samestat(info, os.fstat(held_fd)))
+                    tree, _, _ = _CUSTODY["tree"](held_fd)
+                    _CUSTODY["named_directory"](path, held_fd)
+                    _CUSTODY["named_directory"](self.case, case_fd)
+                    return {"path": path, "fd": held_fd, "tree": tree}
+            except FileNotFoundError:
+                require(not entered and before is None
+                        and (original is None or original["fd"] is None))
+                self.guard(check_usage=False)
+                return {"path": path, "fd": None, "tree": {}}
+        finally:
+            os.close(case_fd)
+
+    def backup_guard(self, namespace=None, following=()):
+        namespace = self.backup_namespace if namespace is None else namespace
+        if namespace is None:
+            return
+        require(self.backup_inventory(namespace)["tree"] == namespace["tree"])
+        for row in (*self.retained_backups, *following):
+            require(self.passive_image(row["path"], row["fd"]) == row["image"])
+
+    def stage_user_backups(self, before, start, end, old, following):
+        """Only one new exact copy of an already held main image may be pending."""
+        after = self.backup_inventory(before)
+        prior, current = before["tree"], after["tree"]
+        require(all(current.get(key) == value for key, value in prior.items()))
+        added = set(current) - set(prior)
+        if not prior and current:
+            require(added and current[""][0] == "dir")
+            added.remove("")
+        require(len(self.retained_backups) + len(added) <= 1
+                and (bool(prior) or not current or bool(added)))
+        candidates = []
+        references = [(os.fstat(row["fd"]).st_size, row["image"][-1])
+                      for row in (old, following)]
+        for name in added:
+            matched = re.fullmatch(r"\.claude\.json\.backup\.([1-9][0-9]{12})", name)
+            require(matched is not None and start <= int(matched[1]) <= end
+                    and current[name][0] == "file")
+            _, held = self.held_passive_document(after["path"] / name)
+            require(held["image"][1:3] == old["image"][1:3]
+                    and (os.fstat(held["fd"]).st_size, held["image"][-1]) in references)
+            candidates.append(held)
+        self.backup_guard(after, candidates)
+        return {"namespace": after, "files": candidates}
 
     def user_initialize_guards(self):
         """Keep every original authority except the explicitly pending main name."""
@@ -664,6 +744,9 @@ class SignedClosureRetirement:
                             for key in ("id", "version", "scope", "enabled", "installPath")))
         if not self.passive_usage:
             raise ValueError("Claude User initialization requires a held passive .claude.json baseline")
+        if self.backup_namespace is None:
+            self.backup_namespace = self.backup_inventory()
+        backup_before = self.backup_namespace
         old = self.passive_usage[0]
         before = _diagnostic_image(old["fd"], self.audit)
         require((before["identity"], before["uid"], before["gid"], before["sha256"]) == old["image"])
@@ -707,7 +790,8 @@ class SignedClosureRetirement:
                 and (held["uid"], held["gid"]) == old["image"][1:3]
                 and held["identity"][3] == (1 if same else 0)
                 and (not same or following["image"] == old["image"]))
-        authority["pending"] = {"old": old, "following": following,
+        backups = self.stage_user_backups(backup_before, start, end, old, following)
+        authority["pending"] = {"old": old, "following": following, "backups": backups,
             "detached_image": (held["identity"], held["uid"], held["gid"], held["sha256"]),
             "same_inode": same, "removed": removed, "native_rows": native_rows}
         # Do not replace passive_usage here: before/after_remove still has to
@@ -725,9 +809,12 @@ class SignedClosureRetirement:
                 and self.passive_image(following["path"], following["fd"]) == following["image"])
         held = _diagnostic_image(old["fd"], self.audit)
         require((held["identity"], held["uid"], held["gid"], held["sha256"]) == pending["detached_image"])
+        self.backup_guard(pending["backups"]["namespace"], pending["backups"]["files"])
         if not pending["same_inode"]:
             self.detached_usage.append(dict(old, image=pending["detached_image"]))
             self.passive_usage = [following, *self.passive_usage[1:]]
+        self.backup_namespace = pending["backups"]["namespace"]
+        self.retained_backups.extend(pending["backups"]["files"])
         self.user_usage = authority
         authority["phase"] = "finished" if pending["removed"] else "initialized"
         authority["pending"] = None
@@ -868,6 +955,7 @@ class SignedClosureRetirement:
             if "retired_parent_entries" in owner:
                 require(_CUSTODY["entries"](owner["parent_fd"]) == owner["retired_parent_entries"])
         if check_usage:
+            self.backup_guard()
             if self.user_usage is not None:
                 require({path for path in self.profile.iterdir() if re.fullmatch(
                     r"\.claude\.json\.tmp\.[1-9][0-9]{0,9}\.[0-9a-f]{12}", path.name)}
@@ -975,7 +1063,9 @@ class SignedClosureRetirement:
             require(Path(home) == self.home and Path(case_root) == self.case)
             self.checkpoint()
             require(callable(rescan) and type(residuals) in (set, list, tuple) and bool(residuals))
-            require_owned_residuals(self.audit, residuals, self.retired_allowed)
+            allowed = self.retired_allowed | {".claude/" + row["path"].relative_to(self.profile).as_posix()
+                                              for row in self.retained_backups}
+            require_owned_residuals(self.audit, residuals, allowed)
             for _ in range(2):
                 require(set(rescan()) == set(residuals))
                 self.checkpoint()
