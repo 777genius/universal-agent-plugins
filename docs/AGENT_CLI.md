@@ -79,6 +79,34 @@ Review [Project installation](PROJECT_INSTALLATION.md) for source eligibility
 and client activation limits. The standalone Skills Project flow has been
 available since CLI 0.1.93.
 
+## Source-only addition: local collections and complete selection
+
+The following commands require a build containing the local collection changes;
+they are not part of the CLI 0.1.110 release baseline above.
+
+```sh
+agentplugins skills list ./skills --format json
+agentplugins skills add ./skills --skill review,testing \
+  --target codex,claude --scope user --yes --format json
+agentplugins skills add ./skills --all \
+  --target codex,claude --scope project --project-root "$PWD" --yes --format json
+agentplugins skills add owner/repository --all --target codex,claude --yes
+agentplugins skills add https://publisher.example --all --target codex,claude --yes
+```
+
+Local `--path` selects one exact child Skill directory. A directory with its own
+`SKILL.md` retains single-Skill behavior; an invalid root document never causes
+descendants to be installed instead. Without explicit names, a local collection
+uses the terminal picker. Local listings have an empty JSON `revision` because
+the source is mutable; installation still creates verified immutable snapshots.
+
+`--all` selects the complete valid catalog observed for that invocation. Empty,
+incomplete, invalid, unavailable or ambiguous catalogs are refused before install.
+It cannot combine with `--skill`, `--path` or `--ui`; use an exact source folder
+to narrow a collection. `--yes` remains confirmation, not automatic selection.
+Each chosen Skill is saved independently. `update --all`, repair and locked
+restore keep those choices; they do not enroll new siblings from the source.
+
 ## Machine output: interpret evidence, not just the exit status
 
 - `--format json` suppresses human interaction and keeps command results on

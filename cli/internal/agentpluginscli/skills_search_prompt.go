@@ -15,20 +15,23 @@ import (
 )
 
 func promptSkillsCatalog(cmd *cobra.Command, s *skillsCatalogSession, catalog skillspicker.Catalog, opts *options) ([]skillsource.Candidate, error) {
+	return promptSkillCandidates(cmd, s.app, catalog, s.candidates, opts)
+}
+func promptSkillCandidates(cmd *cobra.Command, app App, catalog skillspicker.Catalog, candidates map[string]skillsource.Candidate, opts *options) ([]skillsource.Candidate, error) {
 	available := []skillsource.Candidate{}
 	for _, candidate := range catalog.Candidates {
 		if candidate.Status == skillspicker.Available {
-			available = append(available, s.candidates[candidate.Id])
+			available = append(available, candidates[candidate.Id])
 		}
 	}
-	if err := renderSkillsCatalogOmissions(reviewWriter(cmd, s.app), catalog); err != nil {
+	if err := renderSkillsCatalogOmissions(reviewWriter(cmd, app), catalog); err != nil {
 		return nil, err
 	}
 	if len(available) == 0 {
 		return nil, fmt.Errorf("no available Skills in this catalog; inspect the candidate reasons or narrow the source with --path <folder>")
 	}
 	if !opts.plain {
-		app, err := withPrompter(cmd, s.app, opts)
+		app, err := withPrompter(cmd, app, opts)
 		if err != nil && !errors.Is(err, prompt.ErrPromptUnavailable) {
 			return nil, err
 		}
@@ -43,7 +46,7 @@ func promptSkillsCatalog(cmd *cobra.Command, s *skillsCatalogSession, catalog sk
 			}
 		}
 	}
-	return promptFilteredSkillsTo(cmd, available, reviewWriter(cmd, s.app))
+	return promptFilteredSkillsTo(cmd, available, reviewWriter(cmd, app))
 }
 
 func skillsCatalogRequest(available []skillsource.Candidate) prompt.SkillsSelectionRequest {

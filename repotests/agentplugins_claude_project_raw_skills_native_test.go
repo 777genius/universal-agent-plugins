@@ -52,6 +52,7 @@ func claudeNativeProjectRawSkills(t *testing.T, f *claudeProjectNativeFixture, s
 		stages[stage] = nativeStage{Status: "passed", Reason: "public Git batch reports ready for both Skills; exact owned and native-cache bytes match pins, no-token A initialization loads each once, B loads neither"}
 	}
 	claudeNativeRawProjectRemove(t, f, stages, "project_raw_skills_final_remove", expected, original)
+	claudeNativeLocalCollection(t, f, stages)
 }
 
 func claudeNativeRawProjectRemove(t *testing.T, f *claudeProjectNativeFixture, stages map[string]nativeStage, stage string, expected []string, bindings map[string]claudeRawNativeBinding) {
@@ -118,4 +119,42 @@ func claudeNativeRawProjectState(t *testing.T, f *claudeProjectNativeFixture, pa
 		}
 	}
 	return expected, bindings
+}
+
+func claudeNativeLocalCollection(t *testing.T, f *claudeProjectNativeFixture, stages map[string]nativeStage) {
+	t.Helper()
+	collection := nativeLocalCollection(t, f.base.Root)
+	state := filepath.Join(f.project, ".uap", "state-v2.json")
+	before := nativeSHA(t, state)
+	snapshots := nativeLocalListingSnapshots(t, f.project, f.otherProject, f.base.ConfigDir, f.base.Home)
+	result, err := commandsRunInstaller(t, f.base.Root, f.project, f.base.env(filepath.Dir(f.client)), f.installer, "local-collection-list", "skills", "list", collection, "--scope", "project", "--project-root", f.project)
+	nativeLocalCollectionListing(t, result, err)
+	nativeLocalListingUnchanged(t, snapshots)
+	if nativeSHA(t, state) != before {
+		t.Fatal("local listing changed saved project state")
+	}
+	f.requireForeign(t)
+	var expected []string
+	var bindings map[string]claudeRawNativeBinding
+	for _, stage := range []string{"local_collection_all_install", "local_collection_all_repeat"} {
+		nativeAttempt(stages, stage, stage+"-installer.json")
+		before = nativeSHA(t, state)
+		result, err = f.run(t, stage, "skills", "add", collection, "--all", "--target", "claude", "--yes", "--no-ui")
+		items, _ := result["items"].([]any)
+		if err != nil || result["status"] != "succeeded" || result["readiness"] != "ready" || len(items) != 2 {
+			t.Fatalf("local all install failed: %+v %v", result, err)
+		}
+		currentExpected, currentBindings := claudeNativeRawProjectState(t, f, state)
+		if bindings != nil && !maps.Equal(bindings, currentBindings) {
+			t.Fatal("local all repeat changed owned paths")
+		}
+		expected, bindings = currentExpected, currentBindings
+		claudeProjectInitializedSkills(t, f, stage, expected, true)
+		if stage == "local_collection_all_repeat" && nativeSHA(t, state) != before {
+			t.Fatal("local all repeat changed state")
+		}
+		f.requireForeign(t)
+		stages[stage] = nativeStage{Status: "passed", Reason: "public local collection --all installed both exact Skills; fresh pinned native A discovery, B isolation and foreign bytes verified"}
+	}
+	claudeNativeRawProjectRemove(t, f, stages, "local_collection_all_remove", expected, bindings)
 }

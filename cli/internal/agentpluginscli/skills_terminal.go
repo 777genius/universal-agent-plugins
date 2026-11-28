@@ -17,8 +17,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
 )
 
-func runSkillsTerminal(cmd *cobra.Command, app App, opts *options, s *skillsCatalogSession, names []string, interactive, yes bool) error {
-	candidates, err := selectSkillsTerminal(cmd, opts, s, names, interactive)
+func runSkillsTerminal(cmd *cobra.Command, app App, opts *options, s *skillsCatalogSession, names []string, interactive, yes, all bool) error {
+	candidates, err := selectSkillsTerminal(cmd, opts, s, names, interactive, all)
 	if err != nil {
 		return err
 	}
@@ -68,7 +68,7 @@ func (s *skillsCatalogSession) exactTerminalCandidate(ctx context.Context, names
 	}
 	return &candidate, nil
 }
-func selectSkillsTerminal(cmd *cobra.Command, opts *options, s *skillsCatalogSession, names []string, interactive bool) ([]skillsource.Candidate, error) {
+func selectSkillsTerminal(cmd *cobra.Command, opts *options, s *skillsCatalogSession, names []string, interactive, all bool) ([]skillsource.Candidate, error) {
 	candidate, err := s.exactTerminalCandidate(cmd.Context(), names)
 	if err != nil {
 		var issue skillsSelectionError
@@ -80,44 +80,24 @@ func selectSkillsTerminal(cmd *cobra.Command, opts *options, s *skillsCatalogSes
 	if candidate != nil {
 		return []skillsource.Candidate{*candidate}, nil
 	}
+	// Full collection selection must scan category scopes, not the exact-folder shortcut.
+	if all && !s.source.ExactPath {
+		s.mu.Lock()
+		s.scanned = true
+		s.mu.Unlock()
+	}
 	stop := startCommandActivity(cmd, s.app, opts, "Scanning Skills catalog")
 	catalog, err := s.scan(cmd.Context(), s.source.RequestedPath)
 	stop()
 	if err != nil {
 		return nil, err
 	}
-	if len(names) > 0 {
-		return selectNamedSkills(cmd, opts, s, catalog, names)
-	}
-	if !interactive {
-		return nil, skillsMissingSelection(cmd, opts, "SELECTION_REQUIRED", "Use --skill or --path with --target in a non-interactive session", catalog.Candidates)
-	}
-	return promptSkillsCatalog(cmd, s, catalog, opts)
+	return selectSkillCandidates(cmd, s.app, opts, catalog, s.candidates, names, all, interactive)
 }
 func selectNamedSkills(cmd *cobra.Command, opts *options, s *skillsCatalogSession, catalog skillspicker.Catalog, names []string) ([]skillsource.Candidate, error) {
-	if !catalog.Complete {
-		return nil, skillsMissingSelection(cmd, opts, "CATALOG_INCOMPLETE", "The catalog is incomplete; narrow the source with an exact --path", catalog.Candidates)
-	}
-	candidates := []skillsource.Candidate{}
-	seen := map[string]bool{}
-	for _, name := range names {
-		if name == "" || seen[name] {
-			return nil, skillsMissingSelection(cmd, opts, "INVALID_SELECTION", "--skill requires unique non-empty exact names", []skillspicker.Candidate{})
-		}
-		seen[name] = true
-		matches := []skillsource.Candidate{}
-		for _, candidate := range s.candidates {
-			if candidate.Name == name {
-				matches = append(matches, candidate)
-			}
-		}
-		if issue := namedSkillIssue(name, matches, catalog.Candidates); issue != nil {
-			return nil, emitSkillsSelectionIssue(cmd, opts, *issue)
-		}
-		candidates = append(candidates, matches[0])
-	}
-	return candidates, nil
+	return selectSkillCandidates(cmd, s.app, opts, catalog, s.candidates, names, false, false)
 }
+
 func numberedSkillSelection(line string, available []skillsource.Candidate) ([]skillsource.Candidate, error) {
 	result := []skillsource.Candidate{}
 	seen := map[int]bool{}

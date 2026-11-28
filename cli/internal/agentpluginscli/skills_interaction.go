@@ -17,5 +17,5 @@ func resolveSkillsInteraction(cmd *cobra.Command, app App, opts *options, intera
 }
 
 func (selection *skillsAddOptions) requiresInteraction(opts *options, explicitSelection bool) bool {
-	return !explicitSelection || opts.target == "" || !selection.yes && !opts.dryRun
+	return !explicitSelection && !selection.all || opts.target == "" || !selection.yes && !opts.dryRun
 }
