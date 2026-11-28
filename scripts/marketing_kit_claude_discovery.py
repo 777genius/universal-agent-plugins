@@ -227,7 +227,7 @@ class RemovalDiscovery:
                 and sum(len(key) + len(value) + 2 for key, value in native_env.items()) <= 32768)
         record, stdout, stderr = _PROBE["run_probe"](
             [str(self.executable), *args], project, native_env, self.case, label,
-            timeout=60, memory_only=True, input_bytes=input_bytes)
+            timeout=60, memory_only=True, input_bytes=input_bytes, umask=0o077)
         evidence = {key: record[key] for key in (
             "probe", "exit", "error", "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256")}
         evidence.update(stdout_base64=base64.b64encode(stdout).decode("ascii"),

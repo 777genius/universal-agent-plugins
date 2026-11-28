@@ -1133,6 +1133,46 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             pending.write_text(json.dumps(partial)); pending.chmod(0o600)
         return path, pending, document
 
+    def test_child_private_creation_keeps_strict_passive_mode_authority(self):
+        probe = runpy.run_path(str(ROOT / "scripts/native_client_research.py"))["run_probe"]
+        body = ("import os,sys; fd=os.open(sys.argv[1], os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o666); "
+                "os.write(fd, sys.argv[2].encode()); os.close(fd)")
+        original_mask = os.umask(0o022)
+        try:
+            for private in (False, True):
+                with self.subTest(private=private), self.fixture() as f:
+                    _, pending, document = self.author_passive_usage(f, temporary=False)
+                    subject = self.capture(f)
+                    self.retire(f)
+                    partial = copy.deepcopy(document)
+                    del partial["pluginUsage"][f["owners"][0]["key"]]
+                    expected = json.dumps(partial).encode()
+                    options = {"umask": 0o077} if private else {}
+                    record, stdout, stderr = probe(
+                        [sys.executable, "-c", body, str(pending), expected.decode()],
+                        f["project"], {}, f["root"], "inert-private-create",
+                        memory_only=True, **options)
+                    self.assertEqual((record["exit"], record["error"], stdout, stderr), (0, None, b"", b""))
+                    self.assertEqual(os.umask(0o022), 0o022)
+                    self.assertEqual(pending.stat().st_mode & 0o777, 0o600 if private else 0o644)
+                    self.assertEqual(pending.read_bytes(), expected)
+                    before, descriptors = self.scan(f), tuple(subject.fds)
+                    if private:
+                        proof = subject.finish(f["cleanup"], before, lambda: self.scan(f))
+                        self.assertEqual(len(proof["passive_plugin_usage"]["files"]), 2)
+                    else:
+                        with self.assertRaises(ValueError) as refusal:
+                            subject.finish(f["cleanup"], before, lambda: self.scan(f))
+                        self.assertTrue(refusal.exception.passive_file_custody_diagnostics["reasons"]["mode"])
+                    self.assertEqual(subject.fds, [])
+                    for fd in descriptors:
+                        with self.assertRaises(OSError): os.fstat(fd)
+                    self.assertEqual(pending.read_bytes(), expected)
+                    self.assertEqual(pending.stat().st_mode & 0o777, 0o600 if private else 0o644)
+                    self.assertEqual(self.scan(f), before)
+        finally:
+            os.umask(original_mask)
+
     def test_passive_native_usage_is_receipt_bound_and_remains_in_raw_scanner(self):
         for temporary in (False, True):
             with self.subTest(temporary=temporary), self.fixture() as f:
@@ -1744,7 +1784,8 @@ class SignedClosureRetirementContracts(unittest.TestCase):
             probe = runpy.run_path(str(ROOT / "scripts/native_client_research.py"))["run_probe"]
             def native(*arguments, input_bytes=None):
                 record, stdout, stderr = probe([executable, *arguments], f["project"], env,
-                    f["root"], "pinned-native-passive-usage", timeout=60, memory_only=True, input_bytes=input_bytes)
+                    f["root"], "pinned-native-passive-usage", timeout=60, memory_only=True,
+                    input_bytes=input_bytes, umask=0o077)
                 self.assertEqual((record["exit"], record["error"], stderr), (0, None, b""))
                 return stdout
             self.assertEqual(native("--version").strip(), b"2.1.263 (Claude Code)")
