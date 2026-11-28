@@ -292,10 +292,12 @@ class ClaudeOwnedRuntimeLinkContracts(unittest.TestCase):
         from runpy import run_path
         cls.runner = run_path(str(Path(__file__).with_name("marketing-kit-project-release-e2e.py")))
 
-    def install_runtime(self, runner, env, project, scope, *, retained=False):
+    def install_runtime(self, runner, env, project, scope, *, retained=False,
+                        client_id="claude", installation_id=None):
         import hashlib
         anchor = project / ".uap" if scope == "project" else Path(env["AGENTPLUGINS_HOME"])
-        physical = "playwright-01aeb6209cf5"
+        physical = ("playwright-" + hashlib.sha256(installation_id.encode()).hexdigest()[:12]
+                    if installation_id is not None else "playwright-01aeb6209cf5")
         data = anchor / "plugin-data" / physical
         runtime = data / "npm-runtime" / discovery.PLAYWRIGHT_LOCK_SHA256
         bins = runtime / "node_modules/.bin"
@@ -309,7 +311,7 @@ class ClaudeOwnedRuntimeLinkContracts(unittest.TestCase):
             link.symlink_to(relative)
             links[name], targets[name] = link, target
         (runtime / "package-lock.json").write_text(PLAYWRIGHT_LOCK)
-        installation = scope + "-playwright-installation"
+        installation = installation_id if installation_id is not None else scope + "-playwright-installation"
         receipt_id = "data_" + hashlib.sha256(
             "\0".join((installation, physical, scope)).encode()).hexdigest()[:24]
         receipt = {"data_receipt_id": receipt_id, "physical_backend_id": physical,
@@ -327,8 +329,8 @@ class ClaudeOwnedRuntimeLinkContracts(unittest.TestCase):
                       ("resolved_revision", "resolved_revision"), ("tree_digest", "tree_digest"))},
                   "package": {"version": pin["package_version"], "manifest_digest": pin["manifest_digest"]},
                   "data_receipts": {receipt_id: receipt}, "data_retained": retained,
-                  "clients": {} if retained else {"claude": {
-                      "client_id": "claude", "scope": scope, "physical_artifact_id": physical,
+                  "clients": {} if retained else {client_id: {
+                      "client_id": client_id, "scope": scope, "physical_artifact_id": physical,
                       "data_receipt_id": receipt_id}}}
         state = anchor / "state-v2.json"
         state.write_text(json.dumps({"schema_version": 5, "installations": [record]}))

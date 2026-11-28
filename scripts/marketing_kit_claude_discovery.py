@@ -34,9 +34,9 @@ def runtime_document(audit, case, path):
     return decode(body.encode()), body
 
 
-def owned_playwright_data(audit, case, anchor, scope, physical, pins):
+def owned_playwright_data(audit, case, anchor, scope, physical, pins, *, client_id="claude", installation_id=None, authority_image=None):
     """Bind retained data to its signed installation and existing owner receipt."""
-    state, _ = runtime_document(audit, case, anchor / "state-v2.json")
+    state, state_body = runtime_document(audit, case, anchor / "state-v2.json")
     require(type(state) is dict and type(state.get("schema_version")) is int
             and state["schema_version"] == 5 and type(state.get("installations")) is list)
     distribution = "777genius/playwright-bridge"
@@ -55,6 +55,13 @@ def owned_playwright_data(audit, case, anchor, scope, physical, pins):
                 ("repository", "repository"), ("package_subpath", "package_path"),
                 ("resolved_revision", "resolved_revision"), ("tree_digest", "tree_digest"))))
     require(type(row.get("installation_id")) is str and bool(row["installation_id"]))
+    if client_id == "copilot":
+        require(type(installation_id) is str and bool(installation_id)
+                and row["installation_id"] == installation_id and scope == "project"
+                and physical == "playwright-" + hashlib.sha256(installation_id.encode()).hexdigest()[:12]
+                and row.get("data_retained", False) is False)
+    else:
+        require(client_id == "claude" and installation_id is None)
     receipt_id = "data_" + hashlib.sha256(
         "\0".join((row["installation_id"], physical, scope)).encode()).hexdigest()[:24]
     data = anchor / "plugin-data" / physical
@@ -63,20 +70,31 @@ def owned_playwright_data(audit, case, anchor, scope, physical, pins):
                 "ownership_digest": "sha256:" + hashlib.sha256(
                     ("agentplugins-plugin-data-v1\0" + receipt_id + "\0" + str(data)).encode()).hexdigest()}
     receipt = row.get("data_receipts", {}).get(receipt_id)
-    marker, _ = runtime_document(audit, case, data / ".agentplugins-data-owner.json")
+    marker, marker_body = runtime_document(audit, case, data / ".agentplugins-data-owner.json")
     require(type(receipt) is dict and type(marker) is dict
             and all(receipt.get(key) == marker.get(key) == value for key, value in expected.items()))
+    if client_id == "copilot":
+        require(type(authority_image) is dict)
+        root = anchor.parent
+        for path, body in ((anchor / "state-v2.json", state_body),
+                           (data / ".agentplugins-data-owner.json", marker_body)):
+            key = root.name + "/" + path.relative_to(root).as_posix()
+            require(authority_image.get(key) == hashlib.sha256(body.encode()).hexdigest())
     clients = row.get("clients")
-    require(type(clients) is dict and (
-        not clients and row.get("data_retained") is True
-        or any(type(binding) is dict and binding.get("client_id") == "claude"
+    require(type(clients) is dict and (client_id != "copilot" or len(clients) == 1) and (
+        client_id == "claude" and not clients and row.get("data_retained") is True
+        or any(type(binding) is dict and binding.get("client_id") == client_id
                and binding.get("scope") == scope and binding.get("physical_artifact_id") == physical
                and binding.get("data_receipt_id") == receipt_id for binding in clients.values())))
     return data
 
 
-def owned_runtime_link_entries(audit, env, project, case, complete, pins):
+def owned_runtime_link_entries(audit, env, project, case, complete, pins, *,
+                               client_id="claude", installation_ids=None):
     """Admit finite owned npm links; keep every entry in the protected snapshot."""
+    require((client_id == "claude" and installation_ids is None)
+            or (client_id == "copilot" and type(installation_ids) is dict
+                and len(installation_ids) == 1))
     allowed, checked = set(), set()
     roots = (Path(env["HOME"]), Path(env["AGENTPLUGINS_HOME"]), project)
     for key, value in complete.items():
@@ -95,6 +113,8 @@ def owned_runtime_link_entries(audit, env, project, case, complete, pins):
                 or value != PLAYWRIGHT_BIN_LINKS[tail[5]]):
             continue
         physical = tail[0]
+        if client_id == "copilot" and (index != 2 or physical not in installation_ids):
+            continue
         require(physical not in ("", ".", ".."))
         anchor = project / ".uap" if index == 2 else roots[1]
         runtime = anchor / "plugin-data" / physical / "npm-runtime" / PLAYWRIGHT_LOCK_SHA256
@@ -104,7 +124,10 @@ def owned_runtime_link_entries(audit, env, project, case, complete, pins):
         require(audit["path_inside_case"](link.parent, case)
                 and stat.S_ISDIR(link.parent.lstat().st_mode))
         if runtime not in checked:
-            owned_playwright_data(audit, case, anchor, "project" if index == 2 else "user", physical, pins)
+            owned_playwright_data(audit, case, anchor, "project" if index == 2 else "user", physical, pins,
+                                  client_id=client_id,
+                                  installation_id=installation_ids[physical] if installation_ids is not None else None,
+                                  authority_image=complete if client_id == "copilot" else None)
             _, body = runtime_document(audit, case, runtime / "package-lock.json")
             require(hashlib.sha256(body.encode()).hexdigest() == PLAYWRIGHT_LOCK_SHA256)
             require({entry.name for entry in link.parent.iterdir()} == set(PLAYWRIGHT_BIN_LINKS))
@@ -118,6 +141,8 @@ def owned_runtime_link_entries(audit, env, project, case, complete, pins):
         entry = f"{roots[index].name}/{relative}"
         require(complete.get(entry) == "symlink")
         allowed.update((key, entry))
+        if client_id == "copilot":
+            allowed.add(f"metadata:{index}:{relative}")
     return allowed
 
 
