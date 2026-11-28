@@ -128,7 +128,8 @@ func TestCertainNativeRemovalComparesPersistedDirectoryProof(t *testing.T) {
 			service := Service{StateStore: store}
 			refusal := errors.New("native removal refused without effect")
 			err = service.acknowledgeCertainRemoval(attempt, domain.DeactivationOutcome{NativeEffect: domain.NativeEffectUnchanged}, refusal)
-			if !errors.Is(err, refusal) || (name == "unchanged" && err != refusal) {
+			// The reverse check requires the original unwrapped sentinel on success.
+			if !errors.Is(err, refusal) || (name == "unchanged" && !errors.Is(refusal, err)) {
 				t.Fatal("original refusal was not preserved", err)
 			}
 			if name == "foreign" && !strings.Contains(err.Error(), "changed frozen predecessor") {
