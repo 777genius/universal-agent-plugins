@@ -27,13 +27,13 @@ jobs:
       - name: Checkout exact corrected source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: fe7c6951ebd27260d6adacd63b2b4ff2e09e5901
+          ref: fccd72199a1eedc12e3828cf2fdc2f10a2f418f7
           persist-credentials: false
 
       - name: Verify immutable source and clean tree
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = fe7c6951ebd27260d6adacd63b2b4ff2e09e5901
+          test "$(git rev-parse HEAD)" = fccd72199a1eedc12e3828cf2fdc2f10a2f418f7
           test "$(git rev-parse 'HEAD^{tree}')" = 41d82c5eb527f34d16ec2e458194496012bc1c22
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
           git rev-parse HEAD 'HEAD^{tree}'

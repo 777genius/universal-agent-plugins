@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "current_source": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "parent": "c93d3b9803a3dd036ac6f05b3787a3b6b51200a0",
+  "source_review": {
+    "parent": "c93d3b9803a3dd036ac6f05b3787a3b6b51200a0",
+    "delta": "one test file +3/-0",
+    "blob": "2b5e3d7cc32f8eecf98d9436c1e5718398a5acb0",
+    "root": "GO; original helper wiring and exact actual commit delta verified",
+    "independent": "pm_pi_artifact_r31 exact fixture GO",
+    "publication": "parallel external publication at11:22:59; preserved; not performed by root",
+    "equivalent_candidate": "fe7c6951ebd27260d6adacd63b2b4ff2e09e5901",
+    "runtime_qualification": false
+  },
+  "previous_stress_failure": {
+    "run": 46137655740,
+    "job": 140956474531,
+    "decoded_log_sha256": "e78022cc072de42ad39227610f3a7c726215be924870c84e1eb7ac816785950b"
+  },
+  "candidate_prevalidation": {
+    "commit": "fe7c6951ebd27260d6adacd63b2b4ff2e09e5901",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "run": 46139581815,
+    "qualification": "Different commit; diagnostic only"
+  },
+  "action": "Preserve actual parallel-published source; rebind exact-current regression and qualify new current CI; no manual cancellation or PR ref overwrite"
+}
