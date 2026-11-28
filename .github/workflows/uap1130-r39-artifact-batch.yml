@@ -34,12 +34,12 @@ jobs:
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.12'
-      - name: Verify PM Linux original archive and canonical evidence
+      - name: Verify PM Windows original archive and canonical evidence
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 .github/r39-pm-audit/pm_readonly_runner.py \
-            --manifest .github/r39-artifact-manifests/pm-linux.json \
-            --manifest-sha256 e7e41e68f77b9533b61fc9831e4aadc76a24e96f8b2ebf1f40eb539398b9d5f7 \
+            --manifest .github/r39-artifact-manifests/pm-windows.json \
+            --manifest-sha256 2193a90ab11c50652efba4dd861cca8ccf02c79d1e95d3ec3f00672ee166315a \
             --source source \
             --core .github/r39-pm-audit/pm_audit.py

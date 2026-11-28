@@ -1,0 +1,19 @@
+{
+  "repo": "777genius/universal-agent-plugins",
+  "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "run_id": 46139633158,
+  "job_id": 140962468977,
+  "job_name": "package-manager (windows-2025)",
+  "run_attempt": 1,
+  "event": "pull_request",
+  "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+  "artifact_id": 15263468205,
+  "artifact_name": "package-manager-e2e-windows-2025-8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+  "size": 60933,
+  "sha256": "1370202562f54f3708a046738ad45e73e5373055fc426b5899fa7f72612731c2",
+  "expected_platform": {
+    "os": "Windows",
+    "architecture": "AMD64"
+  }
+}

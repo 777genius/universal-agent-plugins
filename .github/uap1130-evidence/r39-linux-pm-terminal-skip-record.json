@@ -1,0 +1,457 @@
+{
+  "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "pm_linux": {
+    "status": "pass",
+    "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "audit_commit": "1fb793c95257ab211644e4b8bba0f56454471834",
+    "run": 46145900569,
+    "job": 140981787196,
+    "all_steps_success": 10,
+    "original_decoded_log": {
+      "sha256": "e0dc7f91657d4d97827e624036ab6ef2e71b1a3c2bca2c4ed58a4e98437b252d",
+      "bytes": 38047
+    },
+    "receipt": {
+      "agreement_roots": 17,
+      "artifact_id": 15263726281,
+      "audit_kind": "independent artifact check only",
+      "boundaries": [
+        "Filesystem preservation follows executed pinned assertions; full original filesystem snapshots are not retained.",
+        "Plugin scanner receipt does not independently qualify collection scanner receipt.",
+        "No authentication or model-call qualification."
+      ],
+      "canonical_required": 140,
+      "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+      "collection_commands": 6,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "job_id": 140962469268,
+      "manifest_sha256": "e7e41e68f77b9533b61fc9831e4aadc76a24e96f8b2ebf1f40eb539398b9d5f7",
+      "native_runtime_qualified": false,
+      "phases": 23,
+      "platform": {
+        "architecture": "x86_64",
+        "os": "Linux"
+      },
+      "raw_pass": 463,
+      "raw_run": 463,
+      "run_id": 46139633158,
+      "status": "pass",
+      "stream_hashes": 46,
+      "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+      "windows_held_readers": {
+        "job_name": "package-manager (ubuntu-24.04)",
+        "qualified_roots": [],
+        "raw_pass": 0,
+        "raw_run": 0,
+        "raw_run_pass_verified": false,
+        "required_roots": 0,
+        "source_condition": "matrix.os == 'windows-2025'",
+        "status": "not_applicable",
+        "stream_bytes": 0,
+        "stream_sha256": null
+      },
+      "zip_crc": "pass",
+      "zip_member_names": [
+        "agreement-boundary.stderr",
+        "agreement-boundary.stdout",
+        "binary-collection-add.stderr",
+        "binary-collection-add.stdout",
+        "binary-collection-list.stderr",
+        "binary-collection-list.stdout",
+        "binary-collection-remove-collection-review.stderr",
+        "binary-collection-remove-collection-review.stdout",
+        "binary-collection-remove-collection-testing.stderr",
+        "binary-collection-remove-collection-testing.stdout",
+        "binary-collection-repeat.stderr",
+        "binary-collection-repeat.stdout",
+        "binary-collection-update.stderr",
+        "binary-collection-update.stdout",
+        "binary-empty-lock.stderr",
+        "binary-empty-lock.stdout",
+        "binary-empty-status.stderr",
+        "binary-empty-status.stdout",
+        "binary-empty-sync.stderr",
+        "binary-empty-sync.stdout",
+        "binary-help.stderr",
+        "binary-help.stdout",
+        "binary-init.stderr",
+        "binary-init.stdout",
+        "binary-install-first.stderr",
+        "binary-install-first.stdout",
+        "binary-install-info.stderr",
+        "binary-install-info.stdout",
+        "binary-install-remove.stderr",
+        "binary-install-remove.stdout",
+        "binary-install-repair.stderr",
+        "binary-install-repair.stdout",
+        "binary-install-repeat.stderr",
+        "binary-install-repeat.stdout",
+        "binary-malformed-package.stderr",
+        "binary-malformed-package.stdout",
+        "binary-missing-lock.stderr",
+        "binary-missing-lock.stdout",
+        "build.stderr",
+        "build.stdout",
+        "catalog.stderr",
+        "catalog.stdout",
+        "collections.stderr",
+        "collections.stdout",
+        "composition.stderr",
+        "composition.stdout",
+        "installations.stderr",
+        "installations.stdout",
+        "report.json"
+      ],
+      "zip_sha256": "1abdb1a5e6bf80dbcebc4c7ca136fe04b66dafd8c70af286e7770c0407eb6240",
+      "zip_size": 63332
+    }
+  },
+  "terminal": {
+    "scope": "Linux and macOS original job logs; Windows pending",
+    "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "workflow_blob": "23fadf72c7fa8353bd28e337c319bf8ee0e6919a",
+    "hosts": {
+      "linux": {
+        "status": "pass",
+        "run": 46139632959,
+        "job": 140962468094,
+        "successful_steps": 16,
+        "platform_only_step_skips": 6,
+        "original_decoded_log": {
+          "sha256": "2e19f3a40c3e869a4210c24352351b8d2943836b7b45ce85455a38693f8125c7",
+          "bytes": 835450
+        },
+        "go_packages_pass": 7,
+        "no_test_packages": 1,
+        "verbose_go": {
+          "run": 3322,
+          "pass": 3313,
+          "skip": 9,
+          "fail": 0,
+          "top_level_run": 1343,
+          "top_level_pass": 1334
+        },
+        "python_discovery": {
+          "attempted": 280,
+          "pass": 277,
+          "skip": 3
+        },
+        "broad_cli_package_seconds": 275.418,
+        "broad_command_package_seconds": 259.433,
+        "requested_policy_cases": [
+          {
+            "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/archive/cli",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/archive/management",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/local-skill/cli",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/local-skill/management",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestEnterprisePolicySelectedSkillKeepsUnrelatedDeniedArchive",
+            "run": 1,
+            "pass": 1
+          }
+        ],
+        "local_skill_roots": [
+          {
+            "name": "TestLocalSkillCLISavedSnapshotLifecycle",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestLocalSkillColdReplayVerifiesRawAndNormalizedBytes",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestLocalSkillWarmStoreReplaysForeignOSCoordinates",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestLocalSkillSelectionRefusalsDoNotWrite",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestLocalSkillRelativeDirectoryUsesCanonicalSnapshotIdentity",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestLocalSkillPathHazardsRefuseBeforePublication",
+            "run": 1,
+            "pass": 1
+          }
+        ],
+        "go_skip_names": [
+          "TestDependencySBOMAgainstOfficialSchemas",
+          "TestPiRealMarketplaceSignedTestCohortSavedClosure",
+          "TestSkillsBrowserFixture",
+          "TestPiAllSignedTestOnlySavedMarketplace",
+          "TestPiFullModernSignedTestOnlyMarketplace",
+          "TestPiUpstreamSignedTestOnlyPositiveSaved",
+          "TestClineCurrentSourceNativeProjectConfigLifecycle",
+          "TestProjectHermesBundleColdRestoreAndRepair",
+          "TestHermesSourceSkillsConfirmedAddsNative"
+        ],
+        "json_case_status_counts": {
+          "pass": 30,
+          "passed": 51,
+          "passed_boolean": 6
+        },
+        "archive_bytes_qualified": false,
+        "boundaries": [
+          "Verbose Go counts cover broad CLI packages; focused packages only retain package PASS summaries.",
+          "Platform-only steps are source-gated; skipped Go/Python tests are not PASS.",
+          "Selection and 19-case plugin matrices use synthetic client/scanner protocols, no genuine vendor/model/auth qualification.",
+          "Original retained ZIP contents, executable bytes, detailed redirected reports and complete filesystem images not independently read."
+        ]
+      },
+      "mac": {
+        "status": "pass",
+        "run": 46139632959,
+        "job": 140962468196,
+        "successful_steps": 16,
+        "platform_only_step_skips": 6,
+        "original_decoded_log": {
+          "sha256": "6b9b39a511d08d35282f30a2c3567df535e2e3e447191ca6c67b0aa5d0634e64",
+          "bytes": 813097
+        },
+        "go_packages_pass": 7,
+        "no_test_packages": 1,
+        "verbose_go": {
+          "run": 3226,
+          "pass": 3218,
+          "skip": 8,
+          "fail": 0,
+          "top_level_run": 1310,
+          "top_level_pass": 1302
+        },
+        "python_discovery": {
+          "attempted": 280,
+          "pass": 270,
+          "skip": 10
+        },
+        "broad_cli_package_seconds": 333.286,
+        "broad_command_package_seconds": 254.991,
+        "requested_policy_cases": [
+          {
+            "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/archive/cli",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/archive/management",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/local-skill/cli",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/local-skill/management",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestEnterprisePolicySelectedSkillKeepsUnrelatedDeniedArchive",
+            "run": 1,
+            "pass": 1
+          }
+        ],
+        "local_skill_roots": [
+          {
+            "name": "TestLocalSkillCLISavedSnapshotLifecycle",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestLocalSkillColdReplayVerifiesRawAndNormalizedBytes",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestLocalSkillWarmStoreReplaysForeignOSCoordinates",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestLocalSkillSelectionRefusalsDoNotWrite",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestLocalSkillRelativeDirectoryUsesCanonicalSnapshotIdentity",
+            "run": 1,
+            "pass": 1
+          },
+          {
+            "name": "TestLocalSkillPathHazardsRefuseBeforePublication",
+            "run": 1,
+            "pass": 1
+          }
+        ],
+        "go_skip_names": [
+          "TestDependencySBOMAgainstOfficialSchemas",
+          "TestPiRealMarketplaceSignedTestCohortSavedClosure",
+          "TestSkillsBrowserFixture",
+          "TestPiAllSignedTestOnlySavedMarketplace",
+          "TestPiFullModernSignedTestOnlyMarketplace",
+          "TestPiUpstreamSignedTestOnlyPositiveSaved",
+          "TestProjectHermesBundleColdRestoreAndRepair",
+          "TestHermesSourceSkillsConfirmedAddsNative"
+        ],
+        "json_case_status_counts": {
+          "pass": 30,
+          "passed": 51,
+          "passed_boolean": 6
+        },
+        "archive_bytes_qualified": false,
+        "boundaries": [
+          "Verbose Go counts cover broad CLI packages; focused packages only retain package PASS summaries.",
+          "Platform-only steps are source-gated; skipped Go/Python tests are not PASS.",
+          "Selection and 19-case plugin matrices use synthetic client/scanner protocols, no genuine vendor/model/auth qualification.",
+          "Original retained ZIP contents, executable bytes, detailed redirected reports and complete filesystem images not independently read."
+        ]
+      }
+    }
+  },
+  "whole_job_skips": [
+    {
+      "run": 46139632928,
+      "job": 140962466858,
+      "file": "qoder-scoped-native.yml",
+      "scope": "Qoder scoped native",
+      "condition": "PR requires ci:github-hosted label",
+      "reason": "Ready pull_request has no labels; required hosted opt-in absent.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "8985b624e4a3a901c2252eea5d3a75acb4a8a6f4",
+      "path": ".github/workflows/qoder-scoped-native.yml",
+      "actual_name": "qoder-native",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139633158,
+      "job": 140962470221,
+      "file": "package-manager-e2e.yml",
+      "scope": "PM draft preflight",
+      "condition": "github.event_name == 'pull_request' && github.event.pull_request.draft",
+      "reason": "Current PR is ready, draft=false; four platform jobs apply.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "75ce24fe9adfe4026f2253ab5e055f9989864950",
+      "path": ".github/workflows/package-manager-e2e.yml",
+      "actual_name": "draft evidence preflight",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139633140,
+      "job": 140962470722,
+      "file": "agentplugins-native-clients.yml",
+      "scope": "Native SDK-only dispatch",
+      "condition": "github.event_name == 'workflow_dispatch' && inputs.sdk_linux_only",
+      "reason": "Current event is pull_request, not SDK-only dispatch.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "37112c3561d51f298c10368dd4530e0db0b7dca3",
+      "path": ".github/workflows/agentplugins-native-clients.yml",
+      "actual_name": "${{ matrix.client }} SDK lifecycle (${{ inputs.sdk_target }})",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139633175,
+      "job": 140962470045,
+      "file": "released-source-audit.yml",
+      "scope": "Published .116 source lifecycle",
+      "condition": "github.event_name == 'workflow_dispatch'",
+      "reason": "Published-release qualification is manual-only; source harness unit gate still applies.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "096a284e7ff906e151b85190d139a0880aa71d86",
+      "path": ".github/workflows/released-source-audit.yml",
+      "actual_name": "Public .116 / ${{ matrix.client }} / ${{ matrix.target }}",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139632912,
+      "job": 140978069133,
+      "file": "hermes-native-e2e.yml",
+      "scope": "Hermes release-native aggregate",
+      "condition": "always() && inputs.release_tag != ''",
+      "reason": "Current pull_request has no release_tag; three source native jobs are separate.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "d109cdee89d0e8b0174d7cebf734644a2bd9e1c4",
+      "path": ".github/workflows/hermes-native-e2e.yml",
+      "actual_name": "Aggregate hermes release-native proofs",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139632913,
+      "job": 140962469364,
+      "file": "skills-install-live-api.yml",
+      "scope": "Native real GitHub/HTTPS Skills install",
+      "condition": "pull_request && ci:live-skills label",
+      "reason": "Current pull_request has no ci:live-skills label; real API contract remains applicable.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "250569fe1d5a2446103800a6574bfa16c5309372",
+      "path": ".github/workflows/skills-install-live-api.yml",
+      "actual_name": "Native real GitHub and HTTPS install",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    },
+    {
+      "run": 46139632913,
+      "job": 140962496153,
+      "file": "skills-install-live-api.yml",
+      "scope": "Published npm Skills install",
+      "condition": "workflow_dispatch || (pull_request && ci:live-skills label)",
+      "reason": "Current event is pull_request without ci:live-skills.",
+      "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "source_blob": "250569fe1d5a2446103800a6574bfa16c5309372",
+      "path": ".github/workflows/skills-install-live-api.yml",
+      "actual_name": "Published npm Skills install",
+      "conclusion": "skipped",
+      "source_inapplicable": true,
+      "test_pass": false
+    }
+  ]
+}

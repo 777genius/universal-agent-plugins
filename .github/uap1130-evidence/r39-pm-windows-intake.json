@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "scope": "R39 PM Windows AMD64 original retained ZIP",
+  "state": "ready_intake_byte_audit_pending",
+  "source": {
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221"
+  },
+  "run_id": 46139633158,
+  "job_id": 140962468977,
+  "run_attempt": 1,
+  "job_steps": {
+    "success": 20,
+    "skipped": 0
+  },
+  "original_decoded_log": {
+    "sha256": "7b1b0f6f882bdb94c16710c31fafef83af24d39b86324871e75cb53279b3b544",
+    "bytes": 77151
+  },
+  "manifest_hash": {
+    "sha256": "2193a90ab11c50652efba4dd861cca8ccf02c79d1e95d3ec3f00672ee166315a",
+    "bytes": 664
+  },
+  "manifest": {
+    "repo": "777genius/universal-agent-plugins",
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "run_id": 46139633158,
+    "job_id": 140962468977,
+    "job_name": "package-manager (windows-2025)",
+    "run_attempt": 1,
+    "event": "pull_request",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "artifact_id": 15263468205,
+    "artifact_name": "package-manager-e2e-windows-2025-8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "size": 60933,
+    "sha256": "1370202562f54f3708a046738ad45e73e5373055fc426b5899fa7f72612731c2",
+    "expected_platform": {
+      "os": "Windows",
+      "architecture": "AMD64"
+    }
+  },
+  "auditor": {
+    "core_blob": "91a5ea4e09df50879dea4fcb948970674a410f29",
+    "wrapper_blob": "608ef50842bce97b3305e3d7ced680f82ef869af",
+    "core_path": ".github/r39-pm-audit/pm_audit.py",
+    "wrapper_path": ".github/r39-pm-audit/pm_readonly_runner.py"
+  },
+  "expected_windows_held_reader_roots": 6,
+  "qualifies_archive_bytes": false
+}
