@@ -49,3 +49,21 @@ func TestEnterprisePolicyDeniesLocalSkillsBeforeScan(t *testing.T) {
 		t.Fatalf("local collection was scanned before enterprise denial: %v", err)
 	}
 }
+
+func TestEnterprisePolicyKeepsGitSkillsListingReadOnly(t *testing.T) {
+	f := newCLIFixture(t, nil)
+	policyPath := filepath.Join(f.root, "deny-git-list.yaml")
+	dependencyWrite(t, policyPath, "schema_version: 2\nsources:\n  allowed_kinds: []\n")
+	setEnterpriseCommandFiles(&f, enterprisepolicy.Path{Layer: "machine", Path: policyPath})
+	// A missing acquirer gives a deterministic error if the read-only route
+	// is reached. An installation denial would mean listing was gated.
+	f.app.SourceAcquirer = nil
+	_, _, err := f.execute(false, "skills", "list", "acme/demo@main", "--format", "json")
+	var denied *domain.InstallPolicyError
+	if err == nil || errors.As(err, &denied) {
+		t.Fatalf("read-only Skills listing was denied by installation policy: %v", err)
+	}
+	if !strings.Contains(err.Error(), "source acquisition does not support raw Skills") {
+		t.Fatalf("read-only listing failed before source acquisition: %v", err)
+	}
+}

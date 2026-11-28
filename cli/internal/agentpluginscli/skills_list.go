@@ -78,7 +78,7 @@ func runSkillsList(cmd *cobra.Command, app App, opts *options, input, ref, folde
 			return fmt.Errorf("invalid Skill folder: %w", err)
 		}
 	}
-	session, err := app.openSkillsCatalog(cmd.Context(), SkillsPickerRequest{
+	session, err := app.openSkillsCatalogReadOnly(cmd.Context(), SkillsPickerRequest{
 		Input: input, Ref: ref, Path: folder, PathSet: pathSet,
 	})
 	if err != nil {

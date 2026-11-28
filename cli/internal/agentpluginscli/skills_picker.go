@@ -61,12 +61,22 @@ func (app App) skillSourceAcquirer(scratch string) (skillsource.Acquirer, error)
 }
 
 func (app App) openSkillsCatalog(ctx context.Context, input SkillsPickerRequest) (*skillsCatalogSession, error) {
+	return app.openSkillsCatalogWithAdmission(ctx, input, true)
+}
+
+// Read-only listing can inspect even a source that current install policy
+// refuses. Only the install/picker entrypoints admit sources before fetch.
+func (app App) openSkillsCatalogReadOnly(ctx context.Context, input SkillsPickerRequest) (*skillsCatalogSession, error) {
+	return app.openSkillsCatalogWithAdmission(ctx, input, false)
+}
+
+func (app App) openSkillsCatalogWithAdmission(ctx context.Context, input SkillsPickerRequest, install bool) (*skillsCatalogSession, error) {
 	if err := app.checkSkillsContext(nil); err != nil {
 		return nil, err
 	}
 	// Known Git authority and original pin intent are available without fetching
 	// refs or cloning. Reject a denied source before any picker acquisition.
-	if app.InstallationPolicy != nil {
+	if install && app.InstallationPolicy != nil {
 		requested, err := skillsource.RequestedGitIntent(input.Input, input.Ref)
 		if err != nil {
 			return nil, err
