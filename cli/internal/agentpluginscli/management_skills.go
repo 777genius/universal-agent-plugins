@@ -10,7 +10,7 @@ func (b *ManagementBackend) SkillsCatalog(ctx context.Context, input management.
 	if isWebsiteSkillInput(input.Source) {
 		return b.websiteSkillsCatalog(ctx, input)
 	}
-	session, err := b.app.openSkillsCatalog(ctx, SkillsPickerRequest{Input: input.Source, Ref: input.Ref, Path: input.Path, PathSet: input.Path != ""})
+	session, err := b.app.openSkillsCatalogReadOnly(ctx, SkillsPickerRequest{Input: input.Source, Ref: input.Ref, Path: input.Path, PathSet: input.Path != ""})
 	if err != nil {
 		return management.SkillCatalog{}, err
 	}

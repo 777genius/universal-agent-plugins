@@ -148,3 +148,36 @@ func TestManagementSelectedSkillTargetPreservesUnselectedDrift(t *testing.T) {
 		t.Fatal("selected Skill install changed saved targets or dependency pins")
 	}
 }
+
+
+// Catalog discovery is a read-only management operation. An installation
+// policy may deny Git delivery but must not prevent source inspection.
+func TestManagementGitCatalogReadOnlyUnderEnterpriseDenial(t *testing.T) {
+	j, _, sha := skillJourney(t)
+	j.cli.app = j.cli.app.withEnterprisePolicyGate(sourcePolicyApp(t,
+		"schema_version: 2\\nsources:\\n  allowed_kinds: [local]\\n").InstallationPolicy)
+	backend := managementJourneyBackend(t, j)
+	before := savedJourneyTree(t, j.cli.root)
+	catalog, err := backend.SkillsCatalog(t.Context(), management.SourceRequest{
+		Source: "https://github.com/acme/tools/tree/" + sha + "/skills/pdf",
+	})
+	if err != nil || len(catalog.Candidates) != 1 {
+		t.Fatalf("read-only management discovery was denied: catalog=%+v err=%v", catalog, err)
+	}
+	if !reflect.DeepEqual(before, savedJourneyTree(t, j.cli.root)) {
+		t.Fatal("management discovery changed saved files")
+	}
+	request := management.ChangeRequest{Action: management.InstallSkills,
+		CatalogId: catalog.CatalogId, CandidateIds: []string{catalog.Candidates[0].Id},
+		TargetIds: []string{"profile-codex"}}
+	prepared, err := backend.Prepare(t.Context(), request, "policy-refusal")
+	if prepared != nil {
+		defer prepared.Close()
+	}
+	if err == nil {
+		t.Fatal("read-only catalog bypassed later installation policy")
+	}
+	if !reflect.DeepEqual(before, savedJourneyTree(t, j.cli.root)) {
+		t.Fatal("refused management installation changed saved files")
+	}
+}
