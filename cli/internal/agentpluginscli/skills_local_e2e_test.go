@@ -19,7 +19,11 @@ import (
 
 func localSkillJourney(t *testing.T) (savedJourney, string) {
 	t.Helper()
-	root := filepath.Join(t.TempDir(), "review")
+	sourceParent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := filepath.Join(sourceParent, "review")
 	if err := os.MkdirAll(filepath.Join(root, "scripts"), 0700); err != nil {
 		t.Fatal(err)
 	}
