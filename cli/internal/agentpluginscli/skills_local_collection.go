@@ -17,6 +17,13 @@ func (selection *skillsAddOptions) localSelections(cmd *cobra.Command, app App, 
 	if err != nil {
 		return nil, err
 	}
+	// A local source is already identified; do not inspect its catalog before
+	// the machine/user/project policy admits the requested source kind.
+	if app.InstallationPolicy != nil {
+		if err := app.checkEnterpriseLocal(cmd.Context(), root); err != nil {
+			return nil, err
+		}
+	}
 	if !selection.all && !cmd.Flags().Changed("path") {
 		saved, err := savedLocalSkillRoot(app, root)
 		if err != nil {

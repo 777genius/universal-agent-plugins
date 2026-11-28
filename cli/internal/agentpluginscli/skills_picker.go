@@ -64,6 +64,17 @@ func (app App) openSkillsCatalog(ctx context.Context, input SkillsPickerRequest)
 	if err := app.checkSkillsContext(nil); err != nil {
 		return nil, err
 	}
+	// Known Git authority and original pin intent are available without fetching
+	// refs or cloning. Reject a denied source before any picker acquisition.
+	if app.InstallationPolicy != nil {
+		requested, err := skillsource.RequestedGitIntent(input.Input, input.Ref)
+		if err != nil {
+			return nil, err
+		}
+		if err := app.checkEnterpriseGit(ctx, requested); err != nil {
+			return nil, err
+		}
+	}
 	scratch, err := os.MkdirTemp("", "agentplugins-skills-")
 	if err != nil {
 		return nil, err
