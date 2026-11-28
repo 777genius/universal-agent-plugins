@@ -93,13 +93,15 @@ def capture_output(process, selector, streams, started, timeout, limit, input_co
     return "probe input response missing" if input_complete is not None else None
 
 
-def run_probe(argv, cwd, env, output, label, timeout=30, limit=OUTPUT_LIMIT, *, memory_only=False, input_bytes=None, input_complete=None):
+def run_probe(argv, cwd, env, output, label, timeout=30, limit=OUTPUT_LIMIT, *, memory_only=False, input_bytes=None, input_complete=None, umask=None):
     """Cap streams live without limiting unrelated native filesystem writes.
 
     New private collectors use memory_only: no native-writable capture path is
     opened or reread, and the returned bytes come from the bounded held buffers.
     The historical on-disk behavior remains available to preserved collectors.
     """
+    if umask is not None and (type(umask) is not int or not 0 <= umask <= 0o777):
+        raise ValueError("probe umask must be an exact POSIX permission mask")
     if input_bytes is not None and (type(input_bytes) is not bytes or not 1 <= len(input_bytes) <= 256):
         raise ValueError("probe input must be 1..256 exact bytes")
     if input_complete is not None and (input_bytes is None or not callable(input_complete)):
@@ -133,7 +135,7 @@ def run_probe(argv, cwd, env, output, label, timeout=30, limit=OUTPUT_LIMIT, *, 
         try:
             process = subprocess.Popen(argv, cwd=cwd, env=env, stdin=(subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL),
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
-                                       preexec_fn=child_limits)
+                                       preexec_fn=child_limits, **({"umask": umask} if umask is not None else {}))
             if input_bytes is not None:
                 os.set_blocking(process.stdin.fileno(), False)
                 try:

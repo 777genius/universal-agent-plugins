@@ -160,6 +160,47 @@ class CaptureTests(unittest.TestCase):
     def run_child(self, root, body, label="probe", **kwargs):
         return research.run_probe([sys.executable, "-c", body], root, {}, root, label, **kwargs)
 
+    def test_optional_child_umask_keeps_parent_mask_on_success_exit_and_startup_failure(self):
+        body = ("import os,sys; fd=os.open(sys.argv[1], os.O_WRONLY|os.O_CREAT|os.O_EXCL, 0o666); "
+                "os.write(fd, b'private child bytes'); os.close(fd); sys.exit(int(sys.argv[2]))")
+        original = os.umask(0o022)
+        try:
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                for label, mask, exit_code in (("inherited", None, 0), ("private", 0o077, 0),
+                                               ("failed", 0o077, 7)):
+                    with self.subTest(label=label):
+                        path = root / label
+                        options = {} if mask is None else {"umask": mask}
+                        record, stdout, stderr = research.run_probe(
+                            [sys.executable, "-c", body, str(path), str(exit_code)],
+                            root, {}, root, label, memory_only=True, **options)
+                        self.assertEqual((record["exit"], record["error"], stdout, stderr),
+                                         (exit_code, None, b"", b""))
+                        self.assertEqual(path.read_bytes(), b"private child bytes")
+                        self.assertEqual(path.stat().st_mode & 0o777, 0o644 if mask is None else 0o600)
+                        self.assertEqual(os.umask(0o022), 0o022)
+                record, stdout, stderr = research.run_probe(
+                    [str(root / "missing-executable")], root, {}, root, "missing",
+                    memory_only=True, umask=0o077)
+                self.assertIsNone(record["exit"])
+                self.assertIsNotNone(record["error"])
+                self.assertEqual((stdout, stderr), (b"", b""))
+                self.assertEqual(os.umask(0o022), 0o022)
+                self.assertEqual({path.name for path in root.iterdir()}, {"inherited", "private", "failed"})
+        finally:
+            os.umask(original)
+
+    def test_invalid_child_umask_refuses_before_capture_files_or_spawn(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for mask in (True, False, -1, 0o1000, "077", 0.0):
+                with self.subTest(mask=mask), patch.object(research.subprocess, "Popen") as spawn:
+                    with self.assertRaisesRegex(ValueError, "probe umask"):
+                        research.run_probe(["never-executed"], root, {}, root, "invalid", umask=mask)
+                    spawn.assert_not_called()
+                    self.assertEqual(list(root.iterdir()), [])
+
     def test_exact_cap_eof_and_each_stream_overflow(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

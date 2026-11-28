@@ -63,6 +63,7 @@ class ClaudeRemovalDiscoveryContracts(unittest.TestCase):
             self.assertNotIn("ANTHROPIC_API_KEY", native_env)
             self.assertEqual(native_env["CLAUDE_CONFIG_DIR"], str(home / ".claude"))
             self.assertTrue(options["memory_only"])
+            self.assertEqual(options["umask"], 0o077)
             self.assertEqual(options["timeout"], 60)
             state["calls"].append(argv[1:])
             mutation = state["mutation"]
