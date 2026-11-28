@@ -445,7 +445,9 @@ class CopilotConsentDiagnosticContracts(unittest.TestCase):
             self.assertEqual(len(right), 1)
             self.assertTrue(next(iter(right)).endswith(link.name))
             detail = json.loads(str(raised.exception).split(": ", 1)[1])
-            self.assertIn(detail["key_prefix"], ("metadata:0:", "link:0:"))
+            self.assertIn((detail["key_prefix"], detail["value_class"], detail["value_prefix"]),
+                          (("metadata:0:", "tuple", "symlink"), ("file", "string", "symlink"),
+                           ("link:0:", "string", None)))
             self.assertEqual(detail["delta"]["changed_key_count"], 1)
             self.assertEqual(detail["delta"]["omitted_key_count"], 0)
             self.assertLess(len(str(raised.exception)), 1400)
