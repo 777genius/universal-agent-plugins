@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "source": "c93d3b9803a3dd036ac6f05b3787a3b6b51200a0",
+  "tree": "d2b10c5ef27715cf5fe8bcea02ee0b7ab33492e6",
+  "audit_commit": "4bf2a4402090893c6cf03f37e756355e250b3187",
+  "run_id": 46137655740,
+  "job_id": 140956474531,
+  "runner_label": "hci-uap-core-linux",
+  "runner_name": "garm-qkdxpkugrhfa",
+  "go_version": "go1.26.11 linux/amd64",
+  "cgo": "1",
+  "result": "FAILURE; blocks qualification and merge",
+  "raw_log": {
+    "sha256": "e78022cc072de42ad39227610f3a7c726215be924870c84e1eb7ac816785950b",
+    "bytes": 128632
+  },
+  "steps": [
+    {
+      "name": "Set up job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 1
+    },
+    {
+      "name": "Checkout exact corrected source",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 2
+    },
+    {
+      "name": "Verify immutable source and clean tree",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 3
+    },
+    {
+      "name": "Provision pinned Go",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 4
+    },
+    {
+      "name": "Verify Go workspace and fixture formatting",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 5
+    },
+    {
+      "name": "Run exact failure and cancellation regression under race detector",
+      "status": "completed",
+      "conclusion": "failure",
+      "number": 6
+    },
+    {
+      "name": "Post Provision pinned Go",
+      "status": "completed",
+      "conclusion": "skipped",
+      "number": 11
+    },
+    {
+      "name": "Post Checkout exact corrected source",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 12
+    },
+    {
+      "name": "Complete job",
+      "status": "completed",
+      "conclusion": "success",
+      "number": 13
+    }
+  ],
+  "requested_repetitions": 20,
+  "completed_full_cycles": 2,
+  "both_completed_cycles_failed": true,
+  "third_cycle_aborted": true,
+  "selected_roots": [
+    {
+      "Test": "TestGitRootPrefetchFailingSourceReturnsTheSerialError",
+      "run": 3,
+      "pass": 0,
+      "fail": 2
+    },
+    {
+      "Test": "TestGitRootPrefetchCanceledRootStopsAfterItsRef",
+      "run": 2,
+      "pass": 2,
+      "fail": 0
+    },
+    {
+      "Test": "TestGitRootPrefetchCancellationLeavesNoAcquisitions",
+      "run": 2,
+      "pass": 2,
+      "fail": 0
+    },
+    {
+      "Test": "TestOrderedPrefetchServesFailureOnceAndStopsStartingNewWork",
+      "run": 2,
+      "pass": 2,
+      "fail": 0
+    },
+    {
+      "Test": "TestOrderedPrefetchFailureCancelsOnlyLaterKeys",
+      "run": 2,
+      "pass": 2,
+      "fail": 0
+    }
+  ],
+  "failing_beta_occurrences": 3,
+  "package_timeout_seconds": 720,
+  "package_elapsed_seconds": 720.037,
+  "race_warning_observed": false,
+  "diagnosis": "The maximal reachable callback window requires earlier real Git acquisition plus consumer progress; the ten-second fixture barrier budget is not a scheduler-only bound. Panic stack was serial acquisition through process.superviseExplicit. No internal supervisor defect established.",
+  "candidate_fix": "Reuse existing directGitTestRunner for this strictly local mixedRootsJourney before copying its production Acquirer; three added lines, no production/timeout/barrier/assertion changes",
+  "candidate_blob": "2b5e3d7cc32f8eecf98d9436c1e5718398a5acb0",
+  "candidate_runtime_validated": false
+}
