@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "repo": "777genius/universal-agent-plugins",
+  "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+  "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "core_blob": "b273b92fc290c09ba81de92516302ad7fc04250d",
+  "event": "pull_request",
+  "run_id": 46139632998,
+  "run_attempt": 1,
+  "lanes": [
+    {
+      "client": "gemini",
+      "job_id": 140962469470,
+      "artifact_id": 15265607794,
+      "archive_size": 4549,
+      "archive_sha256": "40bb8a780961ff3911fadfeafb8ed7f9ed6f49695ea0481a01d86b5ed94c21db"
+    }
+  ],
+  "selected_clients": [
+    "gemini"
+  ]
+}
