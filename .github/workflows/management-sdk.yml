@@ -19,7 +19,7 @@ jobs:
           - macos-15
           - windows-2025
     # Preserve the shared matrix/check identity; only PR Linux execution can opt in.
-    runs-on: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.runner == (vars.CI_LINUX_RUNNER || 'ubuntu-latest') && 'ubuntu-latest' || matrix.runner }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && !contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.runner == (vars.CI_LINUX_RUNNER || 'ubuntu-latest') && (vars.CI_CORE_TEST_RUNNER || matrix.runner) || github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'ci:github-hosted') && matrix.runner == (vars.CI_LINUX_RUNNER || 'ubuntu-latest') && 'ubuntu-latest' || matrix.runner }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
