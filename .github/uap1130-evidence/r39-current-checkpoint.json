@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "recorded_at": "2026-11-28T13:38:00Z",
+  "recorded_at": "2026-11-28T13:55:20Z",
   "source": {
     "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
     "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
@@ -1882,6 +1882,112 @@
           "zip_size": 60933
         },
         "independent_readback_confirmed": true
+      },
+      "mac_arm": {
+        "run_id": 46150622531,
+        "job_id": 140996257118,
+        "audit_commit": "35e9d7fc266d45e1842a9d71aa174cf5462d8080",
+        "status": "passed",
+        "steps_success": 10,
+        "log": {
+          "sha256": "eb15f9197bed39cb4ff142920099838cb659bdb507d52a91349ff582f7f17a1e",
+          "bytes": 38040
+        },
+        "receipt": {
+          "agreement_roots": 17,
+          "artifact_id": 15265766207,
+          "audit_kind": "independent artifact check only",
+          "boundaries": [
+            "Filesystem preservation follows executed pinned assertions; full original filesystem snapshots are not retained.",
+            "Plugin scanner receipt does not independently qualify collection scanner receipt.",
+            "No authentication or model-call qualification."
+          ],
+          "canonical_required": 140,
+          "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+          "collection_commands": 6,
+          "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+          "job_id": 140962469332,
+          "manifest_sha256": "cf206cc3a0c9b8caafc4c2410191a6390dbe2d303d129916a17c579ac0144960",
+          "native_runtime_qualified": false,
+          "phases": 23,
+          "platform": {
+            "architecture": "arm64",
+            "os": "Darwin"
+          },
+          "raw_pass": 463,
+          "raw_run": 463,
+          "run_id": 46139633158,
+          "status": "pass",
+          "stream_hashes": 46,
+          "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+          "windows_held_readers": {
+            "job_name": "package-manager (macos-15)",
+            "qualified_roots": [],
+            "raw_pass": 0,
+            "raw_run": 0,
+            "raw_run_pass_verified": false,
+            "required_roots": 0,
+            "source_condition": "matrix.os == 'windows-2025'",
+            "status": "not_applicable",
+            "stream_bytes": 0,
+            "stream_sha256": null
+          },
+          "zip_crc": "pass",
+          "zip_member_names": [
+            "agreement-boundary.stderr",
+            "agreement-boundary.stdout",
+            "binary-collection-add.stderr",
+            "binary-collection-add.stdout",
+            "binary-collection-list.stderr",
+            "binary-collection-list.stdout",
+            "binary-collection-remove-collection-review.stderr",
+            "binary-collection-remove-collection-review.stdout",
+            "binary-collection-remove-collection-testing.stderr",
+            "binary-collection-remove-collection-testing.stdout",
+            "binary-collection-repeat.stderr",
+            "binary-collection-repeat.stdout",
+            "binary-collection-update.stderr",
+            "binary-collection-update.stdout",
+            "binary-empty-lock.stderr",
+            "binary-empty-lock.stdout",
+            "binary-empty-status.stderr",
+            "binary-empty-status.stdout",
+            "binary-empty-sync.stderr",
+            "binary-empty-sync.stdout",
+            "binary-help.stderr",
+            "binary-help.stdout",
+            "binary-init.stderr",
+            "binary-init.stdout",
+            "binary-install-first.stderr",
+            "binary-install-first.stdout",
+            "binary-install-info.stderr",
+            "binary-install-info.stdout",
+            "binary-install-remove.stderr",
+            "binary-install-remove.stdout",
+            "binary-install-repair.stderr",
+            "binary-install-repair.stdout",
+            "binary-install-repeat.stderr",
+            "binary-install-repeat.stdout",
+            "binary-malformed-package.stderr",
+            "binary-malformed-package.stdout",
+            "binary-missing-lock.stderr",
+            "binary-missing-lock.stdout",
+            "build.stderr",
+            "build.stdout",
+            "catalog.stderr",
+            "catalog.stdout",
+            "collections.stderr",
+            "collections.stdout",
+            "composition.stderr",
+            "composition.stdout",
+            "installations.stderr",
+            "installations.stdout",
+            "report.json"
+          ],
+          "zip_sha256": "6cab600c8122fad535006692f99c2fa320120661ea97900a082a8679436cd0bb",
+          "zip_size": 60962
+        },
+        "independent_readback_confirmed": true
       }
     },
     "terminal": {
@@ -2551,7 +2657,120 @@
           }
         },
         "archive_bytes_qualified": false,
-        "independent_readback_confirmed": false
+        "independent_readback_confirmed": true
+      },
+      "gemini": {
+        "run_id": 46139632998,
+        "job_id": 140962469470,
+        "run_attempt": 1,
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "job_conclusion": "success",
+        "job_steps": {
+          "success": 9,
+          "skipped": 3
+        },
+        "original_log": {
+          "sha256": "0cd600fb84f4bb9264174ae3a7113ba9af750708b46c3e745968d2c2b5903f3c",
+          "bytes": 72939
+        },
+        "artifact": {
+          "client": "gemini",
+          "job_id": 140962469470,
+          "artifact_id": 15265607794,
+          "archive_size": 4549,
+          "archive_sha256": "40bb8a780961ff3911fadfeafb8ed7f9ed6f49695ea0481a01d86b5ed94c21db"
+        },
+        "preflight": {
+          "attempted": 296,
+          "passed": 295,
+          "skipped": 1
+        },
+        "native_package": "@google/gemini-cli@0.66.0",
+        "report": {
+          "status": "passed",
+          "steps": [
+            {
+              "stage": "add",
+              "exit_code": 0
+            },
+            {
+              "stage": "repeat add",
+              "exit_code": 0
+            },
+            {
+              "stage": "update",
+              "exit_code": 0
+            },
+            {
+              "stage": "repair intact",
+              "exit_code": 0
+            },
+            {
+              "stage": "corrupt Project signed lock refused before install",
+              "exit_code": 1
+            },
+            {
+              "stage": "cold locked restore",
+              "exit_code": 0
+            },
+            {
+              "stage": "remove B",
+              "exit_code": 0
+            },
+            {
+              "stage": "remove A",
+              "exit_code": 0
+            },
+            {
+              "stage": "User add",
+              "exit_code": 0
+            },
+            {
+              "stage": "User repeat add",
+              "exit_code": 0
+            },
+            {
+              "stage": "User update",
+              "exit_code": 0
+            },
+            {
+              "stage": "User repair intact",
+              "exit_code": 0
+            },
+            {
+              "stage": "corrupt User signed lock refused before install",
+              "exit_code": 1
+            },
+            {
+              "stage": "User cold locked restore C",
+              "exit_code": 0
+            },
+            {
+              "stage": "User remove C",
+              "exit_code": 0
+            },
+            {
+              "stage": "User remove",
+              "exit_code": 0
+            }
+          ],
+          "two_scope_lifecycle_qualified": true,
+          "scope_results": {
+            "project": {
+              "expectation": "positive_lifecycle",
+              "status": "passed"
+            },
+            "user": {
+              "expectation": "positive_lifecycle",
+              "status": "passed"
+            }
+          },
+          "final_policy_status": "passed"
+        },
+        "archive_bytes_qualified": false,
+        "independent_readback_confirmed": true
       }
     },
     "core_workflow": {
@@ -2831,8 +3050,9 @@
           "size": 776337,
           "sha256": "a33ebc0aba091edc3dbcc6da5ad0a10227e17b5fea32e6447788c44332681c96"
         },
-        "archive_bytes_qualified": false,
-        "independent_intake_matched": true
+        "archive_bytes_qualified": true,
+        "independent_intake_matched": true,
+        "archive_audit_job": 140999202439
       },
       "codex-linux-amd64": {
         "run": 46139633140,
@@ -2885,8 +3105,9 @@
           "sha256": "d49fc19cd91cd0d7154c07e4a2f187ea88c04d54b955f7312a8846f84082e48c",
           "scope": "Original successful browser lifecycle test, step and upload metadata; screenshot/archive member bytes not independently read."
         },
-        "archive_bytes_qualified": false,
-        "independent_intake_matched": true
+        "archive_bytes_qualified": true,
+        "independent_intake_matched": true,
+        "archive_audit_job": 140999202439
       },
       "claude-windows-amd64": {
         "run": 46139633140,
@@ -2928,8 +3149,9 @@
           "size": 788978,
           "sha256": "666979ba6d9a1d3aa64d4416414ef4d8a62029b2b3b8dc671caacb0ec234161a"
         },
-        "archive_bytes_qualified": false,
-        "independent_intake_matched": true
+        "archive_bytes_qualified": true,
+        "independent_intake_matched": true,
+        "archive_audit_job": 140999202439
       },
       "codex-windows-amd64": {
         "run": 46139633140,
@@ -2972,8 +3194,89 @@
           "size": 344102,
           "sha256": "87af5426fd24bd050847359a099ec3ace5e70238bee7f582839c422ac742336e"
         },
-        "archive_bytes_qualified": false,
-        "independent_intake_matched": true
+        "archive_bytes_qualified": true,
+        "independent_intake_matched": true,
+        "archive_audit_job": 140999202439
+      },
+      "claude-darwin-arm64": {
+        "run_id": 46139633140,
+        "job_id": 140968485149,
+        "run_attempt": 1,
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "job_conclusion": "success",
+        "job_steps": {
+          "success": 9,
+          "skipped": 7
+        },
+        "original_log": {
+          "sha256": "746bec1b67df095580892f78f8f406439bbf71389097d39d7c0867a538c1f43e",
+          "bytes": 34525
+        },
+        "artifact": {
+          "client": "claude",
+          "target": "darwin-arm64",
+          "job_id": 140968485149,
+          "artifact_id": 15265776442,
+          "archive_size": 776386,
+          "archive_sha256": "2826b31afb1081cc581b4a3355de16623149860621eb27195a7c6d37b25d9623"
+        },
+        "go": {
+          "top_level_pass": 8,
+          "run": 10,
+          "pass": 10,
+          "skip": 0,
+          "fail": 0
+        },
+        "preflight": {
+          "attempted": 149,
+          "passed": 149,
+          "skipped": 0
+        },
+        "archive_bytes_qualified": true,
+        "independent_readback_confirmed": true,
+        "archive_audit_job": 140999202439
+      },
+      "codex-darwin-arm64": {
+        "run_id": 46139633140,
+        "job_id": 140968485254,
+        "run_attempt": 1,
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "job_conclusion": "success",
+        "job_steps": {
+          "success": 9,
+          "skipped": 7
+        },
+        "original_log": {
+          "sha256": "2fc4985052178e644c8558acb442393fc7438a3be60b56fed39709c141782499",
+          "bytes": 32414
+        },
+        "artifact": {
+          "client": "codex",
+          "target": "darwin-arm64",
+          "job_id": 140968485254,
+          "artifact_id": 15265064793,
+          "archive_size": 346243,
+          "archive_sha256": "cb50f8e29a1003f13db7dcb3ed3caa263c707c292d98f3a3821b9e540e8a7f15"
+        },
+        "go": {
+          "top_level_pass": 9,
+          "run": 9,
+          "pass": 9,
+          "skip": 0,
+          "fail": 0
+        },
+        "preflight": {
+          "attempted": 149,
+          "passed": 149,
+          "skipped": 0
+        },
+        "archive_bytes_qualified": true,
+        "independent_readback_confirmed": true,
+        "archive_audit_job": 140999202439
       }
     },
     "full30_job_intake": {
@@ -3209,7 +3512,8 @@
         "core_path": ".github/r39-pm-audit/pm_audit.py",
         "wrapper_path": ".github/r39-pm-audit/pm_readonly_runner.py"
       },
-      "qualifies_archive_bytes": false
+      "qualifies_archive_bytes": false,
+      "independent_readback_confirmed": true
     },
     "pm_workflow": {
       "run_id": 46139633158,
@@ -3253,6 +3557,1193 @@
           "conclusion": "skipped"
         }
       ]
+    },
+    "marketing_byte_audits": {
+      "first_three": {
+        "run_id": 46150473835,
+        "job_id": 140995789584,
+        "audit_commit": "c51824975a677a829806eece219428e002df3bb4",
+        "status": "passed",
+        "steps_success": 9,
+        "original_decoded_log": {
+          "sha256": "519fe4b3a1bfd381073dbf2f44873697e262f07dfe54432d017f853b0ad931f3",
+          "bytes": 52834
+        },
+        "receipt": {
+          "audit_kind": "selected published Marketing retained-evidence audit batch",
+          "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+          "core_blob": "b273b92fc290c09ba81de92516302ad7fc04250d",
+          "coverage": "selected lanes only; final six-client union checked separately",
+          "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+          "lane_count": 3,
+          "manifest_sha256": "7788f9eb01cc48782a70aa2c216ce5b386443cc34df7480935b2853b2af587e8",
+          "receipts": [
+            {
+              "MCP_observation": "one original observational capture; absence unqualified",
+              "archive_bytes": 72351,
+              "archive_sha256": "a8f0a59c96b603079c74781059023b38e808aa0b447635d64c338bed8dde273c",
+              "artifact_id": 15265651351,
+              "audit_kind": "Marketing_six_retained_evidence",
+              "boundaries": [
+                "Archive CRC/size/SHA, all retained file hashes, original preflight logs and report audited.",
+                "Report has no source-commit field: authenticated job/checkout/source binding is wrapper duty.",
+                "Published UAP0.1.116 acquisition/version and signed policy authentication are source-executed assertions; release binaries, catalog signature bytes and complete CLI outputs are not uploaded.",
+                "Only Claude embeds original native streams. Other stages/checkpoint hashes are not complete CLI/RPC/FS reconstruction. Source/private0600/foreign/state/peer custody remains assertions.",
+                "Claude initialization uses strict empty MCP; one effective MCP listing is observational only.",
+                "Copilot coldDrefusal is compact result evidence; full refusal JSON and permitted runtime-link FS custody are source-pinned assertions, B positive restore has preauthorized native trust.",
+                "Workflow provisioning pins do not independently prove native binary bytes for every client. Cursor Agent+Editor hashes are checked by workflow; GUI/IDE execution remains unqualified.",
+                "No vendor-authentication, real-model, tools/call, physical Claude absence or writer-closure qualification is added by this audit."
+              ],
+              "client": "claude",
+              "cursor_provisioning_pins": null,
+              "decoded_job_log_bytes": 345976,
+              "decoded_job_log_sha256": "845fa480c312a646cd0d486e63b0ff49e0a1364707450347d435980218f02a92",
+              "directory_entries": 0,
+              "expanded_bytes": 264261,
+              "four_fresh_removal_checkpoints": true,
+              "installer_authority": {
+                "historical_0_1_115_launcher_cleanup": "not_applicable",
+                "kind": "published npm UAP control",
+                "source_CLI_build_used": false,
+                "version": "0.1.116"
+              },
+              "job_id": 140962469589,
+              "job_steps": [
+                {
+                  "conclusion": "success",
+                  "name": "Set up job"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+                },
+                {
+                  "conclusion": "skipped",
+                  "name": "Install native Codex sandbox prerequisite"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Install real released UAP and native client"
+                },
+                {
+                  "conclusion": "skipped",
+                  "name": "Verify historical npm 0.1.115 launcher abort cleanup"
+                },
+                {
+                  "conclusion": "skipped",
+                  "name": "Verify published ChatGPT target safety fences"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Exercise actual signed Marketing Kit and three mandatory dependencies"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Preserve factual outcomes including failures"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Complete job"
+                }
+              ],
+              "lifecycle_stages": 16,
+              "native_executable_sha256": "26d020351e8112f4006790f3cfce43b4c9df0c1bb1d0e542364d64151b81d5ba",
+              "native_provisioning_pin": "2.1.263",
+              "original_native_captures": 25,
+              "original_native_stream_hashes_sha256": "7226ab5c3300de58a07beeac5434daaf7c7eb6ff7fcc7ea72280cc8d7ca8d990",
+              "original_native_streams": 50,
+              "policy_snapshot_digest": "sha256:f54f905f55d05477ee01ae6028a8d32e10b8b8db58784f81f624642ae71f2452",
+              "policy_snapshot_sequence": 49,
+              "preflight": {
+                "genuine_Claude_fixture": "passed",
+                "regression_log_sha256": "48f70b2e68aeaf9b9feb5de09263db143effe0d22b66bddd880751beac005999",
+                "retirement_log_sha256": "9fca6bc1a67b569f512c7494ceb73ad918483d957bce5fde664ae3f486e9e2ca",
+                "tests_attempted": 385,
+                "tests_skipped": 0
+              },
+              "private_0600_custody": "source-pinned executed assertions; descriptor images not uploaded",
+              "published_UAP": "0.1.116",
+              "report_sha256": "1bd3060bade17d33d91e73f51c203648a3b8096f74aa2782cc967fe9fd70ee21",
+              "retained_files": 3,
+              "run_id": 46139632998,
+              "signed_closure_sha256": "2d369ddaadcbec13a4a765d4cf7321bab720b26378f24c0cd8d80b9e85bba1e3",
+              "source": {
+                "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+                "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+                "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+              },
+              "source_blob_pins": {
+                ".github/workflows/marketing-kit-project-release-e2e.yml": "7d1c957e25d528fddd36734db2b95ee55ccfc994",
+                "scripts/claude_cache_retirement_audit.py": "ecb56574b3e892be42cb6c79c3df346268c522c6",
+                "scripts/codex_runtime_audit.py": "759b35886a434a7f17e2c36d8fd93d6a12bbe45d",
+                "scripts/live-install-audit.py": "ceab34554b6851be09fae9dbc5345fdd753bd0f8",
+                "scripts/marketing-kit-project-release-e2e.py": "af2ac520fbd9adee43b411864df73b0ea3b936de",
+                "scripts/marketing_kit_claude_discovery.py": "7f1e14c453d7e9f8bcabcfed7bb4343343bf5743",
+                "scripts/marketing_kit_claude_retirement.py": "c96774600899745327892d6e24e9a47c68c0ee2a",
+                "scripts/marketing_kit_codex_profile.py": "7214510d013d7077fa0cc8adf949ec82778c9574",
+                "scripts/native_client_project_artifacts.py": "bfcb69f1393b9b5671062da6e40dce54b3ea7951",
+                "scripts/native_client_research.py": "c28e5f88dc26fa58efd45492b41ad899e6335605",
+                "scripts/test_live_install_audit_env.py": "1d4c36f2b7e6b64233a037634a644f52013ccf7c",
+                "scripts/test_marketing_kit_claude_discovery.py": "1c1d1fa5cde86130ff24dfaf102bcfb8ad8eab58",
+                "scripts/test_marketing_kit_claude_retirement.py": "0ad598ed18ba88f3e0589b191b380461c866c7b2",
+                "scripts/test_marketing_kit_codex_profile.py": "37159810eb32778cee838d1ec540012c3b2da04a",
+                "scripts/test_marketing_kit_codex_sqlite.py": "0f01d6fab0a0fdda7205d418797bafc6a605e947",
+                "scripts/test_marketing_kit_copilot_refusal.py": "6f7516aa1e8ec435b572d93190a61ffc57743d55",
+                "scripts/test_marketing_kit_peer_initialization.py": "7faacd179627922f0bc48d4a4ea317bafac9d356",
+                "scripts/test_marketing_kit_policy_boundary.py": "c17da88d634165cc7de087ae275933ac997f8002"
+              },
+              "status": "passed",
+              "whole_member_hash_inventory_sha256": "4e454f7decebb54e0ce9272cb672d498135f8ecdeae59b47a792e0299a8a1d2c"
+            },
+            {
+              "archive_bytes": 55252,
+              "archive_sha256": "bc97846c65f3e42bfb46c5efcd4620aff55df40eea5652c411e38ef9cdada866",
+              "artifact_id": 15263397292,
+              "audit_kind": "Marketing_six_retained_evidence",
+              "boundaries": [
+                "Archive CRC/size/SHA, all retained file hashes, original preflight logs and report audited.",
+                "Report has no source-commit field: authenticated job/checkout/source binding is wrapper duty.",
+                "Published UAP0.1.116 acquisition/version and signed policy authentication are source-executed assertions; release binaries, catalog signature bytes and complete CLI outputs are not uploaded.",
+                "Only Claude embeds original native streams. Other stages/checkpoint hashes are not complete CLI/RPC/FS reconstruction. Source/private0600/foreign/state/peer custody remains assertions.",
+                "Claude initialization uses strict empty MCP; one effective MCP listing is observational only.",
+                "Copilot coldDrefusal is compact result evidence; full refusal JSON and permitted runtime-link FS custody are source-pinned assertions, B positive restore has preauthorized native trust.",
+                "Workflow provisioning pins do not independently prove native binary bytes for every client. Cursor Agent+Editor hashes are checked by workflow; GUI/IDE execution remains unqualified.",
+                "No vendor-authentication, real-model, tools/call, physical Claude absence or writer-closure qualification is added by this audit."
+              ],
+              "client": "codex",
+              "cursor_provisioning_pins": null,
+              "decoded_job_log_bytes": 3058636,
+              "decoded_job_log_sha256": "f56d529e9a86f7292fd0c381ffed9561ce986fa0ed6b6fd115bff0250b323139",
+              "directory_entries": 0,
+              "expanded_bytes": 1779266,
+              "installer_authority": {
+                "historical_0_1_115_launcher_cleanup": "separate mock-transport test",
+                "kind": "published npm UAP control",
+                "source_CLI_build_used": false,
+                "version": "0.1.116"
+              },
+              "job_id": 140962469188,
+              "job_steps": [
+                {
+                  "conclusion": "success",
+                  "name": "Set up job"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Install native Codex sandbox prerequisite"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Install real released UAP and native client"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Verify historical npm 0.1.115 launcher abort cleanup"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Verify published ChatGPT target safety fences"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Exercise actual signed Marketing Kit and three mandatory dependencies"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Preserve factual outcomes including failures"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Complete job"
+                }
+              ],
+              "lifecycle_stages": 18,
+              "native_provisioning_pin": "0.153.4",
+              "native_runtime_version_assertion": "0.153.4",
+              "original_RPC_uploaded": false,
+              "policy_snapshot_digest": "sha256:f54f905f55d05477ee01ae6028a8d32e10b8b8db58784f81f624642ae71f2452",
+              "policy_snapshot_sequence": 49,
+              "preflight": {
+                "genuine_Claude_fixture": "expected_non_Claude_lane_skip",
+                "regression_log_sha256": "5ca7815441008d15898fdf7ff684d84636c5cd092fc7263702ae70d7155e41f6",
+                "retirement_log_sha256": "135f5a61f598439b2759a3622b59a29cd618c5c356c6e88579acad37123cca02",
+                "tests_attempted": 296,
+                "tests_skipped": 1
+              },
+              "profile_families": [
+                "codex_runtime_profiles",
+                "codex_sqlite_profiles"
+              ],
+              "profiles_each": [
+                "A",
+                "B",
+                "C"
+              ],
+              "published_UAP": "0.1.116",
+              "report_sha256": "d8d79564fd578d5191a8001ced58f029edb01df2440f46b5447aad6bf7992bd6",
+              "retained_files": 3,
+              "run_id": 46139632998,
+              "signed_closure_sha256": "2d369ddaadcbec13a4a765d4cf7321bab720b26378f24c0cd8d80b9e85bba1e3",
+              "source": {
+                "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+                "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+                "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+              },
+              "source_blob_pins": {
+                ".github/workflows/marketing-kit-project-release-e2e.yml": "7d1c957e25d528fddd36734db2b95ee55ccfc994",
+                "scripts/claude_cache_retirement_audit.py": "ecb56574b3e892be42cb6c79c3df346268c522c6",
+                "scripts/codex_runtime_audit.py": "759b35886a434a7f17e2c36d8fd93d6a12bbe45d",
+                "scripts/live-install-audit.py": "ceab34554b6851be09fae9dbc5345fdd753bd0f8",
+                "scripts/marketing-kit-project-release-e2e.py": "af2ac520fbd9adee43b411864df73b0ea3b936de",
+                "scripts/marketing_kit_claude_discovery.py": "7f1e14c453d7e9f8bcabcfed7bb4343343bf5743",
+                "scripts/marketing_kit_claude_retirement.py": "c96774600899745327892d6e24e9a47c68c0ee2a",
+                "scripts/marketing_kit_codex_profile.py": "7214510d013d7077fa0cc8adf949ec82778c9574",
+                "scripts/native_client_project_artifacts.py": "bfcb69f1393b9b5671062da6e40dce54b3ea7951",
+                "scripts/native_client_research.py": "c28e5f88dc26fa58efd45492b41ad899e6335605",
+                "scripts/test_live_install_audit_env.py": "1d4c36f2b7e6b64233a037634a644f52013ccf7c",
+                "scripts/test_marketing_kit_claude_discovery.py": "1c1d1fa5cde86130ff24dfaf102bcfb8ad8eab58",
+                "scripts/test_marketing_kit_claude_retirement.py": "0ad598ed18ba88f3e0589b191b380461c866c7b2",
+                "scripts/test_marketing_kit_codex_profile.py": "37159810eb32778cee838d1ec540012c3b2da04a",
+                "scripts/test_marketing_kit_codex_sqlite.py": "0f01d6fab0a0fdda7205d418797bafc6a605e947",
+                "scripts/test_marketing_kit_copilot_refusal.py": "6f7516aa1e8ec435b572d93190a61ffc57743d55",
+                "scripts/test_marketing_kit_peer_initialization.py": "7faacd179627922f0bc48d4a4ea317bafac9d356",
+                "scripts/test_marketing_kit_policy_boundary.py": "c17da88d634165cc7de087ae275933ac997f8002"
+              },
+              "status": "passed",
+              "whole_member_hash_inventory_sha256": "e81de20a3083a04dbd7a3037e344fb5788fe9dd06890d5e36df582d2ff6953c2"
+            },
+            {
+              "archive_bytes": 4548,
+              "archive_sha256": "044ee341f0bd4ca8ccd677f66698ba279f17c3703653b42db7bbd5a715830a87",
+              "artifact_id": 15263667090,
+              "audit_kind": "Marketing_six_retained_evidence",
+              "boundaries": [
+                "Archive CRC/size/SHA, all retained file hashes, original preflight logs and report audited.",
+                "Report has no source-commit field: authenticated job/checkout/source binding is wrapper duty.",
+                "Published UAP0.1.116 acquisition/version and signed policy authentication are source-executed assertions; release binaries, catalog signature bytes and complete CLI outputs are not uploaded.",
+                "Only Claude embeds original native streams. Other stages/checkpoint hashes are not complete CLI/RPC/FS reconstruction. Source/private0600/foreign/state/peer custody remains assertions.",
+                "Claude initialization uses strict empty MCP; one effective MCP listing is observational only.",
+                "Copilot coldDrefusal is compact result evidence; full refusal JSON and permitted runtime-link FS custody are source-pinned assertions, B positive restore has preauthorized native trust.",
+                "Workflow provisioning pins do not independently prove native binary bytes for every client. Cursor Agent+Editor hashes are checked by workflow; GUI/IDE execution remains unqualified.",
+                "No vendor-authentication, real-model, tools/call, physical Claude absence or writer-closure qualification is added by this audit."
+              ],
+              "client": "cursor",
+              "cursor_provisioning_pins": {
+                "agent_archive_sha256": "85296944e4600a83c4b764f578d1502bf9c416db200d33a593e8f3ecabfdc294",
+                "editor_archive_sha256": "8b9198f7dde79f7e27cc83dabf3c66a93ca5303b6919719100c82f29d9498a65",
+                "editor_version": "3.22.12"
+              },
+              "decoded_job_log_bytes": 72163,
+              "decoded_job_log_sha256": "7ae6d50e6e00735b7954cc86ec45baaa14045a51017669519e3dfed1433c2112",
+              "directory_entries": 0,
+              "expanded_bytes": 27430,
+              "installer_authority": {
+                "historical_0_1_115_launcher_cleanup": "not_applicable",
+                "kind": "published npm UAP control",
+                "source_CLI_build_used": false,
+                "version": "0.1.116"
+              },
+              "job_id": 140962469592,
+              "job_steps": [
+                {
+                  "conclusion": "success",
+                  "name": "Set up job"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+                },
+                {
+                  "conclusion": "skipped",
+                  "name": "Install native Codex sandbox prerequisite"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Install real released UAP and native client"
+                },
+                {
+                  "conclusion": "skipped",
+                  "name": "Verify historical npm 0.1.115 launcher abort cleanup"
+                },
+                {
+                  "conclusion": "skipped",
+                  "name": "Verify published ChatGPT target safety fences"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Exercise actual signed Marketing Kit and three mandatory dependencies"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Preserve factual outcomes including failures"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+                },
+                {
+                  "conclusion": "success",
+                  "name": "Complete job"
+                }
+              ],
+              "lifecycle_stages": 16,
+              "native_provisioning_pin": null,
+              "policy_snapshot_digest": "sha256:f54f905f55d05477ee01ae6028a8d32e10b8b8db58784f81f624642ae71f2452",
+              "policy_snapshot_sequence": 49,
+              "preflight": {
+                "genuine_Claude_fixture": "expected_non_Claude_lane_skip",
+                "regression_log_sha256": "0622c6a704a604145cf1f421214403de1696c7450bb282478cb3430d4fad07e6",
+                "retirement_log_sha256": "174648f22845c59d7336b54324b105ad6671ea7914a5059d409d2567afff9e10",
+                "tests_attempted": 296,
+                "tests_skipped": 1
+              },
+              "published_UAP": "0.1.116",
+              "report_sha256": "099964db5b5a515272339e250c3d639f27fa387a98520ec27cfb0340526b04d0",
+              "retained_files": 3,
+              "run_id": 46139632998,
+              "signed_closure_sha256": "2d369ddaadcbec13a4a765d4cf7321bab720b26378f24c0cd8d80b9e85bba1e3",
+              "source": {
+                "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+                "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+                "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+              },
+              "source_blob_pins": {
+                ".github/workflows/marketing-kit-project-release-e2e.yml": "7d1c957e25d528fddd36734db2b95ee55ccfc994",
+                "scripts/claude_cache_retirement_audit.py": "ecb56574b3e892be42cb6c79c3df346268c522c6",
+                "scripts/codex_runtime_audit.py": "759b35886a434a7f17e2c36d8fd93d6a12bbe45d",
+                "scripts/live-install-audit.py": "ceab34554b6851be09fae9dbc5345fdd753bd0f8",
+                "scripts/marketing-kit-project-release-e2e.py": "af2ac520fbd9adee43b411864df73b0ea3b936de",
+                "scripts/marketing_kit_claude_discovery.py": "7f1e14c453d7e9f8bcabcfed7bb4343343bf5743",
+                "scripts/marketing_kit_claude_retirement.py": "c96774600899745327892d6e24e9a47c68c0ee2a",
+                "scripts/marketing_kit_codex_profile.py": "7214510d013d7077fa0cc8adf949ec82778c9574",
+                "scripts/native_client_project_artifacts.py": "bfcb69f1393b9b5671062da6e40dce54b3ea7951",
+                "scripts/native_client_research.py": "c28e5f88dc26fa58efd45492b41ad899e6335605",
+                "scripts/test_live_install_audit_env.py": "1d4c36f2b7e6b64233a037634a644f52013ccf7c",
+                "scripts/test_marketing_kit_claude_discovery.py": "1c1d1fa5cde86130ff24dfaf102bcfb8ad8eab58",
+                "scripts/test_marketing_kit_claude_retirement.py": "0ad598ed18ba88f3e0589b191b380461c866c7b2",
+                "scripts/test_marketing_kit_codex_profile.py": "37159810eb32778cee838d1ec540012c3b2da04a",
+                "scripts/test_marketing_kit_codex_sqlite.py": "0f01d6fab0a0fdda7205d418797bafc6a605e947",
+                "scripts/test_marketing_kit_copilot_refusal.py": "6f7516aa1e8ec435b572d93190a61ffc57743d55",
+                "scripts/test_marketing_kit_peer_initialization.py": "7faacd179627922f0bc48d4a4ea317bafac9d356",
+                "scripts/test_marketing_kit_policy_boundary.py": "c17da88d634165cc7de087ae275933ac997f8002"
+              },
+              "status": "passed",
+              "whole_member_hash_inventory_sha256": "d110feb26c71adb814c235b51144860b1e47ea030db61f4272c7e7cf7123f0a9"
+            }
+          ],
+          "remaining_clients": [
+            "copilot",
+            "gemini",
+            "opencode"
+          ],
+          "selected_clients": [
+            "claude",
+            "codex",
+            "cursor"
+          ],
+          "six_client_matrix_qualified": false,
+          "status": "passed",
+          "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+        },
+        "independent_readback_confirmed": true
+      }
+    },
+    "native_workflow": {
+      "run_id": 46139633140,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "status": "completed",
+      "conclusion": "success",
+      "attempt": 1,
+      "event": "pull_request"
+    },
+    "native_byte_audit": {
+      "run_id": 46151593640,
+      "job_id": 140999202439,
+      "audit_commit": "03441e6b17632d5a2af0cf912211056439d43124",
+      "status": "passed",
+      "steps_success": 9,
+      "original_decoded_log": {
+        "sha256": "00174be3cf99d1b4e075ccde61f29ed778360016e936181a5da4203bd1191be2",
+        "bytes": 57427
+      },
+      "receipt": {
+        "audit_kind": "selected native collection retained-byte audits only",
+        "cohort": "all-six",
+        "core_blob": "34e14eabc62e82b1dd371f3aeefda43ffe1354bd",
+        "lane_count": 6,
+        "manifest_sha256": "f2d4cb1c6361236855ae2b40a83ace403ef120f7eae9f9f9cf32d6c92d44c5aa",
+        "receipts": [
+          {
+            "archive_bytes": 776386,
+            "archive_sha256": "2826b31afb1081cc581b4a3355de16623149860621eb27195a7c6d37b25d9623",
+            "artifact_id": 15265776442,
+            "audit": "native_collection_retained_bytes",
+            "boundaries": [
+              "Archive bytes/CRC/hashes and retained collection protocol observations audited.",
+              "Run/job/metadata authenticity, source checkout and download custody are caller duties.",
+              "Tool archive/binary bytes are not uploaded here; pins and binary hash joins audited.",
+              "Installed/source Skill bytes, full state, read-only listing snapshots, stable owned bindings, cleanup and foreign-byte preservation are source-pinned Go assertions.",
+              "Installer argv/cwd/exit are not separately captured; original result/stderr retained.",
+              "No vendor authentication or real-model qualification is granted by this audit.",
+              "Claude request is normalized metadata; stdout/stderr are original captures."
+            ],
+            "client": "claude",
+            "collection_inventory_sha256": "7be0870091f4106ecf02d097fa9001e6c402de929cd181d62420a6290749c7ae",
+            "collection_required_files": 28,
+            "decoded_job_log_bytes": 34525,
+            "decoded_job_log_sha256": "746bec1b67df095580892f78f8f406439bbf71389097d39d7c0867a538c1f43e",
+            "directory_entries": 0,
+            "expanded_bytes": 2050943,
+            "fixture_directory": "uap-claude-native-evidence-3023547340",
+            "job_id": 140968485149,
+            "job_steps": [
+              {
+                "conclusion": "success",
+                "name": "Set up job"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Set up Node for browser Skills qualification"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Bundle the real picker before building the public CLI"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Prepare the native Codex Linux sandbox"
+              },
+              {
+                "conclusion": "success",
+                "name": "Verify native matrix safety and evidence gates"
+              },
+              {
+                "conclusion": "success",
+                "name": "Build exact source and execute pinned native client in disposable fixture"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Set up Node for the real SDK lifecycle"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Build the management SDK from this checkout"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Verify SDK lifecycle through the real Go engine and OpenCode"
+              },
+              {
+                "conclusion": "success",
+                "name": "Upload native evidence including failed stages"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Preserve the actual browser to native Skills screenshots"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Complete job"
+              }
+            ],
+            "observation_sha256": "119bda9e4ce4094cb39a2aa1183f444afad8f98d23e9b2d3df27d40f618a57ff",
+            "protocol_sessions": 6,
+            "required_tests": [
+              "TestAgentpluginsClaudeNativeCommandsLifecycle",
+              "TestAgentpluginsClaudeNativeLifecycle",
+              "TestAgentpluginsClaudeNativeProjectPreparedLifecycle",
+              "TestAgentpluginsClaudeNativeRawUserSkillLifecycle",
+              "TestAgentpluginsClaudeNativeRuntimeLifecycle",
+              "TestAgentpluginsClaudeNativeSecondaryProfileIsolation",
+              "TestAgentpluginsClaudeNativeTrustedProjectDiscovery",
+              "TestAgentpluginsClaudeNativeTrustedProjectMCPCall"
+            ],
+            "retained_files": 491,
+            "run_id": 46139633140,
+            "selected_names": [
+              "skill-42c693a2974cf3b3b50d628d6fbf1306ff96cda6b4f0c0d48c29f738:benchmark-secondary",
+              "skill-6ec8f6313b4436c9aad0a45d4da034177163f39d8835c49866973725:benchmark-note"
+            ],
+            "source": {
+              "commit": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+              "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+            },
+            "status": "passed",
+            "target": "darwin-arm64"
+          },
+          {
+            "archive_bytes": 788978,
+            "archive_sha256": "666979ba6d9a1d3aa64d4416414ef4d8a62029b2b3b8dc671caacb0ec234161a",
+            "artifact_id": 15264588487,
+            "audit": "native_collection_retained_bytes",
+            "boundaries": [
+              "Archive bytes/CRC/hashes and retained collection protocol observations audited.",
+              "Run/job/metadata authenticity, source checkout and download custody are caller duties.",
+              "Tool archive/binary bytes are not uploaded here; pins and binary hash joins audited.",
+              "Installed/source Skill bytes, full state, read-only listing snapshots, stable owned bindings, cleanup and foreign-byte preservation are source-pinned Go assertions.",
+              "Installer argv/cwd/exit are not separately captured; original result/stderr retained.",
+              "No vendor authentication or real-model qualification is granted by this audit.",
+              "Claude request is normalized metadata; stdout/stderr are original captures."
+            ],
+            "client": "claude",
+            "collection_inventory_sha256": "d728909baba114ececa7876d86317b7daba97d92201dda65760805e0d85f9638",
+            "collection_required_files": 28,
+            "decoded_job_log_bytes": 36094,
+            "decoded_job_log_sha256": "19050ca2b3a894c613c92d0969c450cdd2691316a3db9ecfa4bf76a55fef93e2",
+            "directory_entries": 0,
+            "expanded_bytes": 2099616,
+            "fixture_directory": "uap-claude-native-evidence-3036380382",
+            "job_id": 140968485170,
+            "job_steps": [
+              {
+                "conclusion": "success",
+                "name": "Set up job"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Set up Node for browser Skills qualification"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Bundle the real picker before building the public CLI"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Prepare the native Codex Linux sandbox"
+              },
+              {
+                "conclusion": "success",
+                "name": "Verify native matrix safety and evidence gates"
+              },
+              {
+                "conclusion": "success",
+                "name": "Build exact source and execute pinned native client in disposable fixture"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Set up Node for the real SDK lifecycle"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Build the management SDK from this checkout"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Verify SDK lifecycle through the real Go engine and OpenCode"
+              },
+              {
+                "conclusion": "success",
+                "name": "Upload native evidence including failed stages"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Preserve the actual browser to native Skills screenshots"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Complete job"
+              }
+            ],
+            "observation_sha256": "0d5372669349afdd69c510789ee8cf811bb3b4c0a1fb5350b38cf4aa88a52c54",
+            "protocol_sessions": 6,
+            "required_tests": [
+              "TestAgentpluginsClaudeNativeCommandsLifecycle",
+              "TestAgentpluginsClaudeNativeLifecycle",
+              "TestAgentpluginsClaudeNativeProjectPreparedLifecycle",
+              "TestAgentpluginsClaudeNativeRawUserSkillLifecycle",
+              "TestAgentpluginsClaudeNativeRuntimeLifecycle",
+              "TestAgentpluginsClaudeNativeSecondaryProfileIsolation",
+              "TestAgentpluginsClaudeNativeTrustedProjectDiscovery",
+              "TestAgentpluginsClaudeNativeTrustedProjectMCPCall"
+            ],
+            "retained_files": 495,
+            "run_id": 46139633140,
+            "selected_names": [
+              "skill-14a5ba95aa165dc2e8c5dce2e4a726c9b956c09a7fb43d0fb1aac33e:benchmark-secondary",
+              "skill-1f16211e0969370b57b483dc5003304c5282d1b8f98386eef66dba7a:benchmark-note"
+            ],
+            "source": {
+              "commit": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+              "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+            },
+            "status": "passed",
+            "target": "windows-amd64"
+          },
+          {
+            "archive_bytes": 776337,
+            "archive_sha256": "a33ebc0aba091edc3dbcc6da5ad0a10227e17b5fea32e6447788c44332681c96",
+            "artifact_id": 15264512126,
+            "audit": "native_collection_retained_bytes",
+            "boundaries": [
+              "Archive bytes/CRC/hashes and retained collection protocol observations audited.",
+              "Run/job/metadata authenticity, source checkout and download custody are caller duties.",
+              "Tool archive/binary bytes are not uploaded here; pins and binary hash joins audited.",
+              "Installed/source Skill bytes, full state, read-only listing snapshots, stable owned bindings, cleanup and foreign-byte preservation are source-pinned Go assertions.",
+              "Installer argv/cwd/exit are not separately captured; original result/stderr retained.",
+              "No vendor authentication or real-model qualification is granted by this audit.",
+              "Claude request is normalized metadata; stdout/stderr are original captures."
+            ],
+            "client": "claude",
+            "collection_inventory_sha256": "d65510401b6013699f00e5ac6709ba0bbb583df87f53fd9364203ede9c058b40",
+            "collection_required_files": 28,
+            "decoded_job_log_bytes": 32370,
+            "decoded_job_log_sha256": "62c1d24ef16c5134a46be99eef1b3c9beb643a6271d857593863c6b5b3100e9a",
+            "directory_entries": 0,
+            "expanded_bytes": 2049625,
+            "fixture_directory": "uap-claude-native-evidence-1573767330",
+            "job_id": 140968485141,
+            "job_steps": [
+              {
+                "conclusion": "success",
+                "name": "Set up job"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Set up Node for browser Skills qualification"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Bundle the real picker before building the public CLI"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Prepare the native Codex Linux sandbox"
+              },
+              {
+                "conclusion": "success",
+                "name": "Verify native matrix safety and evidence gates"
+              },
+              {
+                "conclusion": "success",
+                "name": "Build exact source and execute pinned native client in disposable fixture"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Set up Node for the real SDK lifecycle"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Build the management SDK from this checkout"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Verify SDK lifecycle through the real Go engine and OpenCode"
+              },
+              {
+                "conclusion": "success",
+                "name": "Upload native evidence including failed stages"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Preserve the actual browser to native Skills screenshots"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Complete job"
+              }
+            ],
+            "observation_sha256": "bb5221cd6596a9e81eee02163b47fa58cd0e255dde7014dd8920d6417e5e2f30",
+            "protocol_sessions": 6,
+            "required_tests": [
+              "TestAgentpluginsClaudeNativeCommandsLifecycle",
+              "TestAgentpluginsClaudeNativeLifecycle",
+              "TestAgentpluginsClaudeNativeProjectPreparedLifecycle",
+              "TestAgentpluginsClaudeNativeRawUserSkillLifecycle",
+              "TestAgentpluginsClaudeNativeRuntimeLifecycle",
+              "TestAgentpluginsClaudeNativeSecondaryProfileIsolation",
+              "TestAgentpluginsClaudeNativeTrustedProjectDiscovery",
+              "TestAgentpluginsClaudeNativeTrustedProjectMCPCall"
+            ],
+            "retained_files": 491,
+            "run_id": 46139633140,
+            "selected_names": [
+              "skill-2d2c4c4e5407e82087b7d5a881b85ae2424f0e12e1505c219ce2f5cc:benchmark-secondary",
+              "skill-447f6c8db114565edc1f36ce4466c7d98d53b59b80a6e3ebc4d59c27:benchmark-note"
+            ],
+            "source": {
+              "commit": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+              "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+            },
+            "status": "passed",
+            "target": "linux-amd64"
+          },
+          {
+            "archive_bytes": 346243,
+            "archive_sha256": "cb50f8e29a1003f13db7dcb3ed3caa263c707c292d98f3a3821b9e540e8a7f15",
+            "artifact_id": 15265064793,
+            "audit": "native_collection_retained_bytes",
+            "boundaries": [
+              "Archive bytes/CRC/hashes and retained collection protocol observations audited.",
+              "Run/job/metadata authenticity, source checkout and download custody are caller duties.",
+              "Tool archive/binary bytes are not uploaded here; pins and binary hash joins audited.",
+              "Installed/source Skill bytes, full state, read-only listing snapshots, stable owned bindings, cleanup and foreign-byte preservation are source-pinned Go assertions.",
+              "Installer argv/cwd/exit are not separately captured; original result/stderr retained.",
+              "No vendor authentication or real-model qualification is granted by this audit.",
+              "B is skills/list query isolation; B app-server process cwd is not proven."
+            ],
+            "client": "codex",
+            "collection_inventory_sha256": "2d4f0d96aa5a3da76db222acb090c82546dc9acdd22ea736af9904a6338b713d",
+            "collection_required_files": 22,
+            "decoded_job_log_bytes": 32414,
+            "decoded_job_log_sha256": "2fc4985052178e644c8558acb442393fc7438a3be60b56fed39709c141782499",
+            "directory_entries": 0,
+            "expanded_bytes": 1049633,
+            "fixture_directory": "uap-native-evidence-367098277",
+            "job_id": 140968485254,
+            "job_steps": [
+              {
+                "conclusion": "success",
+                "name": "Set up job"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Set up Node for browser Skills qualification"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Bundle the real picker before building the public CLI"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Prepare the native Codex Linux sandbox"
+              },
+              {
+                "conclusion": "success",
+                "name": "Verify native matrix safety and evidence gates"
+              },
+              {
+                "conclusion": "success",
+                "name": "Build exact source and execute pinned native client in disposable fixture"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Set up Node for the real SDK lifecycle"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Build the management SDK from this checkout"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Verify SDK lifecycle through the real Go engine and OpenCode"
+              },
+              {
+                "conclusion": "success",
+                "name": "Upload native evidence including failed stages"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Preserve the actual browser to native Skills screenshots"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Complete job"
+              }
+            ],
+            "observation_sha256": "7f54ce13b6161f0b35ebcd02b26dfbbeaea27667b6e382aa297b338e1b6f0af9",
+            "plugin_id_wire_forms": {
+              "absent": 0,
+              "empty_string": 0,
+              "null": 4
+            },
+            "protocol_sessions": 6,
+            "raw_skill_inventory_source_blob": "13a33c65e40bf032cc5fbaefe51b0bda675f5f16",
+            "required_tests": [
+              "TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle",
+              "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle",
+              "TestAgentpluginsCodexNativeCommandsLifecycle",
+              "TestAgentpluginsCodexNativeForeignSkillCLIRefusal",
+              "TestAgentpluginsCodexNativeLifecycle",
+              "TestAgentpluginsCodexNativeProjectComponentsLifecycle",
+              "TestAgentpluginsCodexNativeProjectModelForeignMCP",
+              "TestAgentpluginsCodexNativeRawUserSkillLifecycle",
+              "TestAgentpluginsCodexNativeTrustedProjectMCP"
+            ],
+            "retained_files": 350,
+            "run_id": 46139633140,
+            "source": {
+              "commit": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+              "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+            },
+            "status": "passed",
+            "target": "darwin-arm64"
+          },
+          {
+            "archive_bytes": 344102,
+            "archive_sha256": "87af5426fd24bd050847359a099ec3ace5e70238bee7f582839c422ac742336e",
+            "artifact_id": 15264712969,
+            "audit": "native_collection_retained_bytes",
+            "boundaries": [
+              "Archive bytes/CRC/hashes and retained collection protocol observations audited.",
+              "Run/job/metadata authenticity, source checkout and download custody are caller duties.",
+              "Tool archive/binary bytes are not uploaded here; pins and binary hash joins audited.",
+              "Installed/source Skill bytes, full state, read-only listing snapshots, stable owned bindings, cleanup and foreign-byte preservation are source-pinned Go assertions.",
+              "Installer argv/cwd/exit are not separately captured; original result/stderr retained.",
+              "No vendor authentication or real-model qualification is granted by this audit.",
+              "B is skills/list query isolation; B app-server process cwd is not proven."
+            ],
+            "client": "codex",
+            "collection_inventory_sha256": "158e29b7923a5880161801824e907d20d20770541adc13d3bab6a89b49a2093d",
+            "collection_required_files": 22,
+            "decoded_job_log_bytes": 35671,
+            "decoded_job_log_sha256": "4ad76045f33980b3573daa1abaf0c7208ab405c81f9866b09ca35d9f72bd6174",
+            "directory_entries": 0,
+            "expanded_bytes": 1036266,
+            "fixture_directory": "uap-native-evidence-2754869435",
+            "job_id": 140968485237,
+            "job_steps": [
+              {
+                "conclusion": "success",
+                "name": "Set up job"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Set up Node for browser Skills qualification"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Bundle the real picker before building the public CLI"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Prepare the native Codex Linux sandbox"
+              },
+              {
+                "conclusion": "success",
+                "name": "Verify native matrix safety and evidence gates"
+              },
+              {
+                "conclusion": "success",
+                "name": "Build exact source and execute pinned native client in disposable fixture"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Set up Node for the real SDK lifecycle"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Build the management SDK from this checkout"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Verify SDK lifecycle through the real Go engine and OpenCode"
+              },
+              {
+                "conclusion": "success",
+                "name": "Upload native evidence including failed stages"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Preserve the actual browser to native Skills screenshots"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Complete job"
+              }
+            ],
+            "observation_sha256": "b53c8e04ff162ef80f69d4b4d381076cbde1bffc085346bf29e5f7ee27051f18",
+            "plugin_id_wire_forms": {
+              "absent": 0,
+              "empty_string": 0,
+              "null": 4
+            },
+            "protocol_sessions": 6,
+            "raw_skill_inventory_source_blob": "13a33c65e40bf032cc5fbaefe51b0bda675f5f16",
+            "required_tests": [
+              "TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle",
+              "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle",
+              "TestAgentpluginsCodexNativeCommandsLifecycle",
+              "TestAgentpluginsCodexNativeForeignSkillCLIRefusal",
+              "TestAgentpluginsCodexNativeLifecycle",
+              "TestAgentpluginsCodexNativeProjectComponentsLifecycle",
+              "TestAgentpluginsCodexNativeProjectModelForeignMCP",
+              "TestAgentpluginsCodexNativeRawUserSkillLifecycle",
+              "TestAgentpluginsCodexNativeTrustedProjectMCP"
+            ],
+            "retained_files": 350,
+            "run_id": 46139633140,
+            "source": {
+              "commit": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+              "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+            },
+            "status": "passed",
+            "target": "windows-amd64"
+          },
+          {
+            "archive_bytes": 605850,
+            "archive_sha256": "ff2c66166dc4a593bc8ac70374f2dabdb719cbdfdc39117d222a4dd370b48446",
+            "artifact_id": 15265005465,
+            "audit": "native_collection_retained_bytes",
+            "boundaries": [
+              "Archive bytes/CRC/hashes and retained collection protocol observations audited.",
+              "Run/job/metadata authenticity, source checkout and download custody are caller duties.",
+              "Tool archive/binary bytes are not uploaded here; pins and binary hash joins audited.",
+              "Installed/source Skill bytes, full state, read-only listing snapshots, stable owned bindings, cleanup and foreign-byte preservation are source-pinned Go assertions.",
+              "Installer argv/cwd/exit are not separately captured; original result/stderr retained.",
+              "No vendor authentication or real-model qualification is granted by this audit.",
+              "B is skills/list query isolation; B app-server process cwd is not proven."
+            ],
+            "client": "codex",
+            "collection_inventory_sha256": "c2f36817b8ed27a1fa8b435907cd25642cca554c002c1691acf02e987882ec7e",
+            "collection_required_files": 22,
+            "decoded_job_log_bytes": 177439,
+            "decoded_job_log_sha256": "7a94e5c35ee44501daa19884bfdf7ff7c07f41bd5050c95bda8e6c22411f4c79",
+            "directory_entries": 0,
+            "expanded_bytes": 1728609,
+            "fixture_directory": "uap-native-evidence-2748066728",
+            "job_id": 140968485176,
+            "job_steps": [
+              {
+                "conclusion": "success",
+                "name": "Set up job"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "success",
+                "name": "Set up Node for browser Skills qualification"
+              },
+              {
+                "conclusion": "success",
+                "name": "Bundle the real picker before building the public CLI"
+              },
+              {
+                "conclusion": "success",
+                "name": "Prepare the native Codex Linux sandbox"
+              },
+              {
+                "conclusion": "success",
+                "name": "Verify native matrix safety and evidence gates"
+              },
+              {
+                "conclusion": "success",
+                "name": "Build exact source and execute pinned native client in disposable fixture"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Set up Node for the real SDK lifecycle"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Build the management SDK from this checkout"
+              },
+              {
+                "conclusion": "skipped",
+                "name": "Verify SDK lifecycle through the real Go engine and OpenCode"
+              },
+              {
+                "conclusion": "success",
+                "name": "Upload native evidence including failed stages"
+              },
+              {
+                "conclusion": "success",
+                "name": "Preserve the actual browser to native Skills screenshots"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Set up Node for browser Skills qualification"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e"
+              },
+              {
+                "conclusion": "success",
+                "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+              },
+              {
+                "conclusion": "success",
+                "name": "Complete job"
+              }
+            ],
+            "observation_sha256": "44b2b6e73b5117a55ccc60699e56d08b6a2824048507e2679015f96fd6fe9868",
+            "plugin_id_wire_forms": {
+              "absent": 0,
+              "empty_string": 0,
+              "null": 4
+            },
+            "protocol_sessions": 6,
+            "raw_skill_inventory_source_blob": "13a33c65e40bf032cc5fbaefe51b0bda675f5f16",
+            "required_tests": [
+              "TestAgentpluginsCodexClaudeNativeBrowserProjectSkillsLifecycle",
+              "TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle",
+              "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle",
+              "TestAgentpluginsCodexNativeCommandsLifecycle",
+              "TestAgentpluginsCodexNativeForeignSkillCLIRefusal",
+              "TestAgentpluginsCodexNativeLifecycle",
+              "TestAgentpluginsCodexNativeProjectComponentsLifecycle",
+              "TestAgentpluginsCodexNativeProjectModelForeignMCP",
+              "TestAgentpluginsCodexNativeRawUserSkillLifecycle",
+              "TestAgentpluginsCodexNativeTrustedProjectMCP"
+            ],
+            "retained_files": 555,
+            "run_id": 46139633140,
+            "source": {
+              "commit": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+              "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+            },
+            "status": "passed",
+            "target": "linux-amd64"
+          }
+        ],
+        "run_attempt": 1,
+        "run_id": 46139633140,
+        "selected_lanes": [
+          [
+            "claude",
+            "darwin-arm64"
+          ],
+          [
+            "claude",
+            "linux-amd64"
+          ],
+          [
+            "claude",
+            "windows-amd64"
+          ],
+          [
+            "codex",
+            "darwin-arm64"
+          ],
+          [
+            "codex",
+            "linux-amd64"
+          ],
+          [
+            "codex",
+            "windows-amd64"
+          ]
+        ],
+        "six_lane_coverage_complete": true,
+        "source": {
+          "commit": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+          "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22"
+        },
+        "status": "passed"
+      },
+      "independent_readback_confirmed": true
     }
   },
   "whole_job_skips": [
@@ -3455,16 +4946,132 @@
     "scope_boundary": "Published UAP 0.1.116 control remains published CLI, not source-built product."
   },
   "pending": {
-    "pm_mac_arm": "runtime successful; original retained-byte audit next",
-    "native": "Linux/Windows 4 audit queued; ClaudeMac runtime passed; CodexMac queued, both Mac archives pending audit",
-    "marketing": "Claude/Codex/Cursor 3 audit queued; Gemini/OpenCode/Copilot runtime queued",
-    "full30": "Codex full30 plugin+skill and Windsurf plugin queued; original receipts pending",
-    "merge": "only after final-current applicable outcomes and actual-byte proofs; expected-head squash",
-    "main": "fresh actual merged-main push qualification"
+    "marketing": "OpenCode/Copilot runtime; Gemini/OpenCode/Copilot original archive bytes",
+    "full30": "full Codex plugin+skill and Windsurf plugin runtime and original archive qualification; all other applicable full-catalog jobs",
+    "merge": "final source/reviews/skips fresh verification then ordinary expected-head squash",
+    "main": "actual merged-main push qualification after verified squash identity"
   },
   "auxiliary_audits": {
+    "r39_native_all_six": {
+      "state": "closed: six original archives PASS with independent readback",
+      "commit": "03441e6b17632d5a2af0cf912211056439d43124",
+      "tree": "16526c2a5ba0d792dfce8b331238c4f7b66d0d22",
+      "manifest": {
+        "schema_version": 2,
+        "repo": "777genius/universal-agent-plugins",
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "core_blob": "34e14eabc62e82b1dd371f3aeefda43ffe1354bd",
+        "workflow_path": ".github/workflows/agentplugins-native-clients.yml",
+        "event": "pull_request",
+        "run_id": 46139633140,
+        "run_attempt": 1,
+        "lanes": [
+          {
+            "client": "claude",
+            "target": "darwin-arm64",
+            "job_id": 140968485149,
+            "artifact_id": 15265776442,
+            "archive_size": 776386,
+            "archive_sha256": "2826b31afb1081cc581b4a3355de16623149860621eb27195a7c6d37b25d9623"
+          },
+          {
+            "client": "claude",
+            "target": "windows-amd64",
+            "job_id": 140968485170,
+            "artifact_id": 15264588487,
+            "archive_size": 788978,
+            "archive_sha256": "666979ba6d9a1d3aa64d4416414ef4d8a62029b2b3b8dc671caacb0ec234161a"
+          },
+          {
+            "client": "claude",
+            "target": "linux-amd64",
+            "job_id": 140968485141,
+            "artifact_id": 15264512126,
+            "archive_size": 776337,
+            "archive_sha256": "a33ebc0aba091edc3dbcc6da5ad0a10227e17b5fea32e6447788c44332681c96"
+          },
+          {
+            "client": "codex",
+            "target": "darwin-arm64",
+            "job_id": 140968485254,
+            "artifact_id": 15265064793,
+            "archive_size": 346243,
+            "archive_sha256": "cb50f8e29a1003f13db7dcb3ed3caa263c707c292d98f3a3821b9e540e8a7f15"
+          },
+          {
+            "client": "codex",
+            "target": "windows-amd64",
+            "job_id": 140968485237,
+            "artifact_id": 15264712969,
+            "archive_size": 344102,
+            "archive_sha256": "87af5426fd24bd050847359a099ec3ace5e70238bee7f582839c422ac742336e"
+          },
+          {
+            "client": "codex",
+            "target": "linux-amd64",
+            "job_id": 140968485176,
+            "artifact_id": 15265005465,
+            "archive_size": 605850,
+            "archive_sha256": "ff2c66166dc4a593bc8ac70374f2dabdb719cbdfdc39117d222a4dd370b48446"
+          }
+        ],
+        "cohort": "all-six"
+      },
+      "manifest_hash": {
+        "sha256": "f2d4cb1c6361236855ae2b40a83ace403ef120f7eae9f9f9cf32d6c92d44c5aa",
+        "bytes": 2015
+      },
+      "core_blob": "34e14eabc62e82b1dd371f3aeefda43ffe1354bd",
+      "wrapper_blob": "9d3372e62659852f4ee36d15b77e7ec0f3a0ad4c",
+      "run_id": 46151593640,
+      "jobs": [
+        {
+          "id": 140999202439,
+          "name": "native-all-six",
+          "status": "queued",
+          "conclusion": null
+        }
+      ],
+      "actual_wire_forms": {
+        "each_codex_lane": {
+          "absent": 0,
+          "empty_string": 0,
+          "null": 4
+        },
+        "source_equivalent_correction_confirmed": true
+      }
+    },
+    "r39_pm_mac_arm": {
+      "state": "actual archive bytes passed; independent readback confirmed",
+      "commit": "35e9d7fc266d45e1842a9d71aa174cf5462d8080",
+      "tree": "c8755eb1e08cef79143b790ceb31a64d5a2fb608",
+      "workflow_path": ".github/workflows/uap1130-r39-artifact-batch.yml",
+      "manifest": {
+        "repo": "777genius/universal-agent-plugins",
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "run_id": 46139633158,
+        "job_id": 140962469332,
+        "job_name": "package-manager (macos-15)",
+        "run_attempt": 1,
+        "event": "pull_request",
+        "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "artifact_id": 15265766207,
+        "artifact_name": "package-manager-e2e-macos-15-8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "size": 60962,
+        "sha256": "6cab600c8122fad535006692f99c2fa320120661ea97900a082a8679436cd0bb",
+        "expected_platform": {
+          "os": "Darwin",
+          "architecture": "arm64"
+        }
+      },
+      "run_id": 46150622531,
+      "job_id": 140996257118
+    },
     "r39_selected_bytes": {
-      "state": "published; awaiting actual execution",
+      "state": "Marketing3 bytePASS; native4 audit failure pending safe diagnosis",
       "commit": "c51824975a677a829806eece219428e002df3bb4",
       "tree": "a69f46fdc3089769d4893f6e6dbfdb1f1289a1da",
       "workflow_path": ".github/workflows/uap1130-r39-selected-byte-audit.yml",
@@ -3596,8 +5203,27 @@
           "status": "queued",
           "conclusion": null
         }
-      ]
+      ],
+      "native_failure": {
+        "job_id": 140995789352,
+        "log": {
+          "sha256": "bf57461ceda2484eeb312c42193a04619a482f379975d326a8c0b1e703e26b6a",
+          "bytes": 34772
+        },
+        "reason": "opaque error, safe diagnostic retry pending"
+      }
     }
   },
-  "pr_body_snapshot_length": 35730
+  "pr_body_snapshot_length": 42661,
+  "latest_source_ci_snapshot": {
+    "reported_by": "ci_r21",
+    "recorded_at": "2026-11-28T13:54:27Z",
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "runs": 41,
+    "success": 134,
+    "skipped": 8,
+    "queued": 29,
+    "in_progress": 2,
+    "failure": 0
+  }
 }
