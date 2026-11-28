@@ -1,0 +1,576 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-28T11:13:20Z",
+  "pr": "https://github.com/777genius/universal-agent-plugins/pull/1130",
+  "source": {
+    "head": "c93d3b9803a3dd036ac6f05b3787a3b6b51200a0",
+    "tree": "d2b10c5ef27715cf5fe8bcea02ee0b7ab33492e6",
+    "synthetic": "8fe1bcd5697132a3660b71a7b38badd2c7372c4e",
+    "base_main": "ff6c507ddcefd23d41d2f26a6fd0b545ab7b6022"
+  },
+  "state": "Runtime qualification pending; reviewed auditor code only, no current artifact PASS",
+  "current_audited_jobs": {
+    "staged": {
+      "schema_version": 1,
+      "head": "c93d3b9803a3dd036ac6f05b3787a3b6b51200a0",
+      "tree": "d2b10c5ef27715cf5fe8bcea02ee0b7ab33492e6",
+      "checkout": "8fe1bcd5697132a3660b71a7b38badd2c7372c4e",
+      "run_id": 46134103481,
+      "job_id": 140945459650,
+      "result": "pass",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run hermetic staged-package test",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        }
+      ],
+      "totals": {
+        "tests": 1,
+        "suites": 0,
+        "pass": 1,
+        "fail": 0,
+        "cancelled": 0,
+        "skipped": 0,
+        "todo": 0,
+        "duration_ms": 245864.429695
+      },
+      "node": "22.21.1",
+      "command": "node --test --test-name-pattern=\"staged package tests are hermetic\" test/stage-release.test.js",
+      "test": "staged package tests are hermetic to repository layout and caller cwd",
+      "test_duration_ms": 245822.841857,
+      "decoded_log": {
+        "sha256": "2035b04d9c29a7e66f6f808365aecebcd8714a9805302a2eaa922fcb70a47e9c",
+        "bytes": 17829
+      },
+      "boundary": "Original TAP and all seven actual successful steps inspected; no failed/skipped/cancelled/TODO test. Synthetic checkout independently bound to current source tree."
+    },
+    "cli": {
+      "schema_version": 1,
+      "source_head": "c93d3b9803a3dd036ac6f05b3787a3b6b51200a0",
+      "source_tree": "d2b10c5ef27715cf5fe8bcea02ee0b7ab33492e6",
+      "checkout": "8fe1bcd5697132a3660b71a7b38badd2c7372c4e",
+      "run_id": 46134103517,
+      "job_id": 140945461272,
+      "raw_log": {
+        "sha256": "a9b96544e8d3ff086b66e48c67c6524f1f3072a41de528fdd9194b2920d68c94",
+        "bytes": 86716
+      },
+      "actual_steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Fetch lint base",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Lint changed lines",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Size and architecture gate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Windows changed lines for process containment",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 7
+        },
+        {
+          "name": "Windows full-file size and architecture for process containment",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 8
+        },
+        {
+          "name": "Legacy baseline is shrink-only",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 9
+        },
+        {
+          "name": "Legacy baseline negative E2E",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 10
+        },
+        {
+          "name": "Post Size and architecture gate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17
+        },
+        {
+          "name": "Post Lint changed lines",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        }
+      ],
+      "success_steps": 11,
+      "conditional_skips": [
+        "Windows changed lines for process containment",
+        "Windows full-file size and architecture for process containment",
+        "Legacy baseline is shrink-only",
+        "Legacy baseline negative E2E"
+      ],
+      "lint_version": "v2.13.2",
+      "changed_line_lint": "0 issues.",
+      "size_architecture_gate": "0 issues.",
+      "conclusion": "PASS with four explicitly conditional skipped steps",
+      "decoded_utf8_log_hash": true
+    },
+    "core": {
+      "schema_version": 1,
+      "source_head": "c93d3b9803a3dd036ac6f05b3787a3b6b51200a0",
+      "source_tree": "d2b10c5ef27715cf5fe8bcea02ee0b7ab33492e6",
+      "checkout": "8fe1bcd5697132a3660b71a7b38badd2c7372c4e",
+      "run_id": 46134103517,
+      "job_id": 140945461369,
+      "raw_log": {
+        "sha256": "d458b904534d504d424b766d891da9a40b8b5307c6a98902be9067490d6594d2",
+        "bytes": 50589
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Run install core tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Report core coverage",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        }
+      ],
+      "primary": {
+        "ok": 78,
+        "no_test_files": 7,
+        "cached": 0,
+        "fail": []
+      },
+      "coverage": {
+        "ok": 76,
+        "no_test_files": 0,
+        "cached": 0,
+        "fail": []
+      },
+      "coverage_informational": true,
+      "conclusion": "PASS; original package results include successful coverage commands despite workflow's informational || true fallback",
+      "limits": [
+        "Non-verbose package summary does not enumerate individual test outcomes",
+        "Repeated race regression remains a separate pending gate"
+      ]
+    },
+    "linux_contracts": {
+      "schema_version": 1,
+      "source_head": "c93d3b9803a3dd036ac6f05b3787a3b6b51200a0",
+      "source_tree": "d2b10c5ef27715cf5fe8bcea02ee0b7ab33492e6",
+      "checkout": "8fe1bcd5697132a3660b71a7b38badd2c7372c4e",
+      "run_id": 46134103517,
+      "job_id": 140945461263,
+      "raw_log": {
+        "sha256": "1a8461a8c60d2b0b456d2aa14a9423059c30ba8ce7e7931613f8279b28b723a3",
+        "bytes": 66246
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Verify scoped ownership, project lifecycle and legacy lock safety",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Verify Cursor scoped tool approval and public CLI on each OS",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Verify Devin User installation and original profile authority",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Post Run actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15
+        }
+      ],
+      "metrics": {
+        "scope": {
+          "ok": 33,
+          "no_test_files": 0,
+          "cached": 0,
+          "fail": [],
+          "no_tests_to_run": 8,
+          "run_count": 0,
+          "pass_count": 0,
+          "unmatched_run": [],
+          "unmatched_pass": [],
+          "skip": [],
+          "roots": []
+        },
+        "cursor": {
+          "ok": 2,
+          "no_test_files": 0,
+          "cached": 0,
+          "fail": [],
+          "no_tests_to_run": 0,
+          "run_count": 64,
+          "pass_count": 64,
+          "unmatched_run": [],
+          "unmatched_pass": [],
+          "skip": [],
+          "roots": [
+            "TestCursorScopedToolApprovalSchemaAndNameControls",
+            "TestCursorPublisherApprovalsRequireSelectedNativeMCPAndProject",
+            "TestCursorAdmittedMaximumApprovalProjectionRoundTrip",
+            "TestCursorToolPermissionsRefuseOverflowWithoutChangingPolicy",
+            "TestCursorToolPermissionsMergePreservesForeignAndRefusals",
+            "TestCursorToolPermissionsExplicitAddAndIdempotentE2E",
+            "TestCursorToolTrustRefusesSymlinkAndDifferentProject",
+            "TestCursorToolTrustRefusesChangedOwnedServerOrDisabledPolicy",
+            "TestCursorToolTrustRefusesPostReviewApprovalFileTamper",
+            "TestCursorScopedApprovalDoesNotDisableAutomaticProjectLifecycle",
+            "TestCursorServerApprovalVersionRetainsOnlyNativeQualifiedPins",
+            "TestCursorNativeMCPOnlyReadinessIgnoresReviewedApprovalExtension",
+            "TestCursorToolPermissionRollbackPreservesEarlierNativeEffect",
+            "TestCursorApprovalFingerprintMatchesNativeJSONStringify",
+            "TestCursorApprovalCASNeverRemovesConcurrentDisable",
+            "TestCursorCompletionPropagatesUnclosedProbeMetadata",
+            "TestCursorApprovalRefusesPolicyDirectoryAlias",
+            "TestCursorNativeApprovalPreservesDisablementAndMalformedPolicy",
+            "TestCursorNativeApprovalPinsProjectProfileAndExactServer",
+            "TestCursorPreparedSetupCompletesOnlyPendingApproval",
+            "TestCursorReadOnlyObservationReportsPendingApprovalOnly",
+            "TestCursorNativeProfileRefusesDifferentExplicitPolicyRoot",
+            "TestCursorCompletionRetainsFailedApprovalRollbackEffect",
+            "TestCursorReviewDisclosesOnlySelectedProjectApproval",
+            "TestCursorPublisherToolApprovalFullCLI",
+            "TestCursorAgentOnlyUserTargetSuggestsProjectScope"
+          ]
+        },
+        "devin": {
+          "ok": 3,
+          "no_test_files": 0,
+          "cached": 0,
+          "fail": [],
+          "no_tests_to_run": 0,
+          "run_count": 78,
+          "pass_count": 78,
+          "unmatched_run": [],
+          "unmatched_pass": [],
+          "skip": [],
+          "roots": [
+            "TestDevinGlobalOfflineNativeLifecycleRelocatedStateAndLegacyParity",
+            "TestDevinGlobalOfflineRejectsForeignSkillAndWrongReceipts",
+            "TestDevinGlobalSelectedUserProfileIsNotLegacyOrProject",
+            "TestDevinGlobalPreflightAllowsUnstagedButActivationRequiresExactDelivery",
+            "TestDevinGlobalNewVersionPreservesProjectAndNonprimaryBoundaries",
+            "TestDevinGlobalSkillsObserveOriginalProfileAndRejectScopeSubstitution",
+            "TestDevinGlobalSkillCompletionPreservesExplicitAuthenticationAndOtherActions",
+            "TestDevinGlobalSkillObservationRefusesInheritedContextBeforeAndAfter",
+            "TestDevinGlobalSkillsKeepObservedForeignImportsWithoutLendingOwnership",
+            "TestDevinGlobalMissingVersionRefusesBeforeConfigOrProcessEffects",
+            "TestWindsurfRemoveDeletesExactlyManagedObjects",
+            "TestRecordedCascadeMCPReplaysThroughSelectedDevinWithoutMigration",
+            "TestRecordedPackageOnlyCascadeDoesNotAdoptSelectedDevinGlobal",
+            "TestRecordedMixedOrRetargetedUserReceiptFailsClosed",
+            "TestFacadeDevinGlobalOriginalRootAdmission",
+            "TestFacadeDevinGlobalCLIOnlyUserRoot",
+            "TestFacadeDevinGlobalCLIOnlyUserRootRefusals",
+            "TestFacadeDevinGlobalOriginalRootIsFrozenAndPrivate",
+            "TestFacadeDevinGlobalWithoutLegacyCascadeRoot",
+            "TestUserDevinVersionProbeIsExactAndTargeted",
+            "TestUserDevinVersionProbeRefusesIdentityDrift",
+            "TestUserDevinSavedDependencyMutationProbesExactSelectedVersion"
+          ]
+        }
+      },
+      "conclusion": "PASS; exact Linux contract selector groups with all recorded RUN/PASS paired",
+      "limits": [
+        "Scope group is non-verbose; eight package selectors have no matching tests",
+        "Native runtime behavior is not established by these Go contract tests"
+      ]
+    }
+  },
+  "independent_auditors": {
+    "native_core": {
+      "state": "Static reviewed core GO; wrapper being prepared; no current artifacts or byte PASS",
+      "source_head": "c93d3b9803a3dd036ac6f05b3787a3b6b51200a0",
+      "source_tree": "d2b10c5ef27715cf5fe8bcea02ee0b7ab33492e6",
+      "author": "r31_fixture_fix",
+      "required_subsets": {
+        "claude": 28,
+        "codex": 22
+      },
+      "whole_inventory": "Must derive actual retained members from source-bound runner hash map and verify every original file byte; not fixed count",
+      "claude_report": "uap-claude-native-evidence-*/claude-project-plugin-evidence.json",
+      "codex_report": "uap-native-evidence-*/codex-project-components-evidence.json",
+      "important_limits": [
+        "no aggregate removal installer file: actual removals are per Skill",
+        "Codex B query selects B while process cwd remains A; no separate B process cwd claim",
+        "Claude request retained as normalized metadata, not original trailing-newline stdin bytes",
+        "CLI invocation argv/cwd/exit are source-and-test assertions unless separately retained",
+        "no full Skill/state/source/sentinel bytes retained; successful assertions only",
+        "no vendor authentication or real model proof"
+      ],
+      "core_blob": "1ccc6d2c9b2ab7b901fcb028b329e4e4694c922e",
+      "core_hash": {
+        "sha256": "f97674bdcca879cc63d8e7fe484720eab1f36ffdf3175b9debf3e93be1c253bd",
+        "bytes": 28310
+      },
+      "root_static_review": "GO; reviewed original full core and exact two corrective deltas against actual source producers",
+      "independent_static_review": "pm_pi_artifact_r31 GO, no remaining blockers",
+      "runtime_validation": false,
+      "corrections": [
+        "Select unique collection report by all three stage keys irrespective of status; legitimate same-basename trusted reports preserved",
+        "Windows rooted clean/slash/case path equivalence; original listing source case preserved for LocalSkillKey cryptographic identities",
+        "ZIP control/colon/original filename and compression checks; exact platform harness keys",
+        "Codex repeated native path map uses equal keys and producer-authorized path equivalence; original hashes unchanged"
+      ],
+      "wrapper": {
+        "blob": "4aaf5d1e3f7fc763f3c9c7216a203a3f2968fd5f",
+        "core_blob": "1ccc6d2c9b2ab7b901fcb028b329e4e4694c922e",
+        "template_blob": "2269542a8d85b393c5ccf72b64b8b0fddb0a3beb",
+        "root": "GO; full 304 lines read and exact producer workflow compared",
+        "independent": "pm_pi_artifact_r31 full static GO",
+        "runtime": false,
+        "publication": false,
+        "limitations": [
+          "Actual run attempt/job/artifact metadata still required",
+          "Per-job successful source-pinned upload and unique artifact name bind artifact to lane; original log IDs will be checked during manifest intake",
+          "No source execution or product compilation"
+        ]
+      },
+      "workflow_template": "1130R38NativeAuditTemplates"
+    },
+    "full30_core": {
+      "blob": "d0d393e16625759d2ba7fefc0a2db112b5dfab1e",
+      "hash": {
+        "sha256": "9a597fc47855fcb2a21d56fee52a652f33ecbe47fdbade2df84fc9501b3cdc59",
+        "bytes": 48439
+      },
+      "lines": 803,
+      "root": "GO: all 803 lines read; all eight source blobs independently fetched at current head and verified; baseline literal source and artifact upload layout verified",
+      "independent": "pm_pi_artifact_r31 full static GO; reviewer explicitly corrected earlier published-CLI summary to current PR source build and confirmed no code error",
+      "source_binary": "Actual PR source compiled with main.version=0.1.115; separate published-control 0.1.95",
+      "runtime_validation": false,
+      "publication": false,
+      "limits": [
+        "Windsurf Firebase complete filesystem/source images and pool checks execute in memory; reports retain digest/proof joins, not all original image bytes",
+        "Windsurf active four retain original public stdout and four-phase native Base64 streams; prepared rows retain public hashes/tails",
+        "Live Codex app-server full request/response transcript is not retained; runtime checkpoints and file/baseline digests are reported",
+        "Ordinary Live Codex public command full JSON is removed before report serialization; only limited tails retained"
+      ]
+    },
+    "full30_wrapper": {
+      "blob": "4c478da91331cf50e3345bf739c308ed2a0bda87",
+      "hash": {
+        "sha256": "21528a1722caa06096e93a69962d31adb56ed35c2c0490c94aae40e4033845a2",
+        "bytes": 15766
+      },
+      "core_blob": "d0d393e16625759d2ba7fefc0a2db112b5dfab1e",
+      "template_blob": "398e5aa42232dcf27ed7ca04aabb6b08b3ee5a52",
+      "root": "GO; full 344 lines read, canonical job/step/artifact names and PR source-build command verified against actual pinned workflows",
+      "independent": "pm_pi_artifact_r31 full static GO",
+      "runtime_validation": false,
+      "publication": false
+    },
+    "pm_pi": "Existing PM/Pi cores and wrappers runtime-validated against historical da317 artifacts; current artifacts still pending"
+  },
+  "separate_prefetch": {
+    "source": "c93d3b9803a3dd036ac6f05b3787a3b6b51200a0",
+    "tree": "d2b10c5ef27715cf5fe8bcea02ee0b7ab33492e6",
+    "audit_commit": "4bf2a4402090893c6cf03f37e756355e250b3187",
+    "audit_tree": "2ee18ad92330b82c32e4af61afa9759641bb0b1b",
+    "run": 46137655740,
+    "state": "Awaiting execution; immutable source and exact race command preserved",
+    "runner": "repository configured CI_CORE_TEST_RUNNER || CI_LINUX_RUNNER || ubuntu-24.04",
+    "authority_blob": "da9a5a7fbb159b22e49d78d182aca291c9121023",
+    "delta": "one isolated workflow: +2/-1, exact repository/ref guard and existing Core runner precedence",
+    "pr_labels_at_publication": [],
+    "independent_review": "pm_pi_artifact_r31 static GO",
+    "manual_cancellations": 0,
+    "job": 140956474531,
+    "status": "in_progress",
+    "runner_label": "hci-uap-core-linux",
+    "runner_name": "garm-qkdxpkugrhfa",
+    "observed": "2026-11-28T11:00:22Z"
+  },
+  "remaining": "Current PM/Pi/native/full cohorts/Marketing/Terminal/platform jobs, fresh final checks/reviews, ordinary expected-head squash, actual merged-main verification",
+  "publication_scope": "Four reviewed Python files and evidence only; no new executable workflow or manifest; product PR source unchanged"
+}
