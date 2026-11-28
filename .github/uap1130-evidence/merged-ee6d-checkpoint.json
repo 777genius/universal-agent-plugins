@@ -1,0 +1,964 @@
+{
+  "schema_version": 1,
+  "recorded_at": "2026-11-28T14:08:20Z",
+  "phase": "Postmerge verification after externally observed owner merge; retain unfinished exact-PR-source cohorts",
+  "external_merge": {
+    "merged_at": "2026-11-28T13:59:53Z",
+    "observed_at": "2026-11-28T14:01:09Z",
+    "merged_by": "777genius",
+    "root_merge_call": false,
+    "commit": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+    "tree": "fa9f279164dc3060ebe300db608963060a9d4d19",
+    "parent": "aeb3c5e3580ed19db9c0f78b3ddd2ec7f8a086c8",
+    "prior_main": "ff6c507ddcefd23d41d2f26a6fd0b545ab7b6022",
+    "exact_source_delta": [
+      {
+        "path": "install/integrationctl/agentplugins/usecase/native_remove_attempt.go",
+        "old": {
+          "sha": "d637465613e4051c275f6ac96b9650b002839113",
+          "mode": "100644",
+          "type": "blob"
+        },
+        "new": {
+          "sha": "a68ec55713dcde1101ff7379e98c491e4ca0d6ea",
+          "mode": "100644",
+          "type": "blob"
+        }
+      },
+      {
+        "path": "install/integrationctl/agentplugins/usecase/native_remove_decision.go",
+        "old": {
+          "sha": "69df16790ca75820597f80a2275a915c233bbe39",
+          "mode": "100644",
+          "type": "blob"
+        },
+        "new": {
+          "sha": "c1bfe97ee3adac8744a289821507606025ea85f7",
+          "mode": "100644",
+          "type": "blob"
+        }
+      },
+      {
+        "path": "install/integrationctl/agentplugins/usecase/native_remove_proof_comparison_test.go",
+        "old": null,
+        "new": {
+          "sha": "13df8240a0b74bc9a6179482c0b86333755e64ea",
+          "mode": "100644",
+          "type": "blob"
+        }
+      }
+    ],
+    "external_followup_issue": 1148,
+    "static_delta_review": {
+      "root": true,
+      "independent": true,
+      "files": [
+        {
+          "path": "install/integrationctl/agentplugins/usecase/native_remove_attempt.go",
+          "old": {
+            "sha": "d637465613e4051c275f6ac96b9650b002839113",
+            "mode": "100644",
+            "type": "blob"
+          },
+          "new": {
+            "sha": "a68ec55713dcde1101ff7379e98c491e4ca0d6ea",
+            "mode": "100644",
+            "type": "blob"
+          }
+        },
+        {
+          "path": "install/integrationctl/agentplugins/usecase/native_remove_decision.go",
+          "old": {
+            "sha": "69df16790ca75820597f80a2275a915c233bbe39",
+            "mode": "100644",
+            "type": "blob"
+          },
+          "new": {
+            "sha": "c1bfe97ee3adac8744a289821507606025ea85f7",
+            "mode": "100644",
+            "type": "blob"
+          }
+        },
+        {
+          "path": "install/integrationctl/agentplugins/usecase/native_remove_proof_comparison_test.go",
+          "old": null,
+          "new": {
+            "sha": "13df8240a0b74bc9a6179482c0b86333755e64ea",
+            "mode": "100644",
+            "type": "blob"
+          }
+        }
+      ],
+      "finding": "same persisted JSON snapshot boundary for observed and frozen states; foreign proof/attempt/owner/ordering checks retained",
+      "new_test_roots": [
+        "TestNativeRemovalDecisionComparesPersistedDirectoryProof",
+        "TestCertainNativeRemovalComparesPersistedDirectoryProof"
+      ],
+      "runtime_qualification": false
+    }
+  },
+  "actual_main": {
+    "head": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+    "tree": "fa9f279164dc3060ebe300db608963060a9d4d19",
+    "parent": "aeb3c5e3580ed19db9c0f78b3ddd2ec7f8a086c8",
+    "runs": [
+      {
+        "id": 46152361260,
+        "name": "Kiro no-auth installation E2E",
+        "path": ".github/workflows/kiro-no-auth-installation.yml",
+        "event": "push",
+        "status": "pending",
+        "conclusion": null
+      },
+      {
+        "id": 46152361272,
+        "name": "Hermes Project installation and inspection",
+        "path": ".github/workflows/hermes-project-install.yml",
+        "event": "push",
+        "status": "pending",
+        "conclusion": null
+      },
+      {
+        "id": 46152361269,
+        "name": "Hermes native User tools call - scripted localhost provider, no vendor auth",
+        "path": ".github/workflows/hermes-noauth-tool-call.yml",
+        "event": "push",
+        "status": "pending",
+        "conclusion": null
+      },
+      {
+        "id": 46152361238,
+        "name": "Pi Global and Project Native Runtime",
+        "path": ".github/workflows/pi-project-native.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361147,
+        "name": "Released exact-source lifecycle qualification",
+        "path": ".github/workflows/released-source-audit.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361446,
+        "name": "Grok native MCP call without vendor auth",
+        "path": ".github/workflows/grok-noauth-call.yml",
+        "event": "push",
+        "status": "pending",
+        "conclusion": null
+      },
+      {
+        "id": 46152361178,
+        "name": "Polyglot Smoke",
+        "path": ".github/workflows/polyglot-smoke.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361285,
+        "name": "Coverage",
+        "path": ".github/workflows/coverage.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361212,
+        "name": "Required",
+        "path": ".github/workflows/ci.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361274,
+        "name": "Antigravity Native Plugin E2E",
+        "path": ".github/workflows/antigravity-native-e2e.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361262,
+        "name": "Source transports",
+        "path": ".github/workflows/source-transports.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361244,
+        "name": "Landing",
+        "path": ".github/workflows/landing.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361259,
+        "name": "Cline managed project session",
+        "path": ".github/workflows/cline-managed-session.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361142,
+        "name": "Package manager E2E",
+        "path": ".github/workflows/package-manager-e2e.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361204,
+        "name": "CodeQL",
+        "path": ".github/workflows/codeql.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361279,
+        "name": "Skills picker",
+        "path": ".github/workflows/skills-picker.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361079,
+        "name": "Published Marketing Kit Project E2E",
+        "path": ".github/workflows/marketing-kit-project-release-e2e.yml",
+        "event": "push",
+        "status": "pending",
+        "conclusion": null
+      },
+      {
+        "id": 46152361073,
+        "name": "Govulncheck",
+        "path": ".github/workflows/govulncheck.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361097,
+        "name": "Grok Enablement Native Lifecycle",
+        "path": ".github/workflows/grok-enable-readonly.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361104,
+        "name": "Grok Project MCP without model",
+        "path": ".github/workflows/grok-project-protocol.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361115,
+        "name": "Kimi 2.5.2 native MCP call without vendor auth",
+        "path": ".github/workflows/kimi252-noauth-call.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361076,
+        "name": "Dependency Review",
+        "path": ".github/workflows/dependency-review.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361107,
+        "name": "Docs",
+        "path": ".github/workflows/docs.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      },
+      {
+        "id": 46152361124,
+        "name": "Skills source resolution",
+        "path": ".github/workflows/skills-resolve.yml",
+        "event": "push",
+        "status": "queued",
+        "conclusion": null
+      }
+    ],
+    "current_evidence": {},
+    "qualification": "pending; do not reuse PR pass as merged-tree proof",
+    "marketing_audit_preparation": {
+      "state": "root and independent review passed; no actual runtime/archive credit",
+      "head": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+      "checkout": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+      "tree": "fa9f279164dc3060ebe300db608963060a9d4d19",
+      "parent": "aeb3c5e3580ed19db9c0f78b3ddd2ec7f8a086c8",
+      "run_id": 46152361079,
+      "event": "push",
+      "head_branch": "main",
+      "core_blob": "ce7b1a5f48548360b567b47dc430496e1878b55a",
+      "wrapper_blob": "bce89d213f0bad626f7c962b6b9cdae5a7ab4ded",
+      "core_path": ".github/main-marketing-audit/marketing_audit.py",
+      "wrapper_path": ".github/main-marketing-audit/marketing_ready_readonly_runner.py",
+      "canonical_source_pins": {
+        ".github/workflows/marketing-kit-project-release-e2e.yml": "7d1c957e25d528fddd36734db2b95ee55ccfc994",
+        "scripts/claude_cache_retirement_audit.py": "ecb56574b3e892be42cb6c79c3df346268c522c6",
+        "scripts/codex_runtime_audit.py": "759b35886a434a7f17e2c36d8fd93d6a12bbe45d",
+        "scripts/live-install-audit.py": "ceab34554b6851be09fae9dbc5345fdd753bd0f8",
+        "scripts/marketing-kit-project-release-e2e.py": "af2ac520fbd9adee43b411864df73b0ea3b936de",
+        "scripts/marketing_kit_claude_discovery.py": "7f1e14c453d7e9f8bcabcfed7bb4343343bf5743",
+        "scripts/marketing_kit_claude_retirement.py": "c96774600899745327892d6e24e9a47c68c0ee2a",
+        "scripts/marketing_kit_codex_profile.py": "7214510d013d7077fa0cc8adf949ec82778c9574",
+        "scripts/native_client_project_artifacts.py": "bfcb69f1393b9b5671062da6e40dce54b3ea7951",
+        "scripts/native_client_research.py": "c28e5f88dc26fa58efd45492b41ad899e6335605",
+        "scripts/test_live_install_audit_env.py": "1d4c36f2b7e6b64233a037634a644f52013ccf7c",
+        "scripts/test_marketing_kit_claude_discovery.py": "1c1d1fa5cde86130ff24dfaf102bcfb8ad8eab58",
+        "scripts/test_marketing_kit_claude_retirement.py": "0ad598ed18ba88f3e0589b191b380461c866c7b2",
+        "scripts/test_marketing_kit_codex_profile.py": "37159810eb32778cee838d1ec540012c3b2da04a",
+        "scripts/test_marketing_kit_codex_sqlite.py": "0f01d6fab0a0fdda7205d418797bafc6a605e947",
+        "scripts/test_marketing_kit_copilot_refusal.py": "6f7516aa1e8ec435b572d93190a61ffc57743d55",
+        "scripts/test_marketing_kit_peer_initialization.py": "7faacd179627922f0bc48d4a4ea317bafac9d356",
+        "scripts/test_marketing_kit_policy_boundary.py": "c17da88d634165cc7de087ae275933ac997f8002"
+      },
+      "source_pins_verified_against_exact_tree": true,
+      "per_lane_acceptance_unchanged": true,
+      "partial_coverage_never_full_matrix": true,
+      "actual_job_artifacts_pending": true
+    }
+  },
+  "prior_PR_source": {
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "evidence_commit": "345b04c5f493e29d9b00d74fc3d49fb48586c275",
+    "closed": [
+      "Required",
+      "Core",
+      "Terminal",
+      "PM four PR hosts and retained bytes",
+      "Pi three hosts and retained bytes",
+      "native Claude/Codex six hosts and retained bytes"
+    ],
+    "marketing_byte_clients": [
+      "claude",
+      "codex",
+      "cursor",
+      "gemini"
+    ],
+    "pending": [
+      "full 30-source Windsurf",
+      "full 30-source Codex plugin and skill",
+      "Marketing OpenCode/Copilot runtime and archives"
+    ]
+  },
+  "main_marketing_preparation": {
+    "state": "root and independent review passed; no actual runtime/archive credit",
+    "head": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+    "checkout": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+    "tree": "fa9f279164dc3060ebe300db608963060a9d4d19",
+    "parent": "aeb3c5e3580ed19db9c0f78b3ddd2ec7f8a086c8",
+    "run_id": 46152361079,
+    "event": "push",
+    "head_branch": "main",
+    "core_blob": "ce7b1a5f48548360b567b47dc430496e1878b55a",
+    "wrapper_blob": "bce89d213f0bad626f7c962b6b9cdae5a7ab4ded",
+    "core_path": ".github/main-marketing-audit/marketing_audit.py",
+    "wrapper_path": ".github/main-marketing-audit/marketing_ready_readonly_runner.py",
+    "canonical_source_pins": {
+      ".github/workflows/marketing-kit-project-release-e2e.yml": "7d1c957e25d528fddd36734db2b95ee55ccfc994",
+      "scripts/claude_cache_retirement_audit.py": "ecb56574b3e892be42cb6c79c3df346268c522c6",
+      "scripts/codex_runtime_audit.py": "759b35886a434a7f17e2c36d8fd93d6a12bbe45d",
+      "scripts/live-install-audit.py": "ceab34554b6851be09fae9dbc5345fdd753bd0f8",
+      "scripts/marketing-kit-project-release-e2e.py": "af2ac520fbd9adee43b411864df73b0ea3b936de",
+      "scripts/marketing_kit_claude_discovery.py": "7f1e14c453d7e9f8bcabcfed7bb4343343bf5743",
+      "scripts/marketing_kit_claude_retirement.py": "c96774600899745327892d6e24e9a47c68c0ee2a",
+      "scripts/marketing_kit_codex_profile.py": "7214510d013d7077fa0cc8adf949ec82778c9574",
+      "scripts/native_client_project_artifacts.py": "bfcb69f1393b9b5671062da6e40dce54b3ea7951",
+      "scripts/native_client_research.py": "c28e5f88dc26fa58efd45492b41ad899e6335605",
+      "scripts/test_live_install_audit_env.py": "1d4c36f2b7e6b64233a037634a644f52013ccf7c",
+      "scripts/test_marketing_kit_claude_discovery.py": "1c1d1fa5cde86130ff24dfaf102bcfb8ad8eab58",
+      "scripts/test_marketing_kit_claude_retirement.py": "0ad598ed18ba88f3e0589b191b380461c866c7b2",
+      "scripts/test_marketing_kit_codex_profile.py": "37159810eb32778cee838d1ec540012c3b2da04a",
+      "scripts/test_marketing_kit_codex_sqlite.py": "0f01d6fab0a0fdda7205d418797bafc6a605e947",
+      "scripts/test_marketing_kit_copilot_refusal.py": "6f7516aa1e8ec435b572d93190a61ffc57743d55",
+      "scripts/test_marketing_kit_peer_initialization.py": "7faacd179627922f0bc48d4a4ea317bafac9d356",
+      "scripts/test_marketing_kit_policy_boundary.py": "c17da88d634165cc7de087ae275933ac997f8002"
+    },
+    "source_pins_verified_against_exact_tree": true,
+    "per_lane_acceptance_unchanged": true,
+    "partial_coverage_never_full_matrix": true,
+    "actual_job_artifacts_pending": true
+  },
+  "main_workflow_jobs": {
+    "pm": {
+      "total_count": 7,
+      "jobs": [
+        {
+          "id": 141001562860,
+          "run_id": 46152361142,
+          "workflow_name": "Package manager E2E",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361142",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1Fka7A",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001562860",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361142/job/141001562860",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "package-manager (macos-15-intel)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001562860",
+          "labels": [
+            "macos-15-intel"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563018,
+          "run_id": 46152361142,
+          "workflow_name": "Package manager E2E",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361142",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1Fkbig",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563018",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361142/job/141001563018",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "package-manager (windows-2025)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563018",
+          "labels": [
+            "windows-2025"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563024,
+          "run_id": 46152361142,
+          "workflow_name": "Package manager E2E",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361142",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkbkA",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563024",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361142/job/141001563024",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "package-manager (macos-15)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563024",
+          "labels": [
+            "macos-15"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563063,
+          "run_id": 46152361142,
+          "workflow_name": "Package manager E2E",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361142",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1Fkbtw",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563063",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361142/job/141001563063",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "package-manager (windows-11-arm)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563063",
+          "labels": [
+            "windows-11-arm"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563087,
+          "run_id": 46152361142,
+          "workflow_name": "Package manager E2E",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361142",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1Fkbzw",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563087",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361142/job/141001563087",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "package-manager (ubuntu-24.04)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563087",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563118,
+          "run_id": 46152361142,
+          "workflow_name": "Package manager E2E",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361142",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1Fkb7g",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563118",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361142/job/141001563118",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "package-manager (ubuntu-24.04-arm)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563118",
+          "labels": [
+            "ubuntu-24.04-arm"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563929,
+          "run_id": 46152361142,
+          "workflow_name": "Package manager E2E",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361142",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkfGQ",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563929",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361142/job/141001563929",
+          "status": "completed",
+          "conclusion": "skipped",
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": "2026-11-28T13:59:56Z",
+          "name": "draft evidence preflight",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563929",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "runner_id": null,
+          "runner_name": null,
+          "runner_group_id": null,
+          "runner_group_name": null
+        }
+      ]
+    },
+    "pi": {
+      "total_count": 3,
+      "jobs": [
+        {
+          "id": 141001562724,
+          "run_id": 46152361238,
+          "workflow_name": "Pi Global and Project Native Runtime",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361238",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkaZA",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001562724",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361238/job/141001562724",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "pi v1.4.0 global/project lifecycle (darwin-arm64)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001562724",
+          "labels": [
+            "macos-15"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001562892,
+          "run_id": 46152361238,
+          "workflow_name": "Pi Global and Project Native Runtime",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361238",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkbDA",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001562892",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361238/job/141001562892",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "pi v1.4.0 global/project lifecycle (windows-amd64)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001562892",
+          "labels": [
+            "windows-2025"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001562899,
+          "run_id": 46152361238,
+          "workflow_name": "Pi Global and Project Native Runtime",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361238",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkbEw",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001562899",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361238/job/141001562899",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "pi v1.4.0 global/project lifecycle (linux-amd64)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001562899",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        }
+      ]
+    },
+    "required": {
+      "total_count": 10,
+      "jobs": [
+        {
+          "id": 141001563262,
+          "run_id": 46152361212,
+          "workflow_name": "Required",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361212",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1Fkcfg",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563262",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361212/job/141001563262",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "test",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563262",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563326,
+          "run_id": 46152361212,
+          "workflow_name": "Required",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361212",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1Fkcvg",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563326",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361212/job/141001563326",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "staged-hermetic",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563326",
+          "labels": [
+            "hci-uap-core-linux"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563407,
+          "run_id": 46152361212,
+          "workflow_name": "Required",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361212",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkdDw",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563407",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361212/job/141001563407",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "lint / install/integrationctl",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563407",
+          "labels": [
+            "hci-uap-core-linux"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563425,
+          "run_id": 46152361212,
+          "workflow_name": "Required",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361212",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkdIQ",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563425",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361212/job/141001563425",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "management-sdk / qualify (windows-2025)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563425",
+          "labels": [
+            "windows-2025"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563437,
+          "run_id": 46152361212,
+          "workflow_name": "Required",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361212",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkdLQ",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563437",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361212/job/141001563437",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "lint / install/integrationctl/agentplugins",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563437",
+          "labels": [
+            "hci-uap-core-linux"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563442,
+          "run_id": 46152361212,
+          "workflow_name": "Required",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361212",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkdMg",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563442",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361212/job/141001563442",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "lint / root",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563442",
+          "labels": [
+            "hci-uap-core-linux"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563445,
+          "run_id": 46152361212,
+          "workflow_name": "Required",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361212",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkdNQ",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563445",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361212/job/141001563445",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "lint / cli",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563445",
+          "labels": [
+            "hci-uap-core-linux"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563453,
+          "run_id": 46152361212,
+          "workflow_name": "Required",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361212",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkdPQ",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563453",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361212/job/141001563453",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "management-sdk / qualify (macos-15)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563453",
+          "labels": [
+            "macos-15"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001563482,
+          "run_id": 46152361212,
+          "workflow_name": "Required",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361212",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkdWg",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001563482",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361212/job/141001563482",
+          "status": "queued",
+          "conclusion": null,
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": null,
+          "name": "management-sdk / qualify (ubuntu-24.04)",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001563482",
+          "labels": [
+            "ubuntu-24.04"
+          ],
+          "runner_id": 0,
+          "runner_name": "",
+          "runner_group_id": 0,
+          "runner_group_name": ""
+        },
+        {
+          "id": 141001564197,
+          "run_id": 46152361212,
+          "workflow_name": "Required",
+          "head_branch": "main",
+          "run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/runs/46152361212",
+          "run_attempt": 1,
+          "node_id": "CR_kwDORxw17c8AAAAg1FkgJQ",
+          "head_sha": "ee6d714f9f684a5baf4b6740e4e8cb0481918be5",
+          "url": "https://api.github.com/repos/777genius/universal-agent-plugins/actions/jobs/141001564197",
+          "html_url": "https://github.com/777genius/universal-agent-plugins/actions/runs/46152361212/job/141001564197",
+          "status": "completed",
+          "conclusion": "skipped",
+          "created_at": "2026-11-28T13:59:56Z",
+          "started_at": "2026-11-28T13:59:56Z",
+          "completed_at": "2026-11-28T13:59:56Z",
+          "name": "changes",
+          "steps": [],
+          "check_run_url": "https://api.github.com/repos/777genius/universal-agent-plugins/check-runs/141001564197",
+          "labels": [],
+          "runner_id": null,
+          "runner_name": null,
+          "runner_group_id": null,
+          "runner_group_name": null
+        }
+      ]
+    },
+    "marketing": {
+      "total_count": 0,
+      "jobs": []
+    }
+  },
+  "executor": "Unavailable, not probed; read-only artifact workflows only",
+  "qualification_rule": "No prior-source PASS transferred to actual merged source. Keep source/run/job/artifact identity for every receipt.",
+  "pending": "Complete actual merged-main push workflows and original required artifact audits, and retained final-PR broad cohorts."
+}
