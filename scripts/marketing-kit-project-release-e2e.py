@@ -1634,7 +1634,7 @@ def execute(cli, env, project, target, label, *args, checkpoint=None, capture=No
     return {"stage": label, "exit_code": result["exit_code"], "result": "passed"}
 
 
-def check_copilot_cold_project_unchanged(project, before, receipts):
+def check_copilot_cold_project_unchanged(project, before, receipts, *, env=None):
     """Protect the whole Project while allowing exact private install artifacts."""
     # CLI compose.go puts committed packages/state here before verify-only
     # activation refuses missing consent. Directory journals are removed by
@@ -1674,12 +1674,44 @@ def check_copilot_cold_project_unchanged(project, before, receipts):
             # Diagnostics cannot replace the original custody refusal.
             pass
         raise error
+    # Existing bytes, identities and deletions refuse before any new-link grant.
+    for key in before.keys() | after.keys():
+        if key in before and (key not in after or before[key] != after[key]):
+            refuse("cold Copilot locked install modified existing Project state", "existing-project-state")
+    allowed_runtime = set()
+    if env is not None and any(key.startswith("link:0:") and key not in before for key in after):
+        try:
+            if (len(receipts) != len(UPDATE_ALIASES) or {alias for alias, _ in receipts} != UPDATE_ALIASES
+                    or len({installation_id for _, installation_id in receipts}) != len(receipts)):
+                raise ValueError("cold closure receipts are unresolved")
+            selected = [installation_id for alias, installation_id in receipts if alias == "playwright"]
+            if len(selected) != 1 or type(selected[0]) is not str or not selected[0]:
+                raise ValueError("cold Playwright receipt is unresolved")
+            physical = "playwright-" + hashlib.sha256(selected[0].encode()).hexdigest()[:12]
+            # Reuse the existing Project (index 2) pinned-runtime authority.
+            # The complete Project image below retains all original entries.
+            project_image = {(("link:2:" + key.removeprefix("link:0:")) if key.startswith("link:0:") else
+                              ("metadata:2:" + key.removeprefix("metadata:0:")) if key.startswith("metadata:0:") else key): value
+                             for key, value in after.items()}
+            canonical = project.parent.resolve(strict=True)
+            if not audit["path_inside_case"](project, canonical):
+                raise ValueError("cold Project root is unsafe")
+            admitted = claude_owned_runtime_links(audit, env, project, canonical, project_image,
+                FIXED_SIGNED_CLOSURE, client_id="copilot", installation_ids={physical: selected[0]})
+            allowed_runtime = {("link:0:" + key.removeprefix("link:2:")) if key.startswith("link:2:") else
+                               ("metadata:0:" + key.removeprefix("metadata:2:")) if key.startswith("metadata:2:") else key
+                               for key in admitted}
+        except Exception:
+            # Invalid authority keeps the original per-entry refusal/diagnostic.
+            allowed_runtime = set()
     for key in before.keys() | after.keys():
         if key in before and key in after and before[key] == after[key]:
             continue
         # Even existing private files/empty directories remain protected.
         if key in before or key not in after:
             refuse("cold Copilot locked install modified existing Project state", "existing-project-state")
+        if key in allowed_runtime:
+            continue
         if key.startswith("metadata:0:"):
             relative, value = key.removeprefix("metadata:0:"), after[key]
             kind = ("directory" if isinstance(value, tuple) and stat.S_ISDIR(value[0]) else
@@ -1785,7 +1817,7 @@ def verify_copilot_cold_project_refusal(cli, env, project):
             store_pins=tuple(FIXED_SIGNED_CLOSURE.values()), consent_log=consent_log)
         if scoped_snapshot([Path(env["HOME"])]) != native_home:
             raise AssertionError("cold Copilot locked install modified native HOME")
-        check_copilot_cold_project_unchanged(project, project_before, receipts)
+        check_copilot_cold_project_unchanged(project, project_before, receipts, env=env)
         if read_trust() != (None, "absent"):
             raise AssertionError("cold Copilot locked install wrote native folder trust")
         if any((project / name).read_bytes() != value for name, value in agreement.items()):
