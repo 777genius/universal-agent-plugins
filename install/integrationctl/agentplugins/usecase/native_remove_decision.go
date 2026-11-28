@@ -38,7 +38,11 @@ func (service Service) persistNativeRemovalDecision(ctx context.Context, install
 	if err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(observed, target.before) {
+	matches, err := matchesFrozenNativeRemovalState(observed, target.before)
+	if err != nil {
+		return err
+	}
+	if !matches {
 		return fmt.Errorf("native removal decision callback changed durable predecessor")
 	}
 	kernel := service.Kernel
