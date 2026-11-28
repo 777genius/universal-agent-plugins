@@ -40,6 +40,9 @@ func (e *Engine) Apply(ctx context.Context, prepared *PreparedOperation, decisio
 }
 
 func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation, op Operation) (Result, error) {
+	if err := e.recheckInstallationPolicy(ctx, prepared); err != nil {
+		return installationPolicyFailure(op, err)
+	}
 	var result Result
 	var err error
 	// Preserve the prepared root-identity refusal before the stored journal
@@ -67,11 +70,7 @@ func (e *Engine) preflightApply(ctx context.Context, prepared *PreparedOperation
 		return result, err
 	}
 	if err := e.confirmPreparedPlan(ctx, prepared); err != nil {
-		reason := "plan_changed"
-		if errors.Is(err, ErrUpdateRequired) {
-			reason = "update_required"
-		}
-		result = Result{Operation: op, Outcome: OutcomeConflict, Reason: reason}
+		result, _ = confirmationFailure(op, err)
 		attachNextActions(&result, err)
 		return result, err
 	}
@@ -111,7 +110,7 @@ func (e *Engine) applyPreparedOperation(ctx context.Context, prepared *PreparedO
 	var err error
 	e.report(ProgressPreflight)
 	if err := e.confirmDeliveries(ctx, prepared); err != nil {
-		result = Result{Operation: op, Outcome: OutcomeConflict, Reason: "plan_changed"}
+		result, _ = confirmationFailure(op, err)
 		attachNextActions(&result, err)
 		return result, err
 	}

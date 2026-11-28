@@ -12,7 +12,8 @@ import (
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
-func (b *ManagementBackend) Prepare(ctx context.Context, input management.ChangeRequest, operationID string) (management.Prepared, error) {
+func (b *ManagementBackend) Prepare(ctx context.Context, input management.ChangeRequest, operationID string) (prepared management.Prepared, err error) {
+	defer func() { err = managementEnterprisePolicyError(err) }()
 	if err := validateManagementChange(input); err != nil {
 		return nil, err
 	}
@@ -26,7 +27,7 @@ func (b *ManagementBackend) Prepare(ctx context.Context, input management.Change
 	if input.Action == management.InstallSkills {
 		return b.prepareSkills(ctx, input, clients, operationID)
 	}
-	preview, cleanup, err := dependencyPreviewApp(b.app, &options{dryRun: true})
+	preview, cleanup, err := dependencyPreviewApp(b.app.withEnterprisePolicySession(), &options{dryRun: true})
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +74,7 @@ func (b *ManagementBackend) prepareEnvironment(ctx context.Context, preview App,
 	if err != nil {
 		return nil, err
 	}
+	request.removalOnly = input.Action == management.Remove
 	return b.finishManagementPreparation(ctx, preview, cleanup, input, clients, request, operationID)
 }
 
@@ -168,6 +170,6 @@ func managementRemove(ctx context.Context, app App, requirements environment.Req
 		}
 		requirements = removeSavedTargets(requirements, alias, targets)
 	}
-	next, err := (environment.Coordinator{Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: true}}).Resolve(ctx, requirements, locked, "")
+	next, err := (environment.Coordinator{Resolver: dependencyResolver{app: app, requirements: requirements, dryRun: true, retainForRemoval: true}}).Resolve(ctx, requirements, locked, "")
 	return requirements, next, err
 }

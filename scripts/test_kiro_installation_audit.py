@@ -837,6 +837,95 @@ class KiroInstallationTests(unittest.TestCase):
                 for field in ('"_json"', '"stdout_full"', '"stderr_full"'):
                     self.assertNotIn(field, serialized)
 
+    def unresolved_public_calls(self, mismatch):
+        """Keep the real observer/finalizer; supply only inert public calls."""
+        calls = []
+        def public_call(argv, env, cwd, timeout=105, **kwargs):
+            self.assertIs(kwargs.get("capture_full"), True)
+            calls.append(list(argv))
+            self.assertLessEqual(len(calls), 2)
+            if not mismatch:
+                if len(calls) == 1:
+                    return self.outcome(None, 1, "agentplugins: injected initial admission refusal\n")
+                return self.outcome({"schema_version": 1, "command": "list", "result": "success",
+                                     "data": {"installations": []}})
+            documents = raw("plugin", 1, cwd)
+            if len(calls) == 1:
+                from types import SimpleNamespace
+                observer = SimpleNamespace(project=cwd, home=Path(env["HOME"]),
+                                           data=Path(env["AGENTPLUGINS_HOME"]))
+                mcp = observer.home / ".kiro/settings/mcp.json"
+                body = json.loads(mcp.read_bytes())
+                body["mcpServers"]["context7"] = {"command": "inert"}
+                replacement = mcp.with_suffix(".new")
+                replacement.write_text(json.dumps(body))
+                replacement.chmod(mcp.stat().st_mode & 0o777)
+                replacement.replace(mcp)
+                write_projection(observer, "plugin", 1, documents)
+                return self.outcome(documents["install"])
+            documents["list"]["data"]["installations"][0]["directory"]["recorded_revision"] = "f" * 40
+            return self.outcome(documents["list"])
+        return public_call, calls
+
+    def test_actual_do_case_preserves_initial_refusal_and_signed_mismatch_on_finalization_failure(self):
+        run = self.audit["do_case"]
+        for mismatch in (False, True):
+            with self.subTest(mismatch=mismatch), tempfile.TemporaryDirectory() as directory:
+                public_call, calls = self.unresolved_public_calls(mismatch)
+                with patch.dict(run.__globals__, {"call": public_call}), patch.object(sys, "platform", "darwin"), \
+                     self.assertRaisesRegex(ValueError, "Kiro installation evidence is unresolved") as raised:
+                    run("/fixture/agentplugins", "kiro", "plugin", "context7", 1, Path(directory).resolve(),
+                        FIXTURES["plugin_declared_names"], FIXTURES["signed_release_pins"],
+                        installation_audit="kiro-installation", installation_fixtures=FIXTURES)
+                diagnostic = raised.exception.kiro_installation_diagnostics
+                self.assertEqual([argv[1] for argv in calls], ["add", "list"])
+                self.assertEqual(diagnostic["observation_count"], 2)
+                self.assertEqual(diagnostic["status"], "unresolved")
+                self.assertIs(diagnostic["listed_identity"], False)
+                self.assertEqual(diagnostic["commands"]["install"]["exit_code"], 0 if mismatch else 1)
+                self.assertEqual(diagnostic["commands"]["list"]["exit_code"], 0)
+                self.assertTrue(all(diagnostic["commands"][phase] is None for phase in prepared.COMMANDS[2:]))
+                if mismatch:
+                    self.assertEqual(diagnostic["signed_release_observation"][0]["recorded_revision"], "f" * 40)
+                    self.assertEqual(diagnostic["public_status"], "incomplete-native-proof")
+                else:
+                    self.assertEqual(diagnostic["commands"]["install"]["stderr_tail"],
+                                     "agentplugins: injected initial admission refusal\n")
+                    self.assertEqual(diagnostic["public_status"], "install-failed")
+                for field in ('"_json"', '"stdout_full"', '"stderr_full"'):
+                    self.assertNotIn(field, json.dumps(diagnostic))
+
+    def test_main_retains_real_case_finalization_diagnostic_and_refuses_acceptance(self):
+        main, run = self.audit["main"], self.audit["do_case"]
+        good = self.complete_report("plugin")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            cli = root / "agentplugins"; cli.write_text("inert")
+            fixture_file = root / "fixtures.json"; fixture_file.write_text(json.dumps(FIXTURES))
+            public_call, calls = self.unresolved_public_calls(False)
+            def case(*args, **kwargs):
+                return run(*args, **kwargs) if args[4] == 1 else deepcopy(good["results"][args[4]])
+            substitutions = {"do_case": case, "call": public_call, "FIXTURES": fixture_file,
+                "vendor_bootstrap_attested": lambda: True, "AGENT_BINARIES": {"kiro-cli": "/fixture/kiro-cli"},
+                "version_evidence": lambda argv, *args: deepcopy(good["cli_version"] if argv[1] == "version" else good["client_version"]),
+                "published_audit_temp_parent": lambda: None}
+            argv = ["audit", "--cli", str(cli), "--target", "kiro", "--kind", "plugin", "--limit", "30",
+                    "--report-dir", str(root / "report"), "--acceptance", "kiro-installation"]
+            with patch.dict(main.__globals__, substitutions), patch("sys.argv", argv), \
+                 patch.object(sys, "platform", "darwin"), patch("platform.machine", return_value="arm64"), \
+                 redirect_stdout(io.StringIO()):
+                self.assertEqual(main(), 1)
+            report = json.loads((root / "report/kiro-plugin.json").read_text())
+            row = report["results"][1]
+            self.assertEqual(row["status"], "harness-error")
+            self.assertEqual(row["kiro_installation_diagnostics"]["observation_count"], 2)
+            self.assertEqual(row["kiro_installation_diagnostics"]["commands"]["install"]["stderr_tail"],
+                             "agentplugins: injected initial admission refusal\n")
+            self.assertEqual(len(calls), 2)
+            self.assertEqual(report["cases_attempted"], 30)
+            self.assertEqual(report["passed"], 0)
+            self.assertIs(report["installation_acceptance_passed"], False)
+
     def test_unapproved_route_fails_before_public_calls(self):
         run = self.audit["do_case"]
         with tempfile.TemporaryDirectory() as directory, patch.dict(run.__globals__, {"call": lambda *a, **kw: self.fail("wrong route executed")}), self.assertRaises(ValueError):

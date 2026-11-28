@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/enterprisepolicy"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 )
 
@@ -201,5 +202,39 @@ func TestLocalPolicyFingerprintChangesWithAdmissionRules(t *testing.T) {
 	modified, err := evaluateLocalDependencyPolicy(context.Background(), App{}, path, environment.Lock{})
 	if err != nil || modified == approved {
 		t.Fatalf("changed policy escaped stable fingerprint: %q %q %v", approved, modified, err)
+	}
+}
+
+func TestLocalPolicySchemaTwoSharesTargetRulesWithoutAcquisition(t *testing.T) {
+	t.Parallel()
+	path := filepath.Join(t.TempDir(), "policy.yaml")
+	body := "schema_version: 2\nsources:\n  allow_repositories: [github.com/acme/*]\ninstall:\n  allowed_scopes: [user]\n  allowed_targets: [codex]\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	lock := environment.Lock{Packages: []environment.LockedPackage{{Alias: "tools", Targets: []string{"claude"}, Source: environment.LockedSource{Git: &environment.LockedGitSource{Repository: "acme/safe"}}}}}
+	if _, err := evaluateLocalDependencyPolicy(context.Background(), App{}, path, lock); err == nil {
+		t.Fatal("explicit schema-2 target policy was ignored")
+	}
+	lock.Packages[0].Targets = []string{"codex"}
+	if _, err := evaluateLocalDependencyPolicy(context.Background(), App{}, path, lock); err != nil {
+		t.Fatalf("source/target-only policy tried to acquire content: %v", err)
+	}
+}
+
+func TestLocalCandidatePolicyCannotReplaceManagedDenial(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	machine, explicit := filepath.Join(root, "machine.yaml"), filepath.Join(root, "candidate.yaml")
+	if err := os.WriteFile(machine, []byte("schema_version: 2\nsources:\n  deny_hosts: [github.com]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(explicit, []byte("schema_version: 2\nsources:\n  allow_hosts: [github.com]\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	app := App{InstallationPolicy: enterprisepolicy.Files{Paths: []enterprisepolicy.Path{{Layer: "machine", Path: machine}}}}
+	lock := environment.Lock{Packages: []environment.LockedPackage{{Alias: "tools", Source: environment.LockedSource{Git: &environment.LockedGitSource{Repository: "acme/safe"}}}}}
+	if _, err := evaluateLocalDependencyPolicy(context.Background(), app, explicit, lock); err == nil || !strings.Contains(err.Error(), "denied") {
+		t.Fatalf("explicit allow replaced automatic denial: %v", err)
 	}
 }

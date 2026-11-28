@@ -9,6 +9,7 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/domain"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
@@ -32,6 +33,17 @@ func (selection *skillsAddOptions) runWebsite(cmd *cobra.Command, app App, opts 
 	website, err := domain.NormalizeWebSkillURL(endpoint)
 	if err != nil {
 		return err
+	}
+	// Check the known publisher before catalog discovery (including --all).
+	// The prepared transaction independently rechecks the selected closure.
+	policyTargets := make([]string, 0, len(targets))
+	for _, target := range targets {
+		policyTargets = append(policyTargets, string(target))
+	}
+	if err := app.checkEnterpriseRequirement(cmd.Context(), environment.Requirement{
+		Web: &environment.WebSource{URL: website},
+	}, policyTargets); err != nil {
+		return reportSkillsPreparationRefusal(cmd, opts, &skillsCatalogSession{}, err)
 	}
 	request := SkillsBatchRequest{}
 	for _, name := range selection.names {

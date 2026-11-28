@@ -92,6 +92,18 @@ construct `planner.Planner{}`. Detection is request-scoped:
 (`Capabilities`, `ApplyInstallIntent`, and the rest) because those names are a
 stable API for authoring, not a second composition root.
 
+Installation policy has one domain model and evaluator in `domain`, an optional
+`ports.InstallationPolicy` port and a file adapter in `adapters/enterprisepolicy`.
+The adapter owns strict YAML decoding, source normalization and layered file
+fingerprints. The production composition root supplies fixed candidate paths;
+the domain and use cases do not discover files or environment variables.
+The CLI evaluates the selected dependency closure and the installer/use cases
+gate complete inputs before host preparation and managed effects. Both paths
+use the same port. Reviewed operations retain a policy fingerprint; a new
+management or picker operation creates a fresh session. Removal and transaction
+rollback do not become installation admissions. See the
+[policy guide](ENTERPRISE_POLICY.md) for the configuration contract and limits.
+
 `agentplugins/installer` is the public embedding boundary. It owns concrete
 composition but receives the supported client registry from the executable;
 it does not import `clients/all`, branch on client constants, or export its raw

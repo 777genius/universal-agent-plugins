@@ -60,7 +60,7 @@ func newValidateCommand(app App, opts *options) *cobra.Command {
 			if !explicitLocalPath(source) && exactGitPattern.FindStringSubmatch(source) == nil {
 				return fmt.Errorf("validate requires a local path or exact owner/repo@FULL_SHA[//path] source")
 			}
-			loaded, err := app.loadPackage(cmd.Context(), source)
+			loaded, err := app.withEnterprisePolicyGate(nil).loadPackage(cmd.Context(), source)
 			if err != nil {
 				return err
 			}

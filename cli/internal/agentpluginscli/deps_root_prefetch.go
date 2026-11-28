@@ -57,6 +57,15 @@ func (resolver dependencyResolver) prefetchGitRoots(ctx context.Context, previou
 		if source.Kind == environment.SkillKind && (skillsErr != nil || skillDirectoryMismatch(source.Skill, source.Path)) {
 			continue
 		}
+		// The solver checks each selected target before acquisition. Prefetch
+		// must check the same facts or it can read denied roots first.
+		targets := []string{}
+		for _, target := range dependencyRequirementTargets(resolver.requirements, requirement.Alias) {
+			targets = append(targets, string(target))
+		}
+		if err := resolver.app.checkEnterpriseRequirement(ctx, requirement, targets); err != nil {
+			continue
+		}
 		roots = append(roots, root{key: key, source: *source})
 	}
 	if len(roots) < 2 {

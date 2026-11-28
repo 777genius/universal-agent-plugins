@@ -26,6 +26,9 @@ func nativeLocalSkillPath(serialized string) (string, error) {
 }
 
 func (resolver dependencyResolver) resolveLocalSkill(ctx context.Context, req environment.Requirement, targets []string) (environment.LockedPackage, error) {
+	if err := resolver.app.checkEnterpriseRequirement(ctx, req, targets); err != nil {
+		return environment.LockedPackage{}, err
+	}
 	raw, err := resolver.app.acquireLocalSkillRaw(ctx, req.Local.Path)
 	if err != nil {
 		return environment.LockedPackage{}, err

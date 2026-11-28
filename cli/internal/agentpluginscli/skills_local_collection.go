@@ -9,13 +9,23 @@ import (
 
 	"github.com/777genius/plugin-kit-ai/cli/internal/agentpluginscli/skillspicker"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/adapters/skillsource"
+	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/environment"
 	"github.com/777genius/plugin-kit-ai/install/integrationctl/agentplugins/sourcespec"
 )
 
-func (selection *skillsAddOptions) localSelections(cmd *cobra.Command, app App, opts *options, input string, interactive bool) ([]SkillsSelection, error) {
+func (selection *skillsAddOptions) localSelections(cmd *cobra.Command, app App, opts *options, input string, interactive bool, targets []string) ([]SkillsSelection, error) {
 	root, err := localSkillsRoot(input, selection.folder, cmd.Flags().Changed("path"))
 	if err != nil {
 		return nil, err
+	}
+	// A local source is already identified; do not inspect its catalog before
+	// the machine/user/project policy admits the requested source kind.
+	if app.InstallationPolicy != nil {
+		if err := app.checkEnterpriseRequirement(cmd.Context(), environment.Requirement{
+			Local: &environment.LocalSource{Path: filepath.ToSlash(root)},
+		}, targets); err != nil {
+			return nil, err
+		}
 	}
 	if !selection.all && !cmd.Flags().Changed("path") {
 		saved, err := savedLocalSkillRoot(app, root)

@@ -32,10 +32,11 @@ func (e *Engine) applyMutatingPackage(ctx context.Context, prepared *PreparedOpe
 	svc := confirmationLifecycle(prepared, e.lifecycle(helper, prepared.facts, prepared.detected), false)
 	e.report(ProgressStage)
 	if err := e.confirmDeliveries(ctx, prepared); err != nil {
-		return Result{Operation: prepared.req.Operation, Outcome: OutcomeConflict, Reason: "plan_changed"}, err
+		return confirmationFailure(prepared.req.Operation, err)
 	}
 	added, err := call(svc, usecase.AddInput{
 		Envelope: prepared.envelope, Client: prepared.client, Scope: e.scope(), Confirmed: true,
+		GitPinned: prepared.req.GitPinned, ArchivePinned: prepared.req.ArchivePinned,
 		InstallIntent:  prepared.observationPlan.InstallIntent,
 		InstallationID: firstNonEmpty(prepared.req.InstallationID, prepared.plan.InstallationID), OperationID: prepared.req.OperationID,
 		BackendExecutable: prepared.req.ClientExecutable,

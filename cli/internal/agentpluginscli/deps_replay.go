@@ -20,7 +20,7 @@ func resolveDependencySyncCandidate(ctx context.Context, app App, opts *options,
 		if err := previous.Validate(requirements); err != nil {
 			return requirements, environment.Lock{}, fmt.Errorf("exact current uap.lock required; run agentplugins deps lock: %w", err)
 		}
-		if err := verifyDependencyDeclarations(ctx, app, previous); err != nil {
+		if err := verifyInstallationDependencyDeclarations(ctx, app, previous); err != nil {
 			return requirements, environment.Lock{}, err
 		}
 		return requirements, previous, nil
@@ -31,7 +31,7 @@ func resolveDependencySyncCandidate(ctx context.Context, app App, opts *options,
 	}
 	lock, err := (dependencyResolver{app: app, requirements: requirements, dryRun: opts.dryRun}).resolveLock(ctx, previous, "")
 	if err == nil {
-		err = verifyDependencyDeclarations(ctx, app, lock)
+		err = verifyInstallationDependencyDeclarations(ctx, app, lock)
 	}
 	return requirements, lock, err
 }
@@ -59,7 +59,11 @@ func verifyDependencyDeclarations(ctx context.Context, app App, lock environment
 	return nil
 }
 
-func readReplayDependency(ctx context.Context, app App, pin environment.LockedPackage) (resolved environment.ResolvedPackage, resultErr error) {
+func readReplayDependency(ctx context.Context, app App, pin environment.LockedPackage) (environment.ResolvedPackage, error) {
+	return readReplayDependencyWithAdmission(ctx, app, pin, nil)
+}
+
+func readReplayDependencyWithAdmission(ctx context.Context, app App, pin environment.LockedPackage, beforeAcquire func() error) (resolved environment.ResolvedPackage, resultErr error) {
 	if err := requireLockedDirectoryFeed(app, pin); err != nil {
 		return environment.ResolvedPackage{}, err
 	}
@@ -69,6 +73,11 @@ func readReplayDependency(ctx context.Context, app App, pin environment.LockedPa
 	}
 	if !errors.Is(err, environmentstore.ErrMissing) {
 		return environment.ResolvedPackage{}, err
+	}
+	if beforeAcquire != nil {
+		if err := beforeAcquire(); err != nil {
+			return environment.ResolvedPackage{}, err
+		}
 	}
 	loaded, err := materializeLockedPackage(ctx, app, pin, false, nil)
 	if err != nil {

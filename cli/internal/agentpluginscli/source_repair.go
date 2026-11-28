@@ -16,6 +16,12 @@ func (app App) loadRecordedDirect(ctx context.Context, installation domain.Insta
 	if revision == nil || revision.TreeDigest == "" || revision.ManifestDigest == "" {
 		return loadedPackage{}, errors.New("recorded direct package revision is incomplete")
 	}
+	policySource := domain.SourceIdentity{SourceKind: source.SourceKind, SourceURL: source.SourceURL, RequestedSource: source.RequestedSource,
+		CanonicalSource: source.CanonicalSource, Repository: source.Repository, PackageSubpath: source.PackageSubpath,
+		ResolvedRevision: source.ResolvedRevision, ArchiveSHA256: source.ArchiveSHA256}
+	if err := app.checkEnterpriseSource(ctx, policySource, installation.OriginMode); err != nil {
+		return loadedPackage{}, err
+	}
 	direct, err := app.directAcquirer()
 	if err != nil {
 		return loadedPackage{}, err

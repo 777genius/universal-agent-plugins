@@ -52,6 +52,7 @@ func runAddLoaded(ctx context.Context, cmd *cobra.Command, app App, opts *option
 		OriginMode:                       loaded.origin, DirectoryResolution: cloneDirectoryOrigin(loaded.directory),
 		DistributionSuspended: loaded.distributionSuspended, ReleaseRevoked: loaded.releaseRevoked,
 	}
+	input = withEnterprisePins(input, loaded)
 	planned, err := service.Add(ctx, input)
 	if err != nil {
 		if planned.Plan.Status == domain.PlanUnsupported {

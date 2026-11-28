@@ -57,11 +57,14 @@ type Request struct {
 	// AcquiredSnapshot preserves verified acquisition provenance for one
 	// single-target request. Prepare reseals PackageRoot and refuses any digest,
 	// executable inventory or source-provenance rewrite.
-	AcquiredSnapshot     *domain.AcquiredSnapshot
-	EnvironmentAuthority *domain.EnvironmentAuthority
-	ClientID             string
-	ClientConfigRoot     string
-	ClientExecutable     string
+	AcquiredSnapshot *domain.AcquiredSnapshot
+	// Pin facts attest the original acquisition request, not resolved content.
+	// Nil stays unknown and cannot satisfy a policy requiring a requested pin.
+	GitPinned, ArchivePinned *bool `json:"-"`
+	EnvironmentAuthority     *domain.EnvironmentAuthority
+	ClientID                 string
+	ClientConfigRoot         string
+	ClientExecutable         string
 	// ClientSurfaces preserves actual host observations, including unavailable
 	// or incompatible surfaces. It grants no authority inferred from paths.
 	ClientSurfaces []domain.ClientSurface `json:"-"`
@@ -113,7 +116,9 @@ type ClientTarget struct {
 	ClientID, ClientConfigRoot, ClientExecutable string
 	ClientSurfaces                               []domain.ClientSurface `json:"-"`
 	PackageRoot                                  string
-	ExternalUninstalled                          bool
+	// Per-target facts override the common request for mixed-revision repairs.
+	GitPinned, ArchivePinned *bool `json:"-"`
+	ExternalUninstalled      bool
 }
 
 // TargetFacts is the request-scoped host view of one existing client binding.

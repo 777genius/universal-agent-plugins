@@ -23,7 +23,7 @@ func (e *SkillsSelectionError) Error() string { return "selected skill could not
 func (e *SkillsSelectionError) Unwrap() error { return e.Cause }
 
 func (candidate *skillsBatchCandidate) selectSkills(ctx context.Context, app App, selections []SkillsSelection, targets []string) error {
-	prefetch := candidate.prefetchRawSkills(ctx, app, selections)
+	prefetch := candidate.prefetchRawSkills(ctx, app, selections, targets)
 	defer prefetch.close()
 	seen := map[string]bool{}
 	for _, selection := range selections {
@@ -46,7 +46,7 @@ func (candidate *skillsBatchCandidate) selectSkills(ctx context.Context, app App
 // prefetchRawSkills starts the fresh GitHub Skill fetches that selectSkill will
 // request, with exactly the arguments resolveSkill passes for a new selection.
 // Selections that keep a saved requirement or fail validation are not fetched.
-func (candidate *skillsBatchCandidate) prefetchRawSkills(ctx context.Context, app App, selections []SkillsSelection) *rawSkillPrefetch {
+func (candidate *skillsBatchCandidate) prefetchRawSkills(ctx context.Context, app App, selections []SkillsSelection, targets []string) *rawSkillPrefetch {
 	acquirer, err := app.rawSkillAcquirer()
 	if err != nil {
 		return nil
@@ -55,6 +55,9 @@ func (candidate *skillsBatchCandidate) prefetchRawSkills(ctx context.Context, ap
 	for _, selection := range selections {
 		req, err := skillSelectionRequirement(candidate.requirements, selection)
 		if err != nil || req.Git == nil {
+			continue
+		}
+		if err := app.checkEnterpriseRequirement(ctx, req, targets); err != nil {
 			continue
 		}
 		// resolveSkill rejects this selection before downloading; do not either.

@@ -115,7 +115,7 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	if err := locked.Validate(requirements); err != nil {
 		return request, err
 	}
-	if err := verifyDependencyDeclarations(cmd.Context(), app, locked); err != nil {
+	if err := verifySelectedPolicyDeclarations(cmd.Context(), app, locked, aliases, cmd.Name() == "remove"); err != nil {
 		return request, err
 	}
 	aliases = savedClosureAliases(snapshot.Lock, locked, aliases)
@@ -161,7 +161,7 @@ func prepareSavedSync(cmd *cobra.Command, app App, opts *options, snapshot envir
 	if err := validateDependencyCandidateFiles(manifest, body); err != nil {
 		return request, err
 	}
-	request = dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, intent: snapshot.intent(manifest, body), prepared: actions, detected: detected, consent: consent, aliases: aliases, attestation: attest}
+	request = dependencySyncRequest{targets: targets, requirements: requirements, lock: locked, intent: snapshot.intent(manifest, body), prepared: actions, detected: detected, consent: consent, aliases: aliases, attestation: attest, removalOnly: cmd.Name() == "remove"}
 	return request, nil
 }
 

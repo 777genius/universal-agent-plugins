@@ -130,7 +130,14 @@ func dependencyManifestAlias(name string) string {
 }
 
 func (resolver dependencyResolver) DescribePinned(ctx context.Context, pin environment.LockedPackage) (environment.ResolvedPackage, error) {
-	return readReplayDependency(ctx, resolver.app, pin)
+	if resolver.retainForRemoval {
+		return readReplayDependency(ctx, resolver.app, pin)
+	}
+	admit := func() error {
+		_, err := resolver.app.checkEnterprisePolicy(ctx, lockedPolicyRequest(pin, resolver.app.scope()))
+		return err
+	}
+	return readReplayDependencyWithAdmission(ctx, resolver.app, pin, admit)
 }
 
 // Read pinned source facts locally, without checking eligibility for a new install.
@@ -142,6 +149,10 @@ func inspectPinnedDependency(ctx context.Context, app App, pin environment.Locke
 	if err != nil {
 		return environment.ResolvedPackage{}, err
 	}
+	return inspectDependencySnapshot(ctx, app, pin, snapshot, visitor)
+}
+
+func inspectDependencySnapshot(ctx context.Context, app App, pin environment.LockedPackage, snapshot domain.PackageSnapshot, visitor func(domain.PackageEnvelope) error) (resolved environment.ResolvedPackage, resultErr error) {
 	defer func() {
 		if cleanupErr := packagedigest.Remove(snapshot); cleanupErr != nil {
 			resolved = environment.ResolvedPackage{}

@@ -152,8 +152,9 @@ func (e *Engine) lifecycle(helper *managedstdio.Source, facts BindingFacts, dete
 		observer = preparedProjectIdentityObserver{identity: identity}
 	}
 	return usecase.Service{
-		CheckNamespace: e.CheckProjectNamespace,
-		StateStore:     e.store, Paths: paths, Planner: plan, Targets: plan, Stager: stager, ProjectRoot: e.cfg.ProjectRoot,
+		InstallationPolicy: e.cfg.InstallationPolicy,
+		CheckNamespace:     e.CheckProjectNamespace,
+		StateStore:         e.store, Paths: paths, Planner: plan, Targets: plan, Stager: stager, ProjectRoot: e.cfg.ProjectRoot,
 		Detected:          detected,
 		Activator:         seamActivator{independent: e.cfg.IndependentActivations, profileCheck: profileCheck, inner: inner, onCommitted: e.cfg.OnCommittedBinding, store: e.store, facts: facts},
 		PluginData:        providers.PluginDataManager{Base: e.cfg.PluginDataBase},

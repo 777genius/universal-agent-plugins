@@ -59,6 +59,9 @@ func (service Service) apply(ctx context.Context, input AddInput, replace bool) 
 	if err := session.service.revalidateHost(ctx, session.input.Client); err != nil {
 		return session.result, err
 	}
+	if err := session.service.recheckInstallationPolicy(ctx); err != nil {
+		return session.result, err
+	}
 	done, result, err := session.noChangeOrResume()
 	if done {
 		return result, err
@@ -78,10 +81,7 @@ func (service Service) stagePackage(ctx context.Context, envelope domain.Package
 }
 
 func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool) (ports.UnlockFunc, error) {
-	if err := service.checkProfiles(ctx); err != nil {
-		return nil, err
-	}
-	if err := service.guardEnvironmentRecovery(); err != nil {
+	if err := service.checkMutationAuthority(ctx); err != nil {
 		return nil, err
 	}
 	kernel := service.Kernel
@@ -110,22 +110,28 @@ func (service Service) beginMutation(ctx context.Context, dryRun, confirmed bool
 		_ = release()
 		return nil, err
 	}
-	if err := service.checkProfiles(ctx); err != nil {
+	if err := service.checkMutationAuthority(ctx); err != nil {
 		_ = release()
 		return nil, err
 	}
 	kernel = service.Kernel
 	kernel.StateStore = service.StateStore
 	kernel.PhysicalAuthority = service.authorityPort()
-	if err := service.guardEnvironmentRecovery(); err != nil {
-		_ = release()
-		return nil, err
-	}
 	if err := kernel.Recover(ctx); err != nil {
 		_ = release()
 		return nil, fmt.Errorf("recover interrupted mutation: %w", err)
 	}
 	return release, nil
+}
+
+func (service Service) checkMutationAuthority(ctx context.Context) error {
+	if err := service.recheckInstallationPolicy(ctx); err != nil {
+		return err
+	}
+	if err := service.checkProfiles(ctx); err != nil {
+		return err
+	}
+	return service.guardEnvironmentRecovery()
 }
 
 func firstEnvironmentSourceKey(authority *domain.EnvironmentAuthority, fallback string) string {

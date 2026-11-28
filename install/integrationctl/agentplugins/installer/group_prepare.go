@@ -117,5 +117,9 @@ func (e *Engine) loadGroupPackages(ctx context.Context, handle *PreparedOperatio
 	}
 	handle.envelope = envelopes[0]
 	handle.envelopes = envelopes
+	if err := e.reviewInstallationPolicy(ctx, handle); err != nil {
+		_ = handle.closeLocked()
+		return nil, err
+	}
 	return envelopes, nil
 }

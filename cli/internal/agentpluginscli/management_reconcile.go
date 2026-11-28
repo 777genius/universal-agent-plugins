@@ -13,7 +13,7 @@ import (
 // A second, explicit recovery review restores current desired intent. This is
 // a new preparation with fresh receipts and source facts, never an old job replay.
 func (b *ManagementBackend) prepareRecoveryConvergence(ctx context.Context, input management.ChangeRequest, operationID string) (management.Prepared, error) {
-	preview, cleanup, err := dependencyPreviewApp(b.app, &options{dryRun: true})
+	preview, cleanup, err := dependencyPreviewApp(b.app.withEnterprisePolicySession(), &options{dryRun: true})
 	if err != nil {
 		return nil, err
 	}

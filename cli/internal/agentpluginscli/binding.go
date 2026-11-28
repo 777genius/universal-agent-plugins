@@ -117,7 +117,7 @@ func (session *bindingChangeSession) load() error {
 func (session *bindingChangeSession) plan() error {
 	session.service = session.app.Lifecycle
 	session.service.StateStore = session.app.StateStore
-	input := usecase.BindingChangeInput{Selector: session.selector, Envelope: session.loaded.envelope}
+	input := withEnterpriseBindingPins(usecase.BindingChangeInput{Selector: session.selector, Envelope: session.loaded.envelope})
 	planned, err := executeBindingChange(session.ctx, session.service, session.mode, input)
 	if err != nil {
 		return err
@@ -168,7 +168,7 @@ func (session *bindingChangeSession) canceled() error {
 
 func (session *bindingChangeSession) apply() error {
 	writeProgress(session.app, session.opts.format, "Committing the reviewed binding change...")
-	input := usecase.BindingChangeInput{Selector: session.selector, Envelope: session.loaded.envelope, Confirmed: true}
+	input := withEnterpriseBindingPins(usecase.BindingChangeInput{Selector: session.selector, Envelope: session.loaded.envelope, Confirmed: true})
 	result, changeErr := executeBindingChange(session.ctx, session.service, session.mode, input)
 	if renderErr := renderBindingChange(session.cmd.OutOrStdout(), session.opts.format, session.commandName(), result, false); renderErr != nil && changeErr == nil {
 		changeErr = renderErr

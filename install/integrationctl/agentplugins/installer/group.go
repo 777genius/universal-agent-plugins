@@ -93,8 +93,11 @@ func (e *Engine) groupAddInputs(req Request, envelopes []domain.PackageEnvelope,
 		if err != nil {
 			return nil, nil, err
 		}
+		gitPinned, archivePinned := targetPolicyPins(req, target)
 		inputs = append(inputs, usecase.AddInput{
 			Envelope: envelopes[i], Client: client, Scope: e.scope(), DryRun: dry, Confirmed: confirmed,
+			OriginMode: domain.OriginModeDirect,
+			GitPinned:  gitPinned, ArchivePinned: archivePinned,
 			PersistAuthoritativeObservations: e.persistObservations,
 			InstallationID:                   req.InstallationID, OperationID: req.OperationID,
 			BackendExecutable: client.ExecutablePath,

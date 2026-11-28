@@ -6,14 +6,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func (selection *skillsAddOptions) runLocal(cmd *cobra.Command, app App, opts *options, input string, interactive bool) error {
+func (selection *skillsAddOptions) runLocal(cmd *cobra.Command, app App, opts *options, input string, interactive bool, requestedTargets []string) error {
 	if selection.ui || selection.ref != "" {
 		return errors.New("local Skills use terminal selection; omit --ui and --ref")
 	}
 	if opts.noSave {
 		return errors.New("local Skills use saved snapshots; omit --no-save")
 	}
-	selections, err := selection.localSelections(cmd, app, opts, input, interactive)
+	selections, err := selection.localSelections(cmd, app, opts, input, interactive, requestedTargets)
 	if err != nil {
 		return err
 	}

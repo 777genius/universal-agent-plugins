@@ -71,6 +71,9 @@ func commitDependencyTransferInstall(cmd *cobra.Command, original App, staged Ap
 	if !reflect.DeepEqual(actions, request.prepared) {
 		return installer.ErrPlanChanged
 	}
+	if err := checkEnterprisePreparedPolicy(cmd.Context(), staged, &request); err != nil {
+		return err
+	}
 	if err := transfer.publish(cmd.Context()); err != nil {
 		return renderDependencyTransferFailure(cmd, opts, transfer, err)
 	}
@@ -90,7 +93,7 @@ func commitDependencyTransferInstall(cmd *cobra.Command, original App, staged Ap
 func prepareDependencyTransferInstall(cmd *cobra.Command, app App, opts *options, transfer *dependencyTransfer) (dependencySyncRequest, error) {
 	source, destination := transfer.source, transfer.destination
 	request := dependencySyncRequest{requirements: source.requirements, lock: source.lock, intent: environmentapp.Intent{ManifestPath: destination.files[0].path, LockPath: destination.files[1].path, ManifestBytes: destination.files[0].body, LockBytes: destination.files[1].body, CandidateManifest: source.files[0].body, CandidateLock: source.files[1].body}}
-	if err := verifyDependencyDeclarations(cmd.Context(), app, request.lock); err != nil {
+	if err := verifyInstallationDependencyDeclarations(cmd.Context(), app, request.lock); err != nil {
 		return request, err
 	}
 	state, err := app.Installer.Inspect(cmd.Context())
@@ -118,7 +121,8 @@ func applyDependencyTransferInstall(cmd *cobra.Command, app App, opts *options, 
 	if err := ensureDependencyStore(cmd.Context(), app, request.selectedLock()); err != nil {
 		return finishDependencyTransferInstall(cmd, opts, transfer, request, nil, err)
 	}
-	adapter := &dependencyInstaller{app: app, opts: opts, detected: request.detected, cmd: cmd, consent: request.consent, beforeApply: request.checkInputs}
+	guard := enterprisePolicyApplyGuard(cmd.Context(), app, &request, request.checkInputs)
+	adapter := &dependencyInstaller{app: app, opts: opts, detected: request.detected, cmd: cmd, consent: request.consent, beforeApply: guard}
 	outcomes, applyErr := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), ManifestDigest: request.lock.ManifestDigest, Bindings: actions}, true)
 	return finishDependencyTransferInstall(cmd, opts, transfer, request, environment.Results(outcomes), applyErr)
 }

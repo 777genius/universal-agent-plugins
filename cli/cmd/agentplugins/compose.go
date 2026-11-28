@@ -152,7 +152,7 @@ func newScopedAgentpluginsCLIApp(home, cacheRoot, projectRoot string, directoryC
 		}
 		return newScopedAgentpluginsCLIApp(home, cacheRoot, root, directoryClient, discoveryClient, securityClient, registry)
 	}
-	return app, nil
+	return configureEnterprisePolicy(app, home, projectRoot)
 }
 
 func newManagedStager(clientRegistry *clients.Registry, paths pathpolicy.Policy, helperExecutable string) providers.Stager {

@@ -31,6 +31,9 @@ type Config struct {
 	// Registry is the explicit set of client adapters supported by this
 	// executable. Nil is rejected rather than silently enabling every client.
 	Registry *clients.Registry
+	// InstallationPolicy gates new and retained installation operations. Nil
+	// preserves unrestricted installation; removal never consults this gate.
+	InstallationPolicy ports.InstallationPolicy
 	// EnableNativeObserver enables live client discovery for repair and recovery
 	// when Runner is supplied. Project filesystem ownership checks remain
 	// mandatory when it is disabled or no runner is available. User scope keeps

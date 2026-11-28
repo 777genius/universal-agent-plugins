@@ -55,6 +55,7 @@ func (e *Engine) prepareMutatingPackage(ctx context.Context, req Request, op Ope
 	svc := confirmationLifecycle(handle, e.lifecycle(helper, previewFacts, handle.detected), true)
 	preview, err := e.previewHostedPackage(ctx, handle, svc, usecase.AddInput{
 		Envelope: handle.envelope, Client: handle.client, Scope: e.scope(), DryRun: true, Confirmed: false,
+		GitPinned: req.GitPinned, ArchivePinned: req.ArchivePinned,
 		OnlinePreview:                    req.OnlinePreview,
 		PersistAuthoritativeObservations: e.persistObservations,
 		InstallationID:                   req.InstallationID, OperationID: req.OperationID, BackendExecutable: req.ClientExecutable,

@@ -57,8 +57,8 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 			converge = func() error {
 				opts.installResult = nil
 				opts.declaredRepairs = nil
-				err := runDependencySyncConverge(cmd, app, opts, lockedOnly, yes, func(convergeApp App) (bool, error) {
-					return repairDeclaredEnvironmentDrift(cmd, convergeApp, opts, yes)
+				err := runDependencySyncConverge(cmd, app, opts, lockedOnly, yes, func(convergeApp App, recheck func() error) (bool, error) {
+					return repairDeclaredEnvironmentDrift(cmd, convergeApp, opts, yes, recheck)
 				})
 				err = finishDeclaredRepairPresentation(cmd, opts, err)
 				// Running install again converges only what is still missing.
@@ -85,7 +85,7 @@ func newInstallCommand(app App, opts *options) *cobra.Command {
 // repair machinery of the repair command. Foreign bindings and pending
 // transactions keep the fail-closed sync behavior untouched. It reports whether
 // the caller should continue with the sync convergence.
-func repairDeclaredEnvironmentDrift(cmd *cobra.Command, app App, opts *options, yes bool) (bool, error) {
+func repairDeclaredEnvironmentDrift(cmd *cobra.Command, app App, opts *options, yes bool, recheck func() error) (bool, error) {
 	if opts.dryRun {
 		// Dry runs never mutate; sync's own fail-closed drift refusal is the
 		// truthful no-changes plan for a damaged projection.
@@ -109,7 +109,7 @@ func repairDeclaredEnvironmentDrift(cmd *cobra.Command, app App, opts *options, 
 	if len(actions) == 0 {
 		return true, nil
 	}
-	return true, applyDeclaredEnvironmentRepairs(cmd, app, opts, actions, yes)
+	return true, applyDeclaredEnvironmentRepairs(cmd, app, opts, actions, yes, recheck)
 }
 
 // driftedEnvironmentBindings maps each installation ID to the clients whose
@@ -147,7 +147,7 @@ func buildDeclaredEnvironmentRepairs(cmd *cobra.Command, app App, drifted map[st
 	return actions, nil
 }
 
-func applyDeclaredEnvironmentRepairs(cmd *cobra.Command, app App, opts *options, actions []dependencyAction, yes bool) error {
+func applyDeclaredEnvironmentRepairs(cmd *cobra.Command, app App, opts *options, actions []dependencyAction, yes bool, recheck func() error) error {
 	detected, err := detectDependencyClients(cmd.Context(), app)
 	if err != nil {
 		return err
@@ -168,7 +168,13 @@ func applyDeclaredEnvironmentRepairs(cmd *cobra.Command, app App, opts *options,
 	if err != nil || !confirmed {
 		return err
 	}
-	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent}
+	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent,
+		beforeApply: func() error {
+			if err := recheck(); err != nil {
+				return err
+			}
+			return checkEnterpriseRepairPolicies(cmd.Context(), app, prepared, false)
+		}}
 	outcomes, applyErr := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), Bindings: prepared}, true)
 	app.finishInstall(opts, cmd.CommandPath(), appliedAgentItems(prepared, outcomes, applyErr))
 	if opts.format == "json" && applyErr == nil {

@@ -86,6 +86,9 @@ func confirmDeliveryPlan(frozen, current domain.DeliveryPlan) error {
 }
 
 func confirmationLifecycle(prepared *PreparedOperation, svc usecase.Service, capture bool) usecase.Service {
+	if svc.InstallationPolicy != nil && prepared.installationPolicyReviewed {
+		svc.InstallationPolicy = reviewedInstallationPolicy{gate: svc.InstallationPolicy, fingerprint: prepared.installationPolicyFingerprint}
+	}
 	svc.Planner = confirmationPlanner{inner: svc.Planner, prepared: prepared, capture: capture, store: svc.StateStore}
 	return svc
 }
@@ -93,6 +96,9 @@ func confirmationLifecycle(prepared *PreparedOperation, svc usecase.Service, cap
 func (e *Engine) confirmDeliveries(ctx context.Context, prepared *PreparedOperation) error {
 	if prepared.req.Operation == OpRemove {
 		return e.confirmRemoveBindings(ctx, prepared)
+	}
+	if err := e.recheckInstallationPolicy(ctx, prepared); err != nil {
+		return err
 	}
 	if len(prepared.deliveries) == 0 {
 		return nil

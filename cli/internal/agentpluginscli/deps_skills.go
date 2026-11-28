@@ -37,23 +37,17 @@ func (resolver dependencyResolver) resolveSkill(ctx context.Context, requirement
 			_ = packagedigest.Remove(*prefetched)
 		}
 	}()
+	if err := resolver.app.checkEnterpriseRequirement(ctx, requirement, targets); err != nil {
+		return environment.LockedPackage{}, err
+	}
 	source := requirement.Git
-	resolved := source.Path
-	if previous != nil {
-		last := source.Path
-		if previous.Source.Git != nil {
-			last = previous.Source.Git.ResolvedSkillPath
-		}
-		var err error
-		resolved, err = resolver.app.resolveRawSkillPath(ctx, *source, commit, last)
-		if err != nil {
-			return environment.LockedPackage{}, err
-		}
+	resolved, err := resolver.resolveSkillPath(ctx, *source, commit, previous)
+	if err != nil {
+		return environment.LockedPackage{}, err
 	}
 	if skillDirectoryMismatch(source.Skill, resolved) {
 		return environment.LockedPackage{}, errors.New("skill name differs from source directory")
 	}
-	var err error
 	var raw domain.PackageSnapshot
 	var ok bool
 	if prefetched != nil && resolved == source.Path {
@@ -90,6 +84,17 @@ func (resolver dependencyResolver) resolveSkill(ctx context.Context, requirement
 
 // skillDirectoryMismatch reports a selected Skill folder whose name differs from
 // the Skill. An empty folder is the repository root and is never rejected here.
+func (resolver dependencyResolver) resolveSkillPath(ctx context.Context, source environment.GitSource, commit string, previous *environment.LockedPackage) (string, error) {
+	if previous == nil {
+		return source.Path, nil
+	}
+	last := source.Path
+	if previous.Source.Git != nil {
+		last = previous.Source.Git.ResolvedSkillPath
+	}
+	return resolver.app.resolveRawSkillPath(ctx, source, commit, last)
+}
+
 func skillDirectoryMismatch(skill, directory string) bool {
 	return directory != "" && path.Base(directory) != skill
 }

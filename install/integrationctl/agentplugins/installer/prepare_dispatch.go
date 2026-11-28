@@ -13,27 +13,29 @@ import (
 
 // PreparedOperation owns a sealed source snapshot until Close or a terminal Apply.
 type PreparedOperation struct {
-	engine           *Engine
-	mu               sync.Mutex
-	closed           bool
-	busy             bool
-	applied          bool
-	req              Request
-	plan             Plan
-	observationPlan  domain.DeliveryPlan
-	snapshot         domain.PackageSnapshot
-	snapshots        []domain.PackageSnapshot
-	envelope         domain.PackageEnvelope
-	envelopes        []domain.PackageEnvelope
-	client           domain.DetectedClient
-	clients          []domain.DetectedClient
-	detected         map[domain.ClientID]domain.DetectedClient
-	facts            BindingFacts
-	openCodeHost     *OpenCodePreparedHost
-	openCodeSiblings []domain.DetectedClient
-	artifact         string
-	deliveries       []preparedDeliveryPlan
-	recorded         domain.StateFileV2
+	engine                        *Engine
+	mu                            sync.Mutex
+	closed                        bool
+	busy                          bool
+	applied                       bool
+	req                           Request
+	plan                          Plan
+	observationPlan               domain.DeliveryPlan
+	snapshot                      domain.PackageSnapshot
+	snapshots                     []domain.PackageSnapshot
+	envelope                      domain.PackageEnvelope
+	envelopes                     []domain.PackageEnvelope
+	client                        domain.DetectedClient
+	clients                       []domain.DetectedClient
+	detected                      map[domain.ClientID]domain.DetectedClient
+	facts                         BindingFacts
+	openCodeHost                  *OpenCodePreparedHost
+	openCodeSiblings              []domain.DetectedClient
+	artifact                      string
+	deliveries                    []preparedDeliveryPlan
+	recorded                      domain.StateFileV2
+	installationPolicyFingerprint string
+	installationPolicyReviewed    bool
 }
 
 func (p *PreparedOperation) Plan() Plan {
@@ -112,6 +114,7 @@ func (e *Engine) Prepare(ctx context.Context, req Request) (*PreparedOperation, 
 		copied.ClientSurfaces = slices.Clone(target.ClientSurfaces)
 		copied.ClientExecutable = firstNonEmpty(target.ClientExecutable, copied.ClientExecutable)
 		copied.PackageRoot = firstNonEmpty(target.PackageRoot, copied.PackageRoot)
+		copied.GitPinned, copied.ArchivePinned = targetPolicyPins(copied, target)
 		copied.ExternalUninstalled = target.ExternalUninstalled
 		copied.Targets = nil
 	}

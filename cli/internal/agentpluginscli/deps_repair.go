@@ -14,6 +14,7 @@ import (
 
 func buildDependencyRepairs(ctx context.Context, app App, state domain.StateFileV2, installation domain.Installation, targets []domain.ClientID) ([]dependencyAction, error) {
 	var actions []dependencyAction
+	locked := repairPolicyLock(app)
 	for _, target := range targets {
 		authority, err := environmentAuthorityForBinding(state, installation.InstallationID, target, "repair")
 		if err != nil {
@@ -46,6 +47,7 @@ func buildDependencyRepairs(ctx context.Context, app App, state domain.StateFile
 			pkg.Source.Git = nil
 			pkg.Source.Registry = &environment.LockedRegistrySource{FeedID: installation.Directory.FeedID, Distribution: installation.Directory.DistributionID, DistributionID: installation.Directory.DistributionID, ProductID: installation.Directory.ProductID, ReleaseSequence: rev.ReleaseSequence, Repository: installation.Source.Repository, Path: installation.Source.PackageSubpath, Commit: rev.ResolvedRevision}
 		}
+		pkg = repairRequestedIntent(pkg, locked)
 		actions = append(actions, dependencyAction{Alias: authority.Alias, ClientID: string(target), InstallationID: installation.InstallationID, BindingID: binding.ClientBindingID, Action: "repair", Package: &pkg, Authority: authority})
 	}
 	return actions, nil
@@ -73,7 +75,8 @@ func applyDependencyRepairs(cmd *cobra.Command, app App, opts *options, actions 
 	if !confirmed {
 		return declinedInstallResult(opts, renderDependencySync(cmd, opts, actions, true))
 	}
-	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent}
+	adapter := &dependencyInstaller{app: app, opts: opts, cmd: cmd, detected: detected, consent: consent,
+		beforeApply: func() error { return checkEnterpriseRepairPolicies(cmd.Context(), app, actions, true) }}
 	outcomes, err := (environment.Coordinator{EnvironmentID: app.environmentID(), Mutator: adapter}).ApplySync(cmd.Context(), environment.PreparedSync{EnvironmentID: app.environmentID(), Bindings: actions}, true)
 	app.finishInstall(opts, cmd.CommandPath(), appliedAgentItems(actions, outcomes, err))
 	renderErr := renderDependencyBindingResults(cmd, opts, actions, outcomes, err)
