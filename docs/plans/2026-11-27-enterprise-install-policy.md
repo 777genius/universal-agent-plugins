@@ -634,6 +634,56 @@ original full Firebase lifecycles, final required/core/package-manager and Pi
 checks, ordinary expected-head merge, and actual-main verification remain
 required. No release, tag or npm publication is authorized by this work.
 
+### R22 - Accepted main collection and Claude backup integration
+
+Accepted main `11ac0bc0` includes #1135 Skill collections and #1140 Claude
+initialize-backup custody. Published heads `28ad4f84` and `a54d1d27` retain that
+source and add early HTTPS publisher admission, including an actual `--all`
+zero-request regression. Subsequent heads `8903c895` and `06008851` add
+known Git/local source admission and preserve the distinct read-only listing
+entrypoint. These existing branch changes are retained. Independent source review found the existing rooted
+descriptors, bounded backup admission, original held-main evidence and native
+proof checks preserved. No discovery or writer-closure claim was widened.
+
+The combined Claude retirement/discovery and three package-manager Python
+contract suites ran 130 tests: 129 passed and the genuine pinned-Claude case
+was explicitly skipped. The tested Python paths match `28ad4f84`; the only
+subsequent `a54d1d27` change is the Go HTTPS preflight regression.
+
+New full package-manager evidence must include 23 phases, 46 stream hashes,
+140 required Go roots and the collection command evidence. Its expected raw
+case inventory is 463 RUN/PASS nodes. The original binary installation's scanner
+receipt does not become an independent collection scan receipt. Genuine Claude
+and Codex raw-Skill qualification also requires the new collection install,
+repeat and removal stages. These are required observations, not claimed passes.
+
+### R23 - Admit Git collection targets before raw prefetch
+
+Combined-source review found that multi-Skill Git prefetch checked each original
+source with a nil target list before later resolution checked the selected
+targets. A two-Skill public `PrepareSkills` regression reproduced both raw-tree
+acquisitions before a typed refusal of the requested Claude target.
+
+Pass the selected targets through the existing prefetch admission call. This is
+the same installation-policy authority used by per-selection resolution and
+final apply. A denied target starts no selected raw acquisition; an allowed
+Codex control still starts both acquisitions through the existing prefetch seam.
+Independent review caught a test synchronization race: wait for both recorded
+starts before asserting the atomic call count, rather than the reverse order.
+No new policy engine, source exception, authority or client-specific behavior.
+
+Additional real-TLS `--all` regressions cover denied source kind, host, scope and
+target plus malformed policy. They require zero publisher requests and unchanged
+durable files under the fixture root, then prove that explicit read-only listing still obtains the
+two-entry catalog without durable changes under each restriction.
+
+The old-code regression failed as intended. Local post-fix compilation met
+resource failures; a subsequent memory-bounded combined run lost its executor
+connection, so no passing result is claimed for that run. Final-source Required,
+Core, full PM/Pi and applicable genuine native E2E remain mandatory before the
+ordinary expected-head squash merge, followed by actual-main verification.
+Earlier-source successful checks remain historical. No release or tag.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test
