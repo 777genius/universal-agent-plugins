@@ -742,6 +742,45 @@ squash merge with actual-main verification, including all six package-manager
 hosts. Preserve pins, runners, timeouts, custody, lane selection, installation
 authority and acceptance. No release or tag is authorized.
 
+### R31 - Correct composed refusal fixtures and keep prefetch within the size gate
+
+The supported Core run on `4c34ae41` exposed two concrete problems in the
+new tests. A bare `newCLIFixture` has no installer, so explicit `codex` target
+admission refused with an empty supported-target list before the intended
+enterprise policy check. The whole-collection callback compared synthetic
+package manifest names with raw Skill names, so neither its first-admission
+nor its later-denial branch ran. The compound failure assertion alone did not
+establish which individual state predicates changed.
+
+The corrected local and HTTPS fixtures use the existing `newSavedJourney`
+composition. They retain typed policy/configuration refusal, zero publisher
+requests before refusal, successful read-only catalog listing and complete
+saved-file snapshots; native-call checks are also explicit. The collection
+callback identifies members through `Envelope.Source.Skill.Name`, requires
+the first admission before the second member, and retains the real component
+policy adapter for that later refusal. It still requires no partial native,
+durable or source effects. No production admission or assertion is weakened.
+
+The CLI full-file gate independently reported 41 statements in
+`prefetchGitRoots`, exceeding its unchanged limit of 40. Building the same
+ordered raw target strings directly with an append loop removes the temporary
+target-ID assignment. No guard, target identity or policy authority changes,
+and no helper or lint exemption is introduced.
+
+The actual five-file correction received independent source review; the pinned
+formatter and whitespace check passed. The recovered earlier local Go attempt
+had been killed during compilation and ran zero tests. It is not a PASS; the
+new source still requires supported-runner Core/lint and all applicable E2E.
+
+The preceding `4c34ae41` Intel package-manager artifact `15243575525` was
+independently byte-audited: SHA-256
+`a80f4b204fc240e0bda0cfaad38e18543727ce034d39cbbd936882409eab5c61`,
+valid ZIP CRC, all 23 phases and 46 stream hashes, all 140 required roots,
+463 raw RUN/PASS nodes and 17 agreement roots, without failed/skipped inventory.
+The six production collection commands passed. This remains evidence for the
+preceding tree, with native-runtime and independent collection-scanner limits
+unchanged; it does not qualify the new correction or actual merged main.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test

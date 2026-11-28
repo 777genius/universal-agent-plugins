@@ -59,10 +59,9 @@ func (resolver dependencyResolver) prefetchGitRoots(ctx context.Context, previou
 		}
 		// The solver checks each selected target before acquisition. Prefetch
 		// must check the same facts or it can read denied roots first.
-		targetIDs := dependencyRequirementTargets(resolver.requirements, requirement.Alias)
-		targets := make([]string, len(targetIDs))
-		for i, target := range targetIDs {
-			targets[i] = string(target)
+		targets := []string{}
+		for _, target := range dependencyRequirementTargets(resolver.requirements, requirement.Alias) {
+			targets = append(targets, string(target))
 		}
 		if err := resolver.app.checkEnterpriseRequirement(ctx, requirement, targets); err != nil {
 			continue

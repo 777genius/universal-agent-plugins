@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -38,15 +39,20 @@ func TestEnterprisePolicyDeniesGitSkillsBeforeResolve(t *testing.T) {
 }
 
 func TestEnterprisePolicyDeniesLocalSkillsBeforeScan(t *testing.T) {
-	f := newCLIFixture(t, nil)
+	journey := newSavedJourney(t, t.TempDir())
+	f := journey.cli
 	policyPath := filepath.Join(f.root, "deny-local.yaml")
 	dependencyWrite(t, policyPath, "schema_version: 2\nsources:\n  allowed_kinds: []\n")
 	setEnterpriseCommandFiles(&f, enterprisepolicy.Path{Layer: "machine", Path: policyPath})
 	absent := filepath.Join(t.TempDir(), "unreadable-catalog")
+	before := savedJourneyTree(t, f.root)
 	_, _, err := f.execute(false, "skills", "add", absent, "--all", "--target", "codex", "--no-ui", "--yes", "--format", "json")
 	var denied *domain.InstallPolicyError
 	if !errors.As(err, &denied) {
 		t.Fatalf("local collection was scanned before enterprise denial: %v", err)
+	}
+	if journey.runner.calls != 0 || !reflect.DeepEqual(before, savedJourneyTree(t, f.root)) {
+		t.Fatal("denied local collection changed durable/native state")
 	}
 }
 

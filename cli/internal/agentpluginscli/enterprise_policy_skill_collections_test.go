@@ -34,7 +34,8 @@ func TestEnterprisePolicyWebsiteAllRefusesBeforeDiscoveryAndKeepsListing(t *test
 				publisher.serve(w, r)
 			}))
 			defer server.Close()
-			fixture := newCLIFixture(t, nil)
+			journey := newSavedJourney(t, t.TempDir())
+			fixture := journey.cli
 			policy := filepath.Join(fixture.root, "collection-policy.yaml")
 			dependencyWrite(t, policy, "schema_version: 2\n"+tc.policy)
 			setEnterpriseCommandFiles(&fixture, enterprisepolicy.Path{Layer: "machine", Path: policy})
@@ -50,7 +51,7 @@ func TestEnterprisePolicyWebsiteAllRefusesBeforeDiscoveryAndKeepsListing(t *test
 			if got := requests.Load(); got != 0 {
 				t.Fatalf("denied --all contacted publisher %d times", got)
 			}
-			if after := savedJourneyTree(t, fixture.root); !reflect.DeepEqual(before, after) {
+			if after := savedJourneyTree(t, fixture.root); journey.runner.calls != 0 || !reflect.DeepEqual(before, after) {
 				t.Fatal("denied collection changed durable state: " + savedJourneyDifferences(before, after))
 			}
 			out, _, err := fixture.execute(false, "skills", "list", server.URL, "--format", "json")
@@ -66,7 +67,7 @@ func TestEnterprisePolicyWebsiteAllRefusesBeforeDiscoveryAndKeepsListing(t *test
 			if requests.Load() != 1 || !report.Data.Complete || len(report.Data.Candidates) != 2 {
 				t.Fatalf("listing did not observe the real bounded catalog: requests=%d report=%+v", requests.Load(), report.Data)
 			}
-			if after := savedJourneyTree(t, fixture.root); !reflect.DeepEqual(before, after) {
+			if after := savedJourneyTree(t, fixture.root); journey.runner.calls != 0 || !reflect.DeepEqual(before, after) {
 				t.Fatal("read-only collection listing changed durable state: " + savedJourneyDifferences(before, after))
 			}
 		})

@@ -101,11 +101,14 @@ func TestEnterprisePolicyCollectionEnvelopeRefusesWholeBatch(t *testing.T) {
 	policy := sourcePolicyApp(t, "schema_version: 2\ncomponents:\n  denied: [skills]\n").InstallationPolicy
 	var firstAdmitted, secondDenied bool
 	j.cli.app = j.cli.app.withEnterprisePolicyGate(enterpriseHTTPSPolicyFunc(func(ctx context.Context, request domain.InstallPolicyRequest) (string, error) {
-		if request.Envelope != nil {
-			switch request.Envelope.Manifest.Name {
+		if request.Envelope != nil && request.Envelope.Source.Skill != nil {
+			switch request.Envelope.Source.Skill.Name {
 			case "review":
 				firstAdmitted = true
 			case "testing":
+				if !firstAdmitted {
+					t.Fatal("second collection member reached policy before first admission")
+				}
 				secondDenied = true
 				return policy.Check(ctx, request)
 			}

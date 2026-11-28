@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"reflect"
 	"sync/atomic"
 	"testing"
 
@@ -23,12 +24,14 @@ func TestEnterprisePolicyDeniesHTTPSPublisherBeforeCatalogRead(t *testing.T) {
 	}))
 	defer server.Close()
 
-	f := newCLIFixture(t, nil)
+	journey := newSavedJourney(t, t.TempDir())
+	f := journey.cli
 	policyPath := filepath.Join(f.root, "deny-web.yaml")
 	dependencyWrite(t, policyPath, "schema_version: 2\nsources:\n  allowed_kinds: []\n")
 	setEnterpriseCommandFiles(&f, enterprisepolicy.Path{Layer: "machine", Path: policyPath})
 	f.app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: t.TempDir(), HTTPClient: server.Client()}
 
+	before := savedJourneyTree(t, f.root)
 	for _, selection := range [][]string{{"--skill", "review"}, {"--all"}} {
 		t.Run(selection[0], func(t *testing.T) {
 			args := append([]string{"skills", "add", server.URL}, selection...)
@@ -37,6 +40,9 @@ func TestEnterprisePolicyDeniesHTTPSPublisherBeforeCatalogRead(t *testing.T) {
 			var denied *domain.InstallPolicyError
 			if !errors.As(err, &denied) {
 				t.Fatalf("expected typed source policy refusal before publisher read, got %v", err)
+			}
+			if journey.runner.calls != 0 || !reflect.DeepEqual(before, savedJourneyTree(t, f.root)) {
+				t.Fatal("denied publisher changed durable/native state")
 			}
 			if got := requests.Load(); got != 0 {
 				t.Fatalf("enterprise-denied publisher received %d HTTP requests", got)
