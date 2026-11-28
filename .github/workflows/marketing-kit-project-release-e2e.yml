@@ -155,6 +155,13 @@ jobs:
             # its privileged SUID sandbox correctly makes GUI startup refuse.
             # Version was checked above from exact SHA-pinned Debian metadata;
             # runtime discovery, model auth and MCP tools/call are separate gates.
+          elif [[ "$TARGET" == opencode ]]; then
+            # The pinned npm entrypoint needs its own postinstall to select the native binary.
+            [[ "$NATIVE_PACKAGE" == opencode-ai@1.18.34 ]]
+            npm install --global --allow-scripts=opencode-ai "$NATIVE_PACKAGE"
+            opencode_version="$(timeout --kill-after=5s 25s opencode --version)"
+            printf '%s\n' "$opencode_version"
+            [[ "$opencode_version" == 1.18.34 ]]
           else
             npm install --global "$NATIVE_PACKAGE"
           fi
