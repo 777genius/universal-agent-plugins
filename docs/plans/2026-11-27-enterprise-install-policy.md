@@ -781,6 +781,35 @@ The six production collection commands passed. This remains evidence for the
 preceding tree, with native-runtime and independent collection-scanner limits
 unchanged; it does not qualify the new correction or actual merged main.
 
+### R32 - Cover every captured symlink representation in the refusal regression
+
+The accepted main diagnostics merged in `7789e68f` preserve the three existing
+cold Copilot Project custody refusals. On that exact source, the focused local
+suite ran 17 tests: 16 passed and the new singleton regression failed because
+it expected only metadata/link keys while the actual rejected key had the
+ordinary file prefix. The unchanged shared snapshot records the same symlink
+as a file-key `symlink` marker, a private link-target string and a metadata tuple.
+The refusal iterates a set union, so any of those captured entries can be first.
+
+Correct only the test expectation to require one of the three exact captured
+key/value shape triples. Keep the actual refusal, exact singleton key, one
+delta call/item, zero omitted changes, bounded private diagnostics and unchanged
+filesystem assertions. No production predicate, snapshot authority, source pin,
+runner or acceptance gate changes. Independent review confirmed this cause
+and the bounded test-only correction before implementation.
+
+The corrected complete Copilot refusal suite passed all 17 tests with no skips
+or failures. Three bounded hash-seed probes of the affected regression also
+passed: seeds 0 and 2 observed the metadata shape, and seed 1 observed the
+previously omitted file-key shape. No claim is made that these probes executed
+the third, independently source-verified link-target shape. The complete suite
+log SHA-256 is
+`b60990251389487f8c40f742a07b8fb6dfdb211b3bd8cfb5f3fc515d56498188`.
+These inert filesystem/diagnostic tests do not qualify a native lifecycle. Final-source
+Required/Core, full package-manager/Pi and applicable native E2E still precede
+the ordinary expected-head squash merge and actual-main qualification. Earlier
+successful steps remain tied to their original source; no release or tag.
+
 ## Qualification record
 
 - The combined EnterprisePolicy, LegacyRepair and legacy local-policy CLI test
