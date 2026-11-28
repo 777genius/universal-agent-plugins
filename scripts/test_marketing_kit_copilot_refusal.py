@@ -346,6 +346,164 @@ class CopilotConsentDiagnosticContracts(unittest.TestCase):
             self.assertEqual(len(delta["items"]), 20)
             self.assertEqual(delta["omitted_key_count"], 20)
 
+    def install_cold_project_runtime(self, env, project, receipts):
+        from test_marketing_kit_claude_discovery import ClaudeOwnedRuntimeLinkContracts
+        installation_id = next(value for alias, value in receipts if alias == "playwright")
+        return ClaudeOwnedRuntimeLinkContracts().install_runtime(
+            RUNNER, env, project, "project", client_id="copilot", installation_id=installation_id)
+
+    def test_cold_project_exact_receipted_runtime_links_preserve_complete_image(self):
+        verify = RUNNER["verify_copilot_cold_project_refusal"]
+        with TemporaryDirectory() as directory:
+            env, project, data, _, receipts = self.fixture(Path(directory))
+            before = RUNNER["scoped_snapshot"]([project])
+            observed = {}
+            def invoke(argv, actual_env, cwd, timeout):
+                item = self.install_cold_project_runtime(env, project, receipts)
+                observed.update(item=item, image=RUNNER["scoped_snapshot"]([project]))
+                self.write_log(data, receipts)
+                return self.refusal(project, receipts)
+            token = RUNNER["_CLI_VERSION"].set("0.1.116")
+            try:
+                with patch.dict(verify.__globals__, {"invoke": invoke, "time": lambda: CLOCK + .5}):
+                    proof = verify("published-cli", env, project)
+            finally:
+                RUNNER["_CLI_VERSION"].reset(token)
+            self.assertEqual(proof["result"], "expected_refusal")
+            self.assertEqual(proof["bindings"], 4)
+            self.assertFalse(proof["cold_native_restore_qualified"])
+            after = RUNNER["scoped_snapshot"]([project])
+            self.assertEqual(after, observed["image"])
+            self.assertEqual(len(observed["item"]["links"]), 3)
+            for link in observed["item"]["links"].values():
+                relative = link.relative_to(project).as_posix()
+                self.assertIn("link:0:" + relative, after)
+                self.assertIn("metadata:0:" + relative, after)
+                self.assertEqual(after[project.name + "/" + relative], "symlink")
+            with self.assertRaises(AssertionError):
+                RUNNER["check_copilot_cold_project_unchanged"](project, before, receipts)
+            self.assertEqual(RUNNER["scoped_snapshot"]([project]), after)
+            self.assertFalse((Path(env["HOME"]) / ".copilot/config.json").exists())
+
+    def test_cold_project_runtime_grant_rejects_foreign_or_unbound_authority(self):
+        mutations = ("wrong-receipt", "duplicate-alias", "missing-closure", "retained", "wrong-client",
+                     "wrong-scope", "wrong-physical", "source", "owner", "lock", "absolute", "redirected",
+                     "extra-bin", "target-link", "parent-link", "foreign-namespace")
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), TemporaryDirectory() as directory:
+                env, project, _, _, receipts = self.fixture(Path(directory))
+                before = RUNNER["scoped_snapshot"]([project])
+                item = self.install_cold_project_runtime(env, project, receipts)
+                actual = receipts
+                record = item["record"]
+                binding = record["clients"]["copilot"]
+                link, target = item["links"]["playwright-mcp"], item["targets"]["playwright-mcp"]
+                if mutation == "wrong-receipt":
+                    actual = tuple((alias, value + "-foreign" if alias == "playwright" else value)
+                                   for alias, value in receipts)
+                elif mutation == "duplicate-alias":
+                    actual = (*receipts, next(row for row in receipts if row[0] == "playwright"))
+                elif mutation == "missing-closure":
+                    actual = tuple(row for row in receipts if row[0] == "playwright")
+                elif mutation == "retained":
+                    record["clients"] = {}; record["data_retained"] = True
+                elif mutation == "wrong-client":
+                    binding["client_id"] = "claude"
+                elif mutation == "wrong-scope":
+                    binding["scope"] = "user"
+                elif mutation == "wrong-physical":
+                    binding["physical_artifact_id"] = "foreign"
+                elif mutation == "source":
+                    record["source"]["resolved_revision"] = "0" * 40
+                elif mutation == "owner":
+                    item["owner"].write_text(json.dumps({**item["receipt"], "locator": str(project.parent)}))
+                elif mutation == "lock":
+                    with (item["runtime"] / "package-lock.json").open("a") as stream:
+                        stream.write("\\n")
+                elif mutation in ("absolute", "redirected"):
+                    link.unlink()
+                    link.symlink_to(str(target) if mutation == "absolute" else "../playwright/cli.js")
+                elif mutation == "extra-bin":
+                    (link.parent / "unknown").symlink_to("../playwright/cli.js")
+                elif mutation == "target-link":
+                    target.unlink()
+                    target.symlink_to(item["targets"]["playwright"])
+                elif mutation == "parent-link":
+                    saved = project / "saved-bin-directory"
+                    link.parent.rename(saved)
+                    link.parent.symlink_to(saved, target_is_directory=True)
+                else:
+                    foreign = project / ".uap/plugin-data/foreign/npm-runtime" / item["runtime"].name / "node_modules/.bin/playwright"
+                    foreign.parent.mkdir(parents=True)
+                    foreign.symlink_to("../playwright/cli.js")
+                item["state"].write_text(json.dumps({"schema_version": 5, "installations": [record]}))
+                after = RUNNER["scoped_snapshot"]([project])
+                with self.assertRaises(AssertionError) as refused:
+                    RUNNER["check_copilot_cold_project_unchanged"](project, before, actual, env=env)
+                self.assertIn("cold Copilot locked install", str(refused.exception))
+                self.assertEqual(RUNNER["scoped_snapshot"]([project]), after)
+
+    def test_cold_project_runtime_grant_cannot_borrow_another_authority_image(self):
+        for authority in ("state", "owner"):
+            with self.subTest(authority=authority), TemporaryDirectory() as directory:
+                env, project, _, _, receipts = self.fixture(Path(directory))
+                before = RUNNER["scoped_snapshot"]([project])
+                item = self.install_cold_project_runtime(env, project, receipts)
+                path = item[authority]
+                valid_body = path.read_text()
+                if authority == "state":
+                    item["record"]["source"]["resolved_revision"] = "0" * 40
+                    path.write_text(json.dumps({"schema_version": 5, "installations": [item["record"]]}))
+                else:
+                    path.write_text(json.dumps({**item["receipt"], "locator": str(project.parent)}))
+                after = RUNNER["scoped_snapshot"]([project])
+                helper = RUNNER["claude_owned_runtime_links"]
+                reader = helper.__globals__["runtime_document"]
+                supplied = []
+                def substituted(audit, case, candidate):
+                    if candidate == path:
+                        supplied.append(candidate)
+                        return json.loads(valid_body), valid_body
+                    return reader(audit, case, candidate)
+                with patch.dict(helper.__globals__, {"runtime_document": substituted}):
+                    with self.assertRaises(AssertionError):
+                        RUNNER["check_copilot_cold_project_unchanged"](project, before, receipts, env=env)
+                self.assertEqual(supplied, [path])
+                self.assertEqual(RUNNER["scoped_snapshot"]([project]), after)
+
+    def test_cold_project_old_mutation_refuses_before_runtime_grant(self):
+        for mutation in ("changed", "deleted", "runtime-target", "runtime-link", "runtime-lock", "runtime-state", "runtime-owner"):
+            with self.subTest(mutation=mutation), TemporaryDirectory() as directory:
+                env, project, _, _, receipts = self.fixture(Path(directory))
+                protected = project / "protected.txt"
+                protected.write_text("preserve original bytes")
+                item = self.install_cold_project_runtime(env, project, receipts) if mutation.startswith("runtime-") else None
+                before = RUNNER["scoped_snapshot"]([project])
+                if item is None:
+                    item = self.install_cold_project_runtime(env, project, receipts)
+                    protected.write_text("changed bytes") if mutation == "changed" else protected.unlink()
+                elif mutation == "runtime-target":
+                    item["targets"]["playwright"].write_text("changed target")
+                elif mutation == "runtime-link":
+                    link = item["links"]["playwright"]; link.unlink(); link.symlink_to("../playwright-core/cli.js")
+                elif mutation == "runtime-lock":
+                    with (item["runtime"] / "package-lock.json").open("a") as stream: stream.write("\\n")
+                elif mutation == "runtime-state":
+                    item["state"].write_text("{}")
+                else:
+                    item["owner"].write_text("{}")
+                after = RUNNER["scoped_snapshot"]([project])
+                calls = []
+                def forbidden(*args, **kwargs):
+                    calls.append(True)
+                    raise AssertionError("runtime grant must not run after old mutation")
+                check = RUNNER["check_copilot_cold_project_unchanged"]
+                with patch.dict(check.__globals__, {"claude_owned_runtime_links": forbidden}):
+                    with self.assertRaisesRegex(AssertionError, "modified existing Project state"):
+                        check(project, before, receipts, env=env)
+                self.assertEqual(calls, [])
+                self.assertEqual(RUNNER["scoped_snapshot"]([project]), after)
+
     def test_cold_project_refusals_preserve_real_filesystem_and_snapshot_inputs(self):
         check = RUNNER["check_copilot_cold_project_unchanged"]
         snapshot = RUNNER["scoped_snapshot"]
