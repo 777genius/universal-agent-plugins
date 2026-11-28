@@ -22,19 +22,43 @@ type nativeRemovalAttempt struct {
 func freezeNativeRemovalAttempt(before, attempted domain.StateFileV2, attemptID string) (*nativeRemovalAttempt, error) {
 	// Snapshot through the persisted representation so neither a callback nor an
 	// in-memory StateStore can mutate the token through shared slices or maps.
-	body, err := json.Marshal([2]domain.StateFileV2{before, attempted})
+	frozenBefore, err := snapshotNativeRemovalState(before)
 	if err != nil {
 		return nil, err
 	}
-	var frozen [2]domain.StateFileV2
-	if err := json.Unmarshal(body, &frozen); err != nil {
-		return nil, err
-	}
-	digest, err := transaction.ComparableStateDigest(frozen[1])
+	frozenAttempted, err := snapshotNativeRemovalState(attempted)
 	if err != nil {
 		return nil, err
 	}
-	return &nativeRemovalAttempt{before: frozen[0], attempted: frozen[1], attemptID: attemptID, attemptedDigest: digest}, nil
+	digest, err := transaction.ComparableStateDigest(frozenAttempted)
+	if err != nil {
+		return nil, err
+	}
+	return &nativeRemovalAttempt{before: frozenBefore, attempted: frozenAttempted, attemptID: attemptID, attemptedDigest: digest}, nil
+}
+
+func snapshotNativeRemovalState(state domain.StateFileV2) (domain.StateFileV2, error) {
+	body, err := json.Marshal(state)
+	if err != nil {
+		return domain.StateFileV2{}, err
+	}
+	var snapshot domain.StateFileV2
+	if err := json.Unmarshal(body, &snapshot); err != nil {
+		return domain.StateFileV2{}, err
+	}
+	return snapshot, nil
+}
+
+// Compare a fresh durable load in the same representation as the frozen
+// token. StateStore writes indented JSON, whereas the snapshot compacts raw
+// directory proofs. Comparing their raw bytes rejects an unchanged receipt.
+// No ownership, ordering, lifecycle values or proof contents are discarded.
+func matchesFrozenNativeRemovalState(observed, frozen domain.StateFileV2) (bool, error) {
+	snapshot, err := snapshotNativeRemovalState(observed)
+	if err != nil {
+		return false, err
+	}
+	return reflect.DeepEqual(snapshot, frozen), nil
 }
 
 func (attempt *nativeRemovalAttempt) identity(installationID, bindingID string) domain.NativeAttemptIdentity {
@@ -71,7 +95,11 @@ func (service Service) acknowledgeCertainRemoval(attempt *nativeRemovalAttempt, 
 	if err != nil {
 		return errors.Join(removalErr, fmt.Errorf("inspect certain native removal %s: %w", attempt.attemptID, err))
 	}
-	if !reflect.DeepEqual(current, attempt.attempted) {
+	matches, err := matchesFrozenNativeRemovalState(current, attempt.attempted)
+	if err != nil {
+		return errors.Join(removalErr, fmt.Errorf("compare certain native removal %s: %w", attempt.attemptID, err))
+	}
+	if !matches {
 		return errors.Join(removalErr, fmt.Errorf("certain native removal %s changed frozen predecessor; retain uncertainty", attempt.attemptID))
 	}
 	decision := attempt.before
