@@ -29,13 +29,18 @@ func TestEnterprisePolicyDeniesHTTPSPublisherBeforeCatalogRead(t *testing.T) {
 	setEnterpriseCommandFiles(&f, enterprisepolicy.Path{Layer: "machine", Path: policyPath})
 	f.app.SourceAcquirer = sourceacquisition.Acquirer{TempRoot: t.TempDir(), HTTPClient: server.Client()}
 
-	_, _, err := f.execute(false, "skills", "add", server.URL, "--skill", "review",
-		"--target", "codex", "--no-ui", "--yes", "--format", "json")
-	var denied *domain.InstallPolicyError
-	if !errors.As(err, &denied) {
-		t.Fatalf("expected typed source policy refusal before publisher read, got %v", err)
-	}
-	if got := requests.Load(); got != 0 {
-		t.Fatalf("enterprise-denied publisher received %d HTTP requests", got)
+	for _, selection := range [][]string{{"--skill", "review"}, {"--all"}} {
+		t.Run(selection[0], func(t *testing.T) {
+			args := append([]string{"skills", "add", server.URL}, selection...)
+			args = append(args, "--target", "codex", "--no-ui", "--yes", "--format", "json")
+			_, _, err := f.execute(false, args...)
+			var denied *domain.InstallPolicyError
+			if !errors.As(err, &denied) {
+				t.Fatalf("expected typed source policy refusal before publisher read, got %v", err)
+			}
+			if got := requests.Load(); got != 0 {
+				t.Fatalf("enterprise-denied publisher received %d HTTP requests", got)
+			}
+		})
 	}
 }
