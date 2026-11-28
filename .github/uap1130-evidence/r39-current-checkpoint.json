@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "recorded_at": "2026-11-28T13:04:05Z",
+  "recorded_at": "2026-11-28T13:38:00Z",
   "source": {
     "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
     "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
@@ -1885,7 +1885,7 @@
       }
     },
     "terminal": {
-      "scope": "Linux and macOS original job logs; Windows pending",
+      "scope": "All three Terminal host original logs; explicit OS/gated skips and archive-byte limitations retained",
       "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
       "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
       "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
@@ -2119,6 +2119,233 @@
             "Selection and 19-case plugin matrices use synthetic client/scanner protocols, no genuine vendor/model/auth qualification.",
             "Original retained ZIP contents, executable bytes, detailed redirected reports and complete filesystem images not independently read."
           ]
+        },
+        "windows": {
+          "status": "pass",
+          "run": 46139632959,
+          "job": 140962468136,
+          "successful_steps": 17,
+          "platform_only_step_skips": 5,
+          "original_decoded_log": {
+            "sha256": "bb9c3024ef3c548beed366136772d20d332ba92208990798989460dd7bd25792",
+            "bytes": 897330
+          },
+          "go_packages_pass": 7,
+          "no_test_packages": 1,
+          "verbose_go": {
+            "run": 3238,
+            "pass": 3220,
+            "skip": 18,
+            "fail": 0,
+            "top_level_run": 1308,
+            "top_level_pass": 1296,
+            "top_level_skip": 12
+          },
+          "python_discovery": {
+            "suites": [
+              33,
+              3
+            ],
+            "attempted": 36,
+            "pass": 36,
+            "skip": 0
+          },
+          "broad_cli_package_seconds": 957.871,
+          "broad_command_package_seconds": 573.7,
+          "requested_policy_cases": [
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/archive/cli",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/archive/management",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/local-skill/cli",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicyRemovalKeepsUnselectedRootWithInvalidConfiguration/local-skill/management",
+              "run": 1,
+              "pass": 1
+            },
+            {
+              "name": "TestEnterprisePolicySelectedSkillKeepsUnrelatedDeniedArchive",
+              "run": 1,
+              "pass": 1
+            }
+          ],
+          "local_skill_roots": [
+            {
+              "name": "TestLocalSkillCLISavedSnapshotLifecycle",
+              "run": 1,
+              "pass": 1,
+              "skip": 0
+            },
+            {
+              "name": "TestLocalSkillColdReplayVerifiesRawAndNormalizedBytes",
+              "run": 1,
+              "pass": 1,
+              "skip": 0
+            },
+            {
+              "name": "TestLocalSkillWarmStoreReplaysForeignOSCoordinates",
+              "run": 1,
+              "pass": 1,
+              "skip": 0
+            },
+            {
+              "name": "TestLocalSkillSelectionRefusalsDoNotWrite",
+              "run": 1,
+              "pass": 1,
+              "skip": 0
+            },
+            {
+              "name": "TestLocalSkillRelativeDirectoryUsesCanonicalSnapshotIdentity",
+              "run": 1,
+              "pass": 1,
+              "skip": 0
+            },
+            {
+              "name": "TestLocalSkillPathHazardsRefuseBeforePublication",
+              "run": 1,
+              "pass": 0,
+              "skip": 1
+            }
+          ],
+          "current_prefetch_parents": [
+            "TestGitRootPrefetchFailingSourceReturnsTheSerialError",
+            "TestGitRootPrefetchCanceledRootStopsAfterItsRef",
+            "TestGitRootPrefetchCancellationLeavesNoAcquisitions",
+            "TestOrderedPrefetchServesFailureOnceAndStopsStartingNewWork",
+            "TestOrderedPrefetchFailureCancelsOnlyLaterKeys"
+          ],
+          "failing_source_subcases": [
+            "TestGitRootPrefetchFailingSourceReturnsTheSerialError/ref_acme/pb//plugins/pb",
+            "TestGitRootPrefetchFailingSourceReturnsTheSerialError/skill_acme/skills//skills/beta",
+            "TestGitRootPrefetchFailingSourceReturnsTheSerialError/tree_other/pc//plugins/pc"
+          ],
+          "go_skip_names": [
+            "TestConnectRetryRescuesEverySourceSeriallyAndPrefetched",
+            "TestDependencySBOMAgainstOfficialSchemas",
+            "TestDependencyTransferDestinationLeavesAndAlias/symlink",
+            "TestDependencyTransferDestinationLeavesAndAlias/same_directory_alias",
+            "TestDependencyTransferInvalidSourceAndDryRun/export/symlink",
+            "TestDependencyTransferInvalidSourceAndDryRun/import/symlink",
+            "TestPiRealMarketplaceSignedTestCohortSavedClosure",
+            "TestSkillsBrowserFixture",
+            "TestLocalSkillPathHazardsRefuseBeforePublication",
+            "TestDirectSourceSavedLifecycleRealSSH",
+            "TestPiAllSignedTestOnlySavedMarketplace",
+            "TestPiFullModernSignedTestOnlyMarketplace",
+            "TestPiUpstreamSignedTestOnlyPositiveSaved",
+            "TestProjectAddDryRunDoesNotCreateProjectNamespace/read-only_project",
+            "TestProjectHermesBundleColdRestoreAndRepair",
+            "TestHermesSourceSkillsConfirmedAddsNative",
+            "TestProjectKimiGenuineSelectionRefusesPartialOrUnhostedOptIn/official-npm-symlink",
+            "TestProjectRetainedDataGuidancePreservesSelectedRoot"
+          ],
+          "json_case_status_counts": {
+            "pass": 15,
+            "passed": 14,
+            "passed_boolean": 3,
+            "skip": 14
+          },
+          "resilience_skip_names": [
+            "held-process-lock",
+            "killed-lock-owner",
+            "scanner-failure",
+            "permission-denied",
+            "closed-stdout",
+            "closed-stderr",
+            "file-size-limit",
+            "dangling-symlink",
+            "source-path-traversal",
+            "fresh-multi-client-install",
+            "per-client-lifecycle",
+            "sigint-during-activation",
+            "locked-runtime-first-probe",
+            "locked-runtime-preparation-recovery"
+          ],
+          "resilience_skip_authority": {
+            "blob": "f2ae5b26727eb6a8e4a7d06c76a1145fa00f1413",
+            "path": "scripts/terminal-ui/resilience_matrix.py",
+            "posix_only": [
+              "held-process-lock",
+              "killed-lock-owner",
+              "scanner-failure",
+              "permission-denied",
+              "closed-stdout",
+              "dangling-symlink",
+              "closed-stderr",
+              "file-size-limit",
+              "source-path-traversal",
+              "sigint-during-activation"
+            ],
+            "unix_profiles_only": [
+              "fresh-multi-client-install",
+              "per-client-lifecycle",
+              "locked-runtime-first-probe",
+              "locked-runtime-preparation-recovery"
+            ]
+          },
+          "local_skill_symlink_skip_authority": {
+            "blob": "9dea4563761eefce68853d051be97bf356802259",
+            "path": "cli/internal/agentpluginscli/skills_local_e2e_test.go",
+            "condition": "runtime.GOOS == windows",
+            "reason": "Windows symlink creation needs an explicit host privilege"
+          },
+          "native_console_receipts": [
+            {
+              "passed": true,
+              "native_windows": true,
+              "elapsed_seconds": 9.297,
+              "results": "D:\\a\\_temp\\windows-resource-oracle-evidence\\results.json",
+              "error": null
+            },
+            {
+              "case": "windows-console-cancel",
+              "passed": true,
+              "test_binary_sha256": "8e02e2b88340e9f231b9d4b7d20ca21a219318ce4ec23d758474d7109bf6346f",
+              "native_console": true,
+              "cancellation_and_reuse_iterations": 30,
+              "public_consent_boundary_and_overflow": false,
+              "owner_restoration_and_reuse": true,
+              "elapsed_seconds": 1.625
+            },
+            {
+              "case": "windows-consent-boundary",
+              "passed": true,
+              "test_binary_sha256": "e4a0830e55c9a1fb5b9fe0dcd4e146ea90e67a20a696b35a1aa9a4791a625bc1",
+              "native_console": true,
+              "cancellation_and_reuse_iterations": 0,
+              "public_consent_boundary_and_overflow": true,
+              "owner_restoration_and_reuse": true,
+              "elapsed_seconds": 0.344
+            }
+          ],
+          "artifact_upload_metadata": {
+            "id": 15264088660,
+            "size": 57705570,
+            "sha256": "d9c674693e3905e18bb751ffaa07dfaa702fbad95af98bf0f44f04210da86044"
+          },
+          "archive_bytes_qualified": false,
+          "independent_readback_confirmed": true,
+          "boundaries": [
+            "18 Go test/subtest skips and14 resilience skips are not PASS.",
+            "Five LocalSkill roots PASS; Windows symlink path hazard root is source-gated SKIP.",
+            "Native resource oracle andconsole receipts are retained in original job output; referenced full results.json, binary bytes and archive members are not independently read.",
+            "Terminal/scanner protocol fixtures do not establish genuine vendor/model/auth sessions."
+          ]
         }
       }
     },
@@ -2195,6 +2422,136 @@
           },
           "archive_bytes_qualified": false
         }
+      },
+      "claude": {
+        "run_id": 46139632998,
+        "job_id": 140962469589,
+        "run_attempt": 1,
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "job_conclusion": "success",
+        "job_steps": {
+          "success": 9,
+          "skipped": 3,
+          "skip_reason": "Codex-only sandbox, historical launcher and ChatGPT fences"
+        },
+        "original_log": {
+          "sha256": "845fa480c312a646cd0d486e63b0ff49e0a1364707450347d435980218f02a92",
+          "bytes": 345976
+        },
+        "artifact": {
+          "client": "claude",
+          "job_id": 140962469589,
+          "artifact_id": 15265651351,
+          "archive_size": 72351,
+          "archive_sha256": "a8f0a59c96b603079c74781059023b38e808aa0b447635d64c338bed8dde273c"
+        },
+        "preflight": {
+          "attempted": 385,
+          "passed": 385,
+          "skipped": 0
+        },
+        "native_package": "@anthropic-ai/claude-code@2.1.263",
+        "installer": {
+          "kind": "published npm control",
+          "version": "0.1.116",
+          "source_cli_build": false
+        },
+        "report": {
+          "status": "passed",
+          "stages": [
+            {
+              "stage": "add",
+              "exit_code": 0
+            },
+            {
+              "stage": "repeat add",
+              "exit_code": 0
+            },
+            {
+              "stage": "update",
+              "exit_code": 0
+            },
+            {
+              "stage": "repair intact",
+              "exit_code": 0
+            },
+            {
+              "stage": "corrupt Project signed lock refused before install",
+              "exit_code": 1
+            },
+            {
+              "stage": "cold locked restore",
+              "exit_code": 0
+            },
+            {
+              "stage": "remove B",
+              "exit_code": 0
+            },
+            {
+              "stage": "remove A",
+              "exit_code": 0
+            },
+            {
+              "stage": "User add",
+              "exit_code": 0
+            },
+            {
+              "stage": "User repeat add",
+              "exit_code": 0
+            },
+            {
+              "stage": "User update",
+              "exit_code": 0
+            },
+            {
+              "stage": "User repair intact",
+              "exit_code": 0
+            },
+            {
+              "stage": "corrupt User signed lock refused before install",
+              "exit_code": 1
+            },
+            {
+              "stage": "User cold locked restore C",
+              "exit_code": 0
+            },
+            {
+              "stage": "User remove C",
+              "exit_code": 0
+            },
+            {
+              "stage": "User remove",
+              "exit_code": 0
+            }
+          ],
+          "two_scope_lifecycle_qualified": true,
+          "scope_results": {
+            "project": {
+              "expectation": "positive_lifecycle",
+              "status": "passed"
+            },
+            "user": {
+              "expectation": "positive_lifecycle",
+              "status": "passed"
+            }
+          },
+          "final_policy_status": "passed",
+          "source_profile": "E",
+          "native_removal_qualification": {
+            "status": "registration-and-skill-absence-qualified; effective-MCP-absence-unqualified",
+            "full_native_removal_qualified": false,
+            "plugin_registration_absence_qualified": true,
+            "skill_discovery_absence_qualified": true,
+            "physical_absence_qualified": false,
+            "writer_closure_qualified": false,
+            "mcp_discovery_absence_qualified": false,
+            "contract": "owned cache retirement and fresh registration/Skill absence; effective MCP absence unqualified"
+          }
+        },
+        "archive_bytes_qualified": false,
+        "independent_readback_confirmed": false
       }
     },
     "core_workflow": {
@@ -2455,6 +2812,447 @@
         "Initial scoped command is nonverbose; its individual tests are not enumerated.",
         "Original job logs/steps only; no ZIP member-byte or CRC qualification."
       ]
+    },
+    "native_job_intake": {
+      "claude-linux-amd64": {
+        "run": 46139633140,
+        "runtime_job": 140968485141,
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "actual_successful_steps": 9,
+        "source_conditional_skipped_steps": 7,
+        "original_decoded_log": {
+          "sha256": "62c1d24ef16c5134a46be99eef1b3c9beb643a6271d857593863c6b5b3100e9a",
+          "bytes": 32370
+        },
+        "artifact": {
+          "id": 15264512126,
+          "name": "native-client-claude-linux-amd64",
+          "size": 776337,
+          "sha256": "a33ebc0aba091edc3dbcc6da5ad0a10227e17b5fea32e6447788c44332681c96"
+        },
+        "archive_bytes_qualified": false,
+        "independent_intake_matched": true
+      },
+      "codex-linux-amd64": {
+        "run": 46139633140,
+        "runtime_job": 140968485176,
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "actual_successful_steps": 14,
+        "source_conditional_skipped_steps": 3,
+        "original_decoded_log": {
+          "sha256": "7a94e5c35ee44501daa19884bfdf7ff7c07f41bd5050c95bda8e6c22411f4c79",
+          "bytes": 177439
+        },
+        "native_go": {
+          "required_top_level": 10,
+          "top_level_pass": [
+            "TestAgentpluginsCodexClaudeNativeBrowserProjectSkillsLifecycle",
+            "TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle",
+            "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle",
+            "TestAgentpluginsCodexNativeRawUserSkillLifecycle",
+            "TestAgentpluginsCodexNativeCommandsLifecycle",
+            "TestAgentpluginsCodexNativeForeignSkillCLIRefusal",
+            "TestAgentpluginsCodexNativeLifecycle",
+            "TestAgentpluginsCodexNativeTrustedProjectMCP",
+            "TestAgentpluginsCodexNativeProjectModelForeignMCP",
+            "TestAgentpluginsCodexNativeProjectComponentsLifecycle"
+          ],
+          "total_run": 12,
+          "total_pass": 12,
+          "nested_browser_terminal": 2,
+          "skip": 0,
+          "fail": 0
+        },
+        "python_preflight": {
+          "suites": [
+            107,
+            42
+          ],
+          "attempted": 149,
+          "skip": 0
+        },
+        "artifact": {
+          "id": 15265005465,
+          "name": "native-client-codex-linux-amd64",
+          "size": 605850,
+          "sha256": "ff2c66166dc4a593bc8ac70374f2dabdb719cbdfdc39117d222a4dd370b48446"
+        },
+        "browser_supplement": {
+          "id": 15264543020,
+          "size": 1159527,
+          "sha256": "d49fc19cd91cd0d7154c07e4a2f187ea88c04d54b955f7312a8846f84082e48c",
+          "scope": "Original successful browser lifecycle test, step and upload metadata; screenshot/archive member bytes not independently read."
+        },
+        "archive_bytes_qualified": false,
+        "independent_intake_matched": true
+      },
+      "claude-windows-amd64": {
+        "run": 46139633140,
+        "runtime_job": 140968485170,
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "actual_successful_steps": 9,
+        "source_conditional_skipped_steps": 7,
+        "original_decoded_log": {
+          "sha256": "19050ca2b3a894c613c92d0969c450cdd2691316a3db9ecfa4bf76a55fef93e2",
+          "bytes": 36094
+        },
+        "native_go": {
+          "required_top_level": 8,
+          "top_level_pass": [
+            "TestAgentpluginsClaudeNativeCommandsLifecycle",
+            "TestAgentpluginsClaudeNativeLifecycle",
+            "TestAgentpluginsClaudeNativeSecondaryProfileIsolation",
+            "TestAgentpluginsClaudeNativeTrustedProjectMCPCall",
+            "TestAgentpluginsClaudeNativeProjectPreparedLifecycle",
+            "TestAgentpluginsClaudeNativeTrustedProjectDiscovery",
+            "TestAgentpluginsClaudeNativeRuntimeLifecycle",
+            "TestAgentpluginsClaudeNativeRawUserSkillLifecycle"
+          ],
+          "total_run": 10,
+          "total_pass": 10,
+          "skip": 0,
+          "fail": 0
+        },
+        "python_preflight_summaries": [
+          "Ran 107 tests in 6.301s",
+          "OK (skipped=27)",
+          "Ran 42 tests in 7.863s",
+          "OK"
+        ],
+        "artifact": {
+          "id": 15264588487,
+          "name": "native-client-claude-windows-amd64",
+          "size": 788978,
+          "sha256": "666979ba6d9a1d3aa64d4416414ef4d8a62029b2b3b8dc671caacb0ec234161a"
+        },
+        "archive_bytes_qualified": false,
+        "independent_intake_matched": true
+      },
+      "codex-windows-amd64": {
+        "run": 46139633140,
+        "runtime_job": 140968485237,
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "actual_successful_steps": 9,
+        "source_conditional_skipped_steps": 7,
+        "original_decoded_log": {
+          "sha256": "4ad76045f33980b3573daa1abaf0c7208ab405c81f9866b09ca35d9f72bd6174",
+          "bytes": 35671
+        },
+        "native_go": {
+          "required_top_level": 9,
+          "top_level_pass": [
+            "TestAgentpluginsCodexClaudeNativeDirectoryPluginLifecycle",
+            "TestAgentpluginsCodexClaudeNativeDualUserSkillLifecycle",
+            "TestAgentpluginsCodexNativeRawUserSkillLifecycle",
+            "TestAgentpluginsCodexNativeCommandsLifecycle",
+            "TestAgentpluginsCodexNativeForeignSkillCLIRefusal",
+            "TestAgentpluginsCodexNativeLifecycle",
+            "TestAgentpluginsCodexNativeTrustedProjectMCP",
+            "TestAgentpluginsCodexNativeProjectModelForeignMCP",
+            "TestAgentpluginsCodexNativeProjectComponentsLifecycle"
+          ],
+          "total_run": 9,
+          "total_pass": 9,
+          "skip": 0,
+          "fail": 0
+        },
+        "python_preflight_summaries": [
+          "Ran 107 tests in 2.964s",
+          "OK (skipped=27)",
+          "Ran 42 tests in 5.993s",
+          "OK"
+        ],
+        "artifact": {
+          "id": 15264712969,
+          "name": "native-client-codex-windows-amd64",
+          "size": 344102,
+          "sha256": "87af5426fd24bd050847359a099ec3ace5e70238bee7f582839c422ac742336e"
+        },
+        "archive_bytes_qualified": false,
+        "independent_intake_matched": true
+      }
+    },
+    "full30_job_intake": {
+      "rendered": {
+        "run": 46139633123,
+        "attempt": 1,
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "jobs": [
+          {
+            "id": 140962469473,
+            "name": "changes / classify",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 140966658246,
+            "name": "Real codex / skill source install (pilot)",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 140966658463,
+            "name": "Real codex / plugin source install (pilot)",
+            "status": "completed",
+            "conclusion": "success"
+          },
+          {
+            "id": 140989204471,
+            "name": "Historical npm 0.1.95 / Codex lifecycle and default refusal",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204682,
+            "name": "All 30 skill / native opencode",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204683,
+            "name": "All 30 skill / native codex",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204699,
+            "name": "All 30 plugin / native claude",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204701,
+            "name": "All 30 plugin / native codex",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204706,
+            "name": "All 30 skill / native claude",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204707,
+            "name": "All 30 skill / native cline",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204731,
+            "name": "All 30 skill / native kimi",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204748,
+            "name": "All 30 plugin / native cline",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204752,
+            "name": "All 30 plugin / native qoder",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204761,
+            "name": "All 30 skill / native gemini",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204771,
+            "name": "All 30 plugin / native copilot",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204776,
+            "name": "All 30 skill / Prepared installation qoder",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204785,
+            "name": "All 30 plugin / native kimi",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204787,
+            "name": "All 30 plugin / native opencode",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204799,
+            "name": "All 30 skill / native copilot",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989204840,
+            "name": "All 30 plugin / native gemini",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989205879,
+            "name": "All 30 plugin / native registration pi",
+            "status": "queued",
+            "conclusion": null
+          },
+          {
+            "id": 140989205882,
+            "name": "All 30 skill / foreign Prepared + clean native pi",
+            "status": "queued",
+            "conclusion": null
+          }
+        ],
+        "full_jobs_qualified": false,
+        "pilot_only": false
+      }
+    },
+    "terminal_workflow": {
+      "status": "success",
+      "run": 46139632959,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "event": "pull_request",
+      "attempt": 1,
+      "jobs": [
+        {
+          "id": 140962467952,
+          "name": "Skills install (macos-15)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468094,
+          "name": "terminal (ubuntu-24.04, linux-amd64, lintai-v0.1.3-x86_64-unknown-linux-gnu.tar.gz)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468117,
+          "name": "Skills install (ubuntu-24.04)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468136,
+          "name": "terminal (windows-2025, windows-amd64, lintai-v0.1.3-x86_64-pc-windows-msvc.zip)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468189,
+          "name": "Skills install (windows-2025)",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962468196,
+          "name": "terminal (macos-15, darwin-arm64, lintai-v0.1.3-aarch64-apple-darwin.tar.gz)",
+          "conclusion": "success"
+        }
+      ],
+      "scope": "All six current jobs SUCCESS; three Terminal logs audited, three Skills-install jobs here are metadata-qualified."
+    },
+    "pm_mac_arm_intake": {
+      "schema_version": 1,
+      "scope": "R39 PM macOS ARM64 original retained ZIP",
+      "state": "ready_intake_byte_audit_pending",
+      "source": {
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221"
+      },
+      "run_id": 46139633158,
+      "job_id": 140962469332,
+      "run_attempt": 1,
+      "job_steps": {
+        "success": 19,
+        "skipped": 1,
+        "skip_reason": "source condition matrix.os == windows-2025"
+      },
+      "original_decoded_log": {
+        "sha256": "ab96f01c7043e726c5a5f10920737390c2bd6f04328b74615067e799b23eb57f",
+        "bytes": 69407
+      },
+      "manifest": {
+        "repo": "777genius/universal-agent-plugins",
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "run_id": 46139633158,
+        "job_id": 140962469332,
+        "job_name": "package-manager (macos-15)",
+        "run_attempt": 1,
+        "event": "pull_request",
+        "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "artifact_id": 15265766207,
+        "artifact_name": "package-manager-e2e-macos-15-8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "size": 60962,
+        "sha256": "6cab600c8122fad535006692f99c2fa320120661ea97900a082a8679436cd0bb",
+        "expected_platform": {
+          "os": "Darwin",
+          "architecture": "arm64"
+        }
+      },
+      "manifest_hash": {
+        "sha256": "cf206cc3a0c9b8caafc4c2410191a6390dbe2d303d129916a17c579ac0144960",
+        "bytes": 655
+      },
+      "auditor": {
+        "core_blob": "91a5ea4e09df50879dea4fcb948970674a410f29",
+        "wrapper_blob": "608ef50842bce97b3305e3d7ced680f82ef869af",
+        "core_path": ".github/r39-pm-audit/pm_audit.py",
+        "wrapper_path": ".github/r39-pm-audit/pm_readonly_runner.py"
+      },
+      "qualifies_archive_bytes": false
+    },
+    "pm_workflow": {
+      "run_id": 46139633158,
+      "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+      "attempt": 1,
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "success",
+      "successful_jobs": 4,
+      "skipped_jobs": 1,
+      "skip": "draft-only preflight on ready PR",
+      "jobs": [
+        {
+          "id": 140962468977,
+          "name": "package-manager (windows-2025)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962469268,
+          "name": "package-manager (ubuntu-24.04)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962469299,
+          "name": "package-manager (macos-15-intel)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962469332,
+          "name": "package-manager (macos-15)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 140962470221,
+          "name": "draft evidence preflight",
+          "status": "completed",
+          "conclusion": "skipped"
+        }
+      ]
     }
   },
   "whole_job_skips": [
@@ -2656,14 +3454,150 @@
     ],
     "scope_boundary": "Published UAP 0.1.116 control remains published CLI, not source-built product."
   },
-  "pending": [
-    "Terminal Windows original completion/log audit",
-    "PM macOS ARM64 actual job and original archive audit",
-    "Native Claude/Codex six current collection lanes and retained archive audit",
-    "Full 30 Windsurf plugin and dependent full Codex plugin+skill cohorts and archive audit",
-    "Remaining four Marketing runtime lanes then all six original archive audit",
-    "All other applicable current-head workflow jobs",
-    "Fresh complete merge gates/reviews/head/base then expected-head squash",
-    "Actual merged-main push runs, PM six hosts, Pi three, Marketing six and Required/all applicable push gates"
-  ]
+  "pending": {
+    "pm_mac_arm": "runtime successful; original retained-byte audit next",
+    "native": "Linux/Windows 4 audit queued; ClaudeMac runtime passed; CodexMac queued, both Mac archives pending audit",
+    "marketing": "Claude/Codex/Cursor 3 audit queued; Gemini/OpenCode/Copilot runtime queued",
+    "full30": "Codex full30 plugin+skill and Windsurf plugin queued; original receipts pending",
+    "merge": "only after final-current applicable outcomes and actual-byte proofs; expected-head squash",
+    "main": "fresh actual merged-main push qualification"
+  },
+  "auxiliary_audits": {
+    "r39_selected_bytes": {
+      "state": "published; awaiting actual execution",
+      "commit": "c51824975a677a829806eece219428e002df3bb4",
+      "tree": "a69f46fdc3089769d4893f6e6dbfdb1f1289a1da",
+      "workflow_path": ".github/workflows/uap1130-r39-selected-byte-audit.yml",
+      "native_manifest": {
+        "schema_version": 2,
+        "repo": "777genius/universal-agent-plugins",
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "core_blob": "95e43720d4a8a2344a2242cc62adb8ae69b72c89",
+        "workflow_path": ".github/workflows/agentplugins-native-clients.yml",
+        "event": "pull_request",
+        "run_id": 46139633140,
+        "run_attempt": 1,
+        "lanes": [
+          {
+            "client": "claude",
+            "target": "windows-amd64",
+            "job_id": 140968485170,
+            "artifact_id": 15264588487,
+            "archive_size": 788978,
+            "archive_sha256": "666979ba6d9a1d3aa64d4416414ef4d8a62029b2b3b8dc671caacb0ec234161a"
+          },
+          {
+            "client": "claude",
+            "target": "linux-amd64",
+            "job_id": 140968485141,
+            "artifact_id": 15264512126,
+            "archive_size": 776337,
+            "archive_sha256": "a33ebc0aba091edc3dbcc6da5ad0a10227e17b5fea32e6447788c44332681c96"
+          },
+          {
+            "client": "codex",
+            "target": "windows-amd64",
+            "job_id": 140968485237,
+            "artifact_id": 15264712969,
+            "archive_size": 344102,
+            "archive_sha256": "87af5426fd24bd050847359a099ec3ace5e70238bee7f582839c422ac742336e"
+          },
+          {
+            "client": "codex",
+            "target": "linux-amd64",
+            "job_id": 140968485176,
+            "artifact_id": 15265005465,
+            "archive_size": 605850,
+            "archive_sha256": "ff2c66166dc4a593bc8ac70374f2dabdb719cbdfdc39117d222a4dd370b48446"
+          }
+        ],
+        "cohort": "linux-windows-four"
+      },
+      "native_manifest_hash": {
+        "sha256": "3646722d2133c73ca7a2f032491b86a75a2db4060b17b5c904187bbaaf475588",
+        "bytes": 1515
+      },
+      "marketing_manifest": {
+        "schema_version": 1,
+        "repo": "777genius/universal-agent-plugins",
+        "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+        "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+        "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+        "core_blob": "b273b92fc290c09ba81de92516302ad7fc04250d",
+        "event": "pull_request",
+        "run_id": 46139632998,
+        "run_attempt": 1,
+        "lanes": [
+          {
+            "client": "claude",
+            "job_id": 140962469589,
+            "artifact_id": 15265651351,
+            "archive_size": 72351,
+            "archive_sha256": "a8f0a59c96b603079c74781059023b38e808aa0b447635d64c338bed8dde273c"
+          },
+          {
+            "client": "codex",
+            "job_id": 140962469188,
+            "artifact_id": 15263397292,
+            "archive_size": 55252,
+            "archive_sha256": "bc97846c65f3e42bfb46c5efcd4620aff55df40eea5652c411e38ef9cdada866"
+          },
+          {
+            "client": "cursor",
+            "job_id": 140962469592,
+            "artifact_id": 15263667090,
+            "archive_size": 4548,
+            "archive_sha256": "044ee341f0bd4ca8ccd677f66698ba279f17c3703653b42db7bbd5a715830a87"
+          }
+        ],
+        "selected_clients": [
+          "claude",
+          "codex",
+          "cursor"
+        ]
+      },
+      "marketing_manifest_hash": {
+        "sha256": "7788f9eb01cc48782a70aa2c216ce5b386443cc34df7480935b2853b2af587e8",
+        "bytes": 1123
+      },
+      "review": {
+        "state": "root+independent reviewed selected batch wrappers; all per-lane guards unchanged",
+        "native": {
+          "wrapper": "a9bf4c54a4f98c3080df422a2ddb43c373ccd29c",
+          "core": "95e43720d4a8a2344a2242cc62adb8ae69b72c89",
+          "cohort": "linux-windows-four",
+          "exact_lanes": 4
+        },
+        "marketing": {
+          "wrapper": "b758287fbf12f13c7c7c08d03226cdf11235990e",
+          "core": "b273b92fc290c09ba81de92516302ad7fc04250d",
+          "selection": [
+            "claude",
+            "codex",
+            "cursor"
+          ]
+        },
+        "union_required": "Final exact six canonical lanes on identical source/tree/core/run/attempt; no partial matrix credit",
+        "no_product_rerun": true
+      },
+      "run_id": 46150473835,
+      "jobs": [
+        {
+          "id": 140995789352,
+          "name": "native-linux-windows-four",
+          "status": "queued",
+          "conclusion": null
+        },
+        {
+          "id": 140995789584,
+          "name": "marketing-first-three",
+          "status": "queued",
+          "conclusion": null
+        }
+      ]
+    }
+  },
+  "pr_body_snapshot_length": 35730
 }

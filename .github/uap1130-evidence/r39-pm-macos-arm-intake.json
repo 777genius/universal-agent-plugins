@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "scope": "R39 PM macOS ARM64 original retained ZIP",
+  "state": "ready_intake_byte_audit_pending",
+  "source": {
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221"
+  },
+  "run_id": 46139633158,
+  "job_id": 140962469332,
+  "run_attempt": 1,
+  "job_steps": {
+    "success": 19,
+    "skipped": 1,
+    "skip_reason": "source condition matrix.os == windows-2025"
+  },
+  "original_decoded_log": {
+    "sha256": "ab96f01c7043e726c5a5f10920737390c2bd6f04328b74615067e799b23eb57f",
+    "bytes": 69407
+  },
+  "manifest": {
+    "repo": "777genius/universal-agent-plugins",
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "run_id": 46139633158,
+    "job_id": 140962469332,
+    "job_name": "package-manager (macos-15)",
+    "run_attempt": 1,
+    "event": "pull_request",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "artifact_id": 15265766207,
+    "artifact_name": "package-manager-e2e-macos-15-8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "size": 60962,
+    "sha256": "6cab600c8122fad535006692f99c2fa320120661ea97900a082a8679436cd0bb",
+    "expected_platform": {
+      "os": "Darwin",
+      "architecture": "arm64"
+    }
+  },
+  "manifest_hash": {
+    "sha256": "cf206cc3a0c9b8caafc4c2410191a6390dbe2d303d129916a17c579ac0144960",
+    "bytes": 655
+  },
+  "auditor": {
+    "core_blob": "91a5ea4e09df50879dea4fcb948970674a410f29",
+    "wrapper_blob": "608ef50842bce97b3305e3d7ced680f82ef869af",
+    "core_path": ".github/r39-pm-audit/pm_audit.py",
+    "wrapper_path": ".github/r39-pm-audit/pm_readonly_runner.py"
+  },
+  "qualifies_archive_bytes": false
+}
