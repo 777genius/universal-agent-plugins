@@ -37,11 +37,12 @@ type skillsListReport struct {
 func newSkillsListCommand(app App, opts *options) *cobra.Command {
 	var ref, folder string
 	command := &cobra.Command{
-		Use:   "list <owner/repository or Git/HTTPS source>",
+		Use:   "list <local directory, owner/repository or Git/HTTPS source>",
 		Short: "Read-only, bounded discovery of source Skills for scripts and agents",
 		Example: "  agentplugins skills list owner/private-repository --path skills/review\n" +
 			"  agentplugins skills list 'ssh://git@git.example/team/skills.git#refs/heads/main//skills/review'\n" +
-			"  agentplugins skills list https://publisher.example",
+			"  agentplugins skills list https://publisher.example\n" +
+			"  agentplugins skills list ./skills --format json",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := validateCommonOptions(opts); err != nil {
@@ -58,11 +59,14 @@ func newSkillsListCommand(app App, opts *options) *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&ref, "ref", "", "exact Git ref if the source URL is ambiguous")
-	command.Flags().StringVar(&folder, "path", "", "exact repository-relative folder to inspect")
+	command.Flags().StringVar(&folder, "path", "", "exact source-relative Skill folder to inspect")
 	return command
 }
 
 func runSkillsList(cmd *cobra.Command, app App, opts *options, input, ref, folder string, pathSet bool) error {
+	if explicitLocalPath(input) {
+		return listLocalSkills(cmd, app, opts, input, ref, folder, pathSet)
+	}
 	if isWebsiteSkillInput(input) {
 		if ref != "" || pathSet {
 			return CLIUsageError{Code: "INVALID_SELECTION", Message: "HTTPS publisher listings do not accept --ref or --path"}
@@ -177,8 +181,12 @@ func renderSkillsList(cmd *cobra.Command, opts *options, report skillsListReport
 	if !report.Complete {
 		complete = "incomplete; narrow --path to inspect a folder"
 	}
+	revision := report.Revision
+	if revision == "" {
+		revision = "local source"
+	}
 	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "Skills in %s (%s; %s)\n",
-		prompt.SafeText(report.Source), prompt.SafeText(report.Revision), complete); err != nil {
+		prompt.SafeText(report.Source), prompt.SafeText(revision), complete); err != nil {
 		return err
 	}
 	for _, c := range report.Candidates {

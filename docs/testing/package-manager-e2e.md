@@ -62,8 +62,11 @@ from duplicating existing scenarios during ordinary `go test ./...` runs.
 | Transport breadth | Existing ZIP, TAR, TAR.GZ, TGZ and extensionless installation/update/cold replay, strengthened with independently expected resource/skill bytes and complete normalized metadata values; nested literal-plus package selection on first and cold install |
 | Production installation catalog | Nine new real ZIP journeys through the main application composer: unsaved install/repeat/remove; two-target ownership; component replacement; foreign skills and disabled MCP collisions; malformed native configuration; exact-pin repair; preview/decline; rich cold transfer and user/project isolation |
 | Existing production composition | Gemini ZIP user/project isolation, update, repair, retained data, removal and cold agreement transfer; Cursor ZIP lifecycle with its distinct native configuration and ownership layout |
+| Skill collection composition | Eight required ordinary Go tests in the full suite, six local/HTTPS tests in archive: read-only listing/dry-run; Codex/Claude lifecycle; refusal/exact selection; retained single-Skill pins; HTTPS complete selection and changed-index refusal. Full also covers scoped Git all-selection and ambiguous Git collection refusal |
 | Executable smoke | The newly built executable: help, manifest initialization, missing-lock refusal, malformed-package refusal and an empty-environment lock/install/status lifecycle |
 | Unchanged executable installation | Five actual subprocess commands: nonempty local-plugin installation with the real cold production scanner, repeat/cache/no mutation, read-only info, missing-native-skill repair and owned removal; exact source/managed/native/foreign byte checks |
+
+The executable also runs a separate cold disposable local Skill collection profile: read-only listing, two-Skill `--all` installation, unchanged repeat without state/agreement drift, update without enrolling a new sibling, and removal preserving foreign bytes. This Gemini installation evidence does not qualify native agent discovery; the Codex/Claude collection lifecycle is composed evidence. Every required Go test must produce successful execution events; missing or skipped cases fail qualification.
 
 Each graph checks expected source identities, nodes, dependency edges, target
 assignments and distinct installed file contents. A lock that agrees with an
@@ -171,7 +174,8 @@ suite must fail on such a host; it must not replace the process runner, disable 
 guard or convert the scenario into a skip.
 
 To execute the explicit archive-safe subset there (archive, agreement, transport,
-evolution, adversarial, both production-composed catalogs and the binary phases):
+evolution, adversarial, both production-composed catalogs, local/HTTPS Skill
+collection composition and the binary phases):
 
 ```sh
 python scripts/package-manager-e2e.py --suite archive
@@ -181,7 +185,7 @@ This selection still requires Git for repository metadata and existing fixture
 setup, but it does not invoke production Git acquisition. It also requires
 permission to bind a local HTTPS server and to download/run the production
 scanner. The report lists the excluded Registry
-cases and keeps `full_qualification: false`, even when the subset passes. A full
+cases and Git collection tests and keeps `full_qualification: false`, even when the subset passes. A full
 run on a supported CI host is separate evidence for that host.
 
 ## CI and local macOS execution

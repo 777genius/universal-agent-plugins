@@ -19,7 +19,7 @@ func (selection *skillsAddOptions) runWebsite(cmd *cobra.Command, app App, opts 
 	if selection.ui || selection.ref != "" || cmd.Flags().Changed("path") {
 		return errors.New("HTTPS Skills use --skill names; --ui, --ref and --path apply only to Git sources")
 	}
-	if len(selection.names) == 0 {
+	if len(selection.names) == 0 && !selection.all {
 		return skillsMissingSelection(cmd, opts, "SELECTION_REQUIRED", "HTTPS Skill sources require an exact --skill name", []skillspicker.Candidate{})
 	}
 	targets, err := skillsTerminalTargets(cmd, app, opts, interactive)
@@ -48,6 +48,12 @@ func (selection *skillsAddOptions) runWebsite(cmd *cobra.Command, app App, opts 
 	request := SkillsBatchRequest{}
 	for _, name := range selection.names {
 		request.Selections = append(request.Selections, SkillsSelection{Website: website, Name: name})
+	}
+	if selection.all {
+		request.Selections, err = allWebsiteSkills(cmd.Context(), app, website)
+		if err != nil {
+			return renderSkillsCommandIssue(cmd, opts, err)
+		}
 	}
 	for _, target := range targets {
 		request.TargetIDs = append(request.TargetIDs, string(target))

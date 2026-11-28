@@ -18,6 +18,22 @@ SPEC.loader.exec_module(RUNNER)
 
 
 class EvidenceAcceptanceTests(unittest.TestCase):
+    def test_isolated_environment_preserves_go_limits_and_strips_account_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.dict(os.environ, {"GOGC": "25", "GOMEMLIMIT": "512MiB", "GOMAXPROCS": "2",
+                                         "OPENAI_API_KEY": "fixture-secret", "ANTHROPIC_API_KEY": "fixture-secret",
+                                         "GITHUB_TOKEN": "fixture-secret", "CODEX_HOME": "/fixture/account",
+                                         "CLAUDE_CONFIG_DIR": "/fixture/account"}, clear=True):
+                env = RUNNER.isolated_environment(root, {"GOCACHE": str(root / "go-cache")})
+            self.assertEqual(env["GOGC"], "25")
+            self.assertEqual(env["GOMEMLIMIT"], "512MiB")
+            self.assertEqual(env["GOMAXPROCS"], "2")
+            for key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN"):
+                self.assertNotIn(key, env)
+            self.assertEqual(env["CODEX_HOME"], str(root / "codex"))
+            self.assertEqual(env["CLAUDE_CONFIG_DIR"], str(root / "claude"))
+
     def test_empty_duplicate_or_unsafe_case_inventory_is_refused(self):
         for cases in [[], {}, ["same", "same"], ["a/b"], [""], [1], ["PASS"]]:
             with self.subTest(cases=cases), self.assertRaises(ValueError):
@@ -125,6 +141,7 @@ class EvidenceAcceptanceTests(unittest.TestCase):
             run.catalog_required = ["catalog-case"]
             run.install_required = ["installation-case"]
             run.composed_required = ["composition-case"]
+            run.collection_required = ["collection-case"]
             run.report = {"suite": "full", "source": {"commit": "unchanged"}, "phases": []}
             (root / ("agentplugins.exe" if os.name == "nt" else "agentplugins")).write_bytes(b"fixture")
             called = []
@@ -136,14 +153,68 @@ class EvidenceAcceptanceTests(unittest.TestCase):
             with patch.object(run, "command", side_effect=command), \
                     patch.object(run, "smoke", side_effect=KeyError("missing smoke diagnostic")), \
                     patch.object(RUNNER, "run_installations", return_value=True), \
+                    patch.object(RUNNER, "run_collections", return_value=True), \
                     patch.object(RUNNER, "source_identity", return_value={"commit": "unchanged"}):
                 self.assertFalse(run.execute(root))
 
             self.assertIn("missing smoke diagnostic", run.report.get("smoke_error", ""))
-            self.assertEqual(called, ["build", "catalog", "installations", "composition"])
+            self.assertEqual(called, ["build", "catalog", "installations", "composition", "collections"])
             self.assertEqual(run.report["status"], "fail")
             self.assertFalse(run.report["full_qualification"])
             self.assertEqual(json.loads((root / "report.json").read_text())["status"], "fail")
+
+    def test_collection_failure_cannot_qualify_other_passing_phases(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            run = RUNNER.Run.__new__(RUNNER.Run)
+            run.directory = root
+            run.env = {"GOPATH": str(root / "gopath"), "GOCACHE": str(root / "gocache")}
+            run.groups = RUNNER.CATALOG_GROUPS
+            run.catalog_required = ["catalog-case"]
+            run.install_required = ["installation-case"]
+            run.composed_required = ["composition-case"]
+            run.collection_required = RUNNER.COLLECTION_TESTS + RUNNER.GIT_COLLECTION_TESTS
+            run.report = {"suite": "full", "source": {"commit": "unchanged"}, "phases": []}
+            (root / ("agentplugins.exe" if os.name == "nt" else "agentplugins")).write_bytes(b"fixture")
+            with patch.object(run, "command", return_value=True) as commands, \
+                    patch.object(run, "smoke", return_value=True), \
+                    patch.object(RUNNER, "run_installations", return_value=True), \
+                    patch.object(RUNNER, "run_collections", side_effect=RuntimeError("collection failed")), \
+                    patch.object(RUNNER, "source_identity", return_value={"commit": "unchanged"}):
+                self.assertFalse(run.execute(root))
+            self.assertEqual(run.report["status"], "fail")
+            self.assertFalse(run.report["full_qualification"])
+            phase = next(call for call in commands.call_args_list if call.args[0] == "collections")
+            self.assertEqual(phase.kwargs["required"], RUNNER.COLLECTION_TESTS + RUNNER.GIT_COLLECTION_TESTS)
+            self.assertEqual(phase.kwargs["package"], RUNNER.CLI_PACKAGE)
+            self.assertNotIn("-tags=uappm_e2e", phase.args[1])
+
+    def test_archive_and_full_collection_selection_matches_required_evidence(self):
+        for suite in ("archive", "full"):
+            with self.subTest(suite=suite), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                env = {"GOPATH": str(root / "gopath"), "GOCACHE": str(root / "gocache")}
+                catalog = {group: ["fixture"] for group in RUNNER.CATALOG_GROUPS}
+                expected = RUNNER.COLLECTION_TESTS + (RUNNER.GIT_COLLECTION_TESTS if suite == "full" else [])
+                with patch.object(RUNNER, "source_identity", return_value={"commit": "unchanged"}), \
+                        patch.object(RUNNER, "output", return_value="fixture tool"), \
+                        patch.object(RUNNER, "sha256", return_value="fixture digest"):
+                    run = RUNNER.Run(root, env, suite, catalog, ["fixture"])
+                    with patch.object(run, "command", return_value=True) as commands, \
+                            patch.object(run, "smoke", return_value=True), \
+                            patch.object(RUNNER, "run_installations", return_value=True), \
+                            patch.object(RUNNER, "run_collections", return_value=True):
+                        self.assertTrue(run.execute(root))
+                phase = next(call for call in commands.call_args_list if call.args[0] == "collections")
+                self.assertEqual(phase.args[1][-1], "^(" + "|".join(expected) + ")$")
+                self.assertEqual(phase.kwargs["required"], expected)
+                self.assertEqual(phase.kwargs["package"], RUNNER.CLI_PACKAGE)
+                self.assertTrue(set(expected).issubset(run.report["required_tests"]))
+                excluded = [] if suite == "full" else [RUNNER.ROOT_TEST + "/registry/fixture"] + RUNNER.GIT_COLLECTION_TESTS
+                self.assertEqual(run.report["excluded_tests"], excluded)
+                self.assertTrue(set(run.report["required_tests"]).isdisjoint(excluded))
+                self.assertEqual(run.report["full_qualification"], suite == "full")
+                self.assertTrue(run.report["source_unchanged_during_run"])
 
     def test_nested_binary_installation_error_is_reported(self):
         import package_manager_binary

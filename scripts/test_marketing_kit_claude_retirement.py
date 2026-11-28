@@ -394,6 +394,196 @@ class SignedClosureRetirementContracts(unittest.TestCase):
                 with self.assertRaises(OSError):
                     os.fstat(fd)
 
+    def stage_user_backup_writer(self, subject, authority, path, native, *, removed=False,
+                                 image="before", mutation=None, stamp_offset=0):
+        clock = 1795824438001 + stamp_offset
+        prior = path.read_bytes()
+        document = json.loads(prior)
+        if not removed:
+            document["pluginUsage"].update({owner["id"]: {"usageCount": 0,
+                "lastUsedAt": clock + 1, "lastUsedNumStartups": 0} for owner in authority["owners"].values()})
+        backup = subject.profile / "backups" / (".claude.json.backup." + str(clock + 1))
+        def writer():
+            replacement = path.with_name("backup-initialize-replacement")
+            replacement.write_text(json.dumps(document)); replacement.chmod(0o600); replacement.replace(path)
+            backup.parent.mkdir(mode=0o700, exist_ok=True)
+            backup.write_bytes(prior if image == "before" else path.read_bytes())
+            backup.chmod(0o600)
+            if mutation is not None:
+                mutation(backup)
+            return b"held native capture", {"exit": 0, "error": None, "stderr_bytes": 0}
+        with patch.object(retirement.time, "time_ns", side_effect=[clock * 1_000_000, (clock + 2) * 1_000_000]):
+            subject.stage_user_initialize(authority, writer, native, removed=removed)
+        return {"scope": "user", "home": str(subject.home), "project": str(subject.project),
+                "native_rows": copy.deepcopy(native)}, backup
+
+    def test_user_initialize_one_exact_backup_retains_full_lifecycle_custody(self):
+        for phase, image in (("before", "before"), ("before", "following"), ("before-existing", "before"), ("after", "before")):
+            with self.subTest(phase=phase, image=image), self.user_diagnostic_fixture() as (f, subject, path):
+                authority, native, receipt = self.user_authority_fixture(f, subject)
+                original_allowed = set(subject.retired_allowed)
+                offsets = {fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in subject.fds}
+                if phase == "before-existing":
+                    folder = subject.profile / "backups"
+                    folder.mkdir(mode=0o700)
+                    (folder / "foreign.json").write_text('{"private": "unchanged"}')
+                    (folder / "foreign.json").chmod(0o600)
+                if phase != "after":
+                    proof, backup = self.stage_user_backup_writer(subject, authority, path, native, image=image)
+                else:
+                    proof = self.stage_user_writer(subject, authority, path, native)
+                subject.commit_user_initialize(authority, proof)
+                subject.user_remove_receipt(authority, receipt)
+                if phase == "after":
+                    proof, backup = self.stage_user_backup_writer(subject, authority, path, [], removed=True)
+                else:
+                    proof = self.stage_user_writer(subject, authority, path, [], removed=True)
+                subject.commit_user_initialize(authority, proof)
+                for held in getattr(subject, "retained_backups", []):
+                    os.lseek(held["fd"], 5, os.SEEK_SET)
+                    offsets[held["fd"]] = 5
+                residuals = self.scan(f)
+                result = subject.verify_retained(subject.home, subject.case, residuals, lambda: self.scan(f))
+                self.assertEqual(subject.retired_allowed, original_allowed)
+                self.assertEqual(len(subject.retained_backups), 1)
+                self.assertEqual(subject.retained_backups[0]["path"], backup)
+                self.assertEqual(result["passive_plugin_usage"]["user_initialize_backups"]["files"][0]["sha256"],
+                                 hashlib.sha256(backup.read_bytes()).hexdigest())
+                self.assertEqual({fd: os.lseek(fd, 0, os.SEEK_CUR) for fd in offsets}, offsets)
+                descriptors = tuple(subject.fds)
+                subject.close()
+                for fd in descriptors:
+                    with self.assertRaises(OSError): os.fstat(fd)
+
+    def test_user_initialize_backup_rejects_unbound_bytes_window_count_and_links(self):
+        for variant in ("bytes", "timestamp", "count", "hardlink", "mode", "existing-change"):
+            with self.subTest(variant=variant), self.user_diagnostic_fixture() as (f, subject, path):
+                authority, native, _ = self.user_authority_fixture(f, subject)
+                old = subject.passive_usage[0]
+                original = set(subject.retired_allowed)
+                previous = subject.profile / "backups" / "foreign.json"
+                if variant == "existing-change":
+                    previous.parent.mkdir(mode=0o700)
+                    previous.write_text('{"private": "unchanged"}'); previous.chmod(0o600)
+                def mutate(backup):
+                    if variant == "bytes": backup.write_text('{}')
+                    elif variant == "timestamp": backup.rename(backup.with_name('.claude.json.backup.1795824437999'))
+                    elif variant == "count":
+                        extra = backup.with_name('.claude.json.backup.1795824438003')
+                        extra.write_bytes(backup.read_bytes()); extra.chmod(0o600)
+                    elif variant == "hardlink": os.link(backup, f["root"] / 'unowned-link')
+                    elif variant == "mode": backup.chmod(0o644)
+                    else: previous.write_text('{"private": "changed"}')
+                with self.assertRaises(ValueError):
+                    self.stage_user_backup_writer(subject, authority, path, native, mutation=mutate)
+                self.assertIsNone(authority["pending"])
+                self.assertIs(subject.passive_usage[0], old)
+                self.assertEqual(subject.retained_backups, [])
+                self.assertEqual(subject.retired_allowed, original)
+
+    def test_user_initialize_backup_pending_requires_native_and_original_namespace(self):
+        for variant in ("native", "leaf", "parent", "extra", "old-main"):
+            with self.subTest(variant=variant), self.user_diagnostic_fixture() as (f, subject, path):
+                authority, native, _ = self.user_authority_fixture(f, subject)
+                old = subject.passive_usage[0]
+                proof, backup = self.stage_user_backup_writer(subject, authority, path, native)
+                self.assertEqual(subject.retained_backups, [])
+                self.assertNotIn('.claude/backups/' + backup.name, subject.retired_allowed)
+                if variant == "native": proof["native_rows"][0]["version"] = "unrelated"
+                elif variant == "leaf":
+                    replacement = backup.with_name('replacement')
+                    replacement.write_bytes(backup.read_bytes()); replacement.chmod(0o600); replacement.replace(backup)
+                elif variant == "parent": backup.parent.rename(backup.parent.with_name('parked-backups')); backup.parent.mkdir(mode=0o700)
+                elif variant == "extra": (backup.parent / 'unowned').write_text('unowned')
+                else:
+                    with open('/proc/self/fd/' + str(old["fd"]), 'r+b') as stream: stream.write(b' ')
+                with self.assertRaises(ValueError): subject.commit_user_initialize(authority, proof)
+                self.assertEqual(subject.retained_backups, [])
+                self.assertIs(subject.passive_usage[0], old)
+
+    def test_user_initialize_backup_directory_aba_refuses_before_foreign_bytes(self):
+        with self.user_diagnostic_fixture() as (f, subject, path):
+            directory = subject.profile / "backups"
+            directory.mkdir(mode=0o700)
+            (directory / "original.json").write_text('{"original": true}')
+            shadow = subject.profile / "shadow-backups"
+            shadow.mkdir(mode=0o700)
+            (shadow / "foreign.json").write_text('{"foreign": true}')
+            shadow_inode = shadow.stat().st_ino
+            foreign_inodes = {shadow_inode, (shadow / "foreign.json").stat().st_ino}
+            parked = subject.profile / "parked-backups"
+            opened, reads = [], []
+            original_open, original_read, original_pread = os.open, os.read, os.pread
+            def redirected(name, flags, *args, **kwargs):
+                if name == "backups" and kwargs.get("dir_fd") is not None:
+                    directory.rename(parked); shadow.rename(directory)
+                    try:
+                        fd = original_open(name, flags, *args, **kwargs)
+                        self.assertEqual(os.fstat(fd).st_ino, shadow_inode)
+                        opened.append(fd)
+                        return fd
+                    finally:
+                        directory.rename(shadow); parked.rename(directory)
+                return original_open(name, flags, *args, **kwargs)
+            def read(fd, *args):
+                if os.fstat(fd).st_ino in foreign_inodes: reads.append(fd)
+                return original_read(fd, *args)
+            def pread(fd, *args):
+                if os.fstat(fd).st_ino in foreign_inodes: reads.append(fd)
+                return original_pread(fd, *args)
+            with patch.object(retirement.os, "open", side_effect=redirected), \
+                    patch.object(retirement.os, "read", side_effect=read), \
+                    patch.object(retirement.os, "pread", side_effect=pread):
+                with self.assertRaises(ValueError): subject.backup_inventory()
+            self.assertTrue(opened)
+            self.assertEqual(reads, [])
+            for fd in opened:
+                with self.assertRaises(OSError): os.fstat(fd)
+            self.assertIsNone(subject.backup_namespace)
+            self.assertEqual(subject.retained_backups, [])
+
+    def test_user_initialize_backup_inventory_disappearing_child_is_not_absent_namespace(self):
+        with self.user_diagnostic_fixture() as (f, subject, path):
+            folder = subject.profile / "backups"
+            folder.mkdir(mode=0o700)
+            leaf = folder / "foreign.json"
+            leaf.write_text('{"private": "unchanged"}'); leaf.chmod(0o600)
+            original_open = os.open
+            attacked = []
+            def disappearing(name, flags, *args, **kwargs):
+                if name == "foreign.json" and kwargs.get("dir_fd") is not None:
+                    leaf.unlink(); attacked.append(True)
+                return original_open(name, flags, *args, **kwargs)
+            with patch.object(retirement.os, "open", side_effect=disappearing):
+                with self.assertRaises(ValueError): subject.backup_inventory()
+            self.assertEqual(attacked, [True])
+            self.assertIsNone(subject.backup_namespace)
+            self.assertEqual(subject.retained_backups, [])
+
+    def test_user_initialize_backup_count_is_global_and_original_fd_stays_authoritative(self):
+        for variant in ("second-backup", "held-bytes", "parent-rename", "old-main"):
+            with self.subTest(variant=variant), self.user_diagnostic_fixture() as (f, subject, path):
+                authority, native, receipt = self.user_authority_fixture(f, subject)
+                old = subject.passive_usage[0]
+                proof, backup = self.stage_user_backup_writer(subject, authority, path, native)
+                subject.commit_user_initialize(authority, proof)
+                if variant == "second-backup":
+                    subject.user_remove_receipt(authority, receipt)
+                    # Both leaves are in their own actual action window; only the total refuses.
+                    with self.assertRaises(ValueError):
+                        self.stage_user_backup_writer(subject, authority, path, [], removed=True, stamp_offset=10)
+                    continue
+                if variant == "held-bytes":
+                    with open('/proc/self/fd/' + str(subject.retained_backups[0]["fd"]), 'r+b') as stream: stream.write(b' ')
+                elif variant == "parent-rename": backup.parent.rename(backup.parent.with_name('retained-backups'))
+                else:
+                    with open('/proc/self/fd/' + str(old["fd"]), 'r+b') as stream: stream.write(b' ')
+                descriptors = tuple(subject.fds)
+                with self.assertRaises(ValueError): subject.checkpoint()
+                self.assertEqual(subject.fds, [])
+                for fd in descriptors:
+                    with self.assertRaises(OSError): os.fstat(fd)
+
     def test_user_initialize_refuses_foreign_or_original_usage_and_invalid_new_rows(self):
         mutations = {
             "foreign": lambda d: d["foreign"].update(private="changed"),
