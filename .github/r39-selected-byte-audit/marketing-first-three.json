@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "repo": "777genius/universal-agent-plugins",
+  "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+  "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "core_blob": "b273b92fc290c09ba81de92516302ad7fc04250d",
+  "event": "pull_request",
+  "run_id": 46139632998,
+  "run_attempt": 1,
+  "lanes": [
+    {
+      "client": "claude",
+      "job_id": 140962469589,
+      "artifact_id": 15265651351,
+      "archive_size": 72351,
+      "archive_sha256": "a8f0a59c96b603079c74781059023b38e808aa0b447635d64c338bed8dde273c"
+    },
+    {
+      "client": "codex",
+      "job_id": 140962469188,
+      "artifact_id": 15263397292,
+      "archive_size": 55252,
+      "archive_sha256": "bc97846c65f3e42bfb46c5efcd4620aff55df40eea5652c411e38ef9cdada866"
+    },
+    {
+      "client": "cursor",
+      "job_id": 140962469592,
+      "artifact_id": 15263667090,
+      "archive_size": 4548,
+      "archive_sha256": "044ee341f0bd4ca8ccd677f66698ba279f17c3703653b42db7bbd5a715830a87"
+    }
+  ],
+  "selected_clients": [
+    "claude",
+    "codex",
+    "cursor"
+  ]
+}

@@ -1,0 +1,73 @@
+name: UAP1130 R39 selected artifact byte verification
+on:
+  push:
+    branches: [codex/uap1130-r35-artifact-audit]
+    paths:
+      - '.github/r39-selected-byte-audit/**'
+      - '.github/workflows/uap1130-r39-selected-byte-audit.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-linux-windows-four:
+    if: github.repository == '777genius/universal-agent-plugins' && github.ref == 'refs/heads/codex/uap1130-r35-artifact-audit'
+    runs-on: ${{ vars.CI_CORE_TEST_RUNNER || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out immutable reviewed auditor revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check out fixed R39 source as read-only authority
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fccd72199a1eedc12e3828cf2fdc2f10a2f418f7
+          path: source
+          persist-credentials: false
+      - name: Provision Python for independent byte analysis
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - name: Verify four original Linux and Windows native archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/r39-selected-byte-audit/native_closed_cohort_runner.py \
+            --manifest .github/r39-selected-byte-audit/native-linux-windows.json \
+            --manifest-sha256 3646722d2133c73ca7a2f032491b86a75a2db4060b17b5c904187bbaaf475588 \
+            --source source \
+            --core .github/r39-native-audit/native_audit.py
+  marketing-first-three:
+    if: github.repository == '777genius/universal-agent-plugins' && github.ref == 'refs/heads/codex/uap1130-r35-artifact-audit'
+    runs-on: ${{ vars.CI_CORE_TEST_RUNNER || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out immutable reviewed auditor revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check out fixed R39 source as read-only authority
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fccd72199a1eedc12e3828cf2fdc2f10a2f418f7
+          path: source
+          persist-credentials: false
+      - name: Provision Python for independent byte analysis
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - name: Verify original Claude Codex and Cursor Marketing archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/r39-selected-byte-audit/marketing_ready_readonly_runner.py \
+            --manifest .github/r39-selected-byte-audit/marketing-first-three.json \
+            --manifest-sha256 7788f9eb01cc48782a70aa2c216ce5b386443cc34df7480935b2853b2af587e8 \
+            --source source \
+            --core .github/r39-marketing-audit/marketing_audit.py
