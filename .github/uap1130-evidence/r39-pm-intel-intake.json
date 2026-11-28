@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "scope": "R39 PM macOS Intel original retained ZIP",
+  "state": "ready_intake_byte_audit_pending",
+  "source": {
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221"
+  },
+  "run_id": 46139633158,
+  "job_id": 140962469299,
+  "run_attempt": 1,
+  "metadata_source": "Original completed job logs and REST run/job/artifact data independently joined by root and PM owner",
+  "job_steps": {
+    "success": 19,
+    "source_authorized_windows_only_skip": 1
+  },
+  "original_decoded_log": {
+    "sha256": "9b8981f6cda7e9a8d99be233dd8f04e9c1e25b672526a48821dca9d6c2626126",
+    "bytes": 73869
+  },
+  "manifest_hash": {
+    "sha256": "8c600ecf506f1e016545bc47b4fd664945275001df552b85891b645da4b34e1e",
+    "bytes": 668
+  },
+  "manifest": {
+    "repo": "777genius/universal-agent-plugins",
+    "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+    "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+    "run_id": 46139633158,
+    "job_id": 140962469299,
+    "job_name": "package-manager (macos-15-intel)",
+    "run_attempt": 1,
+    "event": "pull_request",
+    "checkout": "8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "artifact_id": 15263261908,
+    "artifact_name": "package-manager-e2e-macos-15-intel-8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221",
+    "size": 61594,
+    "sha256": "28f117e58d495bc8e6823614d690ccfefacc0473a15717ffccb830f6b2d14dca",
+    "expected_platform": {
+      "os": "Darwin",
+      "architecture": "x86_64"
+    }
+  },
+  "auditor": {
+    "core_blob": "91a5ea4e09df50879dea4fcb948970674a410f29",
+    "wrapper_blob": "608ef50842bce97b3305e3d7ced680f82ef869af",
+    "core_path": ".github/r39-pm-audit/pm_audit.py",
+    "wrapper_path": ".github/r39-pm-audit/pm_readonly_runner.py"
+  },
+  "qualifies_archive_bytes": false
+}

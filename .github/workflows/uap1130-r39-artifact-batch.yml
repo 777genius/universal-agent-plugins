@@ -28,34 +28,18 @@ jobs:
           ref: fccd72199a1eedc12e3828cf2fdc2f10a2f418f7
           path: source
           persist-credentials: false
+      - name: Fetch exact PM synthetic object once
+        run: git -C source fetch --no-tags --depth=1 origin 8a1f7d8c87f467e98ca8bfb2ba57fc2a5a16a221
       - name: Provision Python for independent byte analysis
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
         with:
           python-version: '3.12'
-      - name: Verify Pi macOS ARM64 original paired archives and canonical evidence
+      - name: Verify PM macOS Intel original archive and canonical evidence
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          python3 .github/pi-artifact-audit/pi_readonly_runner.py \
-            --manifest .github/r39-artifact-manifests/pi-macos-arm64.json \
-            --manifest-sha256 a1a1938a3a9e3d05d93d2916326d29b3614c429db47a892d98024708fdcf5b56 \
+          python3 .github/r39-pm-audit/pm_readonly_runner.py \
+            --manifest .github/r39-artifact-manifests/pm-macos-intel.json \
+            --manifest-sha256 8c600ecf506f1e016545bc47b4fd664945275001df552b85891b645da4b34e1e \
             --source source \
-            --core .github/pi-artifact-audit/pi_audit.py
-      - name: Verify Pi Windows original paired archives and canonical evidence
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 .github/pi-artifact-audit/pi_readonly_runner.py \
-            --manifest .github/r39-artifact-manifests/pi-windows.json \
-            --manifest-sha256 3811ce2c8d6f46683172dbe79a6ec875d7c6c0ec57b0f9bfd824424b02103744 \
-            --source source \
-            --core .github/pi-artifact-audit/pi_audit.py
-      - name: Verify Pi Linux original paired archives and canonical evidence
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          python3 .github/pi-artifact-audit/pi_readonly_runner.py \
-            --manifest .github/r39-artifact-manifests/pi-linux.json \
-            --manifest-sha256 43f9ccc6a932e7c012e53bc1cc14c49c43cf077a3e1955963e2d6ce8f7e1b25b \
-            --source source \
-            --core .github/pi-artifact-audit/pi_audit.py
+            --core .github/r39-pm-audit/pm_audit.py
