@@ -1,0 +1,339 @@
+{
+  "source_head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "source_tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "run_id": 46139633114,
+  "run_attempt": 1,
+  "event": "pull_request",
+  "runtime_jobs": "3/3 success; 39 successful actual steps",
+  "selected_lanes": 3,
+  "records": [
+    {
+      "target": "darwin-arm64",
+      "job_id": 140962468899,
+      "raw_log": {
+        "sha256": "d108ed7f0148f63e12c01e5b9b4657f330b6845ce1409626436179a5abb5e006",
+        "bytes": 36269
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Verify scoped Pi adapter and real UAP facade before native runtime",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Verify enterprise policy composition under isolated process environments",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Verify Python runner syntax without writing into source checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Run genuine pinned native Pi project trust and A/B lifecycle",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Upload native Pi evidence including failure",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Run real Pi global/project Skills and stdio/HTTP MCP initialize, list and call",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Upload Pi Skills/MCP evidence including failure",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        }
+      ],
+      "artifact_upload_ids_digests_sizes_verified": true,
+      "manifest_hash": {
+        "sha256": "a1a1938a3a9e3d05d93d2916326d29b3614c429db47a892d98024708fdcf5b56",
+        "bytes": 865
+      },
+      "artifacts": {
+        "trust": {
+          "artifact_id": 15262747793,
+          "artifact_name": "pi-project-darwin-arm64",
+          "size": 2982,
+          "sha256": "72cbc8d2550eeb13ce239a3954bde577e6639ebd269067fcf8ddf8e37c018a12"
+        },
+        "components": {
+          "artifact_id": 15263122070,
+          "artifact_name": "pi-project-components-darwin-arm64",
+          "size": 81249,
+          "sha256": "94227cf76304a09680190010f464f40a0d452910082364c94eeaf77144065482"
+        }
+      },
+      "archive_byte_qualified": false
+    },
+    {
+      "target": "windows-amd64",
+      "job_id": 140962468614,
+      "raw_log": {
+        "sha256": "1d1069519830ad61f54bc8d67187b8c77b511b949ce06130d96fae941e583bf9",
+        "bytes": 45811
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Verify scoped Pi adapter and real UAP facade before native runtime",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Verify enterprise policy composition under isolated process environments",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Verify Python runner syntax without writing into source checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Run genuine pinned native Pi project trust and A/B lifecycle",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Upload native Pi evidence including failure",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Run real Pi global/project Skills and stdio/HTTP MCP initialize, list and call",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Upload Pi Skills/MCP evidence including failure",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        }
+      ],
+      "artifact_upload_ids_digests_sizes_verified": true,
+      "manifest_hash": {
+        "sha256": "3811ce2c8d6f46683172dbe79a6ec875d7c6c0ec57b0f9bfd824424b02103744",
+        "bytes": 869
+      },
+      "artifacts": {
+        "trust": {
+          "artifact_id": 15262964237,
+          "artifact_name": "pi-project-windows-amd64",
+          "size": 2959,
+          "sha256": "2839ad8861c56058eca6cf89c0ab5a03d772040e74c3ef391f101f0347c81d3d"
+        },
+        "components": {
+          "artifact_id": 15262924745,
+          "artifact_name": "pi-project-components-windows-amd64",
+          "size": 82914,
+          "sha256": "7072e705da062189c6cefa3b5ee70d6f7d4e1a6bb65ed5c5d75767e64100463a"
+        }
+      },
+      "archive_byte_qualified": false
+    },
+    {
+      "target": "linux-amd64",
+      "job_id": 140962468848,
+      "raw_log": {
+        "sha256": "cb148cbfa95339e80f25c596bf1710a2656553381bef9958527ce9794482f62c",
+        "bytes": 38168
+      },
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Verify scoped Pi adapter and real UAP facade before native runtime",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4
+        },
+        {
+          "name": "Verify enterprise policy composition under isolated process environments",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5
+        },
+        {
+          "name": "Verify Python runner syntax without writing into source checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6
+        },
+        {
+          "name": "Run genuine pinned native Pi project trust and A/B lifecycle",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Upload native Pi evidence including failure",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        },
+        {
+          "name": "Run real Pi global/project Skills and stdio/HTTP MCP initialize, list and call",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9
+        },
+        {
+          "name": "Upload Pi Skills/MCP evidence including failure",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10
+        },
+        {
+          "name": "Post Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19
+        },
+        {
+          "name": "Post Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 20
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21
+        }
+      ],
+      "artifact_upload_ids_digests_sizes_verified": true,
+      "manifest_hash": {
+        "sha256": "43f9ccc6a932e7c012e53bc1cc14c49c43cf077a3e1955963e2d6ce8f7e1b25b",
+        "bytes": 861
+      },
+      "artifacts": {
+        "trust": {
+          "artifact_id": 15263093562,
+          "artifact_name": "pi-project-linux-amd64",
+          "size": 2976,
+          "sha256": "687b73012ddac60a59b66636b5f9787b190e978fb2d2acae5db72930aa39d2c0"
+        },
+        "components": {
+          "artifact_id": 15262979653,
+          "artifact_name": "pi-project-components-linux-amd64",
+          "size": 82211,
+          "sha256": "5b4463918723ed9b99da807f34d68f3766e6f9ae2e45372ec694836cd7111a79"
+        }
+      },
+      "archive_byte_qualified": false
+    }
+  ],
+  "scope": "Only completed Pi three-platform paired-archive audits; four PM hosts remain separate and outstanding",
+  "archive_byte_qualification": false,
+  "auditor_core": "8d146d211fdc20c6f0be3e610a16d1fb2d89e528",
+  "auditor_wrapper": "4ee9beeb23ebf37c0e8b0d89535f1bcd728d922e"
+}

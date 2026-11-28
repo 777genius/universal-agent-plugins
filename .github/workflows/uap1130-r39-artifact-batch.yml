@@ -1,0 +1,61 @@
+name: UAP1130 R39 artifact batch verification
+on:
+  push:
+    branches: [codex/uap1130-r35-artifact-audit]
+    paths:
+      - '.github/r39-artifact-manifests/**'
+      - '.github/r39-pm-audit/**'
+      - '.github/workflows/uap1130-r39-artifact-batch.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify-current-pm-pi:
+    if: github.repository == '777genius/universal-agent-plugins' && github.ref == 'refs/heads/codex/uap1130-r35-artifact-audit'
+    runs-on: ${{ vars.CI_CORE_TEST_RUNNER || vars.CI_LINUX_RUNNER || 'ubuntu-24.04' }}
+    timeout-minutes: 20
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Check out immutable reviewed auditor revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check out fixed R39 source once
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fccd72199a1eedc12e3828cf2fdc2f10a2f418f7
+          path: source
+          persist-credentials: false
+      - name: Provision Python for independent byte analysis
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+      - name: Verify Pi macOS ARM64 original paired archives and canonical evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/pi-artifact-audit/pi_readonly_runner.py \
+            --manifest .github/r39-artifact-manifests/pi-macos-arm64.json \
+            --manifest-sha256 a1a1938a3a9e3d05d93d2916326d29b3614c429db47a892d98024708fdcf5b56 \
+            --source source \
+            --core .github/pi-artifact-audit/pi_audit.py
+      - name: Verify Pi Windows original paired archives and canonical evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/pi-artifact-audit/pi_readonly_runner.py \
+            --manifest .github/r39-artifact-manifests/pi-windows.json \
+            --manifest-sha256 3811ce2c8d6f46683172dbe79a6ec875d7c6c0ec57b0f9bfd824424b02103744 \
+            --source source \
+            --core .github/pi-artifact-audit/pi_audit.py
+      - name: Verify Pi Linux original paired archives and canonical evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/pi-artifact-audit/pi_readonly_runner.py \
+            --manifest .github/r39-artifact-manifests/pi-linux.json \
+            --manifest-sha256 43f9ccc6a932e7c012e53bc1cc14c49c43cf077a3e1955963e2d6ce8f7e1b25b \
+            --source source \
+            --core .github/pi-artifact-audit/pi_audit.py

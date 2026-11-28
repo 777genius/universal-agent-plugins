@@ -1,0 +1,26 @@
+{
+  "repo": "777genius/universal-agent-plugins",
+  "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "run_id": 46139633114,
+  "job_id": 140962468848,
+  "job_name": "pi v1.4.0 global/project lifecycle (linux-amd64)",
+  "run_attempt": 1,
+  "event": "pull_request",
+  "target": "linux-amd64",
+  "artifacts": {
+    "trust": {
+      "artifact_id": 15263093562,
+      "artifact_name": "pi-project-linux-amd64",
+      "size": 2976,
+      "sha256": "687b73012ddac60a59b66636b5f9787b190e978fb2d2acae5db72930aa39d2c0"
+    },
+    "components": {
+      "artifact_id": 15262979653,
+      "artifact_name": "pi-project-components-linux-amd64",
+      "size": 82211,
+      "sha256": "5b4463918723ed9b99da807f34d68f3766e6f9ae2e45372ec694836cd7111a79"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "repo": "777genius/universal-agent-plugins",
+  "head": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "tree": "41d82c5eb527f34d16ec2e458194496012bc1c22",
+  "checkout": "fccd72199a1eedc12e3828cf2fdc2f10a2f418f7",
+  "run_id": 46139633114,
+  "job_id": 140962468614,
+  "job_name": "pi v1.4.0 global/project lifecycle (windows-amd64)",
+  "run_attempt": 1,
+  "event": "pull_request",
+  "target": "windows-amd64",
+  "artifacts": {
+    "trust": {
+      "artifact_id": 15262964237,
+      "artifact_name": "pi-project-windows-amd64",
+      "size": 2959,
+      "sha256": "2839ad8861c56058eca6cf89c0ab5a03d772040e74c3ef391f101f0347c81d3d"
+    },
+    "components": {
+      "artifact_id": 15262924745,
+      "artifact_name": "pi-project-components-windows-amd64",
+      "size": 82914,
+      "sha256": "7072e705da062189c6cefa3b5ee70d6f7d4e1a6bb65ed5c5d75767e64100463a"
+    }
+  }
+}
