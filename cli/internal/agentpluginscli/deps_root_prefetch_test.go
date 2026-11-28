@@ -253,6 +253,9 @@ func mixedRootsJourney(t *testing.T) (App, environment.Requirements, *rootFetchS
 	savedJourneyGit(t, repo, "commit", "-m", "fixture")
 	sha := savedJourneyGit(t, repo, "rev-parse", "HEAD")
 	j := newSavedJourney(t, repo)
+	// Keep real local Git reads without coupling this scheduling fixture to
+	// the production process-containment supervisor's per-command lifecycle.
+	j.source.Runner = directGitTestRunner{}
 	source := &rootFetchSource{Acquirer: skillsource.Acquirer{Acquirer: j.source.Acquirer}, tempRoot: j.source.TempRoot}
 	j.cli.app.SourceAcquirer = source
 	plugin := func(repository, name string, selector environment.Selector) environment.Requirement {
